@@ -1,0 +1,20 @@
+# binaries
+*.test
+*.out
+/bin/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# env
+.env
+.env.local
+
+# OS
+.DS_Store
+
+# coverage
+coverage.out
+coverage.html
