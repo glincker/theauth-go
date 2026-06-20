@@ -93,6 +93,77 @@ func TestConsumeMagicLinkOnce(t *testing.T) {
 	}
 }
 
+func TestMemoryPasswordRoundtrip(t *testing.T) {
+	s := New()
+	ctx := context.Background()
+	uid := ulid.New()
+	if _, err := s.CreateUser(ctx, theauth.User{ID: uid, Email: "pw@h.com", CreatedAt: time.Now()}); err != nil {
+		t.Fatal(err)
+	}
+	// Empty hash before set.
+	_, ph, err := s.UserByEmailWithPassword(ctx, "pw@h.com")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ph != "" {
+		t.Fatalf("expected empty hash; got %q", ph)
+	}
+	if err := s.SetUserPassword(ctx, uid, "phc-string"); err != nil {
+		t.Fatal(err)
+	}
+	_, ph, err = s.UserByEmailWithPassword(ctx, "pw@h.com")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ph != "phc-string" {
+		t.Fatalf("expected hash to persist; got %q", ph)
+	}
+}
+
+func TestMemorySetPasswordUnknownUser(t *testing.T) {
+	s := New()
+	err := s.SetUserPassword(context.Background(), ulid.New(), "x")
+	if !errors.Is(err, storage.ErrNotFound) {
+		t.Fatalf("expected ErrNotFound; got %v", err)
+	}
+}
+
+func TestMemoryUserByEmailWithPasswordNotFound(t *testing.T) {
+	s := New()
+	_, _, err := s.UserByEmailWithPassword(context.Background(), "nobody@h.com")
+	if !errors.Is(err, storage.ErrNotFound) {
+		t.Fatalf("expected ErrNotFound; got %v", err)
+	}
+}
+
+func TestMemoryPasswordResetTokenConsume(t *testing.T) {
+	s := New()
+	ctx := context.Background()
+	uid := ulid.New()
+	if _, err := s.CreateUser(ctx, theauth.User{ID: uid, Email: "r@h.com", CreatedAt: time.Now()}); err != nil {
+		t.Fatal(err)
+	}
+	hash := sha256.Sum256([]byte("rt"))
+	rt := theauth.PasswordResetToken{
+		ID: ulid.New(), UserID: uid,
+		TokenHash: hash[:],
+		CreatedAt: time.Now(), ExpiresAt: time.Now().Add(time.Hour),
+	}
+	if err := s.CreatePasswordResetToken(ctx, rt); err != nil {
+		t.Fatal(err)
+	}
+	got, err := s.ConsumePasswordResetToken(ctx, hash[:])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.UsedAt == nil {
+		t.Fatal("expected UsedAt set on first consume")
+	}
+	if _, err := s.ConsumePasswordResetToken(ctx, hash[:]); !errors.Is(err, storage.ErrNotFound) {
+		t.Fatalf("second consume should miss; got %v", err)
+	}
+}
+
 // TestMemoryExpiredMagicLinkNotConsumed verifies the memory adapter matches
 // Postgres semantics: expired magic-links are NOT marked used. Without this,
 // a single failed/expired verification attempt would burn the link, even

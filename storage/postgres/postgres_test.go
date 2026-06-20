@@ -24,17 +24,25 @@ func testPool(t *testing.T) *pgxpool.Pool {
 	if err != nil {
 		t.Fatal(err)
 	}
-	mig, err := os.ReadFile("migrations/0001_init.up.sql")
+	mig1, err := os.ReadFile("migrations/0001_init.up.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	mig2, err := os.ReadFile("migrations/0002_passwords.up.sql")
 	if err != nil {
 		t.Fatal(err)
 	}
 	// Drop + recreate for clean state
 	_, _ = pool.Exec(context.Background(), `
+		DROP TABLE IF EXISTS password_reset_tokens;
 		DROP TABLE IF EXISTS magic_links;
 		DROP TABLE IF EXISTS sessions;
 		DROP TABLE IF EXISTS users;
 	`)
-	if _, err := pool.Exec(context.Background(), string(mig)); err != nil {
+	if _, err := pool.Exec(context.Background(), string(mig1)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(context.Background(), string(mig2)); err != nil {
 		t.Fatal(err)
 	}
 	return pool
@@ -87,6 +95,75 @@ func TestPostgresSessionAndRevoke(t *testing.T) {
 	}
 	if got.RevokedAt == nil {
 		t.Fatal("expected RevokedAt set")
+	}
+}
+
+func TestPostgresPasswordRoundtrip(t *testing.T) {
+	pool := testPool(t)
+	defer pool.Close()
+	s := New(pool)
+	ctx := context.Background()
+
+	uid := ulid.New()
+	if _, err := s.CreateUser(ctx, theauth.User{ID: uid, Email: "pw@h.com", CreatedAt: time.Now(), UpdatedAt: time.Now()}); err != nil {
+		t.Fatal(err)
+	}
+
+	// Before SetUserPassword: hash is empty string (NULL coalesced).
+	_, ph, err := s.UserByEmailWithPassword(ctx, "pw@h.com")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ph != "" {
+		t.Fatalf("expected empty password hash before SetUserPassword; got %q", ph)
+	}
+
+	if err := s.SetUserPassword(ctx, uid, "$argon2id$v=19$m=65536,t=3,p=4$AAAA$BBBB"); err != nil {
+		t.Fatal(err)
+	}
+	got, ph, err := s.UserByEmailWithPassword(ctx, "pw@h.com")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.ID != uid {
+		t.Fatalf("user id mismatch")
+	}
+	if ph != "$argon2id$v=19$m=65536,t=3,p=4$AAAA$BBBB" {
+		t.Fatalf("password hash not persisted; got %q", ph)
+	}
+}
+
+func TestPostgresPasswordResetTokenConsume(t *testing.T) {
+	pool := testPool(t)
+	defer pool.Close()
+	s := New(pool)
+	ctx := context.Background()
+
+	uid := ulid.New()
+	if _, err := s.CreateUser(ctx, theauth.User{ID: uid, Email: "rt@h.com", CreatedAt: time.Now(), UpdatedAt: time.Now()}); err != nil {
+		t.Fatal(err)
+	}
+	tokenHash := sha256.Sum256([]byte("reset-token"))
+	rt := theauth.PasswordResetToken{
+		ID: ulid.New(), UserID: uid,
+		TokenHash: tokenHash[:],
+		CreatedAt: time.Now(), ExpiresAt: time.Now().Add(time.Hour),
+	}
+	if err := s.CreatePasswordResetToken(ctx, rt); err != nil {
+		t.Fatal(err)
+	}
+	got, err := s.ConsumePasswordResetToken(ctx, tokenHash[:])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.UserID != uid {
+		t.Fatal("reset token user_id mismatch")
+	}
+	if got.UsedAt == nil {
+		t.Fatal("expected UsedAt set after consume")
+	}
+	if _, err := s.ConsumePasswordResetToken(ctx, tokenHash[:]); !errors.Is(err, storage.ErrNotFound) {
+		t.Fatalf("second consume should miss; got %v", err)
 	}
 }
 

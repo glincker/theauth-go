@@ -115,6 +115,17 @@ func rowToMagicLink(r sqlcgen.MagicLink) theauth.MagicLink {
 	}
 }
 
+func rowToResetToken(r sqlcgen.PasswordResetToken) theauth.PasswordResetToken {
+	return theauth.PasswordResetToken{
+		ID:        pgUUIDToULID(r.ID),
+		UserID:    pgUUIDToULID(r.UserID),
+		TokenHash: r.TokenHash,
+		ExpiresAt: tsToTime(r.ExpiresAt),
+		UsedAt:    tsToTimePtr(r.UsedAt),
+		CreatedAt: tsToTime(r.CreatedAt),
+	}
+}
+
 // ---------- Users ----------
 
 func (s *Store) CreateUser(ctx context.Context, u theauth.User) (theauth.User, error) {
@@ -238,4 +249,62 @@ func (s *Store) ConsumeMagicLink(ctx context.Context, tokenHash []byte) (*theaut
 	}
 	ml := rowToMagicLink(row)
 	return &ml, nil
+}
+
+// ---------- Password credentials (v0.2) ----------
+
+func (s *Store) SetUserPassword(ctx context.Context, userID theauth.ULID, passwordHash string) error {
+	ph := passwordHash
+	if err := s.q.SetUserPassword(ctx, sqlcgen.SetUserPasswordParams{
+		ID:           ulidToPgUUID(userID),
+		PasswordHash: &ph,
+	}); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return storage.ErrNotFound
+		}
+		return err
+	}
+	return nil
+}
+
+func (s *Store) UserByEmailWithPassword(ctx context.Context, email string) (*theauth.User, string, error) {
+	row, err := s.q.UserByEmailWithPassword(ctx, email)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, "", storage.ErrNotFound
+		}
+		return nil, "", err
+	}
+	u := theauth.User{
+		ID:              pgUUIDToULID(row.ID),
+		Email:           row.Email,
+		EmailVerifiedAt: tsToTimePtr(row.EmailVerifiedAt),
+		Name:            row.Name,
+		AvatarURL:       row.AvatarUrl,
+		CreatedAt:       tsToTime(row.CreatedAt),
+		UpdatedAt:       tsToTime(row.UpdatedAt),
+	}
+	return &u, row.PasswordHash, nil
+}
+
+func (s *Store) CreatePasswordResetToken(ctx context.Context, t theauth.PasswordResetToken) error {
+	return s.q.CreatePasswordResetToken(ctx, sqlcgen.CreatePasswordResetTokenParams{
+		ID:        ulidToPgUUID(t.ID),
+		UserID:    ulidToPgUUID(t.UserID),
+		TokenHash: t.TokenHash,
+		ExpiresAt: timeToTs(t.ExpiresAt),
+		CreatedAt: timeToTs(t.CreatedAt),
+	})
+}
+
+func (s *Store) ConsumePasswordResetToken(ctx context.Context, tokenHash []byte) (*theauth.PasswordResetToken, error) {
+	row, err := s.q.ConsumePasswordResetToken(ctx, tokenHash)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, storage.ErrNotFound
+		}
+		return nil, err
+	}
+	rt := rowToResetToken(row)
+	return &rt, nil
 }

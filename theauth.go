@@ -33,6 +33,16 @@ type Storage interface {
 	// Magic links
 	CreateMagicLink(ctx context.Context, ml MagicLink) error
 	ConsumeMagicLink(ctx context.Context, tokenHash []byte) (*MagicLink, error)
+
+	// Email + password (v0.2)
+	SetUserPassword(ctx context.Context, userID ULID, passwordHash string) error
+	// UserByEmailWithPassword fetches a user along with their stored PHC hash.
+	// passwordHash is "" if the account exists but has never set a password
+	// (e.g. magic-link-only signup). Callers should treat empty hash as
+	// "no password credential available" and surface invalid_credentials.
+	UserByEmailWithPassword(ctx context.Context, email string) (user *User, passwordHash string, err error)
+	CreatePasswordResetToken(ctx context.Context, t PasswordResetToken) error
+	ConsumePasswordResetToken(ctx context.Context, tokenHash []byte) (*PasswordResetToken, error)
 }
 
 // Config holds the wiring for a TheAuth instance.

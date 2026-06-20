@@ -1,6 +1,8 @@
 version: "2"
 sql:
-  - schema: "storage/postgres/migrations/0001_init.up.sql"
+  - schema:
+      - "storage/postgres/migrations/0001_init.up.sql"
+      - "storage/postgres/migrations/0002_passwords.up.sql"
     queries: "storage/postgres/queries.sql"
     engine: "postgresql"
     gen:

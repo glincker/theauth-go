@@ -46,3 +46,15 @@ type MagicLink struct {
 	UsedAt    *time.Time `json:"usedAt,omitempty"`
 	CreatedAt time.Time  `json:"createdAt"`
 }
+
+// PasswordResetToken backs the /auth/email-password/forgot+reset flow. Shape
+// mirrors MagicLink but binds to a known user_id (resets always operate on an
+// existing account), and lives in its own table to keep flows isolated.
+type PasswordResetToken struct {
+	ID        ULID       `json:"id"`
+	UserID    ULID       `json:"userId"`
+	TokenHash []byte     `json:"-"`
+	ExpiresAt time.Time  `json:"expiresAt"`
+	UsedAt    *time.Time `json:"usedAt,omitempty"`
+	CreatedAt time.Time  `json:"createdAt"`
+}

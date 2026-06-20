@@ -34,3 +34,20 @@ VALUES ($1, $2, $3, $4, $5);
 UPDATE magic_links SET used_at = now()
 WHERE token_hash = $1 AND used_at IS NULL AND expires_at > now()
 RETURNING *;
+
+-- name: SetUserPassword :exec
+UPDATE users SET password_hash = $2, updated_at = now() WHERE id = $1;
+
+-- name: UserByEmailWithPassword :one
+SELECT id, email, email_verified_at, name, avatar_url, created_at, updated_at,
+       COALESCE(password_hash, '') AS password_hash
+FROM users WHERE email = $1;
+
+-- name: CreatePasswordResetToken :exec
+INSERT INTO password_reset_tokens (id, user_id, token_hash, expires_at, created_at)
+VALUES ($1, $2, $3, $4, $5);
+
+-- name: ConsumePasswordResetToken :one
+UPDATE password_reset_tokens SET used_at = now()
+WHERE token_hash = $1 AND used_at IS NULL AND expires_at > now()
+RETURNING *;
