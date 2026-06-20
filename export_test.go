@@ -1,6 +1,9 @@
 package theauth
 
-import "context"
+import (
+	"context"
+	"time"
+)
 
 // IssueSessionForTest exposes the unexported issueSession for external tests.
 func IssueSessionForTest(a *TheAuth, ctx context.Context, user User, userAgent, ip string) (string, Session, error) {
@@ -46,4 +49,29 @@ func RequestPasswordResetForTest(a *TheAuth, ctx context.Context, email string) 
 // ResetPasswordForTest exposes the unexported resetPassword for external tests.
 func ResetPasswordForTest(a *TheAuth, ctx context.Context, token, newPassword string) error {
 	return a.resetPassword(ctx, token, newPassword)
+}
+
+// KeyedLimiterForTest is an opaque handle exposing the internal keyedLimiter
+// for direct testing of the GC + Allow loop without going through HTTP.
+type KeyedLimiterForTest struct {
+	inner *keyedLimiter
+}
+
+// NewKeyedLimiterForTest wires up a keyedLimiter with a tighter GC tick than
+// production, so tests can observe eviction quickly.
+func NewKeyedLimiterForTest(perMinute int, evictAfter, tickerEvery time.Duration) *KeyedLimiterForTest {
+	return &KeyedLimiterForTest{inner: newKeyedLimiterWith(perMinute, evictAfter, tickerEvery)}
+}
+
+// Allow forwards to the inner limiter.
+func (k *KeyedLimiterForTest) Allow(key string) bool { return k.inner.Allow(key) }
+
+// Stop forwards to the inner limiter.
+func (k *KeyedLimiterForTest) Stop() { k.inner.Stop() }
+
+// EntryCount returns the live key count — for verifying GC behavior.
+func (k *KeyedLimiterForTest) EntryCount() int {
+	k.inner.mu.Lock()
+	defer k.inner.mu.Unlock()
+	return len(k.inner.limits)
 }
