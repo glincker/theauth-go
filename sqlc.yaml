@@ -1,0 +1,12 @@
+version: "2"
+sql:
+  - schema: "storage/postgres/migrations/0001_init.up.sql"
+    queries: "storage/postgres/queries.sql"
+    engine: "postgresql"
+    gen:
+      go:
+        package: "sqlc"
+        out: "storage/postgres/sqlc"
+        sql_package: "pgx/v5"
+        emit_json_tags: false
+        emit_pointers_for_null_types: true
