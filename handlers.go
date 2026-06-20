@@ -15,14 +15,35 @@ import (
 // Mount wires TheAuth's HTTP routes onto the supplied chi router under /auth.
 // Routes:
 //
-//	POST   /auth/magic-link            request a magic link
-//	GET    /auth/magic-link/verify     consume a magic link, set session cookie
-//	GET    /auth/me                    return the authenticated user (RequireAuth)
-//	DELETE /auth/sessions/current      revoke the current session (RequireAuth)
+//	POST   /auth/magic-link                       request a magic link
+//	GET    /auth/magic-link/verify                consume a magic link, set session cookie
+//	POST   /auth/email-password/signup            create user with email + password (rate-limited)
+//	POST   /auth/email-password/signin            sign in with email + password (rate-limited)
+//	POST   /auth/email-password/forgot            request a password reset link (rate-limited)
+//	POST   /auth/email-password/reset             consume a reset token + set new password (rate-limited)
+//	GET    /auth/me                               return the authenticated user (RequireAuth)
+//	DELETE /auth/sessions/current                 revoke the current session (RequireAuth)
+//
+// Default rate limits: 5/min per source IP on every credential endpoint, plus
+// 3/min per email on signin + forgot (most attack-surface). All limits are
+// in-memory + per-process; replace at the LB layer for multi-instance deploys.
 func (a *TheAuth) Mount(r chi.Router) {
+	// Build limiter middlewares once so the same buckets persist across all
+	// routes mounted at this point. Re-mounting builds a fresh set.
+	ipLimit := a.RateLimitByIP(a.rateLimitPerIP)
+	emailLimit := a.RateLimitByEmail(a.rateLimitPerEmail)
+
 	r.Route("/auth", func(r chi.Router) {
 		r.Post("/magic-link", a.handleMagicLinkRequest)
 		r.Get("/magic-link/verify", a.handleMagicLinkVerify)
+
+		r.Route("/email-password", func(r chi.Router) {
+			r.With(ipLimit).Post("/signup", a.handlePasswordSignup)
+			r.With(ipLimit, emailLimit).Post("/signin", a.handlePasswordSignin)
+			r.With(ipLimit, emailLimit).Post("/forgot", a.handlePasswordForgot)
+			r.With(ipLimit).Post("/reset", a.handlePasswordReset)
+		})
+
 		r.With(a.RequireAuth()).Delete("/sessions/current", a.handleSessionDelete)
 		r.With(a.RequireAuth()).Get("/me", a.handleMe)
 	})
@@ -109,6 +130,26 @@ func (a *TheAuth) handleSessionDelete(w http.ResponseWriter, r *http.Request) {
 }
 
 func errToHTTP(w http.ResponseWriter, err error) {
+	// Prefer the new TheAuthError code mapping when available — gives callers
+	// a stable Code field in the response body for programmatic handling.
+	var te *TheAuthError
+	if errors.As(err, &te) {
+		switch te.Code {
+		case CodeWeakPassword:
+			writeJSONError(w, http.StatusBadRequest, te.Code, te.Message)
+		case CodeEmailTaken:
+			writeJSONError(w, http.StatusConflict, te.Code, te.Message)
+		case CodeInvalidCredentials:
+			writeJSONError(w, http.StatusUnauthorized, te.Code, te.Message)
+		case CodeRateLimited:
+			writeJSONError(w, http.StatusTooManyRequests, te.Code, te.Message)
+		case CodePasswordResetExpired, CodePasswordResetInvalid:
+			writeJSONError(w, http.StatusUnauthorized, te.Code, te.Message)
+		default:
+			writeJSONError(w, http.StatusInternalServerError, te.Code, "internal error")
+		}
+		return
+	}
 	switch {
 	case errors.Is(err, ErrInvalidToken),
 		errors.Is(err, ErrMagicLinkExpired),
@@ -120,4 +161,15 @@ func errToHTTP(w http.ResponseWriter, err error) {
 	default:
 		http.Error(w, "internal error", http.StatusInternalServerError)
 	}
+}
+
+// writeJSONError emits the v0.2+ error response shape: {"code":"...","message":"..."}.
+// Old (v0.1) error responses still use plain-text http.Error for backward compat.
+func writeJSONError(w http.ResponseWriter, status int, code, message string) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(struct {
+		Code    string `json:"code"`
+		Message string `json:"message"`
+	}{Code: code, Message: message})
 }

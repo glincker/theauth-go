@@ -33,6 +33,16 @@ type Storage interface {
 	// Magic links
 	CreateMagicLink(ctx context.Context, ml MagicLink) error
 	ConsumeMagicLink(ctx context.Context, tokenHash []byte) (*MagicLink, error)
+
+	// Email + password (v0.2)
+	SetUserPassword(ctx context.Context, userID ULID, passwordHash string) error
+	// UserByEmailWithPassword fetches a user along with their stored PHC hash.
+	// passwordHash is "" if the account exists but has never set a password
+	// (e.g. magic-link-only signup). Callers should treat empty hash as
+	// "no password credential available" and surface invalid_credentials.
+	UserByEmailWithPassword(ctx context.Context, email string) (user *User, passwordHash string, err error)
+	CreatePasswordResetToken(ctx context.Context, t PasswordResetToken) error
+	ConsumePasswordResetToken(ctx context.Context, tokenHash []byte) (*PasswordResetToken, error)
 }
 
 // Config holds the wiring for a TheAuth instance.
@@ -50,19 +60,27 @@ type Config struct {
 	MagicLinkTTL time.Duration
 	CookieName   string
 	SecureCookie bool
+	// RateLimitPerIP is the per-IP per-minute budget applied to credential
+	// endpoints (signup/signin/forgot/reset). Defaults to 5 when zero.
+	RateLimitPerIP int
+	// RateLimitPerEmail is the per-email per-minute budget applied to signin
+	// + forgot. Defaults to 3 when zero.
+	RateLimitPerEmail int
 }
 
 // TheAuth is the public entry point — constructed once at app start and
 // shared across handlers.
 type TheAuth struct {
-	storage      Storage
-	emailSender  email.Sender
-	baseURL      string
-	signingKey   ed25519.PrivateKey
-	sessionTTL   time.Duration
-	magicLinkTTL time.Duration
-	cookieName   string
-	secureCookie bool
+	storage           Storage
+	emailSender       email.Sender
+	baseURL           string
+	signingKey        ed25519.PrivateKey
+	sessionTTL        time.Duration
+	magicLinkTTL      time.Duration
+	cookieName        string
+	secureCookie      bool
+	rateLimitPerIP    int
+	rateLimitPerEmail int
 }
 
 // New validates the Config, applies defaults, and returns a ready TheAuth.
@@ -85,14 +103,22 @@ func New(cfg Config) (*TheAuth, error) {
 	if cfg.EmailSender == nil {
 		cfg.EmailSender = email.Noop{}
 	}
+	if cfg.RateLimitPerIP <= 0 {
+		cfg.RateLimitPerIP = 5
+	}
+	if cfg.RateLimitPerEmail <= 0 {
+		cfg.RateLimitPerEmail = 3
+	}
 	return &TheAuth{
-		storage:      cfg.Storage,
-		emailSender:  cfg.EmailSender,
-		baseURL:      cfg.BaseURL,
-		signingKey:   cfg.SigningKey,
-		sessionTTL:   cfg.SessionTTL,
-		magicLinkTTL: cfg.MagicLinkTTL,
-		cookieName:   cfg.CookieName,
-		secureCookie: cfg.SecureCookie,
+		storage:           cfg.Storage,
+		emailSender:       cfg.EmailSender,
+		baseURL:           cfg.BaseURL,
+		signingKey:        cfg.SigningKey,
+		sessionTTL:        cfg.SessionTTL,
+		magicLinkTTL:      cfg.MagicLinkTTL,
+		cookieName:        cfg.CookieName,
+		secureCookie:      cfg.SecureCookie,
+		rateLimitPerIP:    cfg.RateLimitPerIP,
+		rateLimitPerEmail: cfg.RateLimitPerEmail,
 	}, nil
 }
