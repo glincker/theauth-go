@@ -92,3 +92,39 @@ func TestConsumeMagicLinkOnce(t *testing.T) {
 		t.Fatalf("second consume should miss; got %v", err)
 	}
 }
+
+// TestMemoryExpiredMagicLinkNotConsumed verifies the memory adapter matches
+// Postgres semantics: expired magic-links are NOT marked used. Without this,
+// a single failed/expired verification attempt would burn the link, even
+// though the user could still legitimately request a new one.
+func TestMemoryExpiredMagicLinkNotConsumed(t *testing.T) {
+	s := New()
+	ctx := context.Background()
+	tokenHash := sha256.Sum256([]byte("expired"))
+	ml := theauth.MagicLink{
+		ID:        ulid.New(),
+		Email:     "expired@h.com",
+		TokenHash: tokenHash[:],
+		CreatedAt: time.Now().Add(-30 * time.Minute),
+		ExpiresAt: time.Now().Add(-1 * time.Minute), // already expired
+	}
+	if err := s.CreateMagicLink(ctx, ml); err != nil {
+		t.Fatal(err)
+	}
+	// Attempt to consume — should miss without marking the row used.
+	if _, err := s.ConsumeMagicLink(ctx, tokenHash[:]); !errors.Is(err, storage.ErrNotFound) {
+		t.Fatalf("expired link should not be consumable; got %v", err)
+	}
+	// Verify the underlying row was NOT marked used (defensive: a second
+	// attempt with the same hash still misses, and the stored row's UsedAt
+	// is still nil).
+	s.mu.RLock()
+	stored, ok := s.magicLinks[ml.ID]
+	s.mu.RUnlock()
+	if !ok {
+		t.Fatal("magic link row missing from store")
+	}
+	if stored.UsedAt != nil {
+		t.Fatalf("expired link UsedAt should remain nil; got %v", stored.UsedAt)
+	}
+}

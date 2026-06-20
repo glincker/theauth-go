@@ -3,6 +3,7 @@ package theauth
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"time"
 
 	"github.com/glincker/theauth-go/crypto"
@@ -31,6 +32,7 @@ func (a *TheAuth) issueSession(ctx context.Context, user User, userAgent, ip str
 	if err != nil {
 		return "", Session{}, err
 	}
+	slog.Info("theauth: session issued", "user_id", sess.UserID.String(), "session_id", sess.ID.String())
 	return token, sess, nil
 }
 

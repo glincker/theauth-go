@@ -10,24 +10,24 @@ import (
 type ULID = ulid.ULID
 
 type User struct {
-	ID              ULID
-	Email           string
-	EmailVerifiedAt *time.Time
-	Name            string
-	AvatarURL       string
-	CreatedAt       time.Time
-	UpdatedAt       time.Time
+	ID              ULID       `json:"id"`
+	Email           string     `json:"email"`
+	EmailVerifiedAt *time.Time `json:"emailVerifiedAt,omitempty"`
+	Name            string     `json:"name"`
+	AvatarURL       string     `json:"avatarUrl"`
+	CreatedAt       time.Time  `json:"createdAt"`
+	UpdatedAt       time.Time  `json:"updatedAt"`
 }
 
 type Session struct {
-	ID        ULID
-	UserID    ULID
-	TokenHash []byte // sha256 of the opaque token
-	UserAgent string
-	IP        string
-	CreatedAt time.Time
-	ExpiresAt time.Time
-	RevokedAt *time.Time
+	ID        ULID       `json:"id"`
+	UserID    ULID       `json:"userId"`
+	TokenHash []byte     `json:"-"` // never serialize raw hash
+	UserAgent string     `json:"userAgent"`
+	IP        string     `json:"ip"`
+	CreatedAt time.Time  `json:"createdAt"`
+	ExpiresAt time.Time  `json:"expiresAt"`
+	RevokedAt *time.Time `json:"revokedAt,omitempty"`
 }
 
 // Expired reports whether the session is no longer usable at the given time.
@@ -39,10 +39,10 @@ func (s Session) Expired(now time.Time) bool {
 }
 
 type MagicLink struct {
-	ID        ULID
-	Email     string
-	TokenHash []byte
-	ExpiresAt time.Time
-	UsedAt    *time.Time
-	CreatedAt time.Time
+	ID        ULID       `json:"id"`
+	Email     string     `json:"email"`
+	TokenHash []byte     `json:"-"`
+	ExpiresAt time.Time  `json:"expiresAt"`
+	UsedAt    *time.Time `json:"usedAt,omitempty"`
+	CreatedAt time.Time  `json:"createdAt"`
 }

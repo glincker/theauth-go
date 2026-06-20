@@ -3,7 +3,10 @@ package theauth
 import (
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"net/http"
+	"net/mail"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -26,6 +29,7 @@ func (a *TheAuth) Mount(r chi.Router) {
 }
 
 func (a *TheAuth) handleMagicLinkRequest(w http.ResponseWriter, r *http.Request) {
+	r.Body = http.MaxBytesReader(w, r.Body, 1<<14) // 16 KiB cap to prevent memory DoS
 	var body struct {
 		Email string `json:"email"`
 	}
@@ -33,7 +37,13 @@ func (a *TheAuth) handleMagicLinkRequest(w http.ResponseWriter, r *http.Request)
 		http.Error(w, "invalid body", http.StatusBadRequest)
 		return
 	}
-	if err := a.requestMagicLink(r.Context(), body.Email); err != nil {
+	addr, err := mail.ParseAddress(body.Email)
+	if err != nil {
+		http.Error(w, "invalid email", http.StatusBadRequest)
+		return
+	}
+	email := strings.ToLower(strings.TrimSpace(addr.Address))
+	if err := a.requestMagicLink(r.Context(), email); err != nil {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
@@ -85,12 +95,15 @@ func (a *TheAuth) handleSessionDelete(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
+	slog.Info("theauth: session revoked", "user_id", sess.UserID.String(), "session_id", sess.ID.String())
 	http.SetCookie(w, &http.Cookie{
 		Name:     a.cookieName,
 		Value:    "",
 		Path:     "/",
 		MaxAge:   -1,
 		HttpOnly: true,
+		Secure:   a.secureCookie,
+		SameSite: http.SameSiteLaxMode,
 	})
 	w.WriteHeader(http.StatusNoContent)
 }

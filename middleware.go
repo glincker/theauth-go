@@ -2,6 +2,7 @@ package theauth
 
 import (
 	"context"
+	"log/slog"
 	"net/http"
 )
 
@@ -12,11 +13,16 @@ func (a *TheAuth) Authn() func(http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			cookie, err := r.Cookie(a.cookieName)
 			if err != nil || cookie.Value == "" {
+				// No cookie present — silent anonymous request.
 				next.ServeHTTP(w, r)
 				return
 			}
 			sess, user, err := a.validateSession(r.Context(), cookie.Value)
 			if err != nil {
+				// Cookie present but validation failed — log so DB outages
+				// don't masquerade as "user is anonymous". Token value is
+				// never logged.
+				slog.Warn("theauth: session validation failed", "err", err.Error())
 				next.ServeHTTP(w, r)
 				return
 			}

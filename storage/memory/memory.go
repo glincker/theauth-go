@@ -122,9 +122,9 @@ func (s *Store) CreateMagicLink(_ context.Context, ml theauth.MagicLink) error {
 func (s *Store) ConsumeMagicLink(_ context.Context, hash []byte) (*theauth.MagicLink, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	now := time.Now()
 	for id, ml := range s.magicLinks {
-		if bytes.Equal(ml.TokenHash, hash) && ml.UsedAt == nil {
-			now := time.Now()
+		if bytes.Equal(ml.TokenHash, hash) && ml.UsedAt == nil && !ml.ExpiresAt.Before(now) {
 			ml.UsedAt = &now
 			s.magicLinks[id] = ml
 			cp := ml

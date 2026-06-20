@@ -48,13 +48,6 @@ func tsToTimePtr(ts pgtype.Timestamptz) *time.Time {
 	return &t
 }
 
-func timePtrToTs(t *time.Time) pgtype.Timestamptz {
-	if t == nil {
-		return pgtype.Timestamptz{Valid: false}
-	}
-	return pgtype.Timestamptz{Time: *t, Valid: true}
-}
-
 func timeToTs(t time.Time) pgtype.Timestamptz {
 	return pgtype.Timestamptz{Time: t, Valid: true}
 }
@@ -136,13 +129,7 @@ func (s *Store) CreateUser(ctx context.Context, u theauth.User) (theauth.User, e
 	if err != nil {
 		return theauth.User{}, err
 	}
-	out := rowToUser(row)
-	// Preserve caller-supplied EmailVerifiedAt if the column was filled in by
-	// other means; the INSERT does not set it, so the row reflects DB state.
-	if u.EmailVerifiedAt != nil && out.EmailVerifiedAt == nil {
-		out.EmailVerifiedAt = u.EmailVerifiedAt
-	}
-	return out, nil
+	return rowToUser(row), nil
 }
 
 func (s *Store) UserByEmail(ctx context.Context, email string) (*theauth.User, error) {
@@ -252,7 +239,3 @@ func (s *Store) ConsumeMagicLink(ctx context.Context, tokenHash []byte) (*theaut
 	ml := rowToMagicLink(row)
 	return &ml, nil
 }
-
-// Silence unused-import warnings for timePtrToTs when no caller is using it
-// yet (kept for future Update methods).
-var _ = timePtrToTs

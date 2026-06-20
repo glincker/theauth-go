@@ -10,6 +10,7 @@ import (
 // runs out-of-the-box in development.
 type Noop struct{}
 
+// SECURITY: this sender logs the full email body including any magic-link tokens. NEVER use Noop in production.
 func (Noop) Send(_ context.Context, to, subject, body string) error {
 	slog.Info("theauth/email: noop send", "to", to, "subject", subject, "body", body)
 	return nil

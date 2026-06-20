@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
+	"strings"
 	"time"
 
 	"github.com/glincker/theauth-go/crypto"
@@ -23,6 +25,7 @@ func (a *TheAuth) requestMagicLink(ctx context.Context, emailAddr string) error 
 // Production code calls requestMagicLink; the token only ever appears in
 // the user's inbox.
 func (a *TheAuth) requestMagicLinkForTest(ctx context.Context, emailAddr string) (string, error) {
+	emailAddr = strings.ToLower(strings.TrimSpace(emailAddr))
 	token, err := crypto.NewToken()
 	if err != nil {
 		return "", err
@@ -43,6 +46,7 @@ func (a *TheAuth) requestMagicLinkForTest(ctx context.Context, emailAddr string)
 	if err := a.emailSender.Send(ctx, emailAddr, "Sign in to TheAuth", body); err != nil {
 		return "", err
 	}
+	slog.Info("theauth: magic link requested", "email", emailAddr)
 	return token, nil
 }
 
@@ -80,11 +84,14 @@ func (a *TheAuth) consumeMagicLink(ctx context.Context, token string) (sessionTo
 		return "", nil, err
 	} else if u.EmailVerifiedAt == nil {
 		// Existing user, mark verified now
-		_ = a.storage.MarkEmailVerified(ctx, u.ID)
+		if err := a.storage.MarkEmailVerified(ctx, u.ID); err != nil {
+			slog.Warn("theauth: mark email verified failed", "user_id", u.ID.String(), "err", err.Error())
+		}
 	}
 	sessToken, _, err := a.issueSession(ctx, *u, "", "")
 	if err != nil {
 		return "", nil, err
 	}
+	slog.Info("theauth: magic link consumed", "user_id", u.ID.String(), "email", u.Email)
 	return sessToken, u, nil
 }
