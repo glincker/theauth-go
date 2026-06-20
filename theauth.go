@@ -60,19 +60,27 @@ type Config struct {
 	MagicLinkTTL time.Duration
 	CookieName   string
 	SecureCookie bool
+	// RateLimitPerIP is the per-IP per-minute budget applied to credential
+	// endpoints (signup/signin/forgot/reset). Defaults to 5 when zero.
+	RateLimitPerIP int
+	// RateLimitPerEmail is the per-email per-minute budget applied to signin
+	// + forgot. Defaults to 3 when zero.
+	RateLimitPerEmail int
 }
 
 // TheAuth is the public entry point — constructed once at app start and
 // shared across handlers.
 type TheAuth struct {
-	storage      Storage
-	emailSender  email.Sender
-	baseURL      string
-	signingKey   ed25519.PrivateKey
-	sessionTTL   time.Duration
-	magicLinkTTL time.Duration
-	cookieName   string
-	secureCookie bool
+	storage           Storage
+	emailSender       email.Sender
+	baseURL           string
+	signingKey        ed25519.PrivateKey
+	sessionTTL        time.Duration
+	magicLinkTTL      time.Duration
+	cookieName        string
+	secureCookie      bool
+	rateLimitPerIP    int
+	rateLimitPerEmail int
 }
 
 // New validates the Config, applies defaults, and returns a ready TheAuth.
@@ -95,14 +103,22 @@ func New(cfg Config) (*TheAuth, error) {
 	if cfg.EmailSender == nil {
 		cfg.EmailSender = email.Noop{}
 	}
+	if cfg.RateLimitPerIP <= 0 {
+		cfg.RateLimitPerIP = 5
+	}
+	if cfg.RateLimitPerEmail <= 0 {
+		cfg.RateLimitPerEmail = 3
+	}
 	return &TheAuth{
-		storage:      cfg.Storage,
-		emailSender:  cfg.EmailSender,
-		baseURL:      cfg.BaseURL,
-		signingKey:   cfg.SigningKey,
-		sessionTTL:   cfg.SessionTTL,
-		magicLinkTTL: cfg.MagicLinkTTL,
-		cookieName:   cfg.CookieName,
-		secureCookie: cfg.SecureCookie,
+		storage:           cfg.Storage,
+		emailSender:       cfg.EmailSender,
+		baseURL:           cfg.BaseURL,
+		signingKey:        cfg.SigningKey,
+		sessionTTL:        cfg.SessionTTL,
+		magicLinkTTL:      cfg.MagicLinkTTL,
+		cookieName:        cfg.CookieName,
+		secureCookie:      cfg.SecureCookie,
+		rateLimitPerIP:    cfg.RateLimitPerIP,
+		rateLimitPerEmail: cfg.RateLimitPerEmail,
 	}, nil
 }

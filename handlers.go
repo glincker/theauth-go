@@ -30,8 +30,8 @@ import (
 func (a *TheAuth) Mount(r chi.Router) {
 	// Build limiter middlewares once so the same buckets persist across all
 	// routes mounted at this point. Re-mounting builds a fresh set.
-	ipLimit := a.RateLimitByIP(5)
-	emailLimit := a.RateLimitByEmail(3)
+	ipLimit := a.RateLimitByIP(a.rateLimitPerIP)
+	emailLimit := a.RateLimitByEmail(a.rateLimitPerEmail)
 
 	r.Route("/auth", func(r chi.Router) {
 		r.Post("/magic-link", a.handleMagicLinkRequest)

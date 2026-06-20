@@ -18,6 +18,11 @@ func newTestAuth(t *testing.T) (*theauth.TheAuth, *memory.Store) {
 		BaseURL:      "http://localhost",
 		SessionTTL:   time.Hour,
 		MagicLinkTTL: 15 * time.Minute,
+		// Test defaults: keep production-realistic ratios but raise headroom
+		// so multi-step e2e flows don't trip the per-email limit while still
+		// letting dedicated tests assert the 429 boundary.
+		RateLimitPerIP:    100,
+		RateLimitPerEmail: 100,
 	})
 	if err != nil {
 		t.Fatal(err)
