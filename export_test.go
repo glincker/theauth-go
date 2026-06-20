@@ -21,3 +21,9 @@ func RequestMagicLinkForTest(a *TheAuth, ctx context.Context, email string) (str
 func ConsumeMagicLinkForTest(a *TheAuth, ctx context.Context, token string) (string, *User, error) {
 	return a.consumeMagicLink(ctx, token)
 }
+
+// SetBaseURLForTest exposes the unexported baseURL field for tests that
+// need to point the TheAuth instance at an httptest.Server URL.
+func SetBaseURLForTest(a *TheAuth, url string) {
+	a.baseURL = url
+}
