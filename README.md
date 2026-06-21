@@ -2,6 +2,8 @@
 
 > A modern auth library for Go. Magic links, sessions, OAuth, MCP OAuth 2.1. Drop-in chi/net/http middleware. Postgres or in-memory storage.
 
+**Production status**: v1.0.0 is the production-ready release. Public API frozen per [STABILITY.md](STABILITY.md); breaking changes from here forward require a major bump. See [CHANGELOG.md](CHANGELOG.md) for the v0.1 to v1.0 capability summary.
+
 [![Go Reference](https://pkg.go.dev/badge/github.com/glincker/theauth-go.svg)](https://pkg.go.dev/github.com/glincker/theauth-go)
 [![Go Report Card](https://goreportcard.com/badge/github.com/glincker/theauth-go)](https://goreportcard.com/report/github.com/glincker/theauth-go)
 [![CI](https://github.com/glincker/theauth-go/actions/workflows/ci.yml/badge.svg)](https://github.com/glincker/theauth-go/actions/workflows/ci.yml)

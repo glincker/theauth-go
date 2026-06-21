@@ -8,6 +8,7 @@ import (
 	"encoding/pem"
 	"errors"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/glincker/theauth-go/crypto"
@@ -161,6 +162,40 @@ type Storage interface {
 	AddGroupMembers(ctx context.Context, groupID ULID, userIDs []ULID) error
 	RemoveGroupMembers(ctx context.Context, groupID ULID, userIDs []ULID) error
 	GroupMembers(ctx context.Context, groupID ULID) ([]ULID, error)
+
+	// ---------- v1.0 RBAC ----------
+	// Permissions form a global catalog (no org scope). Insert is idempotent
+	// on the name unique index; duplicate names return the existing row
+	// rather than an error so seed runs at app start are safe.
+	InsertPermission(ctx context.Context, p Permission) (Permission, error)
+	PermissionByName(ctx context.Context, name string) (*Permission, error)
+	ListPermissions(ctx context.Context) ([]Permission, error)
+
+	InsertRole(ctx context.Context, r Role) (Role, error)
+	UpdateRoleRow(ctx context.Context, r Role) (Role, error)
+	DeleteRole(ctx context.Context, id ULID) error
+	RoleByID(ctx context.Context, id ULID) (*Role, error)
+	RoleByOrgAndName(ctx context.Context, orgID *ULID, name string) (*Role, error)
+	RolesByOrganization(ctx context.Context, orgID *ULID) ([]Role, error)
+
+	SetRolePermissions(ctx context.Context, roleID ULID, permissionIDs []ULID) error
+	// PermissionsByRole returns the permission-name slice for one role.
+	// The names are looked up by joining role_permissions to permissions.
+	PermissionsByRole(ctx context.Context, roleID ULID) ([]string, error)
+
+	GrantUserRole(ctx context.Context, ur UserRole) error
+	RevokeUserRole(ctx context.Context, userID, roleID ULID) error
+	RolesForUser(ctx context.Context, userID ULID, orgID *ULID) ([]Role, error)
+	PermissionsForUser(ctx context.Context, userID ULID, orgID *ULID) ([]string, error)
+	CountUsersWithPermissionInOrg(ctx context.Context, orgID ULID, perm string) (int, error)
+
+	// ---------- v1.0 audit log ----------
+	// InsertAuditEvents writes a batch in one round trip. Append-only;
+	// adapters MUST NOT expose UPDATE or DELETE for audit rows. Failure
+	// returns an error; the writer goroutine logs it and increments
+	// Stats.AuditFailed without retrying (documented tradeoff).
+	InsertAuditEvents(ctx context.Context, events []AuditEvent) error
+	QueryAuditEvents(ctx context.Context, q AuditQuery) (events []AuditEvent, nextCursor string, err error)
 }
 
 // Config holds the wiring for a TheAuth instance.
@@ -226,11 +261,84 @@ type Config struct {
 	// Organizations to be non-nil.
 	SCIM *SCIMConfig
 
-	// AuditHook (v0.7) is invoked synchronously for every SCIM mutation and
-	// every successful SAML assertion. The hook is a stub for v0.7 and
-	// becomes the entry point for the real async writer in v1.0. Nil hooks
-	// are a no-op; the library never blocks on this call.
-	AuditHook AuditHook
+	// RBAC (v1.0) enables organization-scoped role and permission
+	// management when non-nil. The zero value RBACConfig{} accepts the
+	// seeded permissions and default org roles documented in
+	// service_rbac.go; consumers extend (never shrink) the seeded lists.
+	// New returns an error if Admin is non-nil and RBAC is nil because the
+	// admin endpoints are permission-gated and meaningless without RBAC.
+	RBAC *RBACConfig
+
+	// Audit (v1.0) enables the async batched audit writer when non-nil.
+	// When nil, EmitAudit is a silent no-op and no writer goroutine starts;
+	// the v0.7 stub call sites keep working as no-ops, so deployments that
+	// do not configure audit continue to behave exactly as before.
+	Audit *AuditConfig
+
+	// Admin (v1.0) mounts /admin/v1/* when non-nil. Requires RBAC to be
+	// non-nil. The PathPrefix can be moved (e.g. "/api/admin/v1") but the
+	// trailing version segment is always v1.
+	Admin *AdminConfig
+}
+
+// RBACConfig configures organization-scoped roles and permissions. The zero
+// value is valid and accepts the seeded permission list plus the seeded
+// "owner", "admin", "member" roles.
+type RBACConfig struct {
+	// Permissions extends the seeded catalog. Names are deduped by case-
+	// sensitive equality with the seeded list. New returns an error if any
+	// supplied name contains whitespace or non-ASCII (permission names are
+	// program identifiers, not user input).
+	Permissions []Permission
+
+	// DefaultRoles seeds every new organization. When empty the three
+	// default roles ("owner", "admin", "member") are used. Reserved names
+	// ("owner", "admin", "member") must remain present when consumers
+	// override; New returns an error otherwise.
+	DefaultRoles []RoleSeed
+}
+
+// RoleSeed describes one organization-scoped role created at
+// SeedOrganizationRoles time. Permissions are permission names; unknown
+// names cause New to return a validation error so typos surface at startup
+// instead of on the first permission check.
+type RoleSeed struct {
+	Name        string
+	Description string
+	Permissions []string
+}
+
+// AuditConfig configures the async audit writer. All fields have safe
+// defaults; the zero value AuditConfig{} is valid.
+type AuditConfig struct {
+	// BufferSize is the channel buffer between EmitAudit and the writer
+	// goroutine. Defaults to 4096. When full, EmitAudit drops the event
+	// and increments Stats.AuditDropped.
+	BufferSize int
+
+	// BatchSize is the maximum events per INSERT. Defaults to 100.
+	BatchSize int
+
+	// FlushInterval is the maximum delay before a partial batch flushes.
+	// Defaults to 1 second.
+	FlushInterval time.Duration
+
+	// Redactor optionally transforms metadata before storage. The default
+	// redactor strips the keys "password", "secret", "token", "code",
+	// "refresh_token", "access_token" (case-insensitive) at any nesting
+	// depth and replaces their values with the string "[REDACTED]".
+	Redactor func(metadata map[string]any) map[string]any
+
+	// DrainTimeout caps how long Close waits for the writer goroutine to
+	// drain remaining events. Defaults to 5 seconds.
+	DrainTimeout time.Duration
+}
+
+// AdminConfig mounts /admin/v1/* when non-nil on the same chi router passed
+// to Mount.
+type AdminConfig struct {
+	// PathPrefix where admin routes mount. Defaults to "/admin/v1".
+	PathPrefix string
 }
 
 // OrganizationsConfig is currently empty: there are no tunables for v0.7.
@@ -269,23 +377,6 @@ type SCIMConfig struct {
 	// MaxPageSize caps the count parameter on list endpoints. Defaults to
 	// 200. RFC 7644 section 3.4.2 lets the server enforce a maximum.
 	MaxPageSize int
-}
-
-// AuditHook (v0.7) is the synchronous hook invoked for every SCIM mutation
-// and every successful SAML assertion. v0.7 ships a no-op default; v1.0
-// replaces this with the real async audit writer. Actor is either a SCIM
-// token ID (for SCIM mutations) or a SAML connection ID (for SAML logins).
-type AuditHook func(ctx context.Context, event AuditEvent)
-
-// AuditEvent is the payload passed to AuditHook. Token plaintext is never
-// included; only the hashed actor identifier and the resource id are.
-type AuditEvent struct {
-	Action         string
-	OrganizationID ULID
-	ActorID        ULID
-	ResourceID     ULID
-	Detail         string
-	At             time.Time
 }
 
 // WebAuthnConfig wires the Relying Party identity. Field names mirror the
@@ -359,7 +450,23 @@ type TheAuth struct {
 	samlAuthnInFlight sync.Map // map[string]time.Time -- AuthnRequest ID -> deadline
 	samlAuthnStop     chan struct{}
 	scimCfg           *SCIMConfig
-	auditHook         AuditHook
+
+	// v1.0
+	rbacCfg          *RBACConfig
+	auditCfg         *AuditConfig
+	adminCfg         *AdminConfig
+	auditCh          chan AuditEvent
+	auditStop        chan struct{}
+	auditDone        chan struct{}
+	auditStarted     atomic.Bool
+	auditClosed      atomic.Bool
+	auditEmitted     atomic.Uint64
+	auditWritten     atomic.Uint64
+	auditDropped     atomic.Uint64
+	auditFailed      atomic.Uint64
+	permCatalog      []Permission          // immutable snapshot for validation
+	permIndex        map[string]Permission // name -> Permission, lookup cache
+	defaultRoleSeeds []RoleSeed
 }
 
 // New validates the Config, applies defaults, and returns a ready TheAuth.
@@ -519,8 +626,13 @@ func New(cfg Config) (*TheAuth, error) {
 			cfg.SCIM.MaxPageSize = 200
 		}
 	}
-	if cfg.AuditHook == nil {
-		cfg.AuditHook = noopAuditHook
+	// v1.0 RBAC + Admin validation.
+	if cfg.Admin != nil && cfg.RBAC == nil {
+		return nil, ErrAdminRequiresRBAC
+	}
+	permCatalog, permIndex, defaultSeeds, err := validateRBAC(cfg.RBAC)
+	if err != nil {
+		return nil, err
 	}
 
 	a := &TheAuth{
@@ -545,7 +657,12 @@ func New(cfg Config) (*TheAuth, error) {
 		samlSPCert:        samlCert,
 		samlSPKey:         samlKey,
 		scimCfg:           cfg.SCIM,
-		auditHook:         cfg.AuditHook,
+		rbacCfg:           cfg.RBAC,
+		auditCfg:          cfg.Audit,
+		adminCfg:          cfg.Admin,
+		permCatalog:       permCatalog,
+		permIndex:         permIndex,
+		defaultRoleSeeds:  defaultSeeds,
 	}
 	if len(providers) > 0 {
 		a.oauthStateStop = make(chan struct{})
@@ -564,18 +681,39 @@ func New(cfg Config) (*TheAuth, error) {
 		a.samlAuthnStop = make(chan struct{})
 		go a.samlAuthnGCLoop()
 	}
+	if err := a.Start(); err != nil {
+		return nil, err
+	}
 	return a, nil
 }
 
-// noopAuditHook is the v0.7 default. v1.0 replaces this binding with the
-// real async writer; the signature stays stable so consumer code does not
-// need to change.
-func noopAuditHook(_ context.Context, _ AuditEvent) {}
+// Start spawns the audit writer goroutine when Config.Audit is non-nil and
+// the writer is not already running. Idempotent; safe to call multiple
+// times. New calls Start automatically so existing callers that never
+// invoked Start keep working.
+func (a *TheAuth) Start() error {
+	if a.auditCfg == nil {
+		return nil
+	}
+	if !a.auditStarted.CompareAndSwap(false, true) {
+		return nil
+	}
+	bufSize := a.auditCfg.BufferSize
+	if bufSize <= 0 {
+		bufSize = 4096
+	}
+	a.auditCh = make(chan AuditEvent, bufSize)
+	a.auditStop = make(chan struct{})
+	a.auditDone = make(chan struct{})
+	go a.auditWriterLoop()
+	return nil
+}
 
 // Close releases background resources started by New: the OAuth state GC
-// loop (v0.3) and the WebAuthn challenge / TOTP enrollment GC loops (v0.5).
-// Safe to call multiple times; safe to omit in tests that don't configure
-// the corresponding feature.
+// loop (v0.3), the WebAuthn challenge / TOTP enrollment GC loops (v0.5), the
+// SAML AuthnRequest GC loop (v0.7), and the audit writer goroutine (v1.0).
+// Audit drain waits up to Config.Audit.DrainTimeout (default 5 seconds) for
+// the writer to flush. Safe to call multiple times.
 func (a *TheAuth) Close() {
 	closeOnce := func(ch chan struct{}) {
 		if ch == nil {
@@ -592,4 +730,31 @@ func (a *TheAuth) Close() {
 	closeOnce(a.webauthnStop)
 	closeOnce(a.totpEnrollmentStop)
 	closeOnce(a.samlAuthnStop)
+	// Audit shutdown: mark closed (so EmitAudit becomes a drop), close the
+	// stop channel, then wait for the writer goroutine to drain remaining
+	// events. The auditClosed flag protects EmitAudit from racing on a
+	// closed channel.
+	if a.auditStarted.Load() && !a.auditClosed.Swap(true) {
+		closeOnce(a.auditStop)
+		timeout := 5 * time.Second
+		if a.auditCfg != nil && a.auditCfg.DrainTimeout > 0 {
+			timeout = a.auditCfg.DrainTimeout
+		}
+		if a.auditDone != nil {
+			select {
+			case <-a.auditDone:
+			case <-time.After(timeout):
+			}
+		}
+	}
+}
+
+// Stats returns a snapshot of runtime counters.
+func (a *TheAuth) Stats() Stats {
+	return Stats{
+		AuditEmitted: a.auditEmitted.Load(),
+		AuditWritten: a.auditWritten.Load(),
+		AuditDropped: a.auditDropped.Load(),
+		AuditFailed:  a.auditFailed.Load(),
+	}
 }

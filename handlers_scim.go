@@ -630,17 +630,16 @@ func writeSCIMError(w http.ResponseWriter, status int, scimType, detail string) 
 	_ = json.NewEncoder(w).Encode(newSCIMError(status, scimType, detail))
 }
 
-// emitSCIMAudit invokes the audit hook with the actor token ID resolved by
-// scimAuth. v0.7 ships a no-op default; v1.0 replaces this with the real
-// async writer.
+// emitSCIMAudit emits an audit event for one SCIM mutation. v1.0 swaps the
+// v0.7 synchronous stub for the real async writer; the call sites stay
+// shape-stable.
 func (a *TheAuth) emitSCIMAudit(ctx context.Context, action string, orgID, resourceID ULID, detail string) {
 	tokenID := scimTokenIDFromContext(ctx)
-	a.auditHook(ctx, AuditEvent{
-		Action:         action,
-		OrganizationID: orgID,
-		ActorID:        tokenID,
-		ResourceID:     resourceID,
-		Detail:         detail,
-		At:             time.Now(),
-	})
+	md := AuditMetadata{OrganizationID: &orgID}
+	ctx = WithAuditMetadata(ctx, md)
+	meta := map[string]any{"scim_token_id": tokenID.String()}
+	if detail != "" {
+		meta["detail"] = detail
+	}
+	a.EmitAudit(ctx, action, TargetRef{Type: "user", ID: resourceID.String()}, meta)
 }

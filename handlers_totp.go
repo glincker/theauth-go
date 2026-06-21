@@ -109,5 +109,6 @@ func (a *TheAuth) handleTOTPDelete(w http.ResponseWriter, r *http.Request) {
 		errToHTTP(w, err)
 		return
 	}
+	a.EmitAudit(r.Context(), "totp.disabled", TargetRef{Type: "user", ID: user.ID.String()}, nil)
 	w.WriteHeader(http.StatusNoContent)
 }

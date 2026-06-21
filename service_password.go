@@ -95,6 +95,10 @@ func (a *TheAuth) signupWithPassword(ctx context.Context, emailAddr, password st
 		slog.Warn("theauth: signup verification email failed", "email", emailAddr, "err", err.Error())
 	}
 
+	a.EmitAudit(ctx, "user.login", TargetRef{Type: "user", ID: user.ID.String()}, map[string]any{
+		"auth_method": "password",
+		"email_hash":  HashEmailForAudit(emailAddr),
+	})
 	slog.Info("theauth: password signup", "user_id", user.ID.String(), "email", emailAddr)
 	return &user, sessToken, nil
 }
@@ -160,6 +164,11 @@ func (a *TheAuth) signinWithPassword(ctx context.Context, emailAddr, password, u
 	if err != nil {
 		return "", nil, "", err
 	}
+	a.EmitAudit(WithAuditMetadata(ctx, AuditMetadata{ActorUserID: &user.ID, IP: ip, UserAgent: userAgent}),
+		"user.login", TargetRef{Type: "user", ID: user.ID.String()}, map[string]any{
+			"auth_method": "password",
+			"email_hash":  HashEmailForAudit(emailAddr),
+		})
 	slog.Info("theauth: password signin", "user_id", user.ID.String(), "email", emailAddr)
 	return sessToken, user, SigninStepFull, nil
 }
@@ -209,6 +218,9 @@ func (a *TheAuth) requestPasswordResetForTest(ctx context.Context, emailAddr str
 		// Best effort — token already minted; log and continue.
 		slog.Warn("theauth: password reset email send failed", "email", emailAddr, "err", err.Error())
 	}
+	a.EmitAudit(ctx, "password.reset.requested", TargetRef{Type: "user", ID: user.ID.String()}, map[string]any{
+		"email_hash": HashEmailForAudit(emailAddr),
+	})
 	slog.Info("theauth: password reset requested", "user_id", user.ID.String(), "email", emailAddr)
 	return token, nil
 }
@@ -252,6 +264,8 @@ func (a *TheAuth) resetPassword(ctx context.Context, token, newPassword string) 
 		// password change DID succeed.
 		slog.Warn("theauth: revoke sessions after password reset failed", "user_id", rt.UserID.String(), "err", err.Error())
 	}
+	a.EmitAudit(ctx, "password.reset.completed", TargetRef{Type: "user", ID: rt.UserID.String()}, nil)
+	a.EmitAudit(ctx, "password.changed", TargetRef{Type: "user", ID: rt.UserID.String()}, nil)
 	slog.Info("theauth: password reset", "user_id", rt.UserID.String())
 	return nil
 }

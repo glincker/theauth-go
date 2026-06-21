@@ -26,6 +26,8 @@ type Store struct {
 	// v0.7 multi-tenancy + SAML + SCIM. Held in a sidecar so the existing
 	// New() literal stays compact; see memory_v07.go for details.
 	v07 *v07State
+	// v1.0 RBAC + audit. See memory_v10.go.
+	v10 *v10State
 }
 
 func New() *Store {

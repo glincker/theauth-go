@@ -87,6 +87,12 @@ func (a *TheAuth) Mount(r chi.Router) {
 	if a.scimCfg != nil {
 		a.mountSCIM(r)
 	}
+
+	// Admin API (v1.0). Mounted at /admin/v1/* (or AdminConfig.PathPrefix)
+	// only when Config.Admin is non-nil. Requires RBAC (validated in New).
+	if a.adminCfg != nil {
+		a.mountAdmin(r)
+	}
 }
 
 func (a *TheAuth) handleMagicLinkRequest(w http.ResponseWriter, r *http.Request) {
@@ -156,6 +162,7 @@ func (a *TheAuth) handleSessionDelete(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
+	a.EmitAudit(r.Context(), "user.logout", TargetRef{Type: "session", ID: sess.ID.String()}, nil)
 	slog.Info("theauth: session revoked", "user_id", sess.UserID.String(), "session_id", sess.ID.String())
 	http.SetCookie(w, &http.Cookie{
 		Name:     a.cookieName,

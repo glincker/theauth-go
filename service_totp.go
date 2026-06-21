@@ -192,6 +192,7 @@ func (a *TheAuth) FinishTOTPEnrollment(ctx context.Context, userID ULID, enrollm
 	if err := a.storage.InsertRecoveryCodes(ctx, stored); err != nil {
 		return nil, fmt.Errorf("theauth: insert recovery codes: %w", err)
 	}
+	a.EmitAudit(ctx, "totp.enrolled", TargetRef{Type: "user", ID: userID.String()}, nil)
 	slog.Info("theauth: totp enrolled", "user_id", userID.String(), "recovery_codes", count)
 	return plain, nil
 }

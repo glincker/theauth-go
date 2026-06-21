@@ -46,6 +46,9 @@ func (a *TheAuth) requestMagicLinkForTest(ctx context.Context, emailAddr string)
 	if err := a.emailSender.Send(ctx, emailAddr, "Sign in to TheAuth", body); err != nil {
 		return "", err
 	}
+	a.EmitAudit(ctx, "magic_link.requested", TargetRef{Type: "user", ID: ml.ID.String()}, map[string]any{
+		"email_hash": HashEmailForAudit(emailAddr),
+	})
 	slog.Info("theauth: magic link requested", "email", emailAddr)
 	return token, nil
 }
@@ -92,6 +95,10 @@ func (a *TheAuth) consumeMagicLink(ctx context.Context, token string) (sessionTo
 	if err != nil {
 		return "", nil, err
 	}
+	a.EmitAudit(ctx, "magic_link.verified", TargetRef{Type: "user", ID: u.ID.String()}, nil)
+	a.EmitAudit(ctx, "user.login", TargetRef{Type: "user", ID: u.ID.String()}, map[string]any{
+		"auth_method": "magic_link",
+	})
 	slog.Info("theauth: magic link consumed", "user_id", u.ID.String(), "email", u.Email)
 	return sessToken, u, nil
 }

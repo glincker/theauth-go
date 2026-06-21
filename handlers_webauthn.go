@@ -141,5 +141,6 @@ func (a *TheAuth) handleWebAuthnCredentialsDelete(w http.ResponseWriter, r *http
 		errToHTTP(w, err)
 		return
 	}
+	a.EmitAudit(r.Context(), "passkey.deleted", TargetRef{Type: "webauthn_credential", ID: id.String()}, nil)
 	w.WriteHeader(http.StatusNoContent)
 }
