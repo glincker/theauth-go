@@ -23,6 +23,15 @@ version before removal with a `// Deprecated:` godoc line.
 - `github.com/glincker/theauth-go/storage/postgres`
 - `github.com/glincker/theauth-go/admin`
 
+## Stable packages (v2.0 additions)
+
+The v1.0 surface above is unchanged. v2.0 adds the following packages, each
+covered by the same SemVer guarantees from this point forward.
+
+- `github.com/glincker/theauth-go/mcpresource` (separately importable as a
+  zero-dependency Go module: a consumer pulling this package does NOT
+  transitively pull theauth core or the storage adapters).
+
 ## Stable surface
 
 ### Root package: `github.com/glincker/theauth-go`
@@ -181,6 +190,80 @@ semantics of an existing field is a v2.0 break.
 
 None. The v0.7 audit and the v1.0 review both found no symbols warranting
 a `// Deprecated:` marker before the v1.0 cut.
+
+## v2.0 surface added
+
+Every entry below is a stability commitment at v2.0. The entries are
+additive: they do not rename, remove, or change the semantics of any v1.0
+symbol. Consumers who do not configure `AuthorizationServer`, `AgentIdentity`,
+or `AccountUX` continue to see the v1.0 surface unchanged.
+
+### Root package (v2.0 additions)
+
+- Types: `AuthorizationServerConfig`, `AgentConfig`, `ProtectedResource`,
+  `ProtectedResourceMetadata`, `ASMetadata`, `ClientOwner`, `OAuthClient`,
+  `AuthorizationCode`, `RefreshToken`, `JWKSKey`, `Agent`, `AgentOwner`,
+  `AgentCredential`, `AgentSecret`, `CreateAgentInput`, `DelegationGrant`,
+  `GrantDelegationInput`, `ActorClaim`, `IntrospectionResponse`,
+  `TokenRequest`, `TokenResponse`, `TokenExchangeRequest`,
+  `AuthorizeRequest`, `ClientRegistrationRequest`.
+- Constructors and lifecycle: existing `New` accepts new optional
+  `Config.AuthorizationServer`, `Config.AgentIdentity`, `Config.AccountUX`
+  fields; existing `Mount` automatically mounts the v2.0 routes when those
+  fields are set.
+- New methods on `*TheAuth`: `CreateAgent`, `MintAgentCredential`,
+  `RotateAgentSecret`, `ListAgentsByOwner`, `GetAgent`, `SuspendAgent`,
+  `ResumeAgent`, `RevokeAgent`, `GrantDelegation`,
+  `ListDelegationsForUser`, `ListDelegationsForAgent`, `RevokeDelegation`,
+  `StartAuthorize`, `ExchangeAuthorizationCode`, `RefreshAccessToken`,
+  `ClientCredentialsToken`, `ExchangeToken`, `RevokeToken`,
+  `IntrospectToken`, `RegisterClient`, `RotateSigningKey`,
+  `ASMetadataDoc`, `ProtectedResourceMetadataDoc`.
+- Storage extension: `OAuthServerStorage` interface (root `Storage`
+  remains unchanged; AS-enabled deployments require an adapter that
+  satisfies both).
+- New permission names: `agents:admin`, `delegations:admin`. Owner and
+  admin default org roles include both.
+- New error sentinels (additive): `ErrASIssuerRequired`,
+  `ErrASRequiresEncryptionKey`, `ErrASUnsupportedAlg`,
+  `ErrOAuthInvalidRequest`, `ErrOAuthInvalidClient`, `ErrOAuthInvalidGrant`,
+  `ErrOAuthInvalidScope`, `ErrOAuthUnsupportedGrantType`,
+  `ErrOAuthUnsupportedResponseType`, `ErrOAuthInvalidResource`,
+  `ErrOAuthRegistrationDenied`, `ErrOAuthRedirectURIMismatch`,
+  `ErrOAuthPKCEMismatch`, `ErrOAuthAudienceMismatch`, `ErrNotImplemented`,
+  `ErrAgentNotFound`, `ErrAgentInactive`, `ErrDelegationNotFound`,
+  `ErrDelegationRevoked`, `ErrChainDepthExceeded`, `ErrSubjectTokenInvalid`,
+  `ErrActorTokenInvalid`, `ErrAgentRequiresAS`, `ErrAgentChainDepthTooHigh`,
+  `ErrAccountUXRequiresAgents`, `ErrStorageMissingOAuthMethods`.
+
+### Subpackage `mcpresource` (new in v2.0)
+
+- Types: `Validator`, `Principal`, `Option`.
+- Functions: `New`, `PrincipalFromContext`.
+- Options: `WithJWKS`, `WithIntrospection`, `WithCacheTTL`,
+  `WithHTTPClient`, `WithClockSkew`.
+- Methods: `(*Validator).Middleware`, `(*Validator).Principal`,
+  `(*Validator).ResourceURI`, `(*Validator).CacheTTL`.
+
+### HTTP surface (mounted by `Mount` when configured)
+
+- `GET /.well-known/oauth-authorization-server` (RFC 8414).
+- `GET /.well-known/oauth-protected-resource` (RFC 9728, default resource).
+- `GET /.well-known/oauth-protected-resource/{path}` (RFC 9728, per-resource).
+- `GET /oauth/jwks` (RFC 7517).
+- `GET /oauth/authorize`, `POST /oauth/token`, `POST /oauth/revoke`,
+  `POST /oauth/introspect`, `POST /oauth/register`.
+- `/admin/v1/organizations/{orgID}/agents` and
+  `/admin/v1/organizations/{orgID}/delegations` (RBAC-gated).
+- `/account/agents` and `/account/delegations` (session-gated, when
+  `Config.AccountUX` is true).
+
+### What is NOT public in v2.0
+
+- `internal/jwt`, `internal/chain`, `internal/ulid` remain internal.
+- The HTTP error body wire shape for `application/problem+json` follows
+  RFC 7807; the `code` extension namespace is reserved by this library and
+  may grow with new codes in additive minor releases.
 
 ## What changes without a major bump
 

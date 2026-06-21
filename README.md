@@ -1,8 +1,8 @@
 # theauth-go
 
-> A modern auth library for Go. Magic links, sessions, OAuth, MCP OAuth 2.1. Drop-in chi/net/http middleware. Postgres or in-memory storage.
+> A modern auth library for Go. Magic links, sessions, OAuth, MCP OAuth 2.1 authorization server, agent identities, revocable delegation chains, and a one-import resource server SDK. Drop-in chi/net/http middleware. Postgres or in-memory storage.
 
-**Production status**: v1.0.0 is the production-ready release. Public API frozen per [STABILITY.md](STABILITY.md); breaking changes from here forward require a major bump. See [CHANGELOG.md](CHANGELOG.md) for the v0.1 to v1.0 capability summary.
+**Production status**: v2.0.0 is the production-ready release. v1.0 surface is unchanged; every v2.0 feature is opt-in. Public API frozen per [STABILITY.md](STABILITY.md); breaking changes from here forward require a major bump. See [CHANGELOG.md](CHANGELOG.md) for the full capability summary and [docs/positioning.md](docs/positioning.md) for the MCP positioning.
 
 [![Go Reference](https://pkg.go.dev/badge/github.com/glincker/theauth-go.svg)](https://pkg.go.dev/github.com/glincker/theauth-go)
 [![Go Report Card](https://goreportcard.com/badge/github.com/glincker/theauth-go)](https://goreportcard.com/report/github.com/glincker/theauth-go)
@@ -26,15 +26,15 @@ It is built to drop into a `chi` or `net/http` server in under twenty lines, sto
 
 **What's different**
 
-- **Go-native**: idiomatic `net/http` handlers, a tiny `Storage` interface, `chi`-friendly middleware. Not a port of a TypeScript library
-- **Agent identity on the roadmap**: MCP OAuth 2.1 server, delegation chains, and budget policies are first-class plans (v2.0) — not bolted on
-- **Self-hosted forever**: MIT-licensed library, no per-MAU pricing, no vendor lock-in, your DB
+- **Go-native**: idiomatic `net/http` handlers, a tiny `Storage` interface, `chi`-friendly middleware. Not a port of a TypeScript library.
+- **Agent identity is first-class (v2.0)**: OAuth 2.1 MCP authorization server, agent identities, revocable delegation chains, and the RFC 8693 token-exchange grant ship in the core. Not bolted on.
+- **The first Go auth library where OAuth 2.1 MCP AS, agent identities, and revocable delegation chains are a single import.** See [docs/positioning.md](docs/positioning.md).
+- **Self-hosted forever**: MIT-licensed library, no per-MAU pricing, no vendor lock-in, your DB.
 
 **What it isn't**
 
-- Not a SaaS (no hosted dashboard, no managed UI)
-- Not for Node — see the TypeScript sibling [`glincker/theauth`](https://github.com/glincker/theauth)
-- Not a full IdP yet — OAuth providers ship in v0.3, SAML in v1.0
+- Not a SaaS (no hosted dashboard, no managed UI).
+- Not for Node: see the TypeScript sibling [`glincker/theauth`](https://github.com/glincker/theauth).
 
 ---
 
@@ -45,6 +45,97 @@ go get github.com/glincker/theauth-go
 ```
 
 Requires **Go 1.25+** (matches `pgx/v5`).
+
+The resource server SDK is a separate, zero-dependency module:
+
+```bash
+go get github.com/glincker/theauth-go/mcpresource
+```
+
+A consumer pulling `mcpresource` does NOT transitively pull theauth core or
+any storage adapter. Both modules version together at every theauth-go tag.
+
+---
+
+## What's new in 2.0
+
+v2.0 turns theauth-go into a full MCP authorization stack while keeping the
+v1.0 surface untouched. Every v2.0 feature is opt-in via additional `Config`
+fields; a consumer who upgrades to v2.0 without setting
+`AuthorizationServer`, `AgentIdentity`, or `AccountUX` continues to behave
+identically to v1.0.
+
+- **OAuth 2.1 Authorization Server**: `/.well-known/oauth-authorization-server`,
+  `/oauth/{authorize,token,revoke,introspect,register,jwks}`. RFC 9068
+  EdDSA JWT access tokens. RFC 8707 mandatory audience binding. RFC 9700
+  refresh-token rotation with family revocation. RFC 7591 dynamic client
+  registration. RFC 9728 protected-resource metadata.
+- **Agent identities + delegation chains**: agents owned by a user or
+  organization, the `client_credentials` grant for agent self-tokens, and
+  the RFC 8693 token-exchange grant for delegated calls with a hard chain
+  depth cap of 3, strict scope narrowing, strict duration tightening.
+- **`mcpresource` SDK**: a separately importable, zero-dependency Go
+  module that gives a resource server JWT validation, audience binding,
+  RFC 8693 actor chain walking, and RFC 9728 metadata pointers in a
+  single import + a single middleware line.
+- **Admin and end-user UX**: organization-scoped agent and delegation
+  management at `/admin/v1/.../agents` and `/.../delegations` (RBAC
+  gated). End-user self-service at `/account/agents` and
+  `/account/delegations` (session-cookie gated).
+
+Full positioning: [docs/positioning.md](docs/positioning.md). The
+[CHANGELOG](CHANGELOG.md) carries the per-phase summary; the
+[STABILITY](STABILITY.md) document enumerates the v2.0 stability surface.
+
+---
+
+## mcpresource quickstart
+
+If you are building an MCP server and want to outsource auth to an OAuth
+2.1 AS (theauth-go's own or any RFC 9068 + RFC 9728 compliant one), the
+import + middleware look like this:
+
+```go
+package main
+
+import (
+    "net/http"
+
+    "github.com/glincker/theauth-go/mcpresource"
+    "github.com/go-chi/chi/v5"
+)
+
+func main() {
+    v := mcpresource.New(
+        "https://mcp.example.com",
+        mcpresource.WithJWKS("https://as.example.com/oauth/jwks"),
+        mcpresource.WithIntrospection(
+            "https://as.example.com/oauth/introspect",
+            "mcp-client-id",
+            "mcp-client-secret",
+        ),
+    )
+
+    r := chi.NewRouter()
+    r.Use(v.Middleware)
+    r.Get("/tools/run", func(w http.ResponseWriter, r *http.Request) {
+        p, _ := v.Principal(r.Context())
+        _ = p // p.Subject (user), p.Actor (final agent), p.ActorChain
+    })
+
+    _ = http.ListenAndServe(":8090", r)
+}
+```
+
+The middleware validates the bearer JWT signature against a cached JWKS,
+enforces the audience claim against the resource URI, checks expiry with a
+60 second skew tolerance, walks the RFC 8693 `act` chain via the AS
+introspection endpoint, and on any failure emits 401 with
+`WWW-Authenticate: Bearer error="invalid_token", resource_metadata="..."`
+per RFC 6750 + RFC 9728. Cache TTL defaults to 60 seconds; tune with
+`WithCacheTTL`.
+
+Full runnable example: [`examples/mcp-server/`](./examples/mcp-server).
 
 ---
 
