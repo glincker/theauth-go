@@ -73,7 +73,7 @@ func TestRateLimitByIPIsolatesDifferentIPs(t *testing.T) {
 	if s1 != 200 || s2 != 200 || s3 != 429 {
 		t.Fatalf("1.1.1.1 sequence wrong: got %d, %d, %d; want 200, 200, 429", s1, s2, s3)
 	}
-	// IP B is untouched — first request must still pass.
+	// IP B is untouched, first request must still pass.
 	if rec("2.2.2.2") != 200 {
 		t.Fatal("2.2.2.2 should be allowed; isolation broken")
 	}
@@ -213,7 +213,7 @@ func TestRateLimitByEmailExtractsAndRestoresBody(t *testing.T) {
 	a, _ := newTestAuth(t)
 	mw := a.RateLimitByEmail(2)
 
-	// Downstream handler reads the body — verifies the middleware restored it.
+	// Downstream handler reads the body, verifies the middleware restored it.
 	var seen []string
 	downstream := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		buf, _ := io.ReadAll(r.Body)
@@ -242,7 +242,7 @@ func TestRateLimitByEmailExtractsAndRestoresBody(t *testing.T) {
 		t.Fatal("3rd to a@h.com should 429")
 	}
 	if send("b@h.com") != 200 {
-		t.Fatal("first to b@h.com should pass — isolation broken")
+		t.Fatal("first to b@h.com should pass, isolation broken")
 	}
 	for _, e := range seen {
 		if e != "a@h.com" && e != "b@h.com" {

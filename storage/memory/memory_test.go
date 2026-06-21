@@ -182,7 +182,7 @@ func TestMemoryExpiredMagicLinkNotConsumed(t *testing.T) {
 	if err := s.CreateMagicLink(ctx, ml); err != nil {
 		t.Fatal(err)
 	}
-	// Attempt to consume — should miss without marking the row used.
+	// Attempt to consume, should miss without marking the row used.
 	if _, err := s.ConsumeMagicLink(ctx, tokenHash[:]); !errors.Is(err, storage.ErrNotFound) {
 		t.Fatalf("expired link should not be consumable; got %v", err)
 	}

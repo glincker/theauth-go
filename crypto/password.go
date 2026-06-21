@@ -19,7 +19,7 @@ import (
 //	salt    = 16 bytes
 //	key     = 32 bytes
 //
-// These constants are deliberately not configurable per-hash — the PHC string
+// These constants are deliberately not configurable per-hash, the PHC string
 // embeds the params used at hash time, so VerifyPassword stays correct even
 // if we tune the defaults in a future release.
 const (
@@ -40,7 +40,7 @@ var ErrInvalidPasswordHash = errors.New("crypto: invalid password hash")
 //
 //	$argon2id$v=19$m=<KiB>,t=<iters>,p=<threads>$<base64(salt)>$<base64(hash)>
 //
-// Salt is freshly random per call — two hashes of the same password differ.
+// Salt is freshly random per call, two hashes of the same password differ.
 func HashPassword(plain string) (string, error) {
 	salt := make([]byte, argonSaltLen)
 	if _, err := rand.Read(salt); err != nil {
