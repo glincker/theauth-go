@@ -2,13 +2,17 @@ package theauth
 
 import (
 	"context"
-	"encoding/json"
-	"net/http"
 
 	"github.com/glincker/theauth-go/internal/models"
 	samlhandlers "github.com/glincker/theauth-go/internal/saml/handlers"
 	"github.com/go-chi/chi/v5"
 )
+
+// handlers_saml.go: thin forwarders around the extracted
+// internal/saml/handlers package. PR E moved the SP-flow endpoints
+// (/auth/saml/{connectionId}/{login,acs,metadata}) there; PR F moved
+// the per-organization connection CRUD endpoints into the same
+// package (crud.go) so root no longer owns any SAML handler bodies.
 
 // samlServiceAdapter implements internal/saml/handlers.Service on top
 // of the root *TheAuth, exposing the three SP-flow methods the
@@ -30,12 +34,48 @@ func (s samlServiceAdapter) MetadataXML(ctx context.Context, id models.ULID) ([]
 	return s.a.SAMLMetadataXML(ctx, id)
 }
 
-// mountSAML wires the public-facing SAML SP-flow endpoints (login,
-// ACS, metadata) via the extracted internal/saml/handlers package.
-// PR E architecture reorg (2026-06-20) moved the three SP endpoints
-// there; the per-org SAML connection CRUD endpoints below stay in
-// root because they depend on the unextracted requireOrgRole helper.
-func (a *TheAuth) mountSAML(r chi.Router) {
+// samlConnectionServiceAdapter implements
+// internal/saml/handlers.ConnectionService on top of the root
+// *TheAuth, projecting the handler-side input type into the root
+// SAMLConnectionInput so the extracted package does not import root.
+type samlConnectionServiceAdapter struct{ a *TheAuth }
+
+func (s samlConnectionServiceAdapter) Create(ctx context.Context, in samlhandlers.SAMLConnectionInput) (models.SAMLConnection, error) {
+	return s.a.CreateSAMLConnection(ctx, samlConnectionFromHandlers(in))
+}
+
+func (s samlConnectionServiceAdapter) Update(ctx context.Context, id models.ULID, in samlhandlers.SAMLConnectionInput) (models.SAMLConnection, error) {
+	return s.a.UpdateSAMLConnection(ctx, id, samlConnectionFromHandlers(in))
+}
+
+func (s samlConnectionServiceAdapter) Delete(ctx context.Context, id models.ULID) error {
+	return s.a.DeleteSAMLConnection(ctx, id)
+}
+
+func (s samlConnectionServiceAdapter) ByID(ctx context.Context, id models.ULID) (*models.SAMLConnection, error) {
+	return s.a.SAMLConnectionByID(ctx, id)
+}
+
+func (s samlConnectionServiceAdapter) List(ctx context.Context, orgID models.ULID) ([]models.SAMLConnection, error) {
+	return s.a.ListSAMLConnections(ctx, orgID)
+}
+
+func samlConnectionFromHandlers(in samlhandlers.SAMLConnectionInput) SAMLConnectionInput {
+	return SAMLConnectionInput{
+		OrganizationID: in.OrganizationID,
+		IdPEntityID:    in.IdPEntityID,
+		IdPSSOURL:      in.IdPSSOURL,
+		IdPX509Cert:    in.IdPX509Cert,
+		SPEntityID:     in.SPEntityID,
+		SPACSURL:       in.SPACSURL,
+		AttributeMap:   in.AttributeMap,
+	}
+}
+
+// newSAMLHandler builds the extracted Handler with both the SP-flow
+// and the CRUD-side dependencies attached. Used by both mountSAML
+// (SP-flow) and the org-tree subroute (CRUD).
+func (a *TheAuth) newSAMLHandler() *samlhandlers.Handler {
 	h := samlhandlers.New(
 		samlServiceAdapter{a: a},
 		samlhandlers.SessionCookieConfig{
@@ -45,128 +85,20 @@ func (a *TheAuth) mountSAML(r chi.Router) {
 		},
 		a.postLoginRedirect,
 	)
-	h.Mount(r)
+	h.AttachCRUD(samlConnectionServiceAdapter{a: a}, a.requireOrgRoleHTTP, userFromRequest)
+	return h
 }
 
-// ---------- SAML connection CRUD (mounted under /auth/orgs/{orgId}/saml/connections) ----------
-
-func (a *TheAuth) handleSAMLConnectionCreate(w http.ResponseWriter, r *http.Request) {
-	user, _ := UserFromContext(r.Context())
-	orgID, ok := pathULID(w, r, "orgId")
-	if !ok || user == nil {
-		return
-	}
-	if !a.requireOrgRole(w, r, orgID, user.ID, OrgRoleOwner) {
-		return
-	}
-	var body samlConnectionBody
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<16)).Decode(&body); err != nil {
-		http.Error(w, "invalid body", http.StatusBadRequest)
-		return
-	}
-	in := body.toInput(orgID)
-	conn, err := a.CreateSAMLConnection(r.Context(), in)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-	writeJSON(w, http.StatusCreated, conn)
+// mountSAML wires the public-facing SAML SP-flow endpoints (login,
+// ACS, metadata) via the extracted internal/saml/handlers package.
+func (a *TheAuth) mountSAML(r chi.Router) {
+	a.newSAMLHandler().Mount(r)
 }
 
-func (a *TheAuth) handleSAMLConnectionList(w http.ResponseWriter, r *http.Request) {
-	user, _ := UserFromContext(r.Context())
-	orgID, ok := pathULID(w, r, "orgId")
-	if !ok || user == nil {
-		return
-	}
-	if !a.requireOrgRole(w, r, orgID, user.ID, OrgRoleAdmin, OrgRoleOwner) {
-		return
-	}
-	conns, err := a.ListSAMLConnections(r.Context(), orgID)
-	if err != nil {
-		http.Error(w, "internal error", http.StatusInternalServerError)
-		return
-	}
-	writeJSON(w, http.StatusOK, conns)
-}
-
-func (a *TheAuth) handleSAMLConnectionGet(w http.ResponseWriter, r *http.Request) {
-	user, _ := UserFromContext(r.Context())
-	orgID, ok := pathULID(w, r, "orgId")
-	id, ok2 := pathULID(w, r, "id")
-	if !ok || !ok2 || user == nil {
-		return
-	}
-	if !a.requireOrgRole(w, r, orgID, user.ID, OrgRoleAdmin, OrgRoleOwner) {
-		return
-	}
-	conn, err := a.SAMLConnectionByID(r.Context(), id)
-	if err != nil || conn.OrganizationID != orgID {
-		http.Error(w, "not found", http.StatusNotFound)
-		return
-	}
-	writeJSON(w, http.StatusOK, conn)
-}
-
-func (a *TheAuth) handleSAMLConnectionUpdate(w http.ResponseWriter, r *http.Request) {
-	user, _ := UserFromContext(r.Context())
-	orgID, ok := pathULID(w, r, "orgId")
-	id, ok2 := pathULID(w, r, "id")
-	if !ok || !ok2 || user == nil {
-		return
-	}
-	if !a.requireOrgRole(w, r, orgID, user.ID, OrgRoleOwner) {
-		return
-	}
-	var body samlConnectionBody
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<16)).Decode(&body); err != nil {
-		http.Error(w, "invalid body", http.StatusBadRequest)
-		return
-	}
-	in := body.toInput(orgID)
-	conn, err := a.UpdateSAMLConnection(r.Context(), id, in)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-	writeJSON(w, http.StatusOK, conn)
-}
-
-func (a *TheAuth) handleSAMLConnectionDelete(w http.ResponseWriter, r *http.Request) {
-	user, _ := UserFromContext(r.Context())
-	orgID, ok := pathULID(w, r, "orgId")
-	id, ok2 := pathULID(w, r, "id")
-	if !ok || !ok2 || user == nil {
-		return
-	}
-	if !a.requireOrgRole(w, r, orgID, user.ID, OrgRoleOwner) {
-		return
-	}
-	if err := a.DeleteSAMLConnection(r.Context(), id); err != nil {
-		http.Error(w, "not found", http.StatusNotFound)
-		return
-	}
-	w.WriteHeader(http.StatusNoContent)
-}
-
-// samlConnectionBody is the JSON shape consumers POST/PUT.
-type samlConnectionBody struct {
-	IdPEntityID  string           `json:"idpEntityId"`
-	IdPSSOURL    string           `json:"idpSsoUrl"`
-	IdPX509Cert  string           `json:"idpX509Cert"`
-	SPEntityID   string           `json:"spEntityId"`
-	SPACSURL     string           `json:"spAcsUrl"`
-	AttributeMap SAMLAttributeMap `json:"attributeMap"`
-}
-
-func (b samlConnectionBody) toInput(orgID ULID) SAMLConnectionInput {
-	return SAMLConnectionInput{
-		OrganizationID: orgID,
-		IdPEntityID:    b.IdPEntityID,
-		IdPSSOURL:      b.IdPSSOURL,
-		IdPX509Cert:    b.IdPX509Cert,
-		SPEntityID:     b.SPEntityID,
-		SPACSURL:       b.SPACSURL,
-		AttributeMap:   b.AttributeMap,
-	}
+// mountSAMLConnectionCRUD mounts the five per-org connection CRUD
+// endpoints. Called from mountOrganizations' mountSub callback when
+// Config.SAML is non-nil so the route still resolves under
+// /auth/orgs/{orgId}/saml/connections.
+func (a *TheAuth) mountSAMLConnectionCRUD(r chi.Router) {
+	a.newSAMLHandler().MountCRUD(r)
 }

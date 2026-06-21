@@ -64,11 +64,8 @@ func (a *TheAuth) mountOrganizations(r chi.Router) {
 	mountSub := func(r chi.Router) {
 		if a.samlCfg != nil {
 			r.Route("/{orgId}/saml/connections", func(r chi.Router) {
-				r.With(requireAuth).Post("/", a.handleSAMLConnectionCreate)
-				r.With(requireAuth).Get("/", a.handleSAMLConnectionList)
-				r.With(requireAuth).Get("/{id}", a.handleSAMLConnectionGet)
-				r.With(requireAuth).Put("/{id}", a.handleSAMLConnectionUpdate)
-				r.With(requireAuth).Delete("/{id}", a.handleSAMLConnectionDelete)
+				r.Use(requireAuth)
+				a.mountSAMLConnectionCRUD(r)
 			})
 		}
 		if a.scimCfg != nil {
