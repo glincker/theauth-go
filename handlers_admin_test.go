@@ -130,7 +130,7 @@ func (fx adminFixture) do(t *testing.T, method, path, token string, body any) (*
 	if err != nil {
 		t.Fatalf("Do: %v", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	raw, _ := io.ReadAll(resp.Body)
 	return resp, raw
 }

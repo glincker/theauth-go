@@ -3,7 +3,6 @@ package theauth
 import (
 	"context"
 	"sort"
-	"strings"
 	"sync"
 )
 
@@ -170,13 +169,6 @@ func permissionSetFromList(list []string) map[string]struct{} {
 		out[p] = struct{}{}
 	}
 	return out
-}
-
-// normPerm trims surrounding whitespace and lowercases the namespace
-// portion. Permission names in the catalog are already lowercase; this
-// function exists to defuse minor input typos at the API boundary.
-func normPerm(s string) string {
-	return strings.TrimSpace(s)
 }
 
 // ctxKeyPermCache is the request context key for the permission cache.

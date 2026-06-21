@@ -275,7 +275,7 @@ func (s *Store) RolesForUser(_ context.Context, userID theauth.ULID, orgID *thea
 	defer s.mu.RUnlock()
 	v := s.ensureV10()
 	var out []theauth.Role
-	for k, _ := range v.userRoles {
+	for k := range v.userRoles {
 		if k.userID != userID {
 			continue
 		}
