@@ -133,6 +133,58 @@ Error responses on v0.2 endpoints use a stable `{code, message}` JSON shape — 
 
 ---
 
+## GitHub OAuth (v0.3)
+
+Register an OAuth app at https://github.com/settings/developers with a
+callback of `https://yourapp.com/auth/providers/github/callback`, then wire
+the provider into `theauth.New`:
+
+```go
+import (
+    "github.com/glincker/theauth-go"
+    "github.com/glincker/theauth-go/provider/github"
+)
+
+key := mustGetenv("THEAUTH_ENCRYPTION_KEY") // 32 raw bytes (AES-256)
+
+a, _ := theauth.New(theauth.Config{
+    Storage:       postgres.New(pool),
+    BaseURL:       "https://yourapp.com",
+    EncryptionKey: key,
+    Providers: []theauth.Provider{
+        github.New(github.Config{
+            ClientID:     os.Getenv("GITHUB_CLIENT_ID"),
+            ClientSecret: os.Getenv("GITHUB_CLIENT_SECRET"),
+        }),
+    },
+    PostLoginRedirect: "/dashboard",
+})
+```
+
+`a.Mount(r)` then adds:
+
+| Method + path                                  | Notes                                          |
+| ---------------------------------------------- | ---------------------------------------------- |
+| `GET /auth/providers/github/start`             | 302 to GitHub authorize URL, sets state cookie |
+| `GET /auth/providers/github/callback`          | exchanges code, sets session cookie            |
+
+Built-in safeguards:
+
+- **PKCE S256** on every flow (no plaintext code_verifier on the wire)
+- **State cookie + query parameter** must match before code exchange (CSRF)
+- **State entries expire after 10 minutes** and are GC-swept every minute
+- **Tokens encrypted at rest** with AES-256-GCM via `Config.EncryptionKey`
+- **Primary verified email only** counts as verified on `User.EmailVerifiedAt`
+- **Same rate limit** as credential endpoints (5/min per IP by default)
+
+Find-or-create resolves a returning OAuth user in this order: (1) existing
+`oauth_accounts` row by provider + provider user id, (2) match by verified
+email on the existing users table, (3) create a brand new user. The
+upstream access/refresh tokens are persisted (encrypted) so v0.4 refresh
+rotation can light up without a schema change.
+
+---
+
 ## Comparison
 
 How `theauth-go` stacks up against the libraries and services you would actually consider in 2026:
@@ -142,7 +194,7 @@ How `theauth-go` stacks up against the libraries and services you would actually
 | Language                      | Go            | TypeScript    | Multiple     | Multiple     | Go            |
 | Magic links                   | Shipping      | Shipping      | Shipping     | Shipping     | Shipping      |
 | Email / password              | Shipping      | Shipping      | Shipping     | Shipping     | Shipping      |
-| OAuth providers               | Roadmap v0.3  | 17            | 30+          | 20+          | 10+           |
+| OAuth providers               | 1 (GitHub)    | 17            | 30+          | 20+          | 10+           |
 | Passkeys / WebAuthn           | Roadmap v0.5  | Shipping      | Shipping     | Shipping     | Shipping      |
 | Self-hosted                   | Yes           | Yes           | No           | No           | Yes           |
 | MCP OAuth 2.1 server          | Roadmap v2.0  | Roadmap v2.0  | No           | No           | No            |
@@ -210,13 +262,13 @@ a, _ := theauth.New(theauth.Config{
 
 ## Roadmap
 
-- **v0.1** ✅ Magic links, sessions, chi middleware, Postgres + in-memory storage
-- **v0.2** ✅ Email + password (signup, signin, forgot, reset), argon2id, per-IP + per-email rate limiting, structured `TheAuthError` type
-- **v0.3** — GitHub OAuth (provider interface), refresh-token rotation, SMTP email sender
-- **v0.4** — Google + Discord + Microsoft OAuth, TOTP 2FA
-- **v0.5** — WebAuthn / passkeys
-- **v1.0** — All 17 OAuth providers + SAML 2.0
-- **v2.0** — MCP OAuth 2.1 server, agent identity, delegation chains, budget policies
+- **v0.1** Magic links, sessions, chi middleware, Postgres + in-memory storage (shipped)
+- **v0.2** Email + password (signup, signin, forgot, reset), argon2id, per-IP + per-email rate limiting, structured `TheAuthError` type (shipped)
+- **v0.3** GitHub OAuth (Provider interface + PKCE S256), AES-GCM token-at-rest encryption (shipped)
+- **v0.3.x / v0.4** Google + Discord + Microsoft OAuth, refresh-token rotation, SMTP sender, TOTP 2FA
+- **v0.5** WebAuthn / passkeys
+- **v1.0** All 17 OAuth providers + SAML 2.0
+- **v2.0** MCP OAuth 2.1 server, agent identity, delegation chains, budget policies
 
 Track the work in [GitHub Issues](https://github.com/glincker/theauth-go/issues) and [Releases](https://github.com/glincker/theauth-go/releases).
 
