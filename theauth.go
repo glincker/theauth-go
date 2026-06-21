@@ -16,6 +16,11 @@ import (
 	"github.com/glincker/theauth-go/crypto"
 	"github.com/glincker/theauth-go/email"
 	"github.com/glincker/theauth-go/internal/clientauthcache"
+	"github.com/glincker/theauth-go/internal/magiclink"
+	"github.com/glincker/theauth-go/internal/organizations"
+	"github.com/glincker/theauth-go/internal/rbac"
+	internalscim "github.com/glincker/theauth-go/internal/scim"
+	"github.com/glincker/theauth-go/internal/session"
 	gowebauthn "github.com/go-webauthn/webauthn/webauthn"
 )
 
@@ -560,6 +565,17 @@ type TheAuth struct {
 	// v2.0 phase 6: end-user self-service UX. When true, /account/agents and
 	// /account/delegations are mounted. Requires agentCfg to be non-nil.
 	accountUX bool
+
+	// PR A architecture reorg (2026-06): low-complexity services are
+	// extracted into internal packages and held here. Root methods on
+	// *TheAuth forward to these so the v1.0/v2.0 public surface keeps the
+	// exact same method signatures. Each internal package declares its own
+	// minimal Storage interface so the constructor cycle stays broken.
+	sessionSvc *session.Service
+	magicSvc   *magiclink.Service
+	scimSvc    *internalscim.Service
+	orgsSvc    *organizations.Service
+	rbacSvc    *rbac.Service
 }
 
 // New validates the Config, applies defaults, and returns a ready TheAuth.
@@ -834,6 +850,16 @@ func New(cfg Config) (*TheAuth, error) {
 		agentCfg:                   cfg.AgentIdentity,
 		accountUX:                  cfg.AccountUX,
 	}
+	// PR A architecture reorg (2026-06): wire the extracted internal
+	// services. Each takes a minimal Storage interface satisfied by
+	// cfg.Storage via duck typing. The *TheAuth instance itself satisfies
+	// audit.Emitter via its EmitAudit method, so the rbac and magiclink
+	// services receive a back-reference for audit emission.
+	a.sessionSvc = session.New(cfg.Storage, cfg.SessionTTL)
+	a.magicSvc = magiclink.New(cfg.Storage, cfg.EmailSender, cfg.BaseURL, cfg.MagicLinkTTL, a.sessionSvc, a)
+	a.scimSvc = internalscim.NewService(cfg.Storage, scimConfigFromRoot(cfg.SCIM))
+	a.orgsSvc = organizations.New(cfg.Storage, orgsConfigFromRoot(cfg.Organizations))
+	a.rbacSvc = rbac.New(cfg.Storage, rbacConfigFromValidated(cfg.RBAC, permCatalog, permIndex, defaultSeeds), a)
 	if len(providers) > 0 {
 		a.oauthStateStop = make(chan struct{})
 		go a.oauthStateGCLoop()
@@ -931,4 +957,40 @@ func (a *TheAuth) Stats() Stats {
 		AuditDropped: a.auditDropped.Load(),
 		AuditFailed:  a.auditFailed.Load(),
 	}
+}
+
+// scimConfigFromRoot translates the root SCIMConfig pointer into the
+// internal/scim Config the extracted service consumes. Returns nil when
+// the root config is nil so the service's "disabled" branch fires.
+func scimConfigFromRoot(c *SCIMConfig) *internalscim.Config {
+	if c == nil {
+		return nil
+	}
+	return &internalscim.Config{RequireHTTPS: c.RequireHTTPS, MaxPageSize: c.MaxPageSize}
+}
+
+// orgsConfigFromRoot translates the root OrganizationsConfig pointer into
+// the internal/organizations Config. Returns nil when the root config is
+// nil so the service's "disabled" branch fires.
+func orgsConfigFromRoot(c *OrganizationsConfig) *organizations.Config {
+	if c == nil {
+		return nil
+	}
+	return &organizations.Config{}
+}
+
+// rbacConfigFromValidated produces the internal/rbac Config from the
+// already-validated catalog, index, and default-role seeds. Returns nil
+// when the root RBAC config is nil so the service's "disabled" branch
+// fires (every method returns models.ErrRBACDisabled, matching the legacy
+// root behavior).
+func rbacConfigFromValidated(cfg *RBACConfig, catalog []Permission, index map[string]Permission, seeds []RoleSeed) *rbac.Config {
+	if cfg == nil {
+		return nil
+	}
+	internalSeeds := make([]rbac.RoleSeed, len(seeds))
+	for i, s := range seeds {
+		internalSeeds[i] = rbac.RoleSeed{Name: s.Name, Description: s.Description, Permissions: s.Permissions}
+	}
+	return &rbac.Config{PermCatalog: catalog, PermIndex: index, DefaultRoleSeeds: internalSeeds}
 }
