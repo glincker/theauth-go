@@ -48,7 +48,7 @@ func (a *TheAuth) handlePasswordSignin(w http.ResponseWriter, r *http.Request) {
 	}
 	ip := extractClientIP(r)
 	ua := r.UserAgent()
-	sessToken, _, err := a.signinWithPassword(r.Context(), email, password, ua, ip)
+	sessToken, _, step, err := a.signinWithPassword(r.Context(), email, password, ua, ip)
 	if err != nil {
 		errToHTTP(w, err)
 		return
@@ -56,7 +56,13 @@ func (a *TheAuth) handlePasswordSignin(w http.ResponseWriter, r *http.Request) {
 	a.setSessionCookie(w, sessToken)
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write([]byte(`{"ok":true}`))
+	if step == SigninStepTOTPRequired {
+		// v0.5 step-up: tell the client the cookie is pending and the
+		// next call must be /auth/totp/verify (or /auth/totp/recovery).
+		_, _ = w.Write([]byte(`{"step":"totp_required"}`))
+		return
+	}
+	_, _ = w.Write([]byte(`{"ok":true,"step":"full"}`))
 }
 
 func (a *TheAuth) handlePasswordForgot(w http.ResponseWriter, r *http.Request) {

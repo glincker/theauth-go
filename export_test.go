@@ -36,9 +36,12 @@ func SignupWithPasswordForTest(a *TheAuth, ctx context.Context, email, password 
 	return a.signupWithPassword(ctx, email, password)
 }
 
-// SigninWithPasswordForTest exposes the unexported signinWithPassword for external tests.
+// SigninWithPasswordForTest exposes the unexported signinWithPassword for
+// external tests. v0.5 added the SigninStep return value; older tests pass
+// nil for the step pointer.
 func SigninWithPasswordForTest(a *TheAuth, ctx context.Context, email, password, ua, ip string) (string, *User, error) {
-	return a.signinWithPassword(ctx, email, password, ua, ip)
+	tok, u, _, err := a.signinWithPassword(ctx, email, password, ua, ip)
+	return tok, u, err
 }
 
 // RequestPasswordResetForTest exposes the unexported requestPasswordResetForTest for external tests.

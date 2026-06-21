@@ -10,7 +10,12 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/oklog/ulid/v2"
 )
+
+// ulidParse aliases the upstream ULID Crockford parser so handler files do
+// not import oklog directly.
+var ulidParse = ulid.Parse
 
 // Mount wires TheAuth's HTTP routes onto the supplied chi router under /auth.
 // Routes:
@@ -48,6 +53,16 @@ func (a *TheAuth) Mount(r chi.Router) {
 		// is registered; the routes 404 cleanly otherwise.
 		if len(a.providers) > 0 {
 			a.mountOAuth(r, ipLimit)
+		}
+
+		// WebAuthn passkeys (v0.5). Mounted only when Config.WebAuthn is set.
+		if a.webauthn != nil {
+			a.mountWebAuthn(r, ipLimit)
+		}
+
+		// TOTP 2FA (v0.5). Mounted only when Config.TOTP is set.
+		if a.totpCfg != nil {
+			a.mountTOTP(r, ipLimit)
 		}
 
 		r.With(a.RequireAuth()).Delete("/sessions/current", a.handleSessionDelete)
@@ -151,6 +166,14 @@ func errToHTTP(w http.ResponseWriter, err error) {
 			writeJSONError(w, http.StatusTooManyRequests, te.Code, te.Message)
 		case CodePasswordResetExpired, CodePasswordResetInvalid:
 			writeJSONError(w, http.StatusUnauthorized, te.Code, te.Message)
+		case CodeInvalidTOTP, CodeWebAuthn:
+			// 401 because the supplied factor is invalid; 400 would imply
+			// a malformed request, which we already screened for above.
+			writeJSONError(w, http.StatusUnauthorized, te.Code, te.Message)
+		case CodeAlreadyEnrolled:
+			writeJSONError(w, http.StatusConflict, te.Code, te.Message)
+		case CodeTOTPRequired:
+			writeJSONError(w, http.StatusOK, te.Code, te.Message)
 		default:
 			writeJSONError(w, http.StatusInternalServerError, te.Code, "internal error")
 		}
@@ -178,4 +201,10 @@ func writeJSONError(w http.ResponseWriter, status int, code, message string) {
 		Code    string `json:"code"`
 		Message string `json:"message"`
 	}{Code: code, Message: message})
+}
+
+// parseULIDParam parses a Crockford-base32 ULID from a URL path parameter.
+// Returns an error on any malformed input; handlers should map that to 400.
+func parseULIDParam(s string) (ULID, error) {
+	return ulidParse(s)
 }
