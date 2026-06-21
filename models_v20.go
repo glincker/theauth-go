@@ -123,14 +123,146 @@ const (
 	ClientAuthNone        = "none"
 )
 
-// Grant type constants. Phase 1 + 2 supports authorization_code and
-// refresh_token. client_credentials and token-exchange land in phase 3 + 4.
+// Grant type constants. Phase 1 + 2 ships authorization_code and
+// refresh_token; phase 3 adds client_credentials, phase 4 adds the
+// RFC 8693 token-exchange grant URN.
 const (
 	GrantTypeAuthorizationCode = "authorization_code"
 	GrantTypeRefreshToken      = "refresh_token"
+	GrantTypeClientCredentials = "client_credentials"
+	GrantTypeTokenExchange     = "urn:ietf:params:oauth:grant-type:token-exchange"
+)
+
+// Token type URNs used by the RFC 8693 token-exchange grant.
+const (
+	TokenTypeAccessToken = "urn:ietf:params:oauth:token-type:access_token"
 )
 
 // Response type constants. OAuth 2.1 supports only "code".
 const (
 	ResponseTypeCode = "code"
 )
+
+// Agent identity (v2.0 phase 3). An agent is a long-lived, owner-bound
+// identity with its own client credentials, separate audit identity, and
+// lifecycle. Every agent has a backing OAuthClient row whose owner_kind is
+// "agent"; client authentication paths converge on a single table.
+
+// AgentOwner identifies who owns an agent. Exactly one of the pointer fields
+// MUST be non-nil. A UserID-owned agent is a personal agent; an
+// OrganizationID-owned agent is a service account.
+type AgentOwner struct {
+	UserID         *ULID
+	OrganizationID *ULID
+}
+
+// CreateAgentInput is the input bundle for CreateAgent.
+type CreateAgentInput struct {
+	Owner       AgentOwner
+	Name        string
+	Description string
+	// Scope is the set of scopes the agent may request via client credentials
+	// or token exchange. Must be a subset of the resource's supported scopes
+	// at mint time; the AS enforces this at every grant.
+	Scope []string
+}
+
+// Agent lifecycle status values persisted in agents.status.
+const (
+	AgentStatusActive    = "active"
+	AgentStatusSuspended = "suspended"
+	AgentStatusRevoked   = "revoked"
+)
+
+// Agent credential kind constants persisted in agent_credentials.kind.
+const (
+	AgentCredentialKindSecret = "secret"
+	AgentCredentialKindX509   = "x509"
+	AgentCredentialKindJWK    = "jwk"
+)
+
+// AgentSubjectPrefix is prepended to an agent ID inside JWT sub and act.sub
+// claims so resource servers can distinguish a user subject from an agent
+// subject without consulting storage.
+const AgentSubjectPrefix = "agent:"
+
+// Agent is the persistent record for an agent identity.
+type Agent struct {
+	ID             ULID       `json:"id"`
+	OwnerUserID    *ULID      `json:"ownerUserId,omitempty"`
+	OrganizationID *ULID      `json:"organizationId,omitempty"`
+	Name           string     `json:"name"`
+	Description    string     `json:"description,omitempty"`
+	Status         string     `json:"status"`
+	ClientID       string     `json:"clientId"`
+	Scope          []string   `json:"scope,omitempty"`
+	CreatedAt      time.Time  `json:"createdAt"`
+	LastActiveAt   *time.Time `json:"lastActiveAt,omitempty"`
+}
+
+// AgentCredential is one stored secret material row for an agent. For kind
+// = "secret" the ValueEnc field carries the Argon2id PHC hash of the shared
+// secret (cast to bytes); kinds "x509" and "jwk" are reserved for future
+// phases.
+type AgentCredential struct {
+	ID         ULID       `json:"id"`
+	AgentID    ULID       `json:"agentId"`
+	Kind       string     `json:"kind"`
+	ValueEnc   []byte     `json:"-"`
+	CreatedAt  time.Time  `json:"createdAt"`
+	ExpiresAt  *time.Time `json:"expiresAt,omitempty"`
+	LastUsedAt *time.Time `json:"lastUsedAt,omitempty"`
+	RevokedAt  *time.Time `json:"revokedAt,omitempty"`
+}
+
+// AgentSecret is the one-time return value from CreateAgent or
+// RotateAgentSecret. The plaintext Secret is shown to the caller exactly
+// once; only the Argon2id hash is persisted.
+type AgentSecret struct {
+	AgentID      ULID       `json:"agentId"`
+	CredentialID ULID       `json:"credentialId"`
+	ClientID     string     `json:"clientId"`
+	Secret       string     `json:"secret"`
+	ExpiresAt    *time.Time `json:"expiresAt,omitempty"`
+}
+
+// DelegationGrant records "user U delegates scope S on resource R to agent A
+// for at most max_duration_seconds, optionally bounded by expires_at". Token
+// exchange consults this row at every mint; revocation flips RevokedAt and
+// introspection on every resource request makes the change visible inside
+// IntrospectionCacheTTL.
+type DelegationGrant struct {
+	ID                 ULID       `json:"id"`
+	UserID             ULID       `json:"userId"`
+	AgentID            ULID       `json:"agentId"`
+	OrganizationID     *ULID      `json:"organizationId,omitempty"`
+	Scope              []string   `json:"scope"`
+	Resource           string     `json:"resource"`
+	MaxDurationSeconds int        `json:"maxDurationSeconds"`
+	CreatedAt          time.Time  `json:"createdAt"`
+	ExpiresAt          *time.Time `json:"expiresAt,omitempty"`
+	RevokedAt          *time.Time `json:"revokedAt,omitempty"`
+	RevocationNote     string     `json:"revocationNote,omitempty"`
+}
+
+// GrantDelegationInput is the input bundle for GrantDelegation. UserID and
+// AgentID are mandatory; Scope and Resource are mandatory and validated
+// against the AS's configured ProtectedResources.
+type GrantDelegationInput struct {
+	UserID             ULID
+	AgentID            ULID
+	OrganizationID     *ULID
+	Scope              []string
+	Resource           string
+	MaxDurationSeconds int
+	ExpiresAt          *time.Time
+}
+
+// ActorClaim mirrors the RFC 8693 section 4.1 actor structure. The sub field
+// names the immediate actor; act recurses outward through the chain so the
+// outermost subject (the user who originally granted authority) is implicit
+// in the surrounding JWT's sub.
+type ActorClaim struct {
+	Sub string      `json:"sub"`
+	Act *ActorClaim `json:"act,omitempty"`
+}
