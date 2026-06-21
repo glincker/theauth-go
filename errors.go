@@ -60,6 +60,34 @@ var (
 	// ErrSlugTaken is returned when the supplied organization slug already
 	// exists.
 	ErrSlugTaken = errors.New("theauth: organization slug already taken")
+
+	// v1.0 sentinels.
+
+	// ErrAdminRequiresRBAC is returned by New when Config.Admin is non-nil
+	// but Config.RBAC is nil. The admin endpoints are permission-gated and
+	// meaningless without RBAC.
+	ErrAdminRequiresRBAC = errors.New("theauth: Admin requires RBAC to be enabled")
+	// ErrForbidden indicates the caller lacks a required permission for
+	// the requested operation. Handlers map this to 403 with code
+	// "rbac.forbidden" in the RFC 7807 problem body.
+	ErrForbidden = errors.New("theauth: forbidden")
+	// ErrUnknownPermission indicates a permission name not present in the
+	// seeded or extended catalog. Mapped to 400 "rbac.unknown_permission".
+	ErrUnknownPermission = errors.New("theauth: unknown permission")
+	// ErrRoleInUse indicates a DELETE role would leave the organization
+	// without any user holding the "users:admin" permission. Mapped to
+	// 409 "rbac.role_in_use".
+	ErrRoleInUse = errors.New("theauth: role in use")
+	// ErrNoActiveOrg indicates the session has no active_organization_id
+	// set. Mapped to 403 "rbac.no_active_org".
+	ErrNoActiveOrg = errors.New("theauth: session has no active organization")
+	// ErrOrgMismatch indicates the session's active_organization_id does
+	// not match the resource organization. Mapped to 403 "rbac.org_mismatch".
+	ErrOrgMismatch = errors.New("theauth: session active organization does not match resource")
+	// ErrRBACDisabled is returned by RBAC service methods invoked when
+	// Config.RBAC is nil. The RequirePermission middleware short-circuits
+	// to 500 rather than returning this error directly.
+	ErrRBACDisabled = errors.New("theauth: RBAC disabled (Config.RBAC is nil)")
 )
 
 // Stable error codes that callers can switch on. New endpoints return

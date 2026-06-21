@@ -71,3 +71,185 @@ func (a *TheAuth) RequirePendingOrFull() func(http.Handler) http.Handler {
 		}))
 	}
 }
+
+// RequirePermission (v1.0) returns a middleware that enforces the caller
+// holds every named permission inside session.active_organization_id. A
+// session without active_organization_id is 403 rbac.no_active_org. A user
+// with the system super_admin role bypasses the check entirely. The
+// permission lookup hits storage once per request; subsequent middleware
+// in the same chain hit the per-request cache attached to ctx.
+//
+// When Config.RBAC is nil the middleware short-circuits to 500: an admin
+// trying to wire RequirePermission without enabling RBAC is a programming
+// error worth surfacing loudly.
+func (a *TheAuth) RequirePermission(perms ...string) func(http.Handler) http.Handler {
+	authn := a.Authn()
+	return func(next http.Handler) http.Handler {
+		return authn(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if a.rbacCfg == nil {
+				http.Error(w, "rbac disabled", http.StatusInternalServerError)
+				return
+			}
+			user, okU := UserFromContext(r.Context())
+			sess, okS := SessionFromContext(r.Context())
+			if !okU || !okS || user == nil || sess == nil {
+				http.Error(w, "unauthorized", http.StatusUnauthorized)
+				return
+			}
+			if sess.AuthLevel != "" && sess.AuthLevel != AuthLevelFull {
+				http.Error(w, "unauthorized", http.StatusUnauthorized)
+				return
+			}
+			if sess.ActiveOrganizationID == nil {
+				writeProblemJSON(w, http.StatusForbidden, "rbac.no_active_org", "Session has no active organization", "")
+				return
+			}
+			cache, ok := permissionCacheFromContext(r.Context())
+			if !ok || (cache.orgID != nil && *cache.orgID != *sess.ActiveOrganizationID) {
+				cache = &permissionCache{orgID: sess.ActiveOrganizationID}
+			}
+			cache.once.Do(func() {
+				// super_admin lookup (system role, org NULL).
+				roles, err := a.storage.RolesForUser(r.Context(), user.ID, nil)
+				if err != nil {
+					cache.err = err
+					return
+				}
+				for _, role := range roles {
+					if role.Name == SystemRoleSuperAdmin {
+						cache.superAdmin = true
+						break
+					}
+				}
+				if cache.superAdmin {
+					cache.set = map[string]struct{}{}
+					return
+				}
+				list, err := a.storage.PermissionsForUser(r.Context(), user.ID, sess.ActiveOrganizationID)
+				if err != nil {
+					cache.err = err
+					return
+				}
+				cache.set = permissionSetFromList(list)
+			})
+			if cache.err != nil {
+				http.Error(w, "internal error", http.StatusInternalServerError)
+				return
+			}
+			ctx := withPermissionCache(r.Context(), cache)
+			if !cache.superAdmin {
+				for _, p := range perms {
+					if _, ok := cache.set[p]; !ok {
+						writeProblemJSON(w, http.StatusForbidden, "rbac.forbidden", "Caller lacks required permission: "+p, "")
+						return
+					}
+				}
+			}
+			next.ServeHTTP(w, r.WithContext(ctx))
+		}))
+	}
+}
+
+// writeProblemJSON emits a minimal RFC 7807 problem+json body. The admin
+// package owns the richer variant with type URIs; this in-package helper
+// keeps the middleware self-contained and avoids an import cycle.
+func writeProblemJSON(w http.ResponseWriter, status int, code, detail, instance string) {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(status)
+	_, _ = w.Write(problemBody(status, code, detail, instance))
+}
+
+func problemBody(status int, code, detail, instance string) []byte {
+	// Tiny hand-built JSON encoder so the middleware avoids encoding/json
+	// in the hot path. Six fields, two of which are optional. Numbers and
+	// strings only, no escaping concerns since values are library-owned.
+	b := []byte(`{"type":"https://theauth.dev/problems/`)
+	b = append(b, code...)
+	b = append(b, `","title":"`...)
+	b = append(b, http.StatusText(status)...)
+	b = append(b, `","status":`...)
+	b = appendInt(b, status)
+	b = append(b, `,"detail":`...)
+	b = appendJSONString(b, detail)
+	b = append(b, `,"code":"`...)
+	b = append(b, code...)
+	b = append(b, '"')
+	if instance != "" {
+		b = append(b, `,"instance":`...)
+		b = appendJSONString(b, instance)
+	}
+	b = append(b, '}')
+	return b
+}
+
+func appendInt(b []byte, n int) []byte {
+	if n == 0 {
+		return append(b, '0')
+	}
+	var tmp [20]byte
+	i := len(tmp)
+	neg := n < 0
+	if neg {
+		n = -n
+	}
+	for n > 0 {
+		i--
+		tmp[i] = byte('0' + n%10)
+		n /= 10
+	}
+	if neg {
+		i--
+		tmp[i] = '-'
+	}
+	return append(b, tmp[i:]...)
+}
+
+func appendJSONString(b []byte, s string) []byte {
+	b = append(b, '"')
+	for _, r := range s {
+		switch r {
+		case '\\', '"':
+			b = append(b, '\\', byte(r))
+		case '\n':
+			b = append(b, '\\', 'n')
+		case '\r':
+			b = append(b, '\\', 'r')
+		case '\t':
+			b = append(b, '\\', 't')
+		default:
+			if r < 0x20 {
+				b = append(b, '\\', 'u', '0', '0', hexDigit(byte(r>>4)), hexDigit(byte(r&0xf)))
+			} else {
+				b = appendRune(b, r)
+			}
+		}
+	}
+	return append(b, '"')
+}
+
+func hexDigit(b byte) byte {
+	if b < 10 {
+		return '0' + b
+	}
+	return 'a' + (b - 10)
+}
+
+func appendRune(b []byte, r rune) []byte {
+	const (
+		t1 = 0x00
+		tx = 0x80
+		t2 = 0xC0
+		t3 = 0xE0
+		t4 = 0xF0
+	)
+	switch {
+	case r < 0x80:
+		return append(b, byte(r))
+	case r < 0x800:
+		return append(b, t2|byte(r>>6), tx|byte(r)&0x3F)
+	case r < 0x10000:
+		return append(b, t3|byte(r>>12), tx|byte(r>>6)&0x3F, tx|byte(r)&0x3F)
+	default:
+		return append(b, t4|byte(r>>18), tx|byte(r>>12)&0x3F, tx|byte(r>>6)&0x3F, tx|byte(r)&0x3F)
+	}
+}

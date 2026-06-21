@@ -312,3 +312,106 @@ DELETE FROM group_members WHERE group_id = $1 AND user_id = $2;
 
 -- name: GroupMembersByGroupID :many
 SELECT user_id FROM group_members WHERE group_id = $1 ORDER BY user_id ASC;
+
+-- ============================================================================
+-- v1.0 RBAC
+-- ============================================================================
+
+-- name: InsertPermission :one
+INSERT INTO permissions (id, name, description, created_at)
+VALUES ($1, $2, $3, $4)
+ON CONFLICT (name) DO UPDATE SET description = permissions.description
+RETURNING id, name, description, created_at;
+
+-- name: PermissionByName :one
+SELECT id, name, description, created_at FROM permissions WHERE name = $1;
+
+-- name: ListPermissions :many
+SELECT id, name, description, created_at FROM permissions ORDER BY name ASC;
+
+-- name: InsertRole :one
+INSERT INTO roles (id, organization_id, name, description, created_at, updated_at)
+VALUES ($1, $2, $3, $4, $5, $6)
+RETURNING id, organization_id, name, description, created_at, updated_at;
+
+-- name: UpdateRoleRow :one
+UPDATE roles SET name = $2, description = $3, updated_at = now() WHERE id = $1
+RETURNING id, organization_id, name, description, created_at, updated_at;
+
+-- name: DeleteRoleRow :execrows
+DELETE FROM roles WHERE id = $1;
+
+-- name: RoleByID :one
+SELECT id, organization_id, name, description, created_at, updated_at FROM roles WHERE id = $1;
+
+-- name: RoleByOrgAndName :one
+SELECT id, organization_id, name, description, created_at, updated_at
+  FROM roles
+ WHERE name = $1
+   AND ((organization_id IS NULL AND $2::uuid IS NULL) OR organization_id = $2::uuid);
+
+-- name: RolesByOrganization :many
+SELECT id, organization_id, name, description, created_at, updated_at
+  FROM roles
+ WHERE (organization_id IS NULL AND $1::uuid IS NULL) OR organization_id = $1::uuid
+ ORDER BY name ASC;
+
+-- name: DeleteRolePermissions :exec
+DELETE FROM role_permissions WHERE role_id = $1;
+
+-- name: InsertRolePermission :exec
+INSERT INTO role_permissions (role_id, permission_id) VALUES ($1, $2)
+ON CONFLICT DO NOTHING;
+
+-- name: PermissionsByRoleID :many
+SELECT p.name FROM permissions p
+  JOIN role_permissions rp ON rp.permission_id = p.id
+ WHERE rp.role_id = $1
+ ORDER BY p.name ASC;
+
+-- name: GrantUserRole :exec
+INSERT INTO user_roles (user_id, role_id, granted_at, granted_by)
+VALUES ($1, $2, $3, $4)
+ON CONFLICT (user_id, role_id) DO NOTHING;
+
+-- name: RevokeUserRole :execrows
+DELETE FROM user_roles WHERE user_id = $1 AND role_id = $2;
+
+-- name: RolesForUser :many
+SELECT r.id, r.organization_id, r.name, r.description, r.created_at, r.updated_at
+  FROM roles r
+  JOIN user_roles ur ON ur.role_id = r.id
+ WHERE ur.user_id = $1
+   AND ((r.organization_id IS NULL AND $2::uuid IS NULL) OR r.organization_id = $2::uuid)
+ ORDER BY r.name ASC;
+
+-- name: PermissionsForUserInOrg :many
+SELECT DISTINCT p.name
+  FROM permissions p
+  JOIN role_permissions rp ON rp.permission_id = p.id
+  JOIN user_roles ur ON ur.role_id = rp.role_id
+  JOIN roles r ON r.id = rp.role_id
+ WHERE ur.user_id = $1
+   AND ((r.organization_id IS NULL AND $2::uuid IS NULL) OR r.organization_id = $2::uuid)
+ ORDER BY p.name ASC;
+
+-- name: CountUsersWithPermissionInOrg :one
+SELECT count(DISTINCT ur.user_id) FROM user_roles ur
+  JOIN role_permissions rp ON rp.role_id = ur.role_id
+  JOIN permissions p ON p.id = rp.permission_id
+  JOIN roles r ON r.id = ur.role_id
+ WHERE p.name = $1 AND r.organization_id = $2;
+
+-- ============================================================================
+-- v1.0 Audit
+-- ============================================================================
+
+-- name: InsertAuditEvent :exec
+INSERT INTO audit_events (
+    id, organization_id, actor_user_id, actor_session_id,
+    action, target_type, target_id, metadata, ip, user_agent, created_at
+) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11);
+
+-- The QueryAuditEvents read path is built dynamically in Go (filter combos vary
+-- too much for a fixed sqlc query); the file storage/postgres/queries_v10.sql.go
+-- emits the SQL directly via pgx with a where-builder.

@@ -274,3 +274,100 @@ type SCIMGroupFilter struct {
 	DisplayName string
 	ExternalID  string
 }
+
+// ---------- v1.0 RBAC ----------
+
+// Permission is one entry in the closed permission catalog. Names are program
+// identifiers (ASCII, no whitespace) of the shape "domain:verb" or
+// "domain:verb:scope". Seeded permissions live in service_rbac.go.
+type Permission struct {
+	ID          ULID      `json:"id"`
+	Name        string    `json:"name"`
+	Description string    `json:"description"`
+	CreatedAt   time.Time `json:"createdAt"`
+}
+
+// Role binds a permission set to an organization (or to the global namespace
+// when OrganizationID is nil, i.e. system roles such as super_admin).
+// Permissions is the hydrated permission-name slice and is not persisted on
+// the Role row itself; storage adapters fill it on read via
+// PermissionsByRole.
+type Role struct {
+	ID             ULID      `json:"id"`
+	OrganizationID *ULID     `json:"organizationId,omitempty"`
+	Name           string    `json:"name"`
+	Description    string    `json:"description"`
+	Permissions    []string  `json:"permissions"`
+	CreatedAt      time.Time `json:"createdAt"`
+	UpdatedAt      time.Time `json:"updatedAt"`
+}
+
+// UserRole records a grant of one role to one user. GrantedBy is the actor
+// that issued the grant; nil indicates a system grant (e.g. seeded by
+// SeedOrganizationRoles itself).
+type UserRole struct {
+	UserID    ULID      `json:"userId"`
+	RoleID    ULID      `json:"roleId"`
+	GrantedAt time.Time `json:"grantedAt"`
+	GrantedBy *ULID     `json:"grantedBy,omitempty"`
+}
+
+// SystemRoleSuperAdmin is the global role whose presence on a user bypasses
+// every permission check. It is created at seed time with a NULL
+// organization_id and is granted via direct DB insert or a CLI; the admin
+// API never exposes a path to grant it.
+const SystemRoleSuperAdmin = "super_admin"
+
+// ---------- v1.0 audit log ----------
+
+// TargetRef points at the resource an audit event acts on. ID is a string
+// (not ULID) because some targets are external identifiers (e.g. SCIM
+// externalId) rather than ULIDs.
+type TargetRef struct {
+	Type string `json:"type,omitempty"`
+	ID   string `json:"id,omitempty"`
+}
+
+// AuditEvent is one append-only row in audit_events. Metadata is arbitrary
+// jsonb; the default redactor masks secret-flavored keys at any depth before
+// the value reaches storage.
+type AuditEvent struct {
+	ID             ULID           `json:"id"`
+	OrganizationID *ULID          `json:"organizationId,omitempty"`
+	ActorUserID    *ULID          `json:"actorUserId,omitempty"`
+	ActorSessionID *ULID          `json:"actorSessionId,omitempty"`
+	Action         string         `json:"action"`
+	TargetType     string         `json:"targetType,omitempty"`
+	TargetID       string         `json:"targetId,omitempty"`
+	Metadata       map[string]any `json:"metadata,omitempty"`
+	IP             string         `json:"ip,omitempty"`
+	UserAgent      string         `json:"userAgent,omitempty"`
+	CreatedAt      time.Time      `json:"createdAt"`
+}
+
+// AuditQuery filters and paginates audit_events reads. Zero-valued fields
+// are ignored. Limit is capped at 200 and defaults to 50; After is the
+// opaque cursor returned by the previous page.
+type AuditQuery struct {
+	OrganizationID *ULID
+	ActorUserID    *ULID
+	Action         string
+	TargetType     string
+	TargetID       string
+	Since          *time.Time
+	Until          *time.Time
+	Limit          int
+	After          string
+}
+
+// Stats holds runtime counters useful for ops dashboards and tests. Counters
+// are monotonically non-decreasing; reads are atomic snapshots. AuditFailed
+// counts batches whose INSERT returned an error; the writer goroutine logs
+// the error and does not retry (the v1.0 tradeoff documented in
+// docs/2026-06-20-theauth-go-v1.0-design.md section 4.4).
+type Stats struct {
+	AuditEmitted uint64 `json:"auditEmitted"`
+	AuditWritten uint64 `json:"auditWritten"`
+	AuditDropped uint64 `json:"auditDropped"`
+	AuditFailed  uint64 `json:"auditFailed"`
+}

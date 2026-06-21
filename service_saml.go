@@ -182,14 +182,15 @@ func (a *TheAuth) FinishSAMLLogin(ctx context.Context, connectionID ULID, samlRe
 		return "", Session{}, err
 	}
 
-	// Audit hook (stub for v0.7; real writer in v1.0).
-	a.auditHook(ctx, AuditEvent{
-		Action:         "saml.login",
-		OrganizationID: conn.OrganizationID,
-		ActorID:        conn.ID,
-		ResourceID:     user.ID,
-		Detail:         "saml login",
-		At:             time.Now(),
+	// Emit audit (v1.0 async writer; was a no-op stub in v0.7).
+	auditCtx := WithAuditMetadata(ctx, AuditMetadata{
+		OrganizationID: &conn.OrganizationID,
+		ActorUserID:    &user.ID,
+		IP:             ip,
+		UserAgent:      ua,
+	})
+	a.EmitAudit(auditCtx, "saml.login_success", TargetRef{Type: "user", ID: user.ID.String()}, map[string]any{
+		"connection_id": conn.ID.String(),
 	})
 
 	return token, sess, nil
