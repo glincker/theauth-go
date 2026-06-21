@@ -494,6 +494,14 @@ type TheAuth struct {
 	// request (security audit H1, 2026-06-20).
 	dcrRegistrationTokenHashes [][32]byte
 
+	// dummyPasswordHash is a fixed Argon2id PHC string used by the
+	// signin path on the user-not-found branch so the verify cost is
+	// paid regardless of whether the email is registered. Mints once at
+	// New time so /auth/email-password/signin cannot be used as a
+	// timing-side-channel email enumerator (security audit M6,
+	// 2026-06-20).
+	dummyPasswordHash string
+
 	// OAuth (v0.3)
 	providers         map[string]Provider
 	encryptionKey     []byte
@@ -771,6 +779,19 @@ func New(cfg Config) (*TheAuth, error) {
 		}
 	}
 
+	// security audit M6 (2026-06-20): mint a fixed dummy Argon2id PHC
+	// string the signin path can verify against when the supplied email
+	// does not match any account. Pays the ~150 ms Argon2id cost
+	// regardless of whether the user exists, so an attacker cannot
+	// distinguish registered emails by response time. The dummy hash
+	// value is irrelevant; any password verified against it returns
+	// false. Generated once per *TheAuth so the cost is paid at startup,
+	// not per request.
+	dummyHash, err := crypto.HashPassword("theauth-dummy-password-not-real")
+	if err != nil {
+		return nil, errors.New("theauth: synthesize signin timing-equalization hash: " + err.Error())
+	}
+
 	a := &TheAuth{
 		storage:                    cfg.Storage,
 		emailSender:                cfg.EmailSender,
@@ -784,6 +805,7 @@ func New(cfg Config) (*TheAuth, error) {
 		rateLimitPerEmail:          cfg.RateLimitPerEmail,
 		trustedProxies:             append([]netip.Prefix(nil), cfg.TrustedProxies...),
 		dcrRegistrationTokenHashes: dcrTokenHashes,
+		dummyPasswordHash:          dummyHash,
 		providers:                  providers,
 		encryptionKey:              cfg.EncryptionKey,
 		postLoginRedirect:          cfg.PostLoginRedirect,
