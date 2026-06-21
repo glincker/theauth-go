@@ -44,10 +44,10 @@ type ChallengeCookieConfig struct {
 
 // Handler owns the six WebAuthn HTTP endpoints.
 type Handler struct {
-	svc            *webauthn.Service
-	sessionCookie  SessionCookieConfig
-	challengeCfg   ChallengeCookieConfig
-	userFromCtx    func(r *http.Request) (*models.User, bool)
+	svc           *webauthn.Service
+	sessionCookie SessionCookieConfig
+	challengeCfg  ChallengeCookieConfig
+	userFromCtx   func(r *http.Request) (*models.User, bool)
 }
 
 // New constructs a Handler. The userFromCtx indirection lets the
