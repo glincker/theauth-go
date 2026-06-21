@@ -2,8 +2,11 @@ package theauth
 
 import (
 	"encoding/json"
+	"errors"
 	"strings"
 	"time"
+
+	internalscim "github.com/glincker/theauth-go/internal/scim"
 )
 
 // SCIM 2.0 wire formats and resource mapping. RFC 7643 (Core Schema) and
@@ -328,4 +331,74 @@ func parsePrimaryEmail(emails []scimUserEmail) string {
 		return strings.ToLower(emails[0].Value)
 	}
 	return ""
+}
+
+// parseSCIMUserFilter accepts the equality-only filter subset documented
+// in v0.7 section 6.4 and returns a SCIMUserFilter. Any other shape
+// returns ErrUnsupportedFilter so the handler can emit 400 invalidFilter.
+//
+// Accepted forms:
+//
+//	userName eq "alice@x"
+//	externalId eq "okta-123"
+//	emails.value eq "alice@x"
+//
+// Whitespace is collapsed; the value is unquoted. We do not implement
+// pr / co / sw / ne / and / or. Okta and Azure AD only ever issue eq
+// against this whitelist on the User list endpoint.
+//
+// The text-level parse delegates to internal/scim.ParseEqFilter; this
+// wrapper maps fields into the SCIMUserFilter struct and translates the
+// internal sentinel back to ErrUnsupportedFilter so consumers can keep
+// pattern matching with errors.Is.
+func parseSCIMUserFilter(s string) (SCIMUserFilter, error) {
+	var out SCIMUserFilter
+	field, value, err := internalscim.ParseEqFilter(s)
+	if err != nil {
+		if errors.Is(err, internalscim.ErrUnsupportedFilter) {
+			return out, ErrUnsupportedFilter
+		}
+		return out, err
+	}
+	if field == "" {
+		return out, nil
+	}
+	switch field {
+	case "userName":
+		out.UserName = value
+	case "externalId":
+		out.ExternalID = value
+	case "emails.value":
+		out.Email = value
+	default:
+		return out, ErrUnsupportedFilter
+	}
+	return out, nil
+}
+
+// parseSCIMGroupFilter accepts the equality-only filter subset for groups.
+//
+//	displayName eq "Admins"
+//	externalId  eq "okta-grp-1"
+func parseSCIMGroupFilter(s string) (SCIMGroupFilter, error) {
+	var out SCIMGroupFilter
+	field, value, err := internalscim.ParseEqFilter(s)
+	if err != nil {
+		if errors.Is(err, internalscim.ErrUnsupportedFilter) {
+			return out, ErrUnsupportedFilter
+		}
+		return out, err
+	}
+	if field == "" {
+		return out, nil
+	}
+	switch field {
+	case "displayName":
+		out.DisplayName = value
+	case "externalId":
+		out.ExternalID = value
+	default:
+		return out, ErrUnsupportedFilter
+	}
+	return out, nil
 }

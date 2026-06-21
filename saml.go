@@ -9,6 +9,8 @@ import (
 	"time"
 
 	"github.com/crewjam/saml"
+
+	internalsaml "github.com/glincker/theauth-go/internal/saml"
 )
 
 // samlServiceProviderFor builds a per-connection crewjam/saml ServiceProvider
@@ -97,7 +99,7 @@ func parseIdPCert(pemText string) (*x509.Certificate, error) {
 // idpCertBase64 returns the base64-encoded DER bytes (no PEM headers) that
 // crewjam/saml expects in X509Certificate.Data.
 func idpCertBase64(c *x509.Certificate) string {
-	return base64StdEnc(c.Raw)
+	return internalsaml.StdEnc(c.Raw)
 }
 
 // samlAuthnGCLoop drops AuthnRequest IDs whose TTL has expired. Runs every
