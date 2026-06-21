@@ -202,6 +202,9 @@ func (a *TheAuth) FinishPasskeyRegistration(ctx context.Context, userID ULID, ch
 	if err != nil {
 		return WebAuthnCredential{}, fmt.Errorf("theauth: insert webauthn credential: %w", err)
 	}
+	a.EmitAudit(ctx, "passkey.registered", TargetRef{Type: "webauthn_credential", ID: stored.ID.String()}, map[string]any{
+		"aaguid": fmt.Sprintf("%x", stored.AAGUID),
+	})
 	slog.Info("theauth: webauthn registered", "user_id", userID.String(), "credential_id_len", len(stored.CredentialID))
 	return stored, nil
 }

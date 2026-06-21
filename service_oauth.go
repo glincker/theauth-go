@@ -139,8 +139,9 @@ func (a *TheAuth) callbackOAuth(ctx context.Context, providerName, code, state, 
 		expiresAt = &e
 	}
 	now := time.Now()
+	oauthRowID := ulid.New()
 	if _, err := a.storage.UpsertOAuthAccount(ctx, OAuthAccount{
-		ID:              ulid.New(),
+		ID:              oauthRowID,
 		UserID:          resolved.ID,
 		Provider:        providerName,
 		ProviderUserID:  pu.ID,
@@ -158,6 +159,12 @@ func (a *TheAuth) callbackOAuth(ctx context.Context, providerName, code, state, 
 	if err != nil {
 		return "", nil, err
 	}
+	a.EmitAudit(ctx, "oauth_account.linked", TargetRef{Type: "oauth_account", ID: oauthRowID.String()}, map[string]any{
+		"provider": providerName,
+	})
+	a.EmitAudit(ctx, "user.login", TargetRef{Type: "user", ID: resolved.ID.String()}, map[string]any{
+		"auth_method": "oauth:" + providerName,
+	})
 	slog.Info("theauth: oauth signin", "provider", providerName, "user_id", resolved.ID.String())
 	return sessToken, resolved, nil
 }
