@@ -160,16 +160,12 @@ func validateASConfig(cfg *AuthorizationServerConfig, encryptionKey []byte) erro
 	return nil
 }
 
-// invalidateClientAuthCache drops the cached Argon2-verified entry for
-// clientID. Called from every code path that rotates or removes the
-// stored client_secret_hash. Forwards to the extracted as.Service so
-// the cache lives with the rest of the AS runtime.
-func (a *TheAuth) invalidateClientAuthCache(clientID string) {
-	if a == nil || a.as == nil {
-		return
-	}
-	a.as.InvalidateClientAuthCache(clientID)
-}
+// invalidateClientAuthCache removed in PR G (2026-06-21). The previous
+// unexported helper forwarded to a.as.InvalidateClientAuthCache. Every
+// in-tree caller now invokes the internal/as Service method directly
+// (rotation paths inside internal/as wire it themselves), so the root
+// shim became dead. The internal entry point is still public for the
+// extracted package.
 
 // resourceByIdentifier removed in PR F when handlers_oauth_server.go
 // moved into internal/as/handlers, which calls

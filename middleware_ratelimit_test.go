@@ -29,7 +29,7 @@ func TestRateLimitByIPAllowsBurstThenRejects(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		resp.Body.Close()
+		_ = resp.Body.Close()
 		if resp.StatusCode != http.StatusOK {
 			t.Fatalf("request %d: expected 200; got %d", i+1, resp.StatusCode)
 		}
@@ -38,7 +38,7 @@ func TestRateLimitByIPAllowsBurstThenRejects(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	resp.Body.Close()
+	_ = resp.Body.Close()
 	if resp.StatusCode != http.StatusTooManyRequests {
 		t.Fatalf("expected 429 on 6th request; got %d", resp.StatusCode)
 	}
@@ -64,9 +64,14 @@ func TestRateLimitByIPIsolatesDifferentIPs(t *testing.T) {
 		handler.ServeHTTP(w, req)
 		return w.Code
 	}
-	// IP A burns budget.
-	if rec("1.1.1.1") != 200 || rec("1.1.1.1") != 200 || rec("1.1.1.1") != 429 {
-		t.Fatal("1.1.1.1 sequence wrong")
+	// IP A burns budget. Evaluate sequentially so each request fires (||
+	// short-circuiting would skip later calls and corrupt the per-IP
+	// counter assertions).
+	s1 := rec("1.1.1.1")
+	s2 := rec("1.1.1.1")
+	s3 := rec("1.1.1.1")
+	if s1 != 200 || s2 != 200 || s3 != 429 {
+		t.Fatalf("1.1.1.1 sequence wrong: got %d, %d, %d; want 200, 200, 429", s1, s2, s3)
 	}
 	// IP B is untouched — first request must still pass.
 	if rec("2.2.2.2") != 200 {
@@ -227,8 +232,11 @@ func TestRateLimitByEmailExtractsAndRestoresBody(t *testing.T) {
 		handler.ServeHTTP(w, req)
 		return w.Code
 	}
-	if send("a@h.com") != 200 || send("a@h.com") != 200 {
-		t.Fatal("first 2 to a@h.com should pass")
+	// Evaluate sequentially: || short-circuit would skip the second call.
+	first := send("a@h.com")
+	second := send("a@h.com")
+	if first != 200 || second != 200 {
+		t.Fatalf("first 2 to a@h.com should pass; got %d, %d", first, second)
 	}
 	if send("a@h.com") != 429 {
 		t.Fatal("3rd to a@h.com should 429")

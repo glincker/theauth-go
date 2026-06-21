@@ -191,7 +191,7 @@ func TestRecoveryStepUpFlow(t *testing.T) {
 	}
 	_ = json.Unmarshal(body, &enroll)
 	code, _ := totp.GenerateCode(enroll.Secret, time.Now())
-	resp, body = postJSONWithCookies(t, srv, "/auth/totp/enroll/finish",
+	_, body = postJSONWithCookies(t, srv, "/auth/totp/enroll/finish",
 		map[string]string{"enrollmentId": enroll.EnrollmentID, "code": code}, full)
 	var rcResp struct {
 		RecoveryCodes []string `json:"recoveryCodes"`

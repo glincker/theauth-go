@@ -49,7 +49,7 @@ func TestMagicLinkRequestEndpoint(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != 200 {
 		t.Fatalf("got %d", resp.StatusCode)
 	}
@@ -61,7 +61,7 @@ func TestMeRequiresSession(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != 401 {
 		t.Fatalf("expected 401, got %d", resp.StatusCode)
 	}
@@ -86,7 +86,7 @@ func postJSON(t *testing.T, srv *httptest.Server, path string, body any, cookies
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	buf, _ := io.ReadAll(resp.Body)
 	return resp, buf
 }
@@ -118,7 +118,7 @@ func TestEndToEndEmailPasswordFlow(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer meResp.Body.Close()
+	defer func() { _ = meResp.Body.Close() }()
 	if meResp.StatusCode != 200 {
 		t.Fatalf("/me expected 200 after signup; got %d", meResp.StatusCode)
 	}
@@ -178,7 +178,7 @@ func TestEndToEndEmailPasswordFlow(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	meResp2.Body.Close()
+	_ = meResp2.Body.Close()
 	if meResp2.StatusCode != 401 {
 		t.Fatalf("expected old session to be revoked (401); got %d", meResp2.StatusCode)
 	}
@@ -337,7 +337,7 @@ func TestEndToEndMagicLinkFlow(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != 200 {
 		t.Fatalf("expected 200, got %d", resp.StatusCode)
 	}
@@ -353,7 +353,7 @@ func TestEndToEndMagicLinkFlow(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer meResp.Body.Close()
+	defer func() { _ = meResp.Body.Close() }()
 	if meResp.StatusCode != 200 {
 		t.Fatalf("expected 200 on /me, got %d", meResp.StatusCode)
 	}

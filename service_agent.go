@@ -42,10 +42,15 @@ func validateAgentConfig(cfg *AgentConfig) error {
 // service. PR C of the 2026-06 architecture reorg moved the lifecycle
 // implementation (CreateAgent, MintAgentCredential, RotateAgentSecret,
 // ListAgentsByOwner, GetAgent, SuspendAgent, ResumeAgent, RevokeAgent,
-// and agentBySubjectClaim) into internal/agent. The exported method
+// and AgentBySubjectClaim) into internal/agent. The exported method
 // signatures on *TheAuth are unchanged so handlers and consumer code
 // keep compiling. PR B's oauthStorage back-door is removed by this PR
 // because every storage call now flows through internal/agent.
+//
+// PR G (2026-06-21) removed the unexported agentBySubjectClaim
+// forwarder. The AgentLookup adapter wired in theauth.New now points
+// directly at a.agentSvc.AgentBySubjectClaim (see theauth.go), so the
+// root shim was dead.
 
 // CreateAgent persists a fresh agent owned by the supplied user or
 // organization, mints a backing OAuthClient + client secret, records the
@@ -95,17 +100,4 @@ func (a *TheAuth) ResumeAgent(ctx context.Context, agentID ULID) error {
 // be resumed (operators create a fresh agent instead).
 func (a *TheAuth) RevokeAgent(ctx context.Context, agentID ULID, reason string) error {
 	return a.agentSvc.RevokeAgent(ctx, agentID, reason)
-}
-
-// agentBySubjectClaim resolves an "agent:<id>" sub or act.sub claim into
-// the underlying Agent row. Returns (nil, nil) when the claim does not
-// name an agent so callers can branch cleanly. The internal/as
-// AgentLookup adapter is wired to this method at New time so the
-// introspection and token-exchange paths never import internal/agent
-// directly.
-func (a *TheAuth) agentBySubjectClaim(ctx context.Context, sub string) (*Agent, error) {
-	if a.agentSvc == nil {
-		return nil, nil
-	}
-	return a.agentSvc.AgentBySubjectClaim(ctx, sub)
 }
