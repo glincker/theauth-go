@@ -170,23 +170,3 @@ func (b samlConnectionBody) toInput(orgID ULID) SAMLConnectionInput {
 		AttributeMap:   b.AttributeMap,
 	}
 }
-
-// clientIP extracts the remote IP for audit / session annotation. Falls
-// back to RemoteAddr when X-Forwarded-For is absent.
-func clientIP(r *http.Request) string {
-	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
-		for i := 0; i < len(xff); i++ {
-			if xff[i] == ',' {
-				return xff[:i]
-			}
-		}
-		return xff
-	}
-	host := r.RemoteAddr
-	for i := len(host) - 1; i >= 0; i-- {
-		if host[i] == ':' {
-			return host[:i]
-		}
-	}
-	return host
-}

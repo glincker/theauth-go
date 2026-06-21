@@ -239,9 +239,3 @@ func writeJSONError(w http.ResponseWriter, status int, code, message string) {
 		Message string `json:"message"`
 	}{Code: code, Message: message})
 }
-
-// parseULIDParam parses a Crockford-base32 ULID from a URL path parameter.
-// Returns an error on any malformed input; handlers should map that to 400.
-func parseULIDParam(s string) (ULID, error) {
-	return ulidParse(s)
-}

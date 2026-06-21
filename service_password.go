@@ -48,12 +48,6 @@ func (a *TheAuth) signinWithPassword(ctx context.Context, emailAddr, pw, userAge
 	return a.passwordSvc.Signin(ctx, emailAddr, pw, userAgent, ip)
 }
 
-// requestPasswordReset always returns nil error on "user does not exist"
-// to prevent email enumeration.
-func (a *TheAuth) requestPasswordReset(ctx context.Context, emailAddr string) error {
-	return a.passwordSvc.RequestReset(ctx, emailAddr)
-}
-
 // requestPasswordResetForTest is the testable variant; returns the raw
 // token when one is minted, "" when the email does not exist.
 func (a *TheAuth) requestPasswordResetForTest(ctx context.Context, emailAddr string) (string, error) {
