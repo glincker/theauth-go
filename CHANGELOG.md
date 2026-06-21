@@ -6,6 +6,48 @@ adheres to [Semantic Versioning](https://semver.org/) from v1.0 forward.
 
 ## [Unreleased]
 
+### Security (audit 2026-06-20)
+
+- H1: POST `/oauth/register` Bearer gate now validates the supplied token
+  against `AuthorizationServerConfig.RegistrationTokens` under
+  `crypto/subtle.ConstantTimeCompare` against pre-hashed sha256 digests.
+  The legacy "any non-empty bearer is accepted" behavior is gone. Empty
+  and unknown bearers return 401 access_denied. When `RegistrationTokens`
+  is empty and `AllowAnonymousRegistration` is false (the default and
+  production-recommended state), all registration requests are denied.
+- H2: POST `/oauth/register` is now rate limited per source IP. The cap
+  defaults to 1 req/min when `AllowAnonymousRegistration` is true (the
+  documented public-MCP profile) and 5 req/min otherwise. Operators can
+  override via the new
+  `AuthorizationServerConfig.RegistrationRateLimitPerMinute` field;
+  negative values disable the cap entirely.
+- H3: organization-scoped delegation admin (POST
+  `/admin/v1/organizations/{orgID}/delegations`) now verifies that
+  `body.userId` is a member of the calling admin's organization before
+  creating the grant. Cross-org targets return 403 problem+json
+  (`admin.user_not_in_org`). Previously the storage row could name any
+  user system-wide, which the introspection lookup would honor because
+  the per-grant query does not filter by organization.
+- H4: `X-Forwarded-For` is no longer trusted by default. The new
+  `Config.TrustedProxies []netip.Prefix` field gates XFF: the header is
+  consulted only when the incoming `r.RemoteAddr` is inside one of the
+  configured prefixes. The legacy behavior (XFF honored unconditionally)
+  is gone; existing deployments behind a reverse proxy must list the
+  proxy's network explicitly. Operators on a direct public-internet bind
+  inherit the safe default automatically.
+- M2: `AddOrganizationMember` now refuses to demote the last owner of an
+  organization. The upsert path runs the same `ErrLastOwner` guard as
+  `RemoveOrganizationMember`. Fresh additions and promotions to owner
+  remain unaffected.
+- M6: the email + password signin path pays the Argon2id verify cost on
+  the user-not-found and password-empty branches by verifying against a
+  fixed dummy PHC hash synthesized once at `New` time. Response time no
+  longer distinguishes registered from unregistered emails.
+
+Deferred to follow-up PRs: M1 (SCIM cross-tenant email fallback), M3
+(SecureCookie default), M4 (JWKS rotation transaction), M5 (mcpresource
+missing-introspection startup warning), L1-L5, I1-I7.
+
 ### Added in v2.0 phase 5 + 6 (targeted for `v2.0.0`)
 
 - New separately importable Go module: `github.com/glincker/theauth-go/mcpresource`.

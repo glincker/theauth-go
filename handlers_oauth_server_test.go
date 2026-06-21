@@ -22,7 +22,12 @@ import (
 // drive the authorize endpoint with an authenticated principal.
 func newASHarness(t *testing.T) (*theauth.TheAuth, *httptest.Server, theauth.User, string) {
 	t.Helper()
-	a, store := newASInstance(t)
+	// security audit H1 (2026-06-20): tests that exercise the bearer
+	// gated DCR path must register their initial-access-token with the
+	// AS config; the legacy "any bearer accepted" behavior is gone.
+	a, store := newASInstance(t, func(c *theauth.AuthorizationServerConfig) {
+		c.RegistrationTokens = []string{"initial-access-token"}
+	})
 	user := theauth.User{ID: ulid.New(), Email: "alice@example.com"}
 	if _, err := store.CreateUser(context.Background(), user); err != nil {
 		t.Fatal(err)
@@ -103,7 +108,20 @@ func TestJWKSEndpointServesEd25519Keys(t *testing.T) {
 }
 
 func TestDCRBearerGatedDenialAndAnonymousFlag(t *testing.T) {
-	a, srv, _, _ := newASHarness(t)
+	// security audit H1 (2026-06-20): bearer gate now validates the
+	// supplied token against AuthorizationServerConfig.RegistrationTokens
+	// under crypto/subtle.ConstantTimeCompare. Bearers that do not match
+	// any configured token (or the empty configuration) are rejected with
+	// 401 access_denied, regardless of value. This harness configures
+	// "initial-access-token" so the positive path still exercises a real
+	// match.
+	a, store := newASInstance(t, func(c *theauth.AuthorizationServerConfig) {
+		c.RegistrationTokens = []string{"initial-access-token"}
+	})
+	r := chi.NewRouter()
+	a.Mount(r)
+	srv := httptest.NewServer(r)
+	defer srv.Close()
 	// Anonymous (no bearer) call against an AS where anonymous registration
 	// is disabled (default) returns 401 access_denied.
 	body := `{"redirect_uris":["https://app.example.com/cb"]}`
@@ -115,9 +133,9 @@ func TestDCRBearerGatedDenialAndAnonymousFlag(t *testing.T) {
 	if resp.StatusCode != http.StatusUnauthorized {
 		t.Fatalf("expected 401, got %d", resp.StatusCode)
 	}
-	_ = a
+	_ = store
 
-	// Bearer-gated path: any non-empty Bearer token is accepted in phase 1+2.
+	// Bearer-gated path: only a configured registration token is accepted.
 	req, _ := http.NewRequest(http.MethodPost, srv.URL+"/oauth/register", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer initial-access-token")
@@ -136,6 +154,43 @@ func TestDCRBearerGatedDenialAndAnonymousFlag(t *testing.T) {
 	}
 	if reg.ClientID == "" || reg.ClientSecret == "" {
 		t.Fatalf("client registration response missing fields: %+v", reg)
+	}
+}
+
+// TestDCRBearerRejectsUnknownToken locks in the security audit H1
+// regression: an arbitrary Bearer string is rejected with 401, NOT silently
+// promoted to a bearer-gated registration.
+func TestDCRBearerRejectsUnknownToken(t *testing.T) {
+	a, _ := newASInstance(t, func(c *theauth.AuthorizationServerConfig) {
+		c.RegistrationTokens = []string{"correct-secret"}
+	})
+	r := chi.NewRouter()
+	a.Mount(r)
+	srv := httptest.NewServer(r)
+	defer srv.Close()
+	body := `{"redirect_uris":["https://app.example.com/cb"]}`
+	req, _ := http.NewRequest(http.MethodPost, srv.URL+"/oauth/register", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer not-the-right-secret")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("expected 401 for unknown bearer, got %d", resp.StatusCode)
+	}
+	// Empty bearer must also be rejected.
+	req2, _ := http.NewRequest(http.MethodPost, srv.URL+"/oauth/register", strings.NewReader(body))
+	req2.Header.Set("Content-Type", "application/json")
+	req2.Header.Set("Authorization", "Bearer ")
+	resp2, err := http.DefaultClient.Do(req2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = resp2.Body.Close() }()
+	if resp2.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("expected 401 for empty bearer, got %d", resp2.StatusCode)
 	}
 }
 

@@ -6,10 +6,12 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/netip"
 	"testing"
 	"time"
 
 	"github.com/glincker/theauth-go"
+	"github.com/glincker/theauth-go/storage/memory"
 )
 
 func TestRateLimitByIPAllowsBurstThenRejects(t *testing.T) {
@@ -72,8 +74,22 @@ func TestRateLimitByIPIsolatesDifferentIPs(t *testing.T) {
 	}
 }
 
+// TestRateLimitByIPHonorsXForwardedFor exercises the trusted-proxy
+// allowlist contract introduced in security audit H4 (2026-06-20).
+// Operators that explicitly trust 127.0.0.1 (the proxy address used by the
+// test harness) get the same XFF-keyed behavior as before; the safe
+// default (no trust) is covered separately by
+// TestRateLimitByIPIgnoresXForwardedForByDefault.
 func TestRateLimitByIPHonorsXForwardedFor(t *testing.T) {
-	a, _ := newTestAuth(t)
+	a, err := theauth.New(theauth.Config{
+		Storage:        memory.New(),
+		BaseURL:        "http://localhost",
+		TrustedProxies: []netip.Prefix{netip.MustParsePrefix("127.0.0.1/32")},
+	})
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	t.Cleanup(a.Close)
 	mw := a.RateLimitByIP(1)
 	ok := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -82,23 +98,109 @@ func TestRateLimitByIPHonorsXForwardedFor(t *testing.T) {
 
 	doReq := func(xff string) int {
 		req := httptest.NewRequest("POST", "/", nil)
-		req.RemoteAddr = "127.0.0.1:9999" // proxy address
+		req.RemoteAddr = "127.0.0.1:9999" // proxy address (trusted)
 		req.Header.Set("X-Forwarded-For", xff)
 		w := httptest.NewRecorder()
 		handler.ServeHTTP(w, req)
 		return w.Code
 	}
-	// First request from real client A — passes.
+	// First request from real client A: passes.
 	if doReq("9.9.9.9") != 200 {
 		t.Fatal("first client A req should pass")
 	}
-	// Second request from client A — 429.
+	// Second request from client A: 429.
 	if doReq("9.9.9.9") != 429 {
 		t.Fatal("second client A req should be 429")
 	}
-	// First request from client B — passes (limiter keyed on XFF, not on proxy addr).
+	// First request from client B: passes (limiter keyed on XFF, not on
+	// proxy addr).
 	if doReq("8.8.8.8") != 200 {
 		t.Fatal("client B should be isolated from A")
+	}
+}
+
+// TestRateLimitByIPIgnoresXForwardedForByDefault locks in the security
+// audit H4 (2026-06-20) regression: when no TrustedProxies are configured,
+// the X-Forwarded-For header is NOT honored. An attacker rotating XFF on
+// every request from a single source IP must NOT bypass the per-IP cap.
+func TestRateLimitByIPIgnoresXForwardedForByDefault(t *testing.T) {
+	a, _ := newTestAuth(t) // newTestAuth does not set TrustedProxies.
+	mw := a.RateLimitByIP(1)
+	ok := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+	handler := mw(ok)
+
+	doReq := func(xff string) int {
+		req := httptest.NewRequest("POST", "/", nil)
+		req.RemoteAddr = "203.0.113.7:9999" // same upstream every time
+		req.Header.Set("X-Forwarded-For", xff)
+		w := httptest.NewRecorder()
+		handler.ServeHTTP(w, req)
+		return w.Code
+	}
+	// First request: passes.
+	if doReq("9.9.9.9") != 200 {
+		t.Fatal("first request should pass")
+	}
+	// Second request with a forged XFF from a different "client":
+	// without TrustedProxies the limiter still keys off RemoteAddr, so
+	// this must 429. If the test sees 200, the H4 fix has regressed.
+	if got := doReq("8.8.8.8"); got != 429 {
+		t.Fatalf("forged XFF must not refresh the per-IP budget; got %d (want 429)", got)
+	}
+	// Third request with the original XFF: also 429 (still keyed on the
+	// upstream RemoteAddr).
+	if got := doReq("9.9.9.9"); got != 429 {
+		t.Fatalf("second request from the same RemoteAddr must be 429; got %d", got)
+	}
+}
+
+// TestRateLimitByIPHonorsXForwardedForOnlyForTrustedProxies confirms that
+// when TrustedProxies is set but the request RemoteAddr is NOT inside the
+// allowlist, XFF is ignored (security audit H4 regression coverage).
+func TestRateLimitByIPHonorsXForwardedForOnlyForTrustedProxies(t *testing.T) {
+	a, err := theauth.New(theauth.Config{
+		Storage:        memory.New(),
+		BaseURL:        "http://localhost",
+		TrustedProxies: []netip.Prefix{netip.MustParsePrefix("10.0.0.0/8")},
+	})
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	t.Cleanup(a.Close)
+	mw := a.RateLimitByIP(1)
+	ok := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+	handler := mw(ok)
+
+	doReq := func(remote, xff string) int {
+		req := httptest.NewRequest("POST", "/", nil)
+		req.RemoteAddr = remote
+		req.Header.Set("X-Forwarded-For", xff)
+		w := httptest.NewRecorder()
+		handler.ServeHTTP(w, req)
+		return w.Code
+	}
+	// Untrusted upstream: XFF ignored, second request 429 even with new
+	// XFF value.
+	if doReq("203.0.113.7:1111", "9.9.9.9") != 200 {
+		t.Fatal("first untrusted req should pass")
+	}
+	if got := doReq("203.0.113.7:1111", "1.1.1.1"); got != 429 {
+		t.Fatalf("untrusted upstream must not honor XFF; got %d", got)
+	}
+	// Trusted upstream (10.x.x.x): XFF honored, distinct XFF gets a
+	// fresh bucket.
+	if doReq("10.0.0.1:1111", "9.9.9.9") != 200 {
+		t.Fatal("first trusted req should pass")
+	}
+	if doReq("10.0.0.1:1111", "9.9.9.9") != 429 {
+		t.Fatal("second trusted req from same XFF should be 429")
+	}
+	if doReq("10.0.0.1:1111", "8.8.8.8") != 200 {
+		t.Fatal("trusted upstream with different XFF should get a fresh bucket")
 	}
 }
 

@@ -1,6 +1,8 @@
 package theauth
 
 import (
+	"crypto/sha256"
+	"crypto/subtle"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -41,7 +43,16 @@ func (a *TheAuth) mountAS(r chi.Router) {
 	r.Post("/oauth/token", a.handleToken)
 	r.Post("/oauth/revoke", a.handleRevoke)
 	r.Post("/oauth/introspect", a.handleIntrospect)
-	r.Post("/oauth/register", a.handleRegister)
+	// Per-IP rate limit on /oauth/register. The cap defaults to 1/min
+	// for anonymous mode and 5/min for bearer-gated mode (set in
+	// validateASConfig). A negative value disables the cap (operator
+	// opt-out). Security audit H2 (2026-06-20): the documented
+	// "1 req/min/IP" floor is now actually enforced.
+	if cap := a.as.cfg.RegistrationRateLimitPerMinute; cap > 0 {
+		r.With(a.RateLimitByIP(cap)).Post("/oauth/register", a.handleRegister)
+	} else {
+		r.Post("/oauth/register", a.handleRegister)
+	}
 }
 
 // ---------- discovery ----------
@@ -311,8 +322,30 @@ func (a *TheAuth) handleRegister(w http.ResponseWriter, r *http.Request) {
 		writeOAuthError(w, http.StatusBadRequest, "invalid_client_metadata", "request body must be valid JSON")
 		return
 	}
+	// security audit H1 (2026-06-20): the bearer gate used to flip
+	// anonymous=false whenever any non-empty Authorization: Bearer
+	// header was present, regardless of its value. The gate now
+	// validates the supplied token against the operator-configured
+	// RegistrationTokens via crypto/subtle.ConstantTimeCompare against
+	// the sha256 digest snapshot built at New time. Empty or
+	// non-matching bearers are rejected with 401 access_denied so an
+	// attacker cannot ride the bearer-gated path with arbitrary input.
 	anonymous := true
-	if authz := strings.TrimSpace(r.Header.Get("Authorization")); strings.HasPrefix(strings.ToLower(authz), "bearer ") {
+	authz := strings.TrimSpace(r.Header.Get("Authorization"))
+	if authz != "" {
+		// Any Authorization header signals "client is attempting the
+		// bearer-gated path"; we MUST authenticate it before honoring
+		// the request, even when AllowAnonymousRegistration is true
+		// (otherwise the caller could downgrade the anonymous label).
+		if !strings.HasPrefix(strings.ToLower(authz), "bearer ") {
+			writeOAuthError(w, http.StatusUnauthorized, "access_denied", "Authorization scheme must be Bearer")
+			return
+		}
+		rawToken := strings.TrimSpace(authz[len("bearer "):])
+		if !a.dcrBearerValid(rawToken) {
+			writeOAuthError(w, http.StatusUnauthorized, "access_denied", "invalid initial access token")
+			return
+		}
 		anonymous = false
 	}
 	resp, err := a.RegisterClient(r.Context(), req, anonymous)
@@ -364,6 +397,34 @@ func writeOAuthError(w http.ResponseWriter, status int, code, description string
 		Error            string `json:"error"`
 		ErrorDescription string `json:"error_description,omitempty"`
 	}{Error: code, ErrorDescription: description})
+}
+
+// dcrBearerValid reports whether the supplied raw token (no "Bearer "
+// prefix) matches any operator-configured RegistrationTokens entry. The
+// comparison runs against pre-computed sha256 digests under
+// crypto/subtle.ConstantTimeCompare, so the per-comparison time is fixed
+// at 32 bytes regardless of token length and an attacker cannot probe
+// individual tokens via timing. Returns false when the input is empty or
+// when no tokens are configured (security audit H1, 2026-06-20).
+func (a *TheAuth) dcrBearerValid(rawToken string) bool {
+	if rawToken == "" {
+		return false
+	}
+	if len(a.dcrRegistrationTokenHashes) == 0 {
+		return false
+	}
+	candidate := sha256.Sum256([]byte(rawToken))
+	// Walk every configured digest so the early-exit branch does not leak
+	// a "first match" position via timing. The crypto/subtle compare is
+	// constant time over the 32-byte slice; the loop overall is O(N) over
+	// the configured token count, which is operator-controlled and small.
+	matched := 0
+	for i := range a.dcrRegistrationTokenHashes {
+		if subtle.ConstantTimeCompare(candidate[:], a.dcrRegistrationTokenHashes[i][:]) == 1 {
+			matched = 1
+		}
+	}
+	return matched == 1
 }
 
 // mapOAuthErrorCode maps internal sentinels to wire error codes. The

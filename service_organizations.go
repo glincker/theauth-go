@@ -54,9 +54,37 @@ func (a *TheAuth) OrganizationByID(ctx context.Context, id ULID) (*Organization,
 
 // AddOrganizationMember adds (or updates the role of) a user inside an
 // organization. Roles must be one of "owner", "admin", "member".
+//
+// security audit M2 (2026-06-20): when the upsert would demote the last
+// remaining owner (role != owner on a user who is currently the sole
+// owner), the call is rejected with ErrLastOwner. Without this guard, an
+// admin could orphan the organization by setting the last owner's role
+// to "member" via the upsert path (RemoveOrganizationMember already
+// enforces the same invariant on deletes).
 func (a *TheAuth) AddOrganizationMember(ctx context.Context, orgID, userID ULID, role string) error {
 	if !isValidRole(role) {
 		return errors.New("theauth: invalid organization role")
+	}
+	if role != OrgRoleOwner {
+		// Only the demote path needs the guard: promoting to owner is
+		// always safe (the org gains an owner), and adding a fresh
+		// member/admin row never affects existing owner state.
+		current, err := a.storage.OrganizationMemberRole(ctx, orgID, userID)
+		if err == nil && current == OrgRoleOwner {
+			members, err := a.storage.OrganizationMembersByOrg(ctx, orgID)
+			if err != nil {
+				return err
+			}
+			owners := 0
+			for _, m := range members {
+				if m.Role == OrgRoleOwner {
+					owners++
+				}
+			}
+			if owners <= 1 {
+				return ErrLastOwner
+			}
+		}
 	}
 	return a.storage.UpsertOrganizationMember(ctx, OrganizationMember{
 		OrganizationID: orgID,

@@ -228,6 +228,17 @@ func (a *TheAuth) adminCreateDelegation(w http.ResponseWriter, r *http.Request) 
 		admin.Write(w, http.StatusBadRequest, admin.CodeValidationInvalid, "invalid agentId", "")
 		return
 	}
+	// security audit H3 (2026-06-20): the body.UserID was previously
+	// trusted blindly. Without this check an admin in any org could mint
+	// a delegation_grant naming any user in the system, with no consent
+	// from the named user. The grant remained usable for token exchange
+	// because DelegationGrantByUserAgentResource does not filter by org.
+	// Verify the named user is a member of the calling admin's org
+	// before persisting; reject with 403 problem+json otherwise.
+	if _, err := a.storage.OrganizationMemberRole(r.Context(), orgID, userID); err != nil {
+		admin.Write(w, http.StatusForbidden, admin.CodeUserNotInOrg, "user is not a member of this organization", "")
+		return
+	}
 	orgIDCp := orgID
 	in := GrantDelegationInput{
 		UserID:             userID,
