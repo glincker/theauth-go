@@ -4,6 +4,9 @@ import (
 	"errors"
 
 	"github.com/glincker/theauth-go/internal/models"
+	internalsaml "github.com/glincker/theauth-go/internal/saml"
+	internaltotp "github.com/glincker/theauth-go/internal/totp"
+	internalwebauthn "github.com/glincker/theauth-go/internal/webauthn"
 )
 
 // Sentinel errors retained for backward compatibility with v0.1 callers
@@ -31,12 +34,16 @@ var (
 	// stored value. The library treats this as a clone-attempt and refuses
 	// the login (with the standard 0-stays-0 carve-out for authenticators
 	// that do not implement counters; that case is handled by the caller).
-	ErrReplayDetected = errors.New("theauth: webauthn sign count replay detected")
+	// PR D architecture reorg (2026-06-20): the canonical sentinel lives
+	// in internal/webauthn so the extracted Service can return it; root
+	// re-aliases here.
+	ErrReplayDetected = internalwebauthn.ErrReplayDetected
 
 	// ErrAlreadyEnrolled (v0.5) is returned when /auth/totp/enroll/finish is
 	// called against a user who already has a confirmed TOTP secret. Callers
-	// must DELETE /auth/totp first to re-enroll.
-	ErrAlreadyEnrolled = errors.New("theauth: totp already enrolled")
+	// must DELETE /auth/totp first to re-enroll. PR D architecture reorg
+	// (2026-06-20): canonical sentinel in internal/totp.
+	ErrAlreadyEnrolled = internaltotp.ErrAlreadyEnrolled
 
 	// v0.7 sentinels.
 
@@ -50,14 +57,18 @@ var (
 	ErrSAMLRequiresOrganizations = errors.New("theauth: SAML requires Organizations to be enabled")
 	// ErrSAMLUnsignedAssertion is returned by FinishSAMLLogin when the
 	// inbound SAML Response parses but its assertion is not signed.
-	ErrSAMLUnsignedAssertion = errors.New("theauth: saml assertion not signed")
+	// PR D architecture reorg (2026-06-20): the canonical sentinel lives
+	// in internal/saml so the extracted Service can return it; root
+	// re-aliases here so errors.Is checks against the root name still
+	// match.
+	ErrSAMLUnsignedAssertion = internalsaml.ErrSAMLUnsignedAssertion
 	// ErrSAMLMissingEmail is returned by FinishSAMLLogin when the mapped
 	// email attribute is empty (the find-or-create email fallback path
 	// cannot proceed).
-	ErrSAMLMissingEmail = errors.New("theauth: saml assertion missing email attribute")
+	ErrSAMLMissingEmail = internalsaml.ErrSAMLMissingEmail
 	// ErrSAMLInvalidAssertion wraps the underlying crewjam/saml validation
 	// error for failed signature / conditions / replay checks.
-	ErrSAMLInvalidAssertion = errors.New("theauth: saml assertion invalid")
+	ErrSAMLInvalidAssertion = internalsaml.ErrSAMLInvalidAssertion
 	// ErrLastOwner is returned when an org member removal would leave the
 	// organization with zero owners.
 	ErrLastOwner = models.ErrLastOwner
@@ -99,19 +110,22 @@ var (
 
 // Stable error codes that callers can switch on. New endpoints return
 // TheAuthError; old endpoints keep returning the sentinels above.
+// Re-exported from internal/models (PR D architecture reorg, 2026-06-20)
+// so internal service packages can construct TheAuthError with these codes
+// without taking an import cycle on the root package.
 const (
-	CodeWeakPassword         = "weak_password"
-	CodeEmailTaken           = "email_taken"
-	CodeInvalidCredentials   = "invalid_credentials"
-	CodeRateLimited          = "rate_limited"
-	CodePasswordResetExpired = "password_reset_expired"
-	CodePasswordResetInvalid = "password_reset_invalid"
+	CodeWeakPassword         = models.CodeWeakPassword
+	CodeEmailTaken           = models.CodeEmailTaken
+	CodeInvalidCredentials   = models.CodeInvalidCredentials
+	CodeRateLimited          = models.CodeRateLimited
+	CodePasswordResetExpired = models.CodePasswordResetExpired
+	CodePasswordResetInvalid = models.CodePasswordResetInvalid
 
 	// v0.5 codes.
-	CodeTOTPRequired    = "totp_required"
-	CodeInvalidTOTP     = "invalid_totp"
-	CodeAlreadyEnrolled = "already_enrolled"
-	CodeWebAuthn        = "webauthn_error"
+	CodeTOTPRequired    = models.CodeTOTPRequired
+	CodeInvalidTOTP     = models.CodeInvalidTOTP
+	CodeAlreadyEnrolled = models.CodeAlreadyEnrolled
+	CodeWebAuthn        = models.CodeWebAuthn
 )
 
 // TheAuthError is the structured error type returned by v0.2+ service

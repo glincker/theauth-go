@@ -10,20 +10,23 @@ import (
 	"errors"
 	"net/netip"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/glincker/theauth-go/crypto"
 	"github.com/glincker/theauth-go/email"
 	"github.com/glincker/theauth-go/internal/agent"
 	internalas "github.com/glincker/theauth-go/internal/as"
+	internalaudit "github.com/glincker/theauth-go/internal/audit"
 	"github.com/glincker/theauth-go/internal/delegation"
 	"github.com/glincker/theauth-go/internal/magiclink"
 	"github.com/glincker/theauth-go/internal/organizations"
+	"github.com/glincker/theauth-go/internal/password"
 	"github.com/glincker/theauth-go/internal/rbac"
+	internalsaml "github.com/glincker/theauth-go/internal/saml"
 	internalscim "github.com/glincker/theauth-go/internal/scim"
 	"github.com/glincker/theauth-go/internal/session"
-	gowebauthn "github.com/go-webauthn/webauthn/webauthn"
+	internaltotp "github.com/glincker/theauth-go/internal/totp"
+	internalwebauthn "github.com/glincker/theauth-go/internal/webauthn"
 )
 
 // Storage is the persistence contract TheAuth depends on. Adapters live in
@@ -502,14 +505,6 @@ type TheAuth struct {
 	// request (security audit H1, 2026-06-20).
 	dcrRegistrationTokenHashes [][32]byte
 
-	// dummyPasswordHash is a fixed Argon2id PHC string used by the
-	// signin path on the user-not-found branch so the verify cost is
-	// paid regardless of whether the email is registered. Mints once at
-	// New time so /auth/email-password/signin cannot be used as a
-	// timing-side-channel email enumerator (security audit M6,
-	// 2026-06-20).
-	dummyPasswordHash string
-
 	// OAuth (v0.3)
 	providers         map[string]Provider
 	encryptionKey     []byte
@@ -517,40 +512,28 @@ type TheAuth struct {
 	oauthStates       sync.Map // map[string]*oauthState
 	oauthStateStop    chan struct{}
 
-	// WebAuthn (v0.5). nil when Config.WebAuthn was not set; routes are
-	// only mounted in that case.
-	webauthn           *gowebauthn.WebAuthn
-	webauthnCfg        *WebAuthnConfig
-	webauthnChals      sync.Map // map[string]*webauthnChallenge
-	webauthnStop       chan struct{}
-	webauthnChalTTL    time.Duration
-	pendingFailures    sync.Map // map[ULID]*pendingFailureCounter
-	totpCfg            *TOTPConfig
-	totpEnrollments    sync.Map // map[string]*totpEnrollment
-	totpEnrollmentStop chan struct{}
+	// WebAuthn (v0.5). webauthnCfg is the original Config.WebAuthn pointer
+	// kept as a nil-signal for mount() and to give the handler access to
+	// ChallengeTTL for the bridging cookie. The runtime state (in-flight
+	// challenges + GC goroutine) lives on webauthnSvc.
+	webauthnCfg *WebAuthnConfig
+	// totpCfg is the original Config.TOTP pointer kept as a nil-signal
+	// for mount(). The runtime state (enrollments + failure counters + GC
+	// goroutine) lives on totpSvc.
+	totpCfg *TOTPConfig
 
 	// v0.7
-	orgsCfg           *OrganizationsConfig
-	samlCfg           *SAMLConfig
-	samlSPCert        *x509.Certificate
-	samlSPKey         *rsa.PrivateKey
-	samlAuthnInFlight sync.Map // map[string]time.Time -- AuthnRequest ID -> deadline
-	samlAuthnStop     chan struct{}
-	scimCfg           *SCIMConfig
+	orgsCfg *OrganizationsConfig
+	// samlCfg is the original Config.SAML pointer kept as a nil-signal
+	// for mount(). The SP keypair, AuthnRequest in-flight map, and GC
+	// goroutine live on samlSvc.
+	samlCfg *SAMLConfig
+	scimCfg *SCIMConfig
 
 	// v1.0
 	rbacCfg          *RBACConfig
 	auditCfg         *AuditConfig
 	adminCfg         *AdminConfig
-	auditCh          chan AuditEvent
-	auditStop        chan struct{}
-	auditDone        chan struct{}
-	auditStarted     atomic.Bool
-	auditClosed      atomic.Bool
-	auditEmitted     atomic.Uint64
-	auditWritten     atomic.Uint64
-	auditDropped     atomic.Uint64
-	auditFailed      atomic.Uint64
 	permCatalog      []Permission          // immutable snapshot for validation
 	permIndex        map[string]Permission // name -> Permission, lookup cache
 	defaultRoleSeeds []RoleSeed
@@ -591,6 +574,19 @@ type TheAuth struct {
 	// and the PR B oauthStorage back-door is gone for good.
 	agentSvc      *agent.Service
 	delegationSvc *delegation.Service
+
+	// PR D architecture reorg (2026-06-20): high-complexity services
+	// (password, totp, webauthn, saml, audit) are extracted into internal
+	// packages and held here. Each internal package owns its own runtime
+	// state (in-flight challenges / enrollments / AuthnRequests + GC
+	// goroutines + audit writer goroutine) and declares its own minimal
+	// Storage interface. Root methods on *TheAuth forward to these so the
+	// public surface is byte-stable.
+	passwordSvc *password.Service
+	totpSvc     *internaltotp.Service
+	webauthnSvc *internalwebauthn.Service
+	samlSvc     *internalsaml.Service
+	auditSvc    *internalaudit.Service
 }
 
 // New validates the Config, applies defaults, and returns a ready TheAuth.
@@ -647,8 +643,12 @@ func New(cfg Config) (*TheAuth, error) {
 	}
 
 	// v0.5: WebAuthn + TOTP validation. Both blocks are optional and
-	// orthogonal; consumers can wire either, both, or neither.
-	var wa *gowebauthn.WebAuthn
+	// orthogonal; consumers can wire either, both, or neither. PR D
+	// architecture reorg (2026-06-20): the upstream gowebauthn.WebAuthn
+	// instance is constructed inside internal/webauthn.NewService; here we
+	// only validate the operator-supplied fields and apply the
+	// ChallengeTTL default so the existing handler still reads it for the
+	// bridging cookie.
 	if cfg.WebAuthn != nil {
 		if cfg.WebAuthn.RPID == "" {
 			return nil, errors.New("theauth: Config.WebAuthn.RPID is required")
@@ -656,20 +656,6 @@ func New(cfg Config) (*TheAuth, error) {
 		if len(cfg.WebAuthn.RPOrigins) == 0 {
 			return nil, errors.New("theauth: Config.WebAuthn.RPOrigins must have at least one entry")
 		}
-		display := cfg.WebAuthn.RPDisplayName
-		if display == "" {
-			display = cfg.WebAuthn.RPID
-		}
-		w, err := gowebauthn.New(&gowebauthn.Config{
-			RPID:                  cfg.WebAuthn.RPID,
-			RPDisplayName:         display,
-			RPOrigins:             cfg.WebAuthn.RPOrigins,
-			AttestationPreference: "none", // matches passkey UX guidance; MDS3 deferred to a future config
-		})
-		if err != nil {
-			return nil, errors.New("theauth: webauthn config: " + err.Error())
-		}
-		wa = w
 		if cfg.WebAuthn.ChallengeTTL == 0 {
 			cfg.WebAuthn.ChallengeTTL = 5 * time.Minute
 		}
@@ -811,19 +797,6 @@ func New(cfg Config) (*TheAuth, error) {
 		}
 	}
 
-	// security audit M6 (2026-06-20): mint a fixed dummy Argon2id PHC
-	// string the signin path can verify against when the supplied email
-	// does not match any account. Pays the ~150 ms Argon2id cost
-	// regardless of whether the user exists, so an attacker cannot
-	// distinguish registered emails by response time. The dummy hash
-	// value is irrelevant; any password verified against it returns
-	// false. Generated once per *TheAuth so the cost is paid at startup,
-	// not per request.
-	dummyHash, err := crypto.HashPassword("theauth-dummy-password-not-real")
-	if err != nil {
-		return nil, errors.New("theauth: synthesize signin timing-equalization hash: " + err.Error())
-	}
-
 	a := &TheAuth{
 		storage:                    cfg.Storage,
 		emailSender:                cfg.EmailSender,
@@ -837,17 +810,13 @@ func New(cfg Config) (*TheAuth, error) {
 		rateLimitPerEmail:          cfg.RateLimitPerEmail,
 		trustedProxies:             append([]netip.Prefix(nil), cfg.TrustedProxies...),
 		dcrRegistrationTokenHashes: dcrTokenHashes,
-		dummyPasswordHash:          dummyHash,
 		providers:                  providers,
 		encryptionKey:              cfg.EncryptionKey,
 		postLoginRedirect:          cfg.PostLoginRedirect,
-		webauthn:                   wa,
 		webauthnCfg:                cfg.WebAuthn,
 		totpCfg:                    cfg.TOTP,
 		orgsCfg:                    cfg.Organizations,
 		samlCfg:                    cfg.SAML,
-		samlSPCert:                 samlCert,
-		samlSPKey:                  samlKey,
 		scimCfg:                    cfg.SCIM,
 		rbacCfg:                    cfg.RBAC,
 		auditCfg:                   cfg.Audit,
@@ -857,6 +826,22 @@ func New(cfg Config) (*TheAuth, error) {
 		defaultRoleSeeds:           defaultSeeds,
 		agentCfg:                   cfg.AgentIdentity,
 		accountUX:                  cfg.AccountUX,
+	}
+
+	// PR D architecture reorg (2026-06-20): wire the audit Service first
+	// so subsequent service constructors that take an audit.Emitter
+	// receive the live writer (Start spawns the goroutine below). When
+	// Config.Audit is nil the rest of the wiring takes audit.NoopEmitter
+	// via a.auditEmitter().
+	if cfg.Audit != nil {
+		a.auditSvc = internalaudit.NewService(cfg.Storage, internalaudit.Config{
+			BufferSize:      cfg.Audit.BufferSize,
+			BatchSize:       cfg.Audit.BatchSize,
+			FlushInterval:   cfg.Audit.FlushInterval,
+			CustomRedactor:  internalaudit.Redactor(cfg.Audit.Redactor),
+			DefaultRedactor: internalaudit.Redactor(DefaultRedactor),
+			DrainTimeout:    cfg.Audit.DrainTimeout,
+		})
 	}
 	// v2.0 phase 1 + 2: wire the extracted authorization server service.
 	// PR C architecture reorg (2026-06-20) removes the oauthStorage
@@ -919,26 +904,47 @@ func New(cfg Config) (*TheAuth, error) {
 	a.scimSvc = internalscim.NewService(cfg.Storage, scimConfigFromRoot(cfg.SCIM))
 	a.orgsSvc = organizations.New(cfg.Storage, orgsConfigFromRoot(cfg.Organizations))
 	a.rbacSvc = rbac.New(cfg.Storage, rbacConfigFromValidated(cfg.RBAC, permCatalog, permIndex, defaultSeeds), a)
+
+	// PR D architecture reorg (2026-06-20): wire the extracted
+	// high-complexity services. Each takes a minimal Storage interface
+	// satisfied by cfg.Storage via duck typing. The *TheAuth instance
+	// satisfies audit.Emitter via EmitAudit so each service receives a
+	// back-reference for audit emission. TOTP is constructed before
+	// password so the password service can take *totpSvc as the
+	// PendingTOTPIssuer; webauthn and saml take the session service so
+	// FinishLogin can mint a full session without touching root.
+	a.totpSvc = internaltotp.NewService(cfg.Storage, a.sessionSvc, a, totpConfigFromRoot(cfg.TOTP), cfg.EncryptionKey)
+	pwSvc, err := password.NewService(cfg.Storage, cfg.EmailSender, a.sessionSvc, a.magicSvc, a.totpSvc, a, password.Config{
+		BaseURL:     cfg.BaseURL,
+		TOTPEnabled: cfg.TOTP != nil,
+	})
+	if err != nil {
+		return nil, err
+	}
+	a.passwordSvc = pwSvc
+	waSvc, err := internalwebauthn.NewService(cfg.Storage, a.sessionSvc, a, webauthnConfigFromRoot(cfg.WebAuthn))
+	if err != nil {
+		return nil, err
+	}
+	a.webauthnSvc = waSvc
+	a.samlSvc = internalsaml.NewService(cfg.Storage, a.sessionSvc, a, samlConfigFromRoot(cfg.SAML, samlCert, samlKey))
+
 	if len(providers) > 0 {
 		a.oauthStateStop = make(chan struct{})
 		go a.oauthStateGCLoop()
 	}
-	if wa != nil {
-		a.webauthnChalTTL = cfg.WebAuthn.ChallengeTTL
-		a.webauthnStop = make(chan struct{})
-		go a.webauthnChallengeGCLoop()
+	// Start spawns each extracted service's background loops. The audit
+	// service spawns the writer goroutine; webauthn / totp / saml spawn
+	// their per-service challenge / enrollment / AuthnRequest GC loops.
+	// Every "go ..." has a matching Stop path in Close.
+	if a.auditSvc != nil {
+		if err := a.auditSvc.Start(); err != nil {
+			return nil, err
+		}
 	}
-	if cfg.TOTP != nil {
-		a.totpEnrollmentStop = make(chan struct{})
-		go a.totpEnrollmentGCLoop()
-	}
-	if cfg.SAML != nil {
-		a.samlAuthnStop = make(chan struct{})
-		go a.samlAuthnGCLoop()
-	}
-	if err := a.Start(); err != nil {
-		return nil, err
-	}
+	a.webauthnSvc.Start()
+	a.totpSvc.Start()
+	a.samlSvc.Start()
 	if a.as != nil {
 		if err := a.as.Start(context.Background()); err != nil {
 			return nil, err
@@ -947,33 +953,71 @@ func New(cfg Config) (*TheAuth, error) {
 	return a, nil
 }
 
-// Start spawns the audit writer goroutine when Config.Audit is non-nil and
-// the writer is not already running. Idempotent; safe to call multiple
-// times. New calls Start automatically so existing callers that never
-// invoked Start keep working.
+// totpConfigFromRoot translates the root TOTPConfig pointer into the
+// internal/totp Config the extracted service consumes. Returns nil when
+// the root config is nil so the service's "disabled" branch fires.
+func totpConfigFromRoot(c *TOTPConfig) *internaltotp.Config {
+	if c == nil {
+		return nil
+	}
+	return &internaltotp.Config{
+		Issuer:            c.Issuer,
+		RecoveryCodeCount: c.RecoveryCodeCount,
+	}
+}
+
+// webauthnConfigFromRoot translates the root WebAuthnConfig pointer into
+// the internal/webauthn Config the extracted service consumes. Returns
+// nil when the root config is nil so the service's "disabled" branch
+// fires (every entry point returns "WebAuthn not configured").
+func webauthnConfigFromRoot(c *WebAuthnConfig) *internalwebauthn.Config {
+	if c == nil {
+		return nil
+	}
+	return &internalwebauthn.Config{
+		RPID:          c.RPID,
+		RPDisplayName: c.RPDisplayName,
+		RPOrigins:     append([]string(nil), c.RPOrigins...),
+		ChallengeTTL:  c.ChallengeTTL,
+	}
+}
+
+// samlConfigFromRoot translates the root SAMLConfig pointer plus the
+// pre-parsed cert/key into the internal/saml Config the extracted service
+// consumes. Returns nil when the root config is nil so the service's
+// "disabled" branch fires.
+func samlConfigFromRoot(c *SAMLConfig, cert *x509.Certificate, key *rsa.PrivateKey) *internalsaml.Config {
+	if c == nil {
+		return nil
+	}
+	return &internalsaml.Config{
+		SPCert:          cert,
+		SPKey:           key,
+		AuthnRequestTTL: c.AuthnRequestTTL,
+		ClockSkew:       c.ClockSkew,
+	}
+}
+
+// Start spawns the audit writer goroutine when Config.Audit is non-nil
+// and the writer is not already running. Idempotent; safe to call
+// multiple times. New calls Start automatically so existing callers that
+// never invoked Start keep working.
+//
+// PR D architecture reorg (2026-06-20): forwards to the extracted audit
+// service. WebAuthn / TOTP / SAML GC loops are spawned directly in New
+// via their per-service Start methods; Close handles their lifecycle.
 func (a *TheAuth) Start() error {
-	if a.auditCfg == nil {
+	if a.auditSvc == nil {
 		return nil
 	}
-	if !a.auditStarted.CompareAndSwap(false, true) {
-		return nil
-	}
-	bufSize := a.auditCfg.BufferSize
-	if bufSize <= 0 {
-		bufSize = 4096
-	}
-	a.auditCh = make(chan AuditEvent, bufSize)
-	a.auditStop = make(chan struct{})
-	a.auditDone = make(chan struct{})
-	go a.auditWriterLoop()
-	return nil
+	return a.auditSvc.Start()
 }
 
 // Close releases background resources started by New: the OAuth state GC
-// loop (v0.3), the WebAuthn challenge / TOTP enrollment GC loops (v0.5), the
-// SAML AuthnRequest GC loop (v0.7), and the audit writer goroutine (v1.0).
-// Audit drain waits up to Config.Audit.DrainTimeout (default 5 seconds) for
-// the writer to flush. Safe to call multiple times.
+// loop (v0.3), the WebAuthn challenge / TOTP enrollment GC loops (v0.5),
+// the SAML AuthnRequest GC loop (v0.7), and the audit writer goroutine
+// (v1.0). Audit drain waits up to Config.Audit.DrainTimeout (default 5
+// seconds) for the writer to flush. Safe to call multiple times.
 func (a *TheAuth) Close() {
 	closeOnce := func(ch chan struct{}) {
 		if ch == nil {
@@ -987,38 +1031,34 @@ func (a *TheAuth) Close() {
 		}
 	}
 	closeOnce(a.oauthStateStop)
-	closeOnce(a.webauthnStop)
-	closeOnce(a.totpEnrollmentStop)
-	closeOnce(a.samlAuthnStop)
+	if a.webauthnSvc != nil {
+		a.webauthnSvc.Stop()
+	}
+	if a.totpSvc != nil {
+		a.totpSvc.Stop()
+	}
+	if a.samlSvc != nil {
+		a.samlSvc.Stop()
+	}
 	if a.as != nil {
 		a.as.Stop()
 	}
-	// Audit shutdown: mark closed (so EmitAudit becomes a drop), close the
-	// stop channel, then wait for the writer goroutine to drain remaining
-	// events. The auditClosed flag protects EmitAudit from racing on a
-	// closed channel.
-	if a.auditStarted.Load() && !a.auditClosed.Swap(true) {
-		closeOnce(a.auditStop)
-		timeout := 5 * time.Second
-		if a.auditCfg != nil && a.auditCfg.DrainTimeout > 0 {
-			timeout = a.auditCfg.DrainTimeout
-		}
-		if a.auditDone != nil {
-			select {
-			case <-a.auditDone:
-			case <-time.After(timeout):
-			}
-		}
+	if a.auditSvc != nil {
+		a.auditSvc.Stop()
 	}
 }
 
 // Stats returns a snapshot of runtime counters.
 func (a *TheAuth) Stats() Stats {
+	if a.auditSvc == nil {
+		return Stats{}
+	}
+	c := a.auditSvc.Counters()
 	return Stats{
-		AuditEmitted: a.auditEmitted.Load(),
-		AuditWritten: a.auditWritten.Load(),
-		AuditDropped: a.auditDropped.Load(),
-		AuditFailed:  a.auditFailed.Load(),
+		AuditEmitted: c.Emitted,
+		AuditWritten: c.Written,
+		AuditDropped: c.Dropped,
+		AuditFailed:  c.Failed,
 	}
 }
 

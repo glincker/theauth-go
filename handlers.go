@@ -56,7 +56,7 @@ func (a *TheAuth) Mount(r chi.Router) {
 		}
 
 		// WebAuthn passkeys (v0.5). Mounted only when Config.WebAuthn is set.
-		if a.webauthn != nil {
+		if a.webauthnCfg != nil {
 			a.mountWebAuthn(r, ipLimit)
 		}
 
