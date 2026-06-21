@@ -31,18 +31,8 @@ const (
 	SigninStepTOTPRequired = password.SigninStepTOTPRequired
 )
 
-// normalizeEmail trims and lowercases an email for storage-side
-// uniqueness. Kept on *TheAuth as a small forwarder for the very few
-// callers in this package that still want a non-exported helper.
-func normalizeEmail(e string) string {
-	addr, err := password.ValidateEmail(e)
-	if err != nil {
-		return ""
-	}
-	return addr
-}
-
 // validateEmail forwards to password.ValidateEmail for the fuzz seam.
+// Used by the export_test.go ValidateEmailForTest shim.
 func validateEmail(raw string) (string, error) {
 	return password.ValidateEmail(raw)
 }

@@ -432,7 +432,7 @@ func (s *Service) FinishLogin(ctx context.Context, challengeToken string, body i
 		if err := s.storage.UpdateWebAuthnSignCount(ctx, stored.CredentialID, newCount, time.Now()); err != nil {
 			return "", models.Session{}, fmt.Errorf("theauth: update sign count: %w", err)
 		}
-	} else if !(newCount == 0 && stored.SignCount == 0) {
+	} else if newCount != 0 || stored.SignCount != 0 {
 		// Equal-non-zero or lower: clone warning per spec.
 		return "", models.Session{}, ErrReplayDetected
 	}

@@ -27,12 +27,6 @@ func WithAuditMetadata(ctx context.Context, md AuditMetadata) context.Context {
 	return audit.WithAuditMetadata(ctx, md)
 }
 
-// auditMetadataFromContext returns the AuditMetadata attached via
-// WithAuditMetadata, if any.
-func auditMetadataFromContext(ctx context.Context) (AuditMetadata, bool) {
-	return audit.MetadataFromContext(ctx)
-}
-
 // EmitAudit enqueues an audit event for asynchronous batched write. Non-
 // blocking: when the writer channel is full the event is dropped and
 // Stats.AuditDropped increments by 1.
