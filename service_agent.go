@@ -117,6 +117,11 @@ func (a *TheAuth) CreateAgent(ctx context.Context, in CreateAgentInput) (Agent, 
 		// retry from colliding and the operator can sweep stragglers via
 		// the admin API in a later phase.
 		_ = a.as.storage.DeleteOAuthClient(ctx, clientID)
+		// Cache invalidation contract (clientauthcache): the row was just
+		// inserted and then deleted, so any in-flight authenticate call
+		// could still have cached a verified snapshot. Drop it explicitly
+		// so a future re-registration of the same client_id starts clean.
+		a.invalidateClientAuthCache(clientID)
 		return Agent{}, AgentSecret{}, fmt.Errorf("persist agent: %w", err)
 	}
 	credID := ulid.New()
@@ -199,6 +204,13 @@ func (a *TheAuth) MintAgentCredential(ctx context.Context, agentID ULID, kind st
 	if _, err := a.as.storage.UpdateOAuthClient(ctx, *client); err != nil {
 		return AgentSecret{}, fmt.Errorf("update agent oauth client: %w", err)
 	}
+	// Cache invalidation contract (clientauthcache): the verified-client
+	// LRU is keyed by client_id and stores the prior secret's sha256
+	// digest. Without this Invalidate, a hot client would continue to
+	// authenticate with the OLD secret until the entry expired naturally.
+	// RotateAgentSecret depends on the new secret taking effect on the
+	// next /oauth/token call; that contract requires this line.
+	a.invalidateClientAuthCache(agent.ClientID)
 	a.emitAgentEvent(ctx, "agent_credential.minted", *agent, map[string]any{
 		"agent_id":      agent.ID.String(),
 		"credential_id": credID.String(),
