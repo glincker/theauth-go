@@ -15,7 +15,7 @@ import (
 
 	"github.com/glincker/theauth-go/crypto"
 	"github.com/glincker/theauth-go/email"
-	"github.com/glincker/theauth-go/internal/clientauthcache"
+	internalas "github.com/glincker/theauth-go/internal/as"
 	"github.com/glincker/theauth-go/internal/magiclink"
 	"github.com/glincker/theauth-go/internal/organizations"
 	"github.com/glincker/theauth-go/internal/rbac"
@@ -554,8 +554,21 @@ type TheAuth struct {
 	defaultRoleSeeds []RoleSeed
 
 	// v2.0 phase 1 + 2: OAuth 2.1 authorization server runtime state.
-	// Nil when Config.AuthorizationServer is not set.
-	as *asState
+	// Nil when Config.AuthorizationServer is not set. PR B architecture
+	// reorg (2026-06-20): the *asState struct and every per-method entry
+	// point moved to internal/as as a unit. Root keeps thin forwarders
+	// per public *TheAuth method so the v2.0 stability surface is
+	// unchanged.
+	as *internalas.Service
+
+	// oauthStorage is the type-asserted OAuthServerStorage view of the
+	// same storage adapter that as.Service holds. Kept here so the
+	// service_agent.go, service_delegation.go, handlers_account.go, and
+	// handlers_admin_agents.go entry points (all PR C / PR E scope)
+	// continue to compile without going through a.as.Storage (which
+	// after PR B only carries the AS-needed method subset). Removed
+	// when the agent / delegation cluster moves in PR C.
+	oauthStorage OAuthServerStorage
 
 	// v2.0 phase 3 + 4: agent identity + delegation policy. Nil when
 	// Config.AgentIdentity is not set; client_credentials and token-exchange
@@ -744,25 +757,19 @@ func New(cfg Config) (*TheAuth, error) {
 		return nil, err
 	}
 
-	// v2.0 phase 1 + 2: authorization server validation. Requires a 32-byte
-	// EncryptionKey (used to seal JWKS private keys at rest) and a storage
-	// adapter satisfying OAuthServerStorage. validateASConfig mutates the
-	// struct to apply defaults.
-	var asRuntime *asState
+	// v2.0 phase 1 + 2: authorization server validation. Requires a
+	// 32-byte EncryptionKey (used to seal JWKS private keys at rest) and
+	// a storage adapter satisfying OAuthServerStorage. validateASConfig
+	// mutates the struct to apply defaults. PR B architecture reorg
+	// (2026-06-20): the actual Service is constructed below after the
+	// *TheAuth is allocated so the AgentLookup adapter can close over
+	// the back-reference; only the validation happens here.
 	if cfg.AuthorizationServer != nil {
 		if err := validateASConfig(cfg.AuthorizationServer, cfg.EncryptionKey); err != nil {
 			return nil, err
 		}
-		oss, ok := cfg.Storage.(OAuthServerStorage)
-		if !ok {
+		if _, ok := cfg.Storage.(OAuthServerStorage); !ok {
 			return nil, ErrStorageMissingOAuthMethods
-		}
-		asRuntime = &asState{
-			cfg:             *cfg.AuthorizationServer,
-			storage:         oss,
-			keyMap:          map[string]JWKSKey{},
-			privKeyByKID:    map[string]ed25519.PrivateKey{},
-			clientAuthCache: clientauthcache.New[*OAuthClient](clientauthcache.DefaultMaxEntries, clientauthcache.DefaultTTL),
 		}
 	}
 
@@ -846,9 +853,32 @@ func New(cfg Config) (*TheAuth, error) {
 		permCatalog:                permCatalog,
 		permIndex:                  permIndex,
 		defaultRoleSeeds:           defaultSeeds,
-		as:                         asRuntime,
 		agentCfg:                   cfg.AgentIdentity,
 		accountUX:                  cfg.AccountUX,
+	}
+	// v2.0 phase 1 + 2: wire the extracted authorization server service.
+	// Constructed after *TheAuth so the AgentLookup adapter can close
+	// over the back-reference; the agent identity service moves in PR
+	// C, so for now AS reaches agentBySubjectClaim through the func
+	// adapter on root.
+	if cfg.AuthorizationServer != nil {
+		oss := cfg.Storage.(OAuthServerStorage)
+		a.oauthStorage = oss
+		var policy *internalas.AgentPolicy
+		if cfg.AgentIdentity != nil {
+			policy = &internalas.AgentPolicy{
+				MaxChainDepth:            cfg.AgentIdentity.MaxChainDepth,
+				DefaultDelegatedTokenTTL: cfg.AgentIdentity.DefaultDelegatedTokenTTL,
+			}
+		}
+		a.as = internalas.New(internalas.Deps{
+			Cfg:           asConfigFromRoot(cfg.AuthorizationServer),
+			Storage:       oss,
+			EncryptionKey: cfg.EncryptionKey,
+			AgentPolicy:   policy,
+			Audit:         a,
+			AgentLookup:   internalas.AgentLookupFunc(a.agentBySubjectClaim),
+		})
 	}
 	// PR A architecture reorg (2026-06): wire the extracted internal
 	// services. Each takes a minimal Storage interface satisfied by
@@ -880,8 +910,10 @@ func New(cfg Config) (*TheAuth, error) {
 	if err := a.Start(); err != nil {
 		return nil, err
 	}
-	if err := a.startAS(context.Background()); err != nil {
-		return nil, err
+	if a.as != nil {
+		if err := a.as.Start(context.Background()); err != nil {
+			return nil, err
+		}
 	}
 	return a, nil
 }
@@ -929,7 +961,9 @@ func (a *TheAuth) Close() {
 	closeOnce(a.webauthnStop)
 	closeOnce(a.totpEnrollmentStop)
 	closeOnce(a.samlAuthnStop)
-	a.stopAS()
+	if a.as != nil {
+		a.as.Stop()
+	}
 	// Audit shutdown: mark closed (so EmitAudit becomes a drop), close the
 	// stop channel, then wait for the writer goroutine to drain remaining
 	// events. The auditClosed flag protects EmitAudit from racing on a
@@ -977,6 +1011,34 @@ func orgsConfigFromRoot(c *OrganizationsConfig) *organizations.Config {
 		return nil
 	}
 	return &organizations.Config{}
+}
+
+// asConfigFromRoot translates the root AuthorizationServerConfig into
+// the internal/as Config the extracted service consumes. The root and
+// internal structs intentionally have identical field sets; the
+// translation lives here so the internal package does not import root.
+// Called once at New() time after validateASConfig has applied defaults.
+func asConfigFromRoot(c *AuthorizationServerConfig) internalas.Config {
+	if c == nil {
+		return internalas.Config{}
+	}
+	return internalas.Config{
+		Issuer:                         c.Issuer,
+		Resources:                      append([]ProtectedResource(nil), c.Resources...),
+		SigningAlg:                     c.SigningAlg,
+		KeyRotationPeriod:              c.KeyRotationPeriod,
+		KeyRetention:                   c.KeyRetention,
+		AccessTokenTTL:                 c.AccessTokenTTL,
+		RefreshTokenTTL:                c.RefreshTokenTTL,
+		AuthorizationCodeTTL:           c.AuthorizationCodeTTL,
+		RegistrationAccessTokenTTL:     c.RegistrationAccessTokenTTL,
+		AllowAnonymousRegistration:     c.AllowAnonymousRegistration,
+		RegistrationTokens:             append([]string(nil), c.RegistrationTokens...),
+		RegistrationRateLimitPerMinute: c.RegistrationRateLimitPerMinute,
+		IntrospectionCacheTTL:          c.IntrospectionCacheTTL,
+		LoginURL:                       c.LoginURL,
+		DisableRotation:                c.DisableRotation,
+	}
 }
 
 // rbacConfigFromValidated produces the internal/rbac Config from the

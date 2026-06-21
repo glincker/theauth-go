@@ -54,7 +54,7 @@ func (a *TheAuth) GrantDelegation(ctx context.Context, in GrantDelegationInput) 
 		return DelegationGrant{}, fmt.Errorf("theauth: MaxDurationSeconds exceeds policy cap %d", cap)
 	}
 	// Verify the agent exists and is active before we record any approval.
-	ag, err := a.as.storage.AgentByID(ctx, in.AgentID)
+	ag, err := a.oauthStorage.AgentByID(ctx, in.AgentID)
 	if err != nil {
 		return DelegationGrant{}, ErrAgentNotFound
 	}
@@ -73,7 +73,7 @@ func (a *TheAuth) GrantDelegation(ctx context.Context, in GrantDelegationInput) 
 		CreatedAt:          now,
 		ExpiresAt:          in.ExpiresAt,
 	}
-	stored, err := a.as.storage.InsertDelegationGrant(ctx, row)
+	stored, err := a.oauthStorage.InsertDelegationGrant(ctx, row)
 	if err != nil {
 		return DelegationGrant{}, fmt.Errorf("persist delegation grant: %w", err)
 	}
@@ -94,7 +94,7 @@ func (a *TheAuth) ListDelegationsForUser(ctx context.Context, userID ULID) ([]De
 	if a.as == nil || a.agentCfg == nil {
 		return nil, errors.New("theauth: agent identity not configured")
 	}
-	return a.as.storage.DelegationGrantsByUserID(ctx, userID)
+	return a.oauthStorage.DelegationGrantsByUserID(ctx, userID)
 }
 
 // ListDelegationsForAgent returns every grant naming the supplied agent.
@@ -102,7 +102,7 @@ func (a *TheAuth) ListDelegationsForAgent(ctx context.Context, agentID ULID) ([]
 	if a.as == nil || a.agentCfg == nil {
 		return nil, errors.New("theauth: agent identity not configured")
 	}
-	return a.as.storage.DelegationGrantsByAgentID(ctx, agentID)
+	return a.oauthStorage.DelegationGrantsByAgentID(ctx, agentID)
 }
 
 // RevokeDelegation marks a grant revoked. Cascade: every token already
@@ -114,7 +114,7 @@ func (a *TheAuth) RevokeDelegation(ctx context.Context, grantID ULID, reason str
 	if a.as == nil || a.agentCfg == nil {
 		return errors.New("theauth: agent identity not configured")
 	}
-	cur, err := a.as.storage.DelegationGrantByID(ctx, grantID)
+	cur, err := a.oauthStorage.DelegationGrantByID(ctx, grantID)
 	if err != nil {
 		return ErrDelegationNotFound
 	}
@@ -123,7 +123,7 @@ func (a *TheAuth) RevokeDelegation(ctx context.Context, grantID ULID, reason str
 		return nil
 	}
 	now := time.Now().UTC()
-	if err := a.as.storage.RevokeDelegationGrant(ctx, grantID, now, reason); err != nil {
+	if err := a.oauthStorage.RevokeDelegationGrant(ctx, grantID, now, reason); err != nil {
 		return fmt.Errorf("revoke delegation: %w", err)
 	}
 	a.EmitAudit(ctx, "delegation.revoked", TargetRef{Type: "delegation_grant", ID: grantID.String()}, map[string]any{

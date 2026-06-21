@@ -96,7 +96,7 @@ func (a *TheAuth) CreateAgent(ctx context.Context, in CreateAgentInput) (Agent, 
 		CreatedAt:               now,
 		UpdatedAt:               now,
 	}
-	if _, err := a.as.storage.InsertOAuthClient(ctx, client); err != nil {
+	if _, err := a.oauthStorage.InsertOAuthClient(ctx, client); err != nil {
 		return Agent{}, AgentSecret{}, fmt.Errorf("persist agent oauth client: %w", err)
 	}
 	agent := Agent{
@@ -110,13 +110,13 @@ func (a *TheAuth) CreateAgent(ctx context.Context, in CreateAgentInput) (Agent, 
 		Scope:          append([]string(nil), in.Scope...),
 		CreatedAt:      now,
 	}
-	stored, err := a.as.storage.InsertAgent(ctx, agent)
+	stored, err := a.oauthStorage.InsertAgent(ctx, agent)
 	if err != nil {
 		// Best-effort cleanup of the orphan oauth_clients row; failing
 		// silently is acceptable because the unique client_id prevents a
 		// retry from colliding and the operator can sweep stragglers via
 		// the admin API in a later phase.
-		_ = a.as.storage.DeleteOAuthClient(ctx, clientID)
+		_ = a.oauthStorage.DeleteOAuthClient(ctx, clientID)
 		// Cache invalidation contract (clientauthcache): the row was just
 		// inserted and then deleted, so any in-flight authenticate call
 		// could still have cached a verified snapshot. Drop it explicitly
@@ -132,7 +132,7 @@ func (a *TheAuth) CreateAgent(ctx context.Context, in CreateAgentInput) (Agent, 
 		ValueEnc:  []byte(secretHash),
 		CreatedAt: now,
 	}
-	if err := a.as.storage.InsertAgentCredential(ctx, cred); err != nil {
+	if err := a.oauthStorage.InsertAgentCredential(ctx, cred); err != nil {
 		return Agent{}, AgentSecret{}, fmt.Errorf("persist agent credential: %w", err)
 	}
 	a.emitAgentEvent(ctx, "agent.created", stored, map[string]any{
@@ -168,7 +168,7 @@ func (a *TheAuth) MintAgentCredential(ctx context.Context, agentID ULID, kind st
 	if kind != AgentCredentialKindSecret {
 		return AgentSecret{}, ErrNotImplemented
 	}
-	agent, err := a.as.storage.AgentByID(ctx, agentID)
+	agent, err := a.oauthStorage.AgentByID(ctx, agentID)
 	if err != nil {
 		return AgentSecret{}, ErrAgentNotFound
 	}
@@ -185,7 +185,7 @@ func (a *TheAuth) MintAgentCredential(ctx context.Context, agentID ULID, kind st
 	}
 	now := time.Now().UTC()
 	credID := ulid.New()
-	if err := a.as.storage.InsertAgentCredential(ctx, AgentCredential{
+	if err := a.oauthStorage.InsertAgentCredential(ctx, AgentCredential{
 		ID:        credID,
 		AgentID:   agentID,
 		Kind:      AgentCredentialKindSecret,
@@ -196,12 +196,12 @@ func (a *TheAuth) MintAgentCredential(ctx context.Context, agentID ULID, kind st
 	}
 	// Update the OAuthClient row to use the latest secret so /oauth/token
 	// client authentication accepts the fresh secret immediately.
-	client, err := a.as.storage.OAuthClientByClientID(ctx, agent.ClientID)
+	client, err := a.oauthStorage.OAuthClientByClientID(ctx, agent.ClientID)
 	if err != nil {
 		return AgentSecret{}, fmt.Errorf("load agent oauth client: %w", err)
 	}
 	client.ClientSecretHash = []byte(secretHash)
-	if _, err := a.as.storage.UpdateOAuthClient(ctx, *client); err != nil {
+	if _, err := a.oauthStorage.UpdateOAuthClient(ctx, *client); err != nil {
 		return AgentSecret{}, fmt.Errorf("update agent oauth client: %w", err)
 	}
 	// Cache invalidation contract (clientauthcache): the verified-client
@@ -232,7 +232,7 @@ func (a *TheAuth) RotateAgentSecret(ctx context.Context, agentID ULID) (AgentSec
 	if a.as == nil || a.agentCfg == nil {
 		return AgentSecret{}, errors.New("theauth: agent identity not configured")
 	}
-	priors, err := a.as.storage.AgentCredentialsByAgentID(ctx, agentID)
+	priors, err := a.oauthStorage.AgentCredentialsByAgentID(ctx, agentID)
 	if err != nil {
 		return AgentSecret{}, fmt.Errorf("load prior credentials: %w", err)
 	}
@@ -245,7 +245,7 @@ func (a *TheAuth) RotateAgentSecret(ctx context.Context, agentID ULID) (AgentSec
 		if p.RevokedAt != nil {
 			continue
 		}
-		if err := a.as.storage.RevokeAgentCredential(ctx, p.ID, now); err != nil {
+		if err := a.oauthStorage.RevokeAgentCredential(ctx, p.ID, now); err != nil {
 			// log via audit emission below; keep going so we revoke as many
 			// priors as we can.
 			a.emitAgentEvent(ctx, "agent_credential.revoke_failed", Agent{ID: agentID}, map[string]any{
@@ -272,7 +272,7 @@ func (a *TheAuth) ListAgentsByOwner(ctx context.Context, owner AgentOwner) ([]Ag
 	if err := validateAgentOwner(owner); err != nil {
 		return nil, err
 	}
-	return a.as.storage.AgentsByOwner(ctx, owner)
+	return a.oauthStorage.AgentsByOwner(ctx, owner)
 }
 
 // GetAgent returns the agent record by ID.
@@ -280,7 +280,7 @@ func (a *TheAuth) GetAgent(ctx context.Context, agentID ULID) (*Agent, error) {
 	if a.as == nil || a.agentCfg == nil {
 		return nil, errors.New("theauth: agent identity not configured")
 	}
-	ag, err := a.as.storage.AgentByID(ctx, agentID)
+	ag, err := a.oauthStorage.AgentByID(ctx, agentID)
 	if err != nil {
 		return nil, ErrAgentNotFound
 	}
@@ -297,7 +297,7 @@ func (a *TheAuth) SuspendAgent(ctx context.Context, agentID ULID, reason string)
 // ResumeAgent flips status back to active. Only valid on a suspended agent;
 // resuming a revoked agent returns ErrAgentInactive.
 func (a *TheAuth) ResumeAgent(ctx context.Context, agentID ULID) error {
-	cur, err := a.as.storage.AgentByID(ctx, agentID)
+	cur, err := a.oauthStorage.AgentByID(ctx, agentID)
 	if err != nil {
 		return ErrAgentNotFound
 	}
@@ -318,12 +318,12 @@ func (a *TheAuth) changeAgentStatus(ctx context.Context, agentID ULID, status, a
 	if a.as == nil || a.agentCfg == nil {
 		return errors.New("theauth: agent identity not configured")
 	}
-	cur, err := a.as.storage.AgentByID(ctx, agentID)
+	cur, err := a.oauthStorage.AgentByID(ctx, agentID)
 	if err != nil {
 		return ErrAgentNotFound
 	}
 	now := time.Now().UTC()
-	if err := a.as.storage.UpdateAgentStatus(ctx, agentID, status, now); err != nil {
+	if err := a.oauthStorage.UpdateAgentStatus(ctx, agentID, status, now); err != nil {
 		return fmt.Errorf("update agent status: %w", err)
 	}
 	meta := map[string]any{
@@ -378,5 +378,5 @@ func (a *TheAuth) agentBySubjectClaim(ctx context.Context, sub string) (*Agent, 
 	if err != nil {
 		return nil, ErrAgentNotFound
 	}
-	return a.as.storage.AgentByID(ctx, id)
+	return a.oauthStorage.AgentByID(ctx, id)
 }

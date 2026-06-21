@@ -2,8 +2,9 @@ package theauth
 
 import (
 	"context"
-	"errors"
 	"time"
+
+	"github.com/glincker/theauth-go/internal/models"
 )
 
 // v2.0 (phase 1 + 2) storage extension interface.
@@ -82,5 +83,7 @@ type OAuthServerStorage interface {
 
 // ErrStorageMissingOAuthMethods is returned by New when
 // Config.AuthorizationServer is non-nil but Config.Storage does not satisfy
-// OAuthServerStorage.
-var ErrStorageMissingOAuthMethods = errors.New("theauth: Storage must implement OAuthServerStorage when AuthorizationServer is configured")
+// OAuthServerStorage. The actual error value lives in internal/models (PR B
+// architecture reorg, 2026-06-20) so subpackages can compare against it
+// without importing root.
+var ErrStorageMissingOAuthMethods = models.ErrStorageMissingOAuthMethods

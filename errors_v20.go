@@ -1,112 +1,118 @@
 package theauth
 
-import "errors"
+import "github.com/glincker/theauth-go/internal/models"
 
 // v2.0 sentinel errors. Phase 1 + 2 scope: OAuth 2.1 AS + DCR + JWKS.
+//
+// PR B architecture reorg (2026-06-20): the actual error values now live in
+// internal/models so the extracted internal/as package can reference them
+// without taking an import cycle on the root package. The vars below are
+// alias references (same pointer); existing v2.0 callers that
+// errors.Is-check against these names keep working unchanged.
 
 var (
 	// ErrASRequiresEncryptionKey is returned by New when
 	// Config.AuthorizationServer is non-nil but Config.EncryptionKey is not a
 	// 32-byte AES-256 key. The encryption key protects JWKS private keys at
 	// rest; running the AS without it would persist signing keys in plaintext.
-	ErrASRequiresEncryptionKey = errors.New("theauth: AuthorizationServer requires Config.EncryptionKey (32 bytes)")
+	ErrASRequiresEncryptionKey = models.ErrASRequiresEncryptionKey
 
 	// ErrASIssuerRequired is returned by New when Config.AuthorizationServer
 	// is non-nil but Issuer is empty. RFC 8414 mandates an issuer identifier.
-	ErrASIssuerRequired = errors.New("theauth: AuthorizationServer.Issuer is required")
+	ErrASIssuerRequired = models.ErrASIssuerRequired
 
 	// ErrASUnsupportedAlg is returned by New for any signing algorithm other
 	// than EdDSA. Phase 1 + 2 ships Ed25519 only; RS256 is the documented
 	// fallback for a later phase.
-	ErrASUnsupportedAlg = errors.New("theauth: AuthorizationServer.SigningAlg must be EdDSA")
+	ErrASUnsupportedAlg = models.ErrASUnsupportedAlg
 
 	// ErrOAuthInvalidRequest maps to the OAuth 2.1 "invalid_request" error.
-	ErrOAuthInvalidRequest = errors.New("theauth: invalid_request")
+	ErrOAuthInvalidRequest = models.ErrOAuthInvalidRequest
 
 	// ErrOAuthInvalidClient maps to the OAuth 2.1 "invalid_client" error.
-	ErrOAuthInvalidClient = errors.New("theauth: invalid_client")
+	ErrOAuthInvalidClient = models.ErrOAuthInvalidClient
 
 	// ErrOAuthInvalidGrant maps to the OAuth 2.1 "invalid_grant" error,
 	// covering expired or replayed authorization codes and refresh tokens.
-	ErrOAuthInvalidGrant = errors.New("theauth: invalid_grant")
+	ErrOAuthInvalidGrant = models.ErrOAuthInvalidGrant
 
 	// ErrOAuthInvalidScope maps to the OAuth 2.1 "invalid_scope" error.
-	ErrOAuthInvalidScope = errors.New("theauth: invalid_scope")
+	ErrOAuthInvalidScope = models.ErrOAuthInvalidScope
 
 	// ErrOAuthUnsupportedGrantType maps to "unsupported_grant_type".
-	ErrOAuthUnsupportedGrantType = errors.New("theauth: unsupported_grant_type")
+	ErrOAuthUnsupportedGrantType = models.ErrOAuthUnsupportedGrantType
 
 	// ErrOAuthUnsupportedResponseType maps to "unsupported_response_type".
-	ErrOAuthUnsupportedResponseType = errors.New("theauth: unsupported_response_type")
+	ErrOAuthUnsupportedResponseType = models.ErrOAuthUnsupportedResponseType
 
 	// ErrOAuthInvalidResource maps to RFC 8707 "invalid_target".
-	ErrOAuthInvalidResource = errors.New("theauth: invalid_target")
+	ErrOAuthInvalidResource = models.ErrOAuthInvalidResource
 
 	// ErrOAuthRegistrationDenied is returned when DCR is attempted without
 	// a valid initial access token and AllowAnonymousRegistration is false.
-	ErrOAuthRegistrationDenied = errors.New("theauth: registration not permitted")
+	ErrOAuthRegistrationDenied = models.ErrOAuthRegistrationDenied
 
 	// ErrOAuthRedirectURIMismatch is returned when the token request's
 	// redirect_uri does not equal the value bound to the authorization code.
-	ErrOAuthRedirectURIMismatch = errors.New("theauth: redirect_uri mismatch")
+	ErrOAuthRedirectURIMismatch = models.ErrOAuthRedirectURIMismatch
 
 	// ErrOAuthPKCEMismatch is returned when the supplied code_verifier does
 	// not match the stored code_challenge under S256.
-	ErrOAuthPKCEMismatch = errors.New("theauth: pkce verification failed")
+	ErrOAuthPKCEMismatch = models.ErrOAuthPKCEMismatch
 
 	// ErrOAuthAudienceMismatch is returned at introspection when a token's
 	// aud claim does not match the caller's expected resource identifier.
-	ErrOAuthAudienceMismatch = errors.New("theauth: token audience mismatch")
+	ErrOAuthAudienceMismatch = models.ErrOAuthAudienceMismatch
 
 	// ErrNotImplemented is returned by service paths that exist for forward
 	// compatibility but whose body lands in a later phase. Currently used by
 	// agent credential mints for kind = x509 and kind = jwk.
-	ErrNotImplemented = errors.New("theauth: not implemented")
+	ErrNotImplemented = models.ErrNotImplemented
 
 	// ErrAgentNotFound is returned by lookups whose target agent is absent.
-	ErrAgentNotFound = errors.New("theauth: agent not found")
+	ErrAgentNotFound = models.ErrAgentNotFound
 
 	// ErrAgentInactive is returned when an operation depends on an agent
 	// whose status is suspended or revoked.
-	ErrAgentInactive = errors.New("theauth: agent inactive")
+	ErrAgentInactive = models.ErrAgentInactive
 
 	// ErrDelegationNotFound is returned when no delegation_grants row
 	// matches the (user, agent, resource) tuple. Token exchange surfaces
 	// this as access_denied to the caller.
-	ErrDelegationNotFound = errors.New("theauth: delegation grant not found")
+	ErrDelegationNotFound = models.ErrDelegationNotFound
 
 	// ErrDelegationRevoked is returned when a delegation grant exists but
 	// its revoked_at is set. Token exchange surfaces this as access_denied;
 	// introspection returns active=false.
-	ErrDelegationRevoked = errors.New("theauth: delegation grant revoked")
+	ErrDelegationRevoked = models.ErrDelegationRevoked
 
 	// ErrChainDepthExceeded is returned by the token exchange path when
 	// adding the requesting agent to the actor chain would exceed the
 	// AgentConfig.MaxChainDepth (default 3).
-	ErrChainDepthExceeded = errors.New("theauth: actor chain depth exceeded")
+	ErrChainDepthExceeded = models.ErrChainDepthExceeded
 
 	// ErrSubjectTokenInvalid is returned when the supplied subject_token
 	// fails signature, issuer, expiry, or audience checks.
-	ErrSubjectTokenInvalid = errors.New("theauth: subject_token invalid")
+	ErrSubjectTokenInvalid = models.ErrSubjectTokenInvalid
 
 	// ErrActorTokenInvalid is returned when the supplied actor_token fails
 	// signature, issuer, expiry, or audience checks, or when it does not
 	// resolve to the authenticated agent client.
-	ErrActorTokenInvalid = errors.New("theauth: actor_token invalid")
+	ErrActorTokenInvalid = models.ErrActorTokenInvalid
 
 	// ErrAgentRequiresAS is returned by New when Config.AgentIdentity is
 	// non-nil but Config.AuthorizationServer is nil. Agents and delegations
 	// only make sense alongside the OAuth 2.1 AS that mints their tokens.
-	ErrAgentRequiresAS = errors.New("theauth: AgentIdentity requires AuthorizationServer to be configured")
+	ErrAgentRequiresAS = models.ErrAgentRequiresAS
 
 	// ErrAgentChainDepthTooHigh is returned by New when
 	// AgentConfig.MaxChainDepth exceeds the v2.0 hard ceiling of 3.
-	ErrAgentChainDepthTooHigh = errors.New("theauth: AgentConfig.MaxChainDepth must not exceed 3 in v2.0")
+	ErrAgentChainDepthTooHigh = models.ErrAgentChainDepthTooHigh
 
 	// ErrAccountUXRequiresAgents is returned by New when Config.AccountUX is
 	// true but Config.AgentIdentity is nil. The account routes have no
 	// service surface to back them otherwise.
-	ErrAccountUXRequiresAgents = errors.New("theauth: AccountUX requires AgentIdentity to be configured")
+	ErrAccountUXRequiresAgents = models.ErrAccountUXRequiresAgents
 )
 
 // OAuth 2.1 standard error codes returned in JSON error bodies.

@@ -114,49 +114,20 @@ const (
 	CodeWebAuthn        = "webauthn_error"
 )
 
-// TheAuthError is the structured error type returned by v0.2+ service methods.
-// Callers can errors.As-extract it and switch on Code for stable handling,
-// or errors.Is-check against a value of the same Code for shorter paths.
-type TheAuthError struct {
-	Code    string
-	Message string
-	Inner   error
-}
+// TheAuthError is the structured error type returned by v0.2+ service
+// methods. Callers can errors.As-extract it and switch on Code for stable
+// handling, or errors.Is-check against a value of the same Code for shorter
+// paths.
+//
+// PR B architecture reorg (2026-06-20): the struct + methods now live in
+// internal/models so subpackages can construct it without taking an import
+// cycle on the root package. The type alias below preserves the v0.2+
+// public name and method set; existing callers compile unchanged.
+type TheAuthError = models.TheAuthError
 
 // NewError constructs a TheAuthError with the supplied code, message, and
-// optional wrapped cause.
+// optional wrapped cause. Re-exported from internal/models for the same
+// reason as the type alias above.
 func NewError(code, message string, inner error) *TheAuthError {
-	return &TheAuthError{Code: code, Message: message, Inner: inner}
-}
-
-func (e *TheAuthError) Error() string {
-	if e == nil {
-		return ""
-	}
-	if e.Message == "" {
-		return "theauth: " + e.Code
-	}
-	return "theauth: " + e.Code + ": " + e.Message
-}
-
-// Unwrap exposes the inner error for errors.Is/errors.As traversal.
-func (e *TheAuthError) Unwrap() error {
-	if e == nil {
-		return nil
-	}
-	return e.Inner
-}
-
-// Is reports whether target is a *TheAuthError with the same Code, OR is the
-// Inner cause. This lets callers do errors.Is(err, &TheAuthError{Code: ...})
-// for code-only comparisons without caring about the message or inner cause.
-func (e *TheAuthError) Is(target error) bool {
-	if e == nil || target == nil {
-		return false
-	}
-	t, ok := target.(*TheAuthError)
-	if !ok {
-		return false
-	}
-	return e.Code == t.Code
+	return models.NewError(code, message, inner)
 }
