@@ -15,7 +15,9 @@ import (
 
 	"github.com/glincker/theauth-go/crypto"
 	"github.com/glincker/theauth-go/email"
+	"github.com/glincker/theauth-go/internal/agent"
 	internalas "github.com/glincker/theauth-go/internal/as"
+	"github.com/glincker/theauth-go/internal/delegation"
 	"github.com/glincker/theauth-go/internal/magiclink"
 	"github.com/glincker/theauth-go/internal/organizations"
 	"github.com/glincker/theauth-go/internal/rbac"
@@ -561,15 +563,6 @@ type TheAuth struct {
 	// unchanged.
 	as *internalas.Service
 
-	// oauthStorage is the type-asserted OAuthServerStorage view of the
-	// same storage adapter that as.Service holds. Kept here so the
-	// service_agent.go, service_delegation.go, handlers_account.go, and
-	// handlers_admin_agents.go entry points (all PR C / PR E scope)
-	// continue to compile without going through a.as.Storage (which
-	// after PR B only carries the AS-needed method subset). Removed
-	// when the agent / delegation cluster moves in PR C.
-	oauthStorage OAuthServerStorage
-
 	// v2.0 phase 3 + 4: agent identity + delegation policy. Nil when
 	// Config.AgentIdentity is not set; client_credentials and token-exchange
 	// grants short-circuit with unsupported_grant_type in that case.
@@ -589,6 +582,15 @@ type TheAuth struct {
 	scimSvc    *internalscim.Service
 	orgsSvc    *organizations.Service
 	rbacSvc    *rbac.Service
+
+	// PR C architecture reorg (2026-06-20): agent identity + delegation
+	// services. Nil when Config.AuthorizationServer is not set; the
+	// service_agent.go and service_delegation.go forwarders short-circuit
+	// against agentCfg in that case. Each package declares its own
+	// minimal Storage interface so the constructor cycle stays broken
+	// and the PR B oauthStorage back-door is gone for good.
+	agentSvc      *agent.Service
+	delegationSvc *delegation.Service
 }
 
 // New validates the Config, applies defaults, and returns a ready TheAuth.
@@ -857,13 +859,16 @@ func New(cfg Config) (*TheAuth, error) {
 		accountUX:                  cfg.AccountUX,
 	}
 	// v2.0 phase 1 + 2: wire the extracted authorization server service.
-	// Constructed after *TheAuth so the AgentLookup adapter can close
-	// over the back-reference; the agent identity service moves in PR
-	// C, so for now AS reaches agentBySubjectClaim through the func
-	// adapter on root.
+	// PR C architecture reorg (2026-06-20) removes the oauthStorage
+	// back-door PR B introduced: the type-asserted OAuthServerStorage view
+	// is now passed directly into internal/agent and internal/delegation
+	// (which each declare their own minimal Storage interface) and is
+	// no longer kept on the root struct. AgentLookup is wired after
+	// internal/agent is constructed so the AS introspection / token-
+	// exchange paths still resolve "agent:<id>" subjects without
+	// importing internal/agent.
 	if cfg.AuthorizationServer != nil {
 		oss := cfg.Storage.(OAuthServerStorage)
-		a.oauthStorage = oss
 		var policy *internalas.AgentPolicy
 		if cfg.AgentIdentity != nil {
 			policy = &internalas.AgentPolicy{
@@ -877,8 +882,32 @@ func New(cfg Config) (*TheAuth, error) {
 			EncryptionKey: cfg.EncryptionKey,
 			AgentPolicy:   policy,
 			Audit:         a,
-			AgentLookup:   internalas.AgentLookupFunc(a.agentBySubjectClaim),
+			// AgentLookup wired below once internal/agent.Service exists.
 		})
+		// PR C: wire agent + delegation services. The agent service
+		// holds the invalidation hook into the AS clientauthcache so a
+		// rotated secret takes effect on the next /oauth/token call.
+		var agentPolicy *agent.Config
+		if cfg.AgentIdentity != nil {
+			agentPolicy = &agent.Config{
+				MaxChainDepth:            cfg.AgentIdentity.MaxChainDepth,
+				MaxDelegationDuration:    cfg.AgentIdentity.MaxDelegationDuration,
+				DefaultDelegatedTokenTTL: cfg.AgentIdentity.DefaultDelegatedTokenTTL,
+				AgentSecretLength:        cfg.AgentIdentity.AgentSecretLength,
+			}
+		}
+		a.agentSvc = agent.New(oss, agentPolicy, a, a.as.InvalidateClientAuthCache)
+		var delegationPolicy *delegation.Config
+		if cfg.AgentIdentity != nil {
+			delegationPolicy = &delegation.Config{
+				MaxDelegationDuration: cfg.AgentIdentity.MaxDelegationDuration,
+			}
+		}
+		a.delegationSvc = delegation.New(oss, delegationPolicy, a.as, a)
+		// AS subject-claim lookup is now satisfied by internal/agent. The
+		// adapter closes over agentSvc directly so the AS package never
+		// imports internal/agent.
+		a.as.AgentLookup = internalas.AgentLookupFunc(a.agentSvc.AgentBySubjectClaim)
 	}
 	// PR A architecture reorg (2026-06): wire the extracted internal
 	// services. Each takes a minimal Storage interface satisfied by

@@ -267,7 +267,7 @@ func (a *TheAuth) adminRevokeDelegation(w http.ResponseWriter, r *http.Request) 
 		admin.Write(w, http.StatusBadRequest, admin.CodeValidationInvalid, "invalid grantID", "")
 		return
 	}
-	grant, err := a.oauthStorage.DelegationGrantByID(r.Context(), grantID)
+	grant, err := a.delegationSvc.GrantByID(r.Context(), grantID)
 	if err != nil {
 		admin.Write(w, http.StatusNotFound, admin.CodeNotFound, "delegation grant not found", "")
 		return
@@ -292,7 +292,7 @@ func (a *TheAuth) adminRevokeDelegation(w http.ResponseWriter, r *http.Request) 
 // by the supplied organization. Used by the admin patch + delete paths so
 // cross-org tampering returns 404 (no leak of agent existence).
 func (a *TheAuth) ensureAgentInOrg(r *http.Request, agentID, orgID ULID) error {
-	ag, err := a.oauthStorage.AgentByID(r.Context(), agentID)
+	ag, err := a.agentSvc.AgentByID(r.Context(), agentID)
 	if err != nil {
 		return errors.New("agent not found")
 	}

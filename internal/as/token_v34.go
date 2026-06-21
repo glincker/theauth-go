@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/glincker/theauth-go/internal/chain"
+	"github.com/glincker/theauth-go/internal/delegation"
 	"github.com/glincker/theauth-go/internal/jwt"
 	"github.com/glincker/theauth-go/internal/models"
 	"github.com/glincker/theauth-go/internal/ulid"
@@ -223,13 +224,13 @@ func (s *Service) ExchangeToken(ctx context.Context, req TokenExchangeRequest) (
 	if err != nil {
 		return TokenResponse{}, models.ErrDelegationNotFound
 	}
-	if !delegationActive(grant, now) {
+	if !delegation.Active(grant, now) {
 		return TokenResponse{}, models.ErrDelegationRevoked
 	}
 	// Step 9: scope narrowing. Requested must be subset of subject's
 	// scope AND the delegation's scope_grant.
 	subjectScope := scopeSplit(subjectClaims.Scope)
-	finalScope, ok := narrowDelegatedScope(req.Scope, subjectScope, grant.Scope)
+	finalScope, ok := delegation.NarrowScope(req.Scope, subjectScope, grant.Scope)
 	if !ok || len(finalScope) == 0 {
 		return TokenResponse{}, models.ErrOAuthInvalidScope
 	}
@@ -336,30 +337,11 @@ func (s *Service) resolveSubjectPrincipal(ctx context.Context, subjectClaims jwt
 	return root, existing, nil
 }
 
-// narrowDelegatedScope returns the strict intersection of (requested,
-// subject_scope, grant_scope). Empty result means the caller asked for
-// nothing the chain still allows; the token-exchange path treats that
-// as invalid_scope. Mirrors the root narrowDelegatedScope in
-// service_delegation.go; both versions MUST stay in sync until PR C
-// unifies them.
-func narrowDelegatedScope(requested, subjectScope, grantScope []string) ([]string, bool) {
-	if len(requested) == 0 {
-		// Default to the strict intersection of subject and grant;
-		// falls back to the grant scope when subject scope is empty.
-		base := subjectScope
-		if len(base) == 0 {
-			base = grantScope
-		}
-		return chain.ScopeIntersect(base, grantScope), true
-	}
-	if !chain.ScopeSubset(requested, subjectScope) {
-		return nil, false
-	}
-	if !chain.ScopeSubset(requested, grantScope) {
-		return nil, false
-	}
-	return append([]string(nil), requested...), true
-}
+// narrowDelegatedScope + delegationActive previously lived here as
+// duplicates of the root service_delegation.go helpers. PR C of the
+// 2026-06 architecture reorg consolidated both into
+// internal/delegation; this file now imports delegation.NarrowScope and
+// delegation.Active so the helpers exist in exactly one place.
 
 // actorFromClaims reads the "act" extra claim from a JWT and returns
 // the chain.Actor pointer (nil if not present or malformed). The
