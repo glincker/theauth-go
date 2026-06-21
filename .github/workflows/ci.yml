@@ -67,4 +67,4 @@ jobs:
       - uses: golangci/golangci-lint-action@v7
         with:
           version: v2.12.2
-          args: --timeout=3m
+          args: --timeout=3m --new-from-rev=origin/main
