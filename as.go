@@ -240,23 +240,6 @@ func validateScopeAgainstResource(requested []string, resource ProtectedResource
 	return out, nil
 }
 
-// scopeIntersection returns the intersection of two scope slices, preserving
-// order from `a`. Used at refresh time to ensure narrowing requests stay
-// within the original grant.
-func scopeIntersection(a, b []string) []string {
-	have := map[string]struct{}{}
-	for _, s := range b {
-		have[s] = struct{}{}
-	}
-	out := make([]string, 0, len(a))
-	for _, s := range a {
-		if _, ok := have[s]; ok {
-			out = append(out, s)
-		}
-	}
-	return out
-}
-
 // scopeSubset reports whether every element of sub is present in sup.
 func scopeSubset(sub, sup []string) bool {
 	have := map[string]struct{}{}

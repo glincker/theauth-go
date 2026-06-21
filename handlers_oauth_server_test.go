@@ -58,7 +58,7 @@ func TestASMetadataDocumentShape(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("status %d", resp.StatusCode)
 	}
@@ -85,7 +85,7 @@ func TestJWKSEndpointServesEd25519Keys(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	var doc struct {
 		Keys []map[string]any `json:"keys"`
 	}
@@ -111,7 +111,7 @@ func TestDCRBearerGatedDenialAndAnonymousFlag(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusUnauthorized {
 		t.Fatalf("expected 401, got %d", resp.StatusCode)
 	}
@@ -125,7 +125,7 @@ func TestDCRBearerGatedDenialAndAnonymousFlag(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer resp2.Body.Close()
+	defer func() { _ = resp2.Body.Close() }()
 	if resp2.StatusCode != http.StatusCreated {
 		buf, _ := io.ReadAll(resp2.Body)
 		t.Fatalf("expected 201, got %d body=%s", resp2.StatusCode, buf)
@@ -152,7 +152,7 @@ func TestAnonymousRegistrationWhenEnabled(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusCreated {
 		buf, _ := io.ReadAll(resp.Body)
 		t.Fatalf("anonymous registration failed: status=%d body=%s", resp.StatusCode, buf)
@@ -190,7 +190,7 @@ func TestAuthorizeRejectsMissingPKCE(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusBadRequest {
 		t.Fatalf("expected 400 invalid_request, got %d", resp.StatusCode)
 	}
@@ -215,7 +215,7 @@ func TestAuthorizeRejectsBadResource(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusBadRequest {
 		t.Fatalf("expected 400, got %d", resp.StatusCode)
 	}
@@ -233,7 +233,7 @@ func registerTestClient(t *testing.T, srv *httptest.Server) theauth.RegisteredCl
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusCreated {
 		t.Fatalf("registerTestClient: status %d", resp.StatusCode)
 	}
