@@ -83,6 +83,7 @@ type Storage interface {
 	UpsertPendingTOTPSecret(ctx context.Context, s models.TOTPSecret) error
 	ConfirmTOTPSecret(ctx context.Context, userID models.ULID, at time.Time) error
 	TOTPSecretByUserID(ctx context.Context, userID models.ULID) (*models.TOTPSecret, error)
+	DeleteTOTPSecret(ctx context.Context, userID models.ULID) error
 	InsertRecoveryCodes(ctx context.Context, codes []models.RecoveryCode) error
 	ConsumeRecoveryCode(ctx context.Context, userID models.ULID, code string, at time.Time) error
 	CreateSessionWithAuthLevel(ctx context.Context, s models.Session) (models.Session, error)
@@ -405,6 +406,17 @@ func (s *Service) ConsumeRecoveryCode(ctx context.Context, pendingSessionToken, 
 	updated := *sess
 	updated.AuthLevel = models.AuthLevelFull
 	return pendingSessionToken, updated, nil
+}
+
+// Delete removes a user's TOTP secret. Used by DELETE /auth/totp to
+// turn off 2FA. Returns nil if the user had no secret; storage layer
+// idempotency contract. Emits a totp.disabled audit on success.
+func (s *Service) Delete(ctx context.Context, userID models.ULID) error {
+	if err := s.storage.DeleteTOTPSecret(ctx, userID); err != nil {
+		return err
+	}
+	s.auditEm.EmitAudit(ctx, "totp.disabled", models.TargetRef{Type: "user", ID: userID.String()}, nil)
+	return nil
 }
 
 // decryptSecret loads the confirmed secret for a user and Decrypts it
