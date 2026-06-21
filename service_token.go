@@ -31,12 +31,15 @@ type TokenRequest struct {
 }
 
 // TokenResponse is the JSON body emitted by /oauth/token on success.
+// IssuedTokenType is populated by the RFC 8693 token-exchange grant (phase 4)
+// per RFC 8693 section 2.2.1; omitted on other grants.
 type TokenResponse struct {
-	AccessToken  string `json:"access_token"`
-	TokenType    string `json:"token_type"`
-	ExpiresIn    int    `json:"expires_in"`
-	RefreshToken string `json:"refresh_token,omitempty"`
-	Scope        string `json:"scope"`
+	AccessToken     string `json:"access_token"`
+	TokenType       string `json:"token_type"`
+	ExpiresIn       int    `json:"expires_in"`
+	RefreshToken    string `json:"refresh_token,omitempty"`
+	Scope           string `json:"scope"`
+	IssuedTokenType string `json:"issued_token_type,omitempty"`
 }
 
 // ExchangeAuthorizationCode redeems a one-time authorization code for an

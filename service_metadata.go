@@ -52,10 +52,7 @@ func (a *TheAuth) ASMetadataDoc() (ASMetadata, error) {
 		ResponseTypesSupported: []string{
 			ResponseTypeCode,
 		},
-		GrantTypesSupported: []string{
-			GrantTypeAuthorizationCode,
-			GrantTypeRefreshToken,
-		},
+		GrantTypesSupported: grantTypesAdvertised(a),
 		TokenEndpointAuthMethodsSupported: []string{
 			ClientAuthSecretBasic,
 			ClientAuthSecretPost,
@@ -64,4 +61,16 @@ func (a *TheAuth) ASMetadataDoc() (ASMetadata, error) {
 		CodeChallengeMethodsSupported: []string{"S256"},
 		ScopesSupported:               scopeList,
 	}, nil
+}
+
+// grantTypesAdvertised returns the grant types this AS supports. Phase 1+2
+// supports authorization_code and refresh_token unconditionally; phase 3+4
+// adds client_credentials and the RFC 8693 token-exchange URN when
+// AgentIdentity is configured.
+func grantTypesAdvertised(a *TheAuth) []string {
+	out := []string{GrantTypeAuthorizationCode, GrantTypeRefreshToken}
+	if a.agentCfg != nil {
+		out = append(out, GrantTypeClientCredentials, GrantTypeTokenExchange)
+	}
+	return out
 }

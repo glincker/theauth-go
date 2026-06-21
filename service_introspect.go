@@ -36,6 +36,13 @@ type IntrospectionResponse struct {
 	Aud       string `json:"aud,omitempty"`
 	Iss       string `json:"iss,omitempty"`
 	Jti       string `json:"jti,omitempty"`
+	// Act + DelegationGrantID are populated when the token was minted via
+	// the RFC 8693 token-exchange grant. Resource servers walk Act inward
+	// to outward to render Principal.ActorChain. DelegationGrantID lets
+	// audit pipelines correlate every chain-validation failure back to the
+	// grant that authorised the original delegation.
+	Act               *ActorClaim `json:"act,omitempty"`
+	DelegationGrantID string      `json:"delegation_grant_id,omitempty"`
 }
 
 // IntrospectToken validates the supplied token and returns the structured
@@ -61,12 +68,25 @@ func (a *TheAuth) IntrospectToken(ctx context.Context, token, clientID, clientSe
 	if cached, ok := a.introspectCacheGet(token, expectedAud); ok {
 		var resp IntrospectionResponse
 		_ = json.Unmarshal(cached, &resp)
+		// Even on cache hit we re-verify the actor chain (and delegation
+		// grant) so revocation propagation honors the
+		// IntrospectionCacheTTL upper bound but never lags behind a
+		// resume / revoke decision the operator made AFTER the cache was
+		// populated. Inactive chain entries flip active=false and bypass
+		// the cache body entirely.
+		if resp.Active && (resp.Act != nil || resp.DelegationGrantID != "") {
+			if !a.chainStillActive(ctx, &resp) {
+				resp = IntrospectionResponse{Active: false}
+				body, _ := json.Marshal(resp)
+				return resp, body, nil
+			}
+		}
 		return resp, cached, nil
 	}
 	// Heuristic: a JWT has three dot-separated segments. Refresh tokens are
 	// base64url single segments.
 	if strings.Count(token, ".") == 2 {
-		resp := a.introspectJWT(token, expectedAud)
+		resp := a.introspectJWT(ctx, token, expectedAud)
 		body, _ := json.Marshal(resp)
 		a.introspectCacheSet(token, expectedAud, body)
 		return resp, body, nil
@@ -77,7 +97,7 @@ func (a *TheAuth) IntrospectToken(ctx context.Context, token, clientID, clientSe
 	return resp, body, nil
 }
 
-func (a *TheAuth) introspectJWT(token, expectedAud string) IntrospectionResponse {
+func (a *TheAuth) introspectJWT(ctx context.Context, token, expectedAud string) IntrospectionResponse {
 	claims, err := jwt.Verify(token, a.publicKeyByKID, expectedAud, time.Now())
 	if err != nil {
 		return IntrospectionResponse{Active: false}
@@ -86,7 +106,7 @@ func (a *TheAuth) introspectJWT(token, expectedAud string) IntrospectionResponse
 	if claims.Aud == "" {
 		return IntrospectionResponse{Active: false}
 	}
-	return IntrospectionResponse{
+	resp := IntrospectionResponse{
 		Active:    true,
 		Scope:     claims.Scope,
 		ClientID:  claims.ClientID,
@@ -98,6 +118,90 @@ func (a *TheAuth) introspectJWT(token, expectedAud string) IntrospectionResponse
 		Iss:       claims.Iss,
 		Jti:       claims.Jti,
 	}
+	// Populate the act chain and delegation_grant_id from the JWT Extras
+	// so the cached body carries them and a downstream resource server can
+	// render the Principal.ActorChain without a second AS call.
+	if raw, ok := claims.Extra["act"]; ok && raw != nil {
+		resp.Act = actorClaimFromAny(raw)
+	}
+	if v, ok := claims.Extra["delegation_grant_id"]; ok {
+		if s, ok := v.(string); ok {
+			resp.DelegationGrantID = s
+		}
+	}
+	// Walk the chain on every fresh introspection: any actor in the chain
+	// being suspended/revoked, or the delegation grant being revoked,
+	// flips active=false immediately. Cache hits perform the same check on
+	// the cached body so revocations are observable within
+	// IntrospectionCacheTTL of the operator decision (or sooner).
+	if resp.Act != nil || resp.DelegationGrantID != "" {
+		if !a.chainStillActive(ctx, &resp) {
+			return IntrospectionResponse{Active: false}
+		}
+	}
+	// Walk the sub: if it names an agent ("agent:<id>"), reject when that
+	// agent is no longer active. This catches the agent-self-token path
+	// (client_credentials grant) without touching the chain checks above.
+	if strings.HasPrefix(resp.Sub, AgentSubjectPrefix) {
+		ag, err := a.agentBySubjectClaim(ctx, resp.Sub)
+		if err != nil || ag == nil || ag.Status != AgentStatusActive {
+			return IntrospectionResponse{Active: false}
+		}
+	}
+	return resp
+}
+
+// chainStillActive walks the full actor chain (innermost-first) and verifies
+// every agent referenced is currently active, plus the delegation grant
+// (when present) is not revoked. Returns false if anything is off; caller
+// flips active=false. Background context shielding is unnecessary because
+// the introspection call itself is request-scoped.
+func (a *TheAuth) chainStillActive(ctx context.Context, resp *IntrospectionResponse) bool {
+	if a.as == nil {
+		return true
+	}
+	now := time.Now()
+	if resp.DelegationGrantID != "" {
+		var id ULID
+		if err := id.UnmarshalText([]byte(resp.DelegationGrantID)); err == nil {
+			g, err := a.as.storage.DelegationGrantByID(ctx, id)
+			if err != nil {
+				return false
+			}
+			if !delegationActive(g, now) {
+				return false
+			}
+		}
+	}
+	for cur := resp.Act; cur != nil; cur = cur.Act {
+		ag, err := a.agentBySubjectClaim(ctx, cur.Sub)
+		if err != nil || ag == nil {
+			return false
+		}
+		if ag.Status != AgentStatusActive {
+			return false
+		}
+	}
+	return true
+}
+
+// actorClaimFromAny converts the {sub, act?} map shape into an *ActorClaim
+// pointer. Mirrors actorFromAny in service_token_v34.go but returns the
+// public ActorClaim type so the introspection response can serialize it.
+func actorClaimFromAny(raw any) *ActorClaim {
+	m, ok := raw.(map[string]any)
+	if !ok {
+		return nil
+	}
+	sub, _ := m["sub"].(string)
+	if sub == "" {
+		return nil
+	}
+	out := &ActorClaim{Sub: sub}
+	if inner, ok := m["act"]; ok {
+		out.Act = actorClaimFromAny(inner)
+	}
+	return out
 }
 
 func (a *TheAuth) introspectRefreshToken(ctx context.Context, token string) IntrospectionResponse {
