@@ -133,6 +133,21 @@ func (a *TheAuth) bootstrapJWKS(ctx context.Context) error {
 }
 
 // refreshJWKSSnapshot rewrites the in-memory key snapshot under the AS lock.
+//
+// As part of the swap, the AES-GCM-encrypted private seed on every active
+// key is decrypted ONCE and stashed in a.as.privKeyByKID. currentSigningKey
+// then serves JWT mints out of that map, sparing the hot path the per-call
+// aes.NewCipher + cipher.NewGCM allocations the previous implementation
+// paid. Retired keys are still kept in keyMap for the KeyRetention window
+// (so verifiers can validate tokens minted under the prior key) but their
+// private halves are NOT cached because retired keys are never used to
+// sign.
+//
+// Cache invalidation contract: the privKeyByKID map is replaced wholesale
+// here. Every state transition (bootstrap, scheduled rotation, manual
+// RotateSigningKey) routes through this function, so a rotated KID's
+// private key disappears from the cache the same moment its public form
+// changes state.
 func (a *TheAuth) refreshJWKSSnapshot(keys []JWKSKey) {
 	a.as.mu.Lock()
 	defer a.as.mu.Unlock()
@@ -150,13 +165,35 @@ func (a *TheAuth) refreshJWKSSnapshot(keys []JWKSKey) {
 	})
 	a.as.keys = keys
 	a.as.keyMap = map[string]JWKSKey{}
+	a.as.privKeyByKID = make(map[string]ed25519.PrivateKey, len(keys))
 	for _, k := range keys {
 		a.as.keyMap[k.KID] = k
+		if k.State == JWKSStateRetired {
+			continue
+		}
+		priv, err := a.loadPrivateKey(k)
+		if err != nil {
+			// A single bad row should not poison the whole snapshot. Skip
+			// it; currentSigningKey will surface the absence of a
+			// decrypted current key as a typed error to the caller.
+			slog.Warn("theauth: jwks key decrypt failed during snapshot refresh", "kid", k.KID, "err", err.Error())
+			continue
+		}
+		a.as.privKeyByKID[k.KID] = priv
 	}
 }
 
 // currentSigningKey returns the active (state = current) JWKS row and the
 // decrypted private key. Used at every JWT mint.
+//
+// The private key is served from a.as.privKeyByKID, which refreshJWKSSnapshot
+// populates by decrypting each key exactly once at snapshot build time. The
+// hot path therefore never executes aes.NewCipher + cipher.NewGCM and never
+// allocates the seed buffer; it returns a pointer to the cached ed25519
+// private key under the same RLock that already guards the keys slice. Per
+// the cache invalidation contract documented on asState.privKeyByKID, a
+// rotated KID is removed from this cache the moment its row leaves the
+// "current" state.
 func (a *TheAuth) currentSigningKey() (JWKSKey, ed25519.PrivateKey, error) {
 	if a.as == nil {
 		return JWKSKey{}, nil, errors.New("theauth: authorization server not configured")
@@ -165,11 +202,19 @@ func (a *TheAuth) currentSigningKey() (JWKSKey, ed25519.PrivateKey, error) {
 	defer a.as.mu.RUnlock()
 	for _, k := range a.as.keys {
 		if k.State == JWKSStateCurrent {
-			priv, err := a.loadPrivateKey(k)
+			if priv, ok := a.as.privKeyByKID[k.KID]; ok && priv != nil {
+				return k, priv, nil
+			}
+			// Defensive fallback: the cache should always carry the current
+			// key (refreshJWKSSnapshot populates it for every non-retired
+			// row). If a bootstrap race or storage corruption leaves it
+			// empty, fall back to the slow decrypt path so the request
+			// still succeeds.
+			fallback, err := a.loadPrivateKey(k)
 			if err != nil {
 				return JWKSKey{}, nil, err
 			}
-			return k, priv, nil
+			return k, fallback, nil
 		}
 	}
 	return JWKSKey{}, nil, errors.New("theauth: no current JWKS key")

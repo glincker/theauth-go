@@ -2,6 +2,7 @@ package theauth
 
 import (
 	"context"
+	"crypto/ed25519"
 	"errors"
 	"log/slog"
 	"strings"
@@ -102,6 +103,20 @@ type asState struct {
 	mu     sync.RWMutex
 	keys   []JWKSKey // ordered: current first, then next, then previous, then retired (filtered out of JWKS)
 	keyMap map[string]JWKSKey
+	// privKeyByKID holds the AES-GCM-decrypted ed25519.PrivateKey for every
+	// active key in keyMap. Populated by refreshJWKSSnapshot at boot, at
+	// every scheduled rotation tick, and at every manual RotateSigningKey
+	// call. Consumed by currentSigningKey under mu.RLock so the JWT mint
+	// path never re-runs aes.NewCipher + cipher.NewGCM on the hot path.
+	//
+	// Cache invalidation contract: this map is REPLACED wholesale (not
+	// mutated in place) by refreshJWKSSnapshot. Because every key state
+	// transition (bootstrap, scheduled rotation, manual RotateSigningKey)
+	// ends with a refreshJWKSSnapshot call, a rotated or retired KID is
+	// automatically gone from this cache the moment the public keyMap
+	// stops listing it. There is no external invalidation surface; the
+	// snapshot owns the lifecycle.
+	privKeyByKID map[string]ed25519.PrivateKey
 
 	rotationStop chan struct{}
 	rotationDone chan struct{}

@@ -714,6 +714,7 @@ func New(cfg Config) (*TheAuth, error) {
 			cfg:             *cfg.AuthorizationServer,
 			storage:         oss,
 			keyMap:          map[string]JWKSKey{},
+			privKeyByKID:    map[string]ed25519.PrivateKey{},
 			clientAuthCache: clientauthcache.New[*OAuthClient](clientauthcache.DefaultMaxEntries, clientauthcache.DefaultTTL),
 		}
 	}
