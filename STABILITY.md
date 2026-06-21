@@ -207,6 +207,22 @@ or `AccountUX` continue to see the v1.0 surface unchanged.
   `GrantDelegationInput`, `ActorClaim`, `IntrospectionResponse`,
   `TokenRequest`, `TokenResponse`, `TokenExchangeRequest`,
   `AuthorizeRequest`, `ClientRegistrationRequest`.
+
+#### Security audit additions (2026-06-20, additive only)
+
+- `Config.TrustedProxies []netip.Prefix`: allowlist of reverse-proxy
+  prefixes whose `X-Forwarded-For` header is trusted by the rate
+  limiter. Default empty slice (no XFF trust). Existing deployments
+  that depend on XFF must opt in explicitly.
+- `AuthorizationServerConfig.RegistrationTokens []string`: initial
+  access tokens accepted by POST `/oauth/register` when DCR is bearer
+  gated. Hashed at `New` time; constant-time compare on the wire.
+  Default empty slice, which combined with the default
+  `AllowAnonymousRegistration: false` denies all registration.
+- `AuthorizationServerConfig.RegistrationRateLimitPerMinute int`:
+  per-IP per-minute cap on POST `/oauth/register`. Defaults to 1 when
+  `AllowAnonymousRegistration` is true and 5 otherwise. Set to a
+  negative value to disable the cap.
 - Constructors and lifecycle: existing `New` accepts new optional
   `Config.AuthorizationServer`, `Config.AgentIdentity`, `Config.AccountUX`
   fields; existing `Mount` automatically mounts the v2.0 routes when those

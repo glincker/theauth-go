@@ -6,6 +6,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/netip"
 	"strings"
 	"sync"
 	"time"
@@ -99,17 +100,41 @@ func (k *keyedLimiter) Stop() {
 	k.stopOnce.Do(func() { close(k.stop) })
 }
 
-// extractClientIP returns the best-effort client IP for the request. Honors
-// the first hop of X-Forwarded-For (which a trusted reverse proxy sets), and
-// falls back to r.RemoteAddr. The IP is returned without a port.
-func extractClientIP(r *http.Request) string {
-	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
-		parts := strings.Split(xff, ",")
-		ip := strings.TrimSpace(parts[0])
-		if ip != "" {
-			return ip
+// extractClientIPTrusting returns the best-effort client IP for the
+// request. The X-Forwarded-For header is consulted ONLY when the incoming
+// r.RemoteAddr belongs to one of the operator-configured trusted prefixes;
+// on a public-internet deployment with no proxy in front, that allowlist
+// is empty and XFF is ignored, so an attacker cannot trivially bypass
+// per-IP rate limits by forging the header (security audit H4,
+// 2026-06-20).
+//
+// When the request arrives from a trusted proxy the first segment of XFF
+// (the original client) is returned. Otherwise the function returns the
+// connection-level RemoteAddr without a port.
+func extractClientIPTrusting(r *http.Request, trusted []netip.Prefix) string {
+	remoteHost := remoteAddrHost(r)
+	if len(trusted) > 0 && remoteIsTrusted(remoteHost, trusted) {
+		if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
+			parts := strings.Split(xff, ",")
+			ip := strings.TrimSpace(parts[0])
+			if ip != "" {
+				return ip
+			}
 		}
 	}
+	return remoteHost
+}
+
+// extractClientIP is the no-trust shim retained for callers that do not
+// have access to the TrustedProxies allowlist. It always reads
+// r.RemoteAddr and never trusts XFF.
+func extractClientIP(r *http.Request) string {
+	return remoteAddrHost(r)
+}
+
+// remoteAddrHost strips the port from r.RemoteAddr; if the address has no
+// port it is returned as-is.
+func remoteAddrHost(r *http.Request) string {
 	host, _, err := net.SplitHostPort(r.RemoteAddr)
 	if err != nil {
 		return r.RemoteAddr
@@ -117,15 +142,37 @@ func extractClientIP(r *http.Request) string {
 	return host
 }
 
+// remoteIsTrusted reports whether the supplied IP literal belongs to any
+// of the configured trusted prefixes. Malformed IPs are never trusted.
+func remoteIsTrusted(ipLiteral string, trusted []netip.Prefix) bool {
+	addr, err := netip.ParseAddr(ipLiteral)
+	if err != nil {
+		return false
+	}
+	for _, p := range trusted {
+		if p.Contains(addr) {
+			return true
+		}
+	}
+	return false
+}
+
 // RateLimitByIP returns a middleware that limits requests per source IP to
 // perMinute per minute. Use on credential endpoints (signin, signup, forgot,
-// reset). The limiter lives on the returned handler — multiple calls produce
+// reset). The limiter lives on the returned handler. Multiple calls produce
 // independent buckets, so wire it once per route group at startup.
+//
+// X-Forwarded-For is honored only when r.RemoteAddr is inside one of the
+// Config.TrustedProxies prefixes. Deployments behind a reverse proxy MUST
+// opt in by listing the proxy network in TrustedProxies; the default is
+// the empty allowlist (no XFF trust), which is the safe behavior on a
+// direct public-internet bind (security audit H4, 2026-06-20).
 func (a *TheAuth) RateLimitByIP(perMinute int) func(http.Handler) http.Handler {
 	k := newKeyedLimiter(perMinute)
+	trusted := a.trustedProxies
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			ip := extractClientIP(r)
+			ip := extractClientIPTrusting(r, trusted)
 			if !k.Allow(ip) {
 				w.Header().Set("Retry-After", "60")
 				http.Error(w, "rate_limited", http.StatusTooManyRequests)

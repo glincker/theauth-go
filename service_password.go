@@ -124,6 +124,12 @@ func (a *TheAuth) signinWithPassword(ctx context.Context, emailAddr, password, u
 	emailAddr = normalizeEmail(emailAddr)
 	user, hash, err := a.storage.UserByEmailWithPassword(ctx, emailAddr)
 	if errors.Is(err, ErrStorageNotFound) {
+		// security audit M6 (2026-06-20): pay the Argon2id verify cost
+		// on the user-not-found branch too. Without this, an attacker
+		// can time the response and learn which emails are registered.
+		// The dummy hash mints once at New time; the verify result is
+		// ignored.
+		_, _ = crypto.VerifyPassword(password, a.dummyPasswordHash)
 		return "", nil, "", NewError(CodeInvalidCredentials, "invalid email or password", nil)
 	}
 	if err != nil {
@@ -131,7 +137,9 @@ func (a *TheAuth) signinWithPassword(ctx context.Context, emailAddr, password, u
 	}
 	if hash == "" {
 		// Account exists but has no password set (magic-link-only signup).
-		// Indistinguishable from "wrong password" to avoid enumeration.
+		// Pay the verify cost against the dummy hash so the timing matches
+		// the genuine wrong-password branch (security audit M6).
+		_, _ = crypto.VerifyPassword(password, a.dummyPasswordHash)
 		return "", nil, "", NewError(CodeInvalidCredentials, "invalid email or password", nil)
 	}
 	ok, err := crypto.VerifyPassword(password, hash)
