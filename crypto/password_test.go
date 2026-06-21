@@ -61,7 +61,7 @@ func TestVerifyPasswordMalformedPHC(t *testing.T) {
 	}
 }
 
-// Salt is random per call — two hashes of the same password must differ.
+// Salt is random per call, two hashes of the same password must differ.
 func TestHashPasswordUsesFreshSalt(t *testing.T) {
 	a, err := HashPassword("same-password")
 	if err != nil {

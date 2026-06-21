@@ -133,7 +133,7 @@ func TestEndToEndEmailPasswordFlow(t *testing.T) {
 		t.Fatal("EmailVerifiedAt must be nil for password signup (soft verification)")
 	}
 
-	// Signin with original password — issues a NEW session cookie.
+	// Signin with original password, issues a NEW session cookie.
 	resp, _ = postJSON(t, srv, "/auth/email-password/signin", map[string]string{
 		"email": email, "password": pw,
 	}, nil)
@@ -145,7 +145,7 @@ func TestEndToEndEmailPasswordFlow(t *testing.T) {
 		t.Fatal("signin must set session cookie")
 	}
 
-	// Request password reset — handler always responds 200.
+	// Request password reset, handler always responds 200.
 	resp, _ = postJSON(t, srv, "/auth/email-password/forgot", map[string]string{
 		"email": email,
 	}, nil)
@@ -169,7 +169,7 @@ func TestEndToEndEmailPasswordFlow(t *testing.T) {
 		t.Fatalf("reset expected 200; got %d", resp.StatusCode)
 	}
 
-	// Old session cookie is now revoked — /me returns 401.
+	// Old session cookie is now revoked, /me returns 401.
 	req, _ = http.NewRequest("GET", srv.URL+"/auth/me", nil)
 	for _, c := range signinCookies {
 		req.AddCookie(c)
@@ -254,7 +254,7 @@ func TestSigninRateLimited(t *testing.T) {
 	a.Mount(r)
 	srv := httptest.NewServer(r)
 	t.Cleanup(srv.Close)
-	// 6 signin attempts from same IP within a minute — 6th should 429.
+	// 6 signin attempts from same IP within a minute, 6th should 429.
 	// All attempts use a fresh email per request so the per-email limiter (100/min)
 	// doesn't kick in first. The per-IP limiter (5/min) is what we're testing.
 	for i := 0; i < 5; i++ {
@@ -262,7 +262,7 @@ func TestSigninRateLimited(t *testing.T) {
 			"email":    fmt.Sprintf("nobody%d@h.com", i),
 			"password": "whatever-12345",
 		}, nil)
-		// Expect 401 (invalid_credentials) on each — the request was allowed
+		// Expect 401 (invalid_credentials) on each, the request was allowed
 		// through the rate limiter, just rejected by the service.
 		if resp.StatusCode != http.StatusUnauthorized {
 			t.Fatalf("attempt %d: expected 401; got %d", i+1, resp.StatusCode)

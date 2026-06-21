@@ -42,7 +42,7 @@ func newKeyedLimiter(perMinute int) *keyedLimiter {
 	return newKeyedLimiterWith(perMinute, 10*time.Minute, time.Minute)
 }
 
-// newKeyedLimiterWith is the testable variant — caller specifies GC timing.
+// newKeyedLimiterWith is the testable variant, caller specifies GC timing.
 func newKeyedLimiterWith(perMinute int, evictAfter, tickerEvery time.Duration) *keyedLimiter {
 	k := &keyedLimiter{
 		limits:      make(map[string]*limiterEntry),
@@ -65,7 +65,7 @@ func (k *keyedLimiter) Allow(key string) bool {
 	if !ok {
 		// rate.Every(perMinute per minute) = 1 token every (60/perMinute) seconds.
 		// Burst of perMinute lets a fresh client burn the full budget instantly,
-		// after which it refills smoothly — matches what users intuit as "N/min".
+		// after which it refills smoothly, matches what users intuit as "N/min".
 		r := rate.Every(time.Minute / time.Duration(k.perMinute))
 		entry = &limiterEntry{lim: rate.NewLimiter(r, k.perMinute)}
 		k.limits[key] = entry
@@ -196,7 +196,7 @@ func (a *TheAuth) RateLimitByEmail(perMinute int) func(http.Handler) http.Handle
 			var body struct {
 				Email string `json:"email"`
 			}
-			// Best-effort decode; if it fails, we don't have a key — pass through.
+			// Best-effort decode; if it fails, we don't have a key, pass through.
 			if err := json.Unmarshal(buf, &body); err != nil || body.Email == "" {
 				next.ServeHTTP(w, r)
 				return

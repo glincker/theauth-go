@@ -183,7 +183,7 @@ func (a *TheAuth) handleSessionDelete(w http.ResponseWriter, r *http.Request) {
 }
 
 func errToHTTP(w http.ResponseWriter, err error) {
-	// Prefer the new TheAuthError code mapping when available — gives callers
+	// Prefer the new TheAuthError code mapping when available, gives callers
 	// a stable Code field in the response body for programmatic handling.
 	var te *TheAuthError
 	if errors.As(err, &te) {
