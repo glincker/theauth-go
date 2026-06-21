@@ -29,6 +29,13 @@ func (a *TheAuth) mountAS(r chi.Router) {
 		return
 	}
 	r.Get("/.well-known/oauth-authorization-server", a.handleASMetadata)
+	// RFC 9728 OAuth 2.0 Protected Resource Metadata. Two flavours: the bare
+	// path returns metadata for the first configured resource (most common
+	// single-resource deployment); the suffixed path returns metadata for an
+	// arbitrary registered resource so MCP clients can discover any AS that
+	// fronts multiple resources.
+	r.Get("/.well-known/oauth-protected-resource", a.handleProtectedResourceMetadata)
+	r.Get("/.well-known/oauth-protected-resource/*", a.handleProtectedResourceMetadata)
 	r.Get("/oauth/jwks", a.handleJWKS)
 	r.With(a.Authn()).Get("/oauth/authorize", a.handleAuthorize)
 	r.Post("/oauth/token", a.handleToken)
@@ -43,6 +50,48 @@ func (a *TheAuth) handleASMetadata(w http.ResponseWriter, r *http.Request) {
 	doc, err := a.ASMetadataDoc()
 	if err != nil {
 		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", "public, max-age=300")
+	_ = json.NewEncoder(w).Encode(doc)
+}
+
+func (a *TheAuth) handleProtectedResourceMetadata(w http.ResponseWriter, r *http.Request) {
+	if a.as == nil {
+		http.Error(w, "not configured", http.StatusNotFound)
+		return
+	}
+	resourceID := chi.URLParam(r, "*")
+	// Resolve the resource identifier. The wildcard segment carries the path
+	// portion of the resource URI when the AS hosts multiple resources; for
+	// the bare /.well-known/oauth-protected-resource path we fall back to
+	// the first configured resource so the most common deployment (one
+	// resource per AS) just works without configuration.
+	var ident string
+	switch {
+	case resourceID != "":
+		// Reconstruct the full resource URI from the AS Issuer host plus the
+		// wildcard tail. The AS Issuer scheme + host is canonical; tail must
+		// match the configured Identifier's path component.
+		ident = a.as.cfg.Issuer + "/" + strings.TrimPrefix(resourceID, "/")
+		if _, ok := a.resourceByIdentifier(ident); !ok {
+			// Try the wildcard tail as a full URL too (covers cases where
+			// the resource lives on a different host than the AS).
+			if _, ok := a.resourceByIdentifier(strings.TrimPrefix(resourceID, "/")); ok {
+				ident = strings.TrimPrefix(resourceID, "/")
+			}
+		}
+	default:
+		if len(a.as.cfg.Resources) == 0 {
+			http.Error(w, "no resources configured", http.StatusNotFound)
+			return
+		}
+		ident = a.as.cfg.Resources[0].Identifier
+	}
+	doc, err := a.ProtectedResourceMetadataDoc(ident)
+	if err != nil {
+		http.Error(w, "unknown resource", http.StatusNotFound)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")

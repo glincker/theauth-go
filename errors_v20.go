@@ -102,6 +102,11 @@ var (
 	// ErrAgentChainDepthTooHigh is returned by New when
 	// AgentConfig.MaxChainDepth exceeds the v2.0 hard ceiling of 3.
 	ErrAgentChainDepthTooHigh = errors.New("theauth: AgentConfig.MaxChainDepth must not exceed 3 in v2.0")
+
+	// ErrAccountUXRequiresAgents is returned by New when Config.AccountUX is
+	// true but Config.AgentIdentity is nil. The account routes have no
+	// service surface to back them otherwise.
+	ErrAccountUXRequiresAgents = errors.New("theauth: AccountUX requires AgentIdentity to be configured")
 )
 
 // OAuth 2.1 standard error codes returned in JSON error bodies.

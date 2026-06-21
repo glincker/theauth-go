@@ -296,6 +296,12 @@ type Config struct {
 	// MaxChainDepth=3, MaxDelegationDuration=90d, DefaultDelegatedTokenTTL=15m,
 	// AgentSecretLength=32.
 	AgentIdentity *AgentConfig
+
+	// AccountUX (v2.0 phase 6) mounts /account/agents and /account/delegations
+	// when true. Requires AgentIdentity to be configured. Routes are gated by
+	// session cookie auth only (no special permission): they manage the
+	// authenticated user's own agents and the user's own granted delegations.
+	AccountUX bool
 }
 
 // AgentConfig wires the agent-identity policy. Set on Config.AgentIdentity
@@ -518,6 +524,10 @@ type TheAuth struct {
 	// Config.AgentIdentity is not set; client_credentials and token-exchange
 	// grants short-circuit with unsupported_grant_type in that case.
 	agentCfg *AgentConfig
+
+	// v2.0 phase 6: end-user self-service UX. When true, /account/agents and
+	// /account/delegations are mounted. Requires agentCfg to be non-nil.
+	accountUX bool
 }
 
 // New validates the Config, applies defaults, and returns a ready TheAuth.
@@ -714,6 +724,12 @@ func New(cfg Config) (*TheAuth, error) {
 			return nil, err
 		}
 	}
+	// v2.0 phase 6: end-user UX requires the agent identity service to be
+	// configured (otherwise /account/agents and /account/delegations have
+	// no service backing).
+	if cfg.AccountUX && cfg.AgentIdentity == nil {
+		return nil, ErrAccountUXRequiresAgents
+	}
 
 	a := &TheAuth{
 		storage:           cfg.Storage,
@@ -745,6 +761,7 @@ func New(cfg Config) (*TheAuth, error) {
 		defaultRoleSeeds:  defaultSeeds,
 		as:                asRuntime,
 		agentCfg:          cfg.AgentIdentity,
+		accountUX:         cfg.AccountUX,
 	}
 	if len(providers) > 0 {
 		a.oauthStateStop = make(chan struct{})

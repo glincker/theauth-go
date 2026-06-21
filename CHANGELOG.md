@@ -6,7 +6,72 @@ adheres to [Semantic Versioning](https://semver.org/) from v1.0 forward.
 
 ## [Unreleased]
 
-### Added in v2.0 phase 3 + 4 (targeted for `v2.0.0-alpha.2`)
+### Added in v2.0 phase 5 + 6 (targeted for `v2.0.0`)
+
+- New separately importable Go module: `github.com/glincker/theauth-go/mcpresource`.
+  Zero dependencies outside the standard library: a consumer importing the
+  package does not transitively pull theauth core or the storage adapters.
+  Public surface: `Validator`, `Principal`, `Option`, `New`,
+  `PrincipalFromContext`, `WithJWKS`, `WithIntrospection`, `WithCacheTTL`,
+  `WithHTTPClient`, `WithClockSkew`, `(*Validator).Middleware`,
+  `(*Validator).Principal`. Validates JWT signature against a cached JWKS
+  (refreshes on kid miss and at the configured cache TTL), enforces the
+  audience claim against the configured resource URI, checks expiry, nbf,
+  and iat with a 60 second skew tolerance by default, and walks the RFC 8693
+  `act` chain via the AS introspection endpoint so revocations propagate
+  inside the configured cache window. On any failure the middleware emits
+  HTTP 401 with `WWW-Authenticate: Bearer error="invalid_token",
+  resource_metadata="..."` per RFC 6750 + RFC 9728.
+- RFC 9728 OAuth 2.0 Protected Resource Metadata: the AS exposes
+  `GET /.well-known/oauth-protected-resource` (bare path returns the first
+  configured resource) and `GET /.well-known/oauth-protected-resource/{path}`
+  (per-resource discovery for multi-resource deployments). The document
+  carries `resource`, `authorization_servers`, `bearer_methods_supported`,
+  plus `scopes_supported`, `resource_name`, `jwks_uri`, and
+  `resource_signing_alg_values_supported`.
+- Organization-scoped admin UX under `/admin/v1/organizations/{orgID}`:
+  `GET/POST/PATCH/DELETE /agents` and
+  `GET/POST/DELETE /delegations`. Gated by the new seeded permissions
+  `agents:admin` and `delegations:admin`; both are added to the owner and
+  admin default org roles.
+- End-user self-service UX under `/account` (enabled via
+  `Config.AccountUX`): `GET/POST /agents`, `DELETE /agents/{id}`,
+  `GET/POST /delegations`, `POST /delegations/{id}/revoke`. Session-cookie
+  gated; cross-user calls return 404 to avoid leaking record existence.
+- New seeded RBAC permissions: `agents:admin`, `delegations:admin`.
+  Existing consumers see the additional permissions on the next
+  `SeedPermissions` call; downstream role definitions that did not pre-grant
+  them stay valid (catalog only grows).
+- New error sentinels: `ErrAccountUXRequiresAgents`.
+- Example `examples/mcp-server/`: standalone runnable demo of the
+  mcpresource middleware on a tiny chi server. Shows the one-import claim:
+  middleware wiring plus principal extraction in roughly ten lines of Go.
+- Audit emission additions: every admin and account mutation emits the same
+  events used by the service layer (`agent.created`, `agent.suspended`,
+  `agent.resumed`, `agent.revoked`, `agent_credential.minted`,
+  `agent_credential.revoked`, `delegation.granted`, `delegation.revoked`).
+  No new action names introduced in this PR; the v2.0 phase 3 + 4 catalog
+  remains the source of truth.
+
+### v2.0 capability summary
+
+- Phase 1 + 2 (`v2.0.0-alpha.1`): OAuth 2.1 Authorization Server core.
+  `/oauth/authorize`, `/oauth/token`, `/oauth/revoke`, `/oauth/introspect`,
+  `/oauth/register`, `/oauth/jwks`, `/.well-known/oauth-authorization-server`.
+  RFC 9068 EdDSA JWT access tokens. RFC 8707 mandatory audience binding.
+  PKCE S256 mandatory. RFC 9700 refresh rotation with family revocation.
+  RFC 7591 dynamic client registration.
+- Phase 3 + 4 (`v2.0.0-alpha.2`): agent identity and delegation chains.
+  Agents (user or org owned) with one-shot client secrets. Delegation grants
+  per `(user, agent, resource)`. `client_credentials` grant for agent
+  self-tokens. RFC 8693 token-exchange grant with strict scope narrowing,
+  strict duration tightening, and a hard chain-depth cap of 3.
+  Introspection walks the actor chain on every call.
+- Phase 5 + 6 (`v2.0.0`): the consumption side and the operator surface.
+  `mcpresource` SDK for MCP servers. RFC 9728 protected-resource metadata.
+  Admin and end-user routes for agent and delegation lifecycle.
+
+### Added in v2.0 phase 3 + 4 (released as `v2.0.0-alpha.2`)
 
 - Agents: `Agent`, `AgentCredential`, `AgentOwner`, `CreateAgentInput`,
   `AgentSecret` models. `CreateAgent`, `MintAgentCredential`,
@@ -47,7 +112,7 @@ adheres to [Semantic Versioning](https://semver.org/) from v1.0 forward.
   `ErrActorTokenInvalid`, `ErrNotImplemented`, `ErrAgentRequiresAS`,
   `ErrAgentChainDepthTooHigh`.
 
-### Added in v2.0 phase 1 + 2 (targeted for `v2.0.0-alpha.1`)
+### Added in v2.0 phase 1 + 2 (released as `v2.0.0-alpha.1`)
 
 - OAuth 2.1 Authorization Server with `/.well-known/oauth-authorization-server`,
   `/oauth/authorize`, `/oauth/token` (authorization_code + refresh_token),

@@ -42,6 +42,10 @@ func (a *TheAuth) mountAdmin(r chi.Router) {
 
 			r.With(a.RequirePermission(PermissionAuditRead)).Get("/audit", a.adminQueryAudit)
 			r.With(a.RequirePermission(PermissionUsersRead)).Get("/oauth_accounts", a.adminListOAuthAccounts)
+
+			// v2.0 phase 6: organization-scoped agent + delegation admin.
+			// Mounted only when the agent identity service is configured.
+			a.mountAdminAgents(r)
 		})
 	})
 }
