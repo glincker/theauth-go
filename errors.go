@@ -76,8 +76,10 @@ var (
 	// filter shape outside the documented eq-only whitelist.
 	ErrUnsupportedFilter = errors.New("theauth: scim filter not supported")
 	// ErrSlugTaken is returned when the supplied organization slug already
-	// exists.
-	ErrSlugTaken = errors.New("theauth: organization slug already taken")
+	// exists. PR F architecture reorg (2026-06-20): canonical sentinel
+	// lives in internal/models so the extracted organization handler
+	// package can reference it without importing root.
+	ErrSlugTaken = models.ErrSlugTaken
 
 	// v1.0 sentinels.
 

@@ -34,6 +34,12 @@ var (
 	// organization with zero owners.
 	ErrLastOwner = errors.New("theauth: cannot remove the last owner")
 
+	// ErrSlugTaken is returned when the supplied organization slug already
+	// exists. Lifted to internal/models in PR F so the extracted
+	// organization handler package can errors.Is-check it without
+	// importing root.
+	ErrSlugTaken = errors.New("theauth: organization slug already taken")
+
 	// ErrForbidden indicates the caller lacks a required permission for
 	// the requested operation. Handlers map this to 403 with code
 	// "rbac.forbidden" in the RFC 7807 problem body.

@@ -171,12 +171,6 @@ func (a *TheAuth) invalidateClientAuthCache(clientID string) {
 	a.as.InvalidateClientAuthCache(clientID)
 }
 
-// resourceByIdentifier returns the configured ProtectedResource matching
-// the supplied identifier, or false when not found. Forwards to the
-// extracted as.Service.
-func (a *TheAuth) resourceByIdentifier(id string) (ProtectedResource, bool) {
-	if a.as == nil {
-		return ProtectedResource{}, false
-	}
-	return a.as.ResourceByIdentifier(id)
-}
+// resourceByIdentifier removed in PR F when handlers_oauth_server.go
+// moved into internal/as/handlers, which calls
+// a.as.ResourceByIdentifier directly.

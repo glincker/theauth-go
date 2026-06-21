@@ -28,11 +28,8 @@ func (a *TheAuth) publicKeyByKID(kid string) (ed25519.PublicKey, bool) {
 	return a.as.PublicKeyByKID(kid)
 }
 
-// renderJWKSDoc serializes the current JWKS document. Current + next +
-// previous keys are exposed; retired keys are omitted.
-func (a *TheAuth) renderJWKSDoc() ([]byte, error) {
-	return a.as.RenderJWKSDoc()
-}
+// renderJWKSDoc removed in PR F when handlers_oauth_server.go moved
+// into internal/as/handlers, which calls a.as.RenderJWKSDoc directly.
 
 // RotateSigningKey advances the JWKS state machine one step: previous
 // (if any) is retired, current becomes previous, next becomes current,

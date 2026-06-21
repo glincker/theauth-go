@@ -37,11 +37,22 @@ type SessionCookieConfig struct {
 	TTL        time.Duration
 }
 
-// Handler owns the three SAML SP HTTP endpoints.
+// Handler owns the three SAML SP HTTP endpoints, plus (when AttachCRUD
+// has been called) the five per-organization SAML connection CRUD
+// endpoints in crud.go. Both groups live on the same struct so the
+// thin root forwarder constructs one value and mounts it twice (Mount
+// for SP-flow, MountCRUD for connection CRUD).
 type Handler struct {
 	svc               Service
 	sessionCookie     SessionCookieConfig
 	postLoginRedirect string
+
+	// CRUD-side fields populated by AttachCRUD (PR F). Nil-valued when
+	// AttachCRUD was not invoked; MountCRUD must not be called in that
+	// case.
+	connSvc     ConnectionService
+	roleCheck   RoleChecker
+	userFromCtx UserFromCtx
 }
 
 // New constructs a Handler. postLoginRedirect is the URL the browser
