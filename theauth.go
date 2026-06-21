@@ -15,6 +15,7 @@ import (
 
 	"github.com/glincker/theauth-go/crypto"
 	"github.com/glincker/theauth-go/email"
+	"github.com/glincker/theauth-go/internal/clientauthcache"
 	gowebauthn "github.com/go-webauthn/webauthn/webauthn"
 )
 
@@ -740,7 +741,13 @@ func New(cfg Config) (*TheAuth, error) {
 		if !ok {
 			return nil, ErrStorageMissingOAuthMethods
 		}
-		asRuntime = &asState{cfg: *cfg.AuthorizationServer, storage: oss, keyMap: map[string]JWKSKey{}}
+		asRuntime = &asState{
+			cfg:             *cfg.AuthorizationServer,
+			storage:         oss,
+			keyMap:          map[string]JWKSKey{},
+			privKeyByKID:    map[string]ed25519.PrivateKey{},
+			clientAuthCache: clientauthcache.New[*OAuthClient](clientauthcache.DefaultMaxEntries, clientauthcache.DefaultTTL),
+		}
 	}
 
 	// v2.0 phase 3 + 4: agent identity + delegation policy validation. Only

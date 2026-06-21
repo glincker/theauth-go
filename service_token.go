@@ -228,12 +228,34 @@ func (a *TheAuth) mintAccessAndRefresh(ctx context.Context, in mintInput) (Token
 // MUST supply a non-empty secret matching the stored Argon2id hash. Public
 // clients (token_endpoint_auth_method = none) authenticate by client_id
 // alone and rely on PKCE for proof of possession.
+//
+// Hot-path optimization: a successful Argon2id verify is cached on
+// a.as.clientAuthCache, keyed by client_id and bound to the sha256 of the
+// presented secret. The cache is bounded (DefaultMaxEntries) and entries
+// expire after DefaultTTL. Every code path that rotates or removes the
+// stored client_secret_hash MUST invalidate via invalidateClientAuthCache;
+// see the contract comment on asState.clientAuthCache. The public-client
+// path (ClientAuthNone) does not pay Argon2id at all and is therefore not
+// cached: the storage lookup it does is already cheap and skipping the
+// cache avoids a code path that would have to teach the cache "this entry
+// has no secret".
 func (a *TheAuth) authenticateClient(ctx context.Context, clientID, clientSecret string) (*OAuthClient, error) {
 	if a.as == nil {
 		return nil, errors.New("theauth: authorization server not configured")
 	}
 	if clientID == "" {
 		return nil, ErrOAuthInvalidClient
+	}
+	// Fast path: cache hit returns the verified client snapshot without the
+	// storage round trip and without the Argon2id verify. The cache only
+	// stores successful confidential-client verifications; a public client
+	// (ClientAuthNone) is never inserted, so a hit here implies we have a
+	// confidential client and the presented secret matches the digest we
+	// stored at insert.
+	if clientSecret != "" {
+		if cached, ok := a.as.clientAuthCache.Get(clientID, clientSecret); ok && cached != nil {
+			return cached, nil
+		}
 	}
 	client, err := a.as.storage.OAuthClientByClientID(ctx, clientID)
 	if err != nil {
@@ -251,8 +273,14 @@ func (a *TheAuth) authenticateClient(ctx context.Context, clientID, clientSecret
 		}
 		ok, err := crypto.VerifyPassword(clientSecret, string(client.ClientSecretHash))
 		if err != nil || !ok {
+			// Failures are never cached: an attacker presenting a wrong
+			// secret must keep paying Argon2id on every attempt so the
+			// rate limiter (middleware_ratelimit.go) can throttle them,
+			// and a legitimate client whose secret was just rotated
+			// cannot have a wrong-secret entry poisoning the cache.
 			return nil, ErrOAuthInvalidClient
 		}
+		a.as.clientAuthCache.Put(clientID, clientSecret, client)
 		return client, nil
 	default:
 		return nil, ErrOAuthInvalidClient

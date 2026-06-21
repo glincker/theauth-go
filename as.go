@@ -2,6 +2,7 @@ package theauth
 
 import (
 	"context"
+	"crypto/ed25519"
 	"errors"
 	"log/slog"
 	"strings"
@@ -9,6 +10,7 @@ import (
 	"time"
 
 	"github.com/glincker/theauth-go/crypto"
+	"github.com/glincker/theauth-go/internal/clientauthcache"
 )
 
 // AuthorizationServerConfig wires the OAuth 2.1 + MCP authorization server
@@ -126,6 +128,20 @@ type asState struct {
 	mu     sync.RWMutex
 	keys   []JWKSKey // ordered: current first, then next, then previous, then retired (filtered out of JWKS)
 	keyMap map[string]JWKSKey
+	// privKeyByKID holds the AES-GCM-decrypted ed25519.PrivateKey for every
+	// active key in keyMap. Populated by refreshJWKSSnapshot at boot, at
+	// every scheduled rotation tick, and at every manual RotateSigningKey
+	// call. Consumed by currentSigningKey under mu.RLock so the JWT mint
+	// path never re-runs aes.NewCipher + cipher.NewGCM on the hot path.
+	//
+	// Cache invalidation contract: this map is REPLACED wholesale (not
+	// mutated in place) by refreshJWKSSnapshot. Because every key state
+	// transition (bootstrap, scheduled rotation, manual RotateSigningKey)
+	// ends with a refreshJWKSSnapshot call, a rotated or retired KID is
+	// automatically gone from this cache the moment the public keyMap
+	// stops listing it. There is no external invalidation surface; the
+	// snapshot owns the lifecycle.
+	privKeyByKID map[string]ed25519.PrivateKey
 
 	rotationStop chan struct{}
 	rotationDone chan struct{}
@@ -133,11 +149,40 @@ type asState struct {
 	// introspectCache memoizes recent introspection responses keyed by token
 	// hash. Honors IntrospectionCacheTTL.
 	introspectCache sync.Map // map[string]*introspectCacheEntry
+
+	// clientAuthCache memoizes the result of an Argon2id verify on
+	// client_secret_hash. Keyed by client_id; cached entries bind the
+	// verified *OAuthClient snapshot to the sha256 of the presented
+	// secret.
+	//
+	// Cache invalidation contract: invalidateClientAuthCache(clientID)
+	// MUST be called from every path that rotates or removes the stored
+	// client_secret_hash. The current call sites are:
+	//   - service_agent.go::MintAgentCredential (rotates via
+	//     storage.UpdateOAuthClient).
+	//   - service_agent.go::CreateAgent failure-cleanup (deletes via
+	//     storage.DeleteOAuthClient).
+	// Bounded LRU + 5 minute TTL prevent unbounded memory growth and cap
+	// the window during which a stale entry could survive an external
+	// secret rotation.
+	clientAuthCache *clientauthcache.Cache[*OAuthClient]
 }
 
 type introspectCacheEntry struct {
 	expiresAt time.Time
 	body      []byte
+}
+
+// invalidateClientAuthCache drops the cached Argon2-verified entry for
+// clientID. Called from every code path that rotates or removes the
+// stored client_secret_hash so a freshly minted secret is never shadowed
+// by a stale verified entry and a deleted client cannot continue
+// authenticating from cache.
+func (a *TheAuth) invalidateClientAuthCache(clientID string) {
+	if a == nil || a.as == nil || a.as.clientAuthCache == nil {
+		return
+	}
+	a.as.clientAuthCache.Invalidate(clientID)
 }
 
 // validateASConfig applies defaults and screens required fields.
