@@ -47,6 +47,37 @@ type OAuthServerStorage interface {
 	JWKSKeyByKID(ctx context.Context, kid string) (*JWKSKey, error)
 	JWKSKeysAll(ctx context.Context) ([]JWKSKey, error)
 	UpdateJWKSKeyState(ctx context.Context, kid, state string, at time.Time) error
+
+	// Agents (v2.0 phase 3). Status transitions are recorded via
+	// UpdateAgentStatus; last_active_at is updated by the introspection +
+	// token paths so operators can see which agents are warm.
+	InsertAgent(ctx context.Context, a Agent) (Agent, error)
+	AgentByID(ctx context.Context, id ULID) (*Agent, error)
+	AgentByClientID(ctx context.Context, clientID string) (*Agent, error)
+	AgentsByOwner(ctx context.Context, owner AgentOwner) ([]Agent, error)
+	UpdateAgentStatus(ctx context.Context, id ULID, status string, at time.Time) error
+	UpdateAgentLastActive(ctx context.Context, id ULID, at time.Time) error
+
+	// Agent credentials. Multiple rows per agent so a rotation can issue a
+	// fresh credential before revoking the previous one. RevokeAgentCredential
+	// sets revoked_at; AgentCredentialsByAgentID returns every row (callers
+	// filter on RevokedAt themselves so audit views can list history).
+	InsertAgentCredential(ctx context.Context, c AgentCredential) error
+	AgentCredentialsByAgentID(ctx context.Context, agentID ULID) ([]AgentCredential, error)
+	RevokeAgentCredential(ctx context.Context, id ULID, at time.Time) error
+	UpdateAgentCredentialLastUsed(ctx context.Context, id ULID, at time.Time) error
+
+	// Delegations (v2.0 phase 4). Uniqueness on (user_id, agent_id, resource)
+	// is enforced at the database layer; InsertDelegationGrant returns a
+	// wrapped error when violated. RevokeDelegationGrant sets revoked_at;
+	// introspection on every resource server call honors the change inside
+	// AuthorizationServerConfig.IntrospectionCacheTTL.
+	InsertDelegationGrant(ctx context.Context, g DelegationGrant) (DelegationGrant, error)
+	DelegationGrantByID(ctx context.Context, id ULID) (*DelegationGrant, error)
+	DelegationGrantByUserAgentResource(ctx context.Context, userID, agentID ULID, resource string) (*DelegationGrant, error)
+	DelegationGrantsByUserID(ctx context.Context, userID ULID) ([]DelegationGrant, error)
+	DelegationGrantsByAgentID(ctx context.Context, agentID ULID) ([]DelegationGrant, error)
+	RevokeDelegationGrant(ctx context.Context, id ULID, at time.Time, reason string) error
 }
 
 // ErrStorageMissingOAuthMethods is returned by New when

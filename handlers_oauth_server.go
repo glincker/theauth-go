@@ -153,6 +153,39 @@ func (a *TheAuth) handleToken(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		writeTokenJSON(w, resp)
+	case GrantTypeClientCredentials:
+		req := TokenRequest{
+			GrantType:    grantType,
+			ClientID:     clientID,
+			ClientSecret: clientSecret,
+			Resource:     r.PostFormValue("resource"),
+			Scope:        scopeSplit(r.PostFormValue("scope")),
+		}
+		resp, err := a.ClientCredentialsToken(r.Context(), req)
+		if err != nil {
+			writeTokenError(w, err)
+			return
+		}
+		writeTokenJSON(w, resp)
+	case GrantTypeTokenExchange:
+		req := TokenExchangeRequest{
+			ClientID:           clientID,
+			ClientSecret:       clientSecret,
+			SubjectToken:       r.PostFormValue("subject_token"),
+			SubjectTokenType:   r.PostFormValue("subject_token_type"),
+			ActorToken:         r.PostFormValue("actor_token"),
+			ActorTokenType:     r.PostFormValue("actor_token_type"),
+			RequestedTokenType: r.PostFormValue("requested_token_type"),
+			Resource:           r.PostFormValue("resource"),
+			Audience:           r.PostFormValue("audience"),
+			Scope:              scopeSplit(r.PostFormValue("scope")),
+		}
+		resp, err := a.ExchangeToken(r.Context(), req)
+		if err != nil {
+			writeTokenError(w, err)
+			return
+		}
+		writeTokenJSON(w, resp)
 	default:
 		writeOAuthError(w, http.StatusBadRequest, OAuthErrUnsupportedGrantType, "grant_type not supported")
 	}
@@ -284,10 +317,17 @@ func writeOAuthError(w http.ResponseWriter, status int, code, description string
 	}{Error: code, ErrorDescription: description})
 }
 
-// mapOAuthErrorCode maps internal sentinels to wire error codes.
+// mapOAuthErrorCode maps internal sentinels to wire error codes. The
+// phase 3 + 4 additions map agent + delegation failures to access_denied
+// (RFC 6749 section 5.2) and chain depth / subject token failures to
+// invalid_request so callers can distinguish a malformed exchange from a
+// genuinely revoked grant.
 func mapOAuthErrorCode(err error) string {
 	switch {
-	case errors.Is(err, ErrOAuthInvalidRequest):
+	case errors.Is(err, ErrOAuthInvalidRequest),
+		errors.Is(err, ErrChainDepthExceeded),
+		errors.Is(err, ErrSubjectTokenInvalid),
+		errors.Is(err, ErrActorTokenInvalid):
 		return OAuthErrInvalidRequest
 	case errors.Is(err, ErrOAuthInvalidClient):
 		return OAuthErrInvalidClient
@@ -301,6 +341,10 @@ func mapOAuthErrorCode(err error) string {
 		return OAuthErrUnsupportedResponseType
 	case errors.Is(err, ErrOAuthInvalidResource):
 		return OAuthErrInvalidTarget
+	case errors.Is(err, ErrAgentInactive),
+		errors.Is(err, ErrDelegationNotFound),
+		errors.Is(err, ErrDelegationRevoked):
+		return OAuthErrAccessDenied
 	}
 	return OAuthErrServerError
 }
