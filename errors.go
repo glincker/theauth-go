@@ -18,6 +18,18 @@ var (
 	// code can errors.Is-check without importing the storage package
 	// (which would create an import cycle).
 	ErrStorageNotFound = errors.New("theauth: storage row not found")
+
+	// ErrReplayDetected (v0.5) is returned by storage on a WebAuthn sign
+	// count update where the new count is not strictly greater than the
+	// stored value. The library treats this as a clone-attempt and refuses
+	// the login (with the standard 0-stays-0 carve-out for authenticators
+	// that do not implement counters; that case is handled by the caller).
+	ErrReplayDetected = errors.New("theauth: webauthn sign count replay detected")
+
+	// ErrAlreadyEnrolled (v0.5) is returned when /auth/totp/enroll/finish is
+	// called against a user who already has a confirmed TOTP secret. Callers
+	// must DELETE /auth/totp first to re-enroll.
+	ErrAlreadyEnrolled = errors.New("theauth: totp already enrolled")
 )
 
 // Stable error codes that callers can switch on. New endpoints return
@@ -29,6 +41,12 @@ const (
 	CodeRateLimited          = "rate_limited"
 	CodePasswordResetExpired = "password_reset_expired"
 	CodePasswordResetInvalid = "password_reset_invalid"
+
+	// v0.5 codes.
+	CodeTOTPRequired    = "totp_required"
+	CodeInvalidTOTP     = "invalid_totp"
+	CodeAlreadyEnrolled = "already_enrolled"
+	CodeWebAuthn        = "webauthn_error"
 )
 
 // TheAuthError is the structured error type returned by v0.2+ service methods.

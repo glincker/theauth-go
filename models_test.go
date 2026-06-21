@@ -66,6 +66,69 @@ func TestSessionJSONOmitsTokenHash(t *testing.T) {
 	}
 }
 
+// TestWebAuthnCredentialJSONOmitsPublicKey ensures the COSE public key bytes
+// never leak through a JSON response (PublicKey is opaque material that an
+// attacker could use offline; only metadata should reach the wire).
+func TestWebAuthnCredentialJSONOmitsPublicKey(t *testing.T) {
+	c := WebAuthnCredential{
+		ID:           ulid.New(),
+		UserID:       ulid.New(),
+		CredentialID: []byte{1, 2, 3, 4},
+		PublicKey:    []byte("secret-cose-bytes"),
+		Name:         "MacBook",
+	}
+	b, err := json.Marshal(c)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(b)
+	if strings.Contains(got, "publicKey") || strings.Contains(got, "PublicKey") || strings.Contains(got, "secret-cose-bytes") {
+		t.Fatalf("WebAuthnCredential JSON must omit PublicKey; got %s", got)
+	}
+	if !strings.Contains(got, `"name":"MacBook"`) {
+		t.Fatalf("expected name key; got %s", got)
+	}
+}
+
+// TestTOTPSecretJSONOmitsSecret ensures the encrypted secret never serializes
+// over JSON, even though it is already ciphertext (defense in depth: the wire
+// shape must not give anyone a starting point).
+func TestTOTPSecretJSONOmitsSecret(t *testing.T) {
+	s := TOTPSecret{UserID: ulid.New(), SecretEnc: []byte("ciphertext-bytes")}
+	b, err := json.Marshal(s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(b)
+	if strings.Contains(got, "secretEnc") || strings.Contains(got, "SecretEnc") || strings.Contains(got, "ciphertext-bytes") {
+		t.Fatalf("TOTPSecret JSON must omit SecretEnc; got %s", got)
+	}
+}
+
+// TestRecoveryCodeJSONOmitsHash ensures the per-code hash never serializes.
+func TestRecoveryCodeJSONOmitsHash(t *testing.T) {
+	c := RecoveryCode{ID: ulid.New(), UserID: ulid.New(), CodeHash: []byte("hash-bytes")}
+	b, err := json.Marshal(c)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(b)
+	if strings.Contains(got, "codeHash") || strings.Contains(got, "CodeHash") || strings.Contains(got, "hash-bytes") {
+		t.Fatalf("RecoveryCode JSON must omit CodeHash; got %s", got)
+	}
+}
+
+// TestAuthLevelConstants pins the wire string values so a future rename
+// doesn't silently break existing rows in the sessions table.
+func TestAuthLevelConstants(t *testing.T) {
+	if AuthLevelFull != "full" {
+		t.Fatalf("AuthLevelFull drift: got %q want %q", AuthLevelFull, "full")
+	}
+	if AuthLevelPending2FA != "pending_2fa" {
+		t.Fatalf("AuthLevelPending2FA drift: got %q want %q", AuthLevelPending2FA, "pending_2fa")
+	}
+}
+
 func TestSessionExpired(t *testing.T) {
 	now := time.Now()
 	cases := []struct {
