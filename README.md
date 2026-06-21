@@ -1,8 +1,6 @@
+<!-- keywords: oauth2 oauth-server oidc mcp mcp-authorization go golang authorization-server pkce jwt saml scim webauthn totp rbac ed25519 postgres agent-identity delegation -->
+
 # theauth-go
-
-> A modern auth library for Go. Magic links, sessions, OAuth, MCP OAuth 2.1 authorization server, agent identities, revocable delegation chains, and a one-import resource server SDK. Drop-in chi/net/http middleware. Postgres or in-memory storage.
-
-**Production status**: v2.0.0 is the production-ready release. v1.0 surface is unchanged; every v2.0 feature is opt-in. Public API frozen per [STABILITY.md](STABILITY.md); breaking changes from here forward require a major bump. See [CHANGELOG.md](CHANGELOG.md) for the full capability summary and [docs/positioning.md](docs/positioning.md) for the MCP positioning.
 
 [![Go Reference](https://pkg.go.dev/badge/github.com/glincker/theauth-go.svg)](https://pkg.go.dev/github.com/glincker/theauth-go)
 [![Go Report Card](https://goreportcard.com/badge/github.com/glincker/theauth-go)](https://goreportcard.com/report/github.com/glincker/theauth-go)
@@ -10,90 +8,135 @@
 [![Release](https://img.shields.io/github/v/release/glincker/theauth-go)](https://github.com/glincker/theauth-go/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-`theauth-go` is a small, opinionated Go auth library. Sign in with email magic links or email + password today; OAuth, passkeys, and an MCP OAuth 2.1 server land on the published roadmap below.
+A Go auth library that covers magic links, email and password, OAuth providers, passkeys, TOTP, SAML, SCIM, multi-tenancy, RBAC, an OAuth 2.1 authorization server, agent identities, and revocable delegation chains, all behind a single `go get`. v2.0.0 is the production release.
 
-It is built to drop into a `chi` or `net/http` server in under twenty lines, store sessions in Postgres or memory, and grow into agent identity (the part of auth most libraries skip) without a rewrite.
-
----
-
-## Why theauth-go
-
-**Who it's for**
-
-- Go developers building web apps or APIs who want a real auth flow without owning every line of it
-- Teams building MCP servers and AI-agent backends who need agent identity, not just human login
-- Anyone who would otherwise reach for a SaaS auth vendor and would rather self-host
-
-**What's different**
-
-- **Go-native**: idiomatic `net/http` handlers, a tiny `Storage` interface, `chi`-friendly middleware. Not a port of a TypeScript library.
-- **Agent identity is first-class (v2.0)**: OAuth 2.1 MCP authorization server, agent identities, revocable delegation chains, and the RFC 8693 token-exchange grant ship in the core. Not bolted on.
-- **The first Go auth library where OAuth 2.1 MCP AS, agent identities, and revocable delegation chains are a single import.** See [docs/positioning.md](docs/positioning.md).
-- **Self-hosted forever**: MIT-licensed library, no per-MAU pricing, no vendor lock-in, your DB.
-
-**What it isn't**
-
-- Not a SaaS (no hosted dashboard, no managed UI).
-- Not for Node: see the TypeScript sibling [`glincker/theauth`](https://github.com/glincker/theauth).
+It is the first Go auth library where oauth 2.1 mcp authorization, agent identities, and revocable delegation chains ship in a single import. It drops into a `chi` or `net/http` server in under twenty lines and stores sessions in postgres or memory.
 
 ---
 
-## Install
+## Contents
+
+- [Features](#features)
+- [Quick start](#quick-start)
+- [MCP resource server quickstart](#mcp-resource-server-quickstart)
+- [Documentation](#documentation)
+- [Examples](#examples)
+- [Architecture](#architecture)
+- [Security](#security)
+- [Versioning and stability](#versioning-and-stability)
+- [Contributing](#contributing)
+- [License](#license)
+- [Acknowledgements](#acknowledgements)
+
+---
+
+## Features
+
+### Identity and session management
+
+- Opaque session tokens with `HttpOnly`, `Secure`, `SameSite=Lax` cookies; only a SHA-256 hash is persisted
+- Magic-link sign-in
+- Email and password with Argon2id (OWASP 2026 defaults), minimum 12-char enforcement, anti-enumeration safeguards
+- Per-IP and per-email rate limiting on every credential endpoint
+- WebAuthn / passkeys: discoverable login, sign-count replay protection, single-factor-strong per NIST SP 800-63B
+- TOTP second factor with 10 single-use recovery codes and a `pending_2fa` session step-up state machine
+
+### OAuth 2.1 authorization server
+
+- `/.well-known/oauth-authorization-server` (RFC 8414), `/oauth/authorize`, `/oauth/token`, `/oauth/revoke`, `/oauth/introspect`, `/oauth/jwks`
+- RFC 9068 JWT access tokens signed with Ed25519 (30-day JWKS rotation)
+- RFC 8707 mandatory audience binding
+- PKCE S256 mandatory
+- RFC 9700 refresh-token rotation with family revocation on replay
+- RFC 7591 dynamic client registration with bearer-gated initial access tokens
+
+### MCP authorization
+
+- First-class agent identities (user-owned or org-owned) with audited lifecycle (active, suspended, revoked)
+- `client_credentials` grant for agent self-tokens
+- RFC 8693 token-exchange grant: scope narrowing, duration tightening, actor chain capped at 3
+- RFC 9728 protected-resource metadata at `/.well-known/oauth-protected-resource`
+- `mcpresource` SDK: a zero-dependency Go module for MCP resource servers. Wire one middleware for JWT validation, audience enforcement, actor-chain walking, and revocation propagation
+
+### Enterprise
+
+- SAML 2.0 Service Provider (per-organization IdP binding, signed assertions only, find-or-create)
+- SCIM 2.0 provisioning: Users and Groups CRUD, RFC 7644 PATCH, sha256 bearer tokens, per-org isolation
+- Organizations multi-tenancy with `active_organization_id` session scope
+- RBAC with a closed permission catalog, seeded roles, and `RequirePermission` middleware
+
+### Hardening and observability
+
+- Append-only async audit log with default redactor and keyset pagination
+- Admin HTTP API at `/admin/v1` with RFC 7807 problem+json errors
+- Fuzz tests, race-clean test suite, benchmark baselines in `internal/bench/BASELINES.md`
+- Pluggable `Storage` interface: in-memory (zero deps) or postgres (`pgx/v5` + `sqlc`)
+
+---
+
+## Quick start
 
 ```bash
 go get github.com/glincker/theauth-go
 ```
 
-Requires **Go 1.25+** (matches `pgx/v5`).
+Requires **Go 1.25+**.
 
-The resource server SDK is a separate, zero-dependency module:
+```go
+package main
+
+import (
+    "net/http"
+
+    "github.com/glincker/theauth-go"
+    "github.com/glincker/theauth-go/storage/memory"
+    "github.com/go-chi/chi/v5"
+)
+
+func main() {
+    a, _ := theauth.New(theauth.Config{
+        Storage: memory.New(),
+        BaseURL: "http://localhost:8080",
+    })
+
+    r := chi.NewRouter()
+    a.Mount(r) // wires /auth/* endpoints (magic-link, email-password, me, signout, ...)
+
+    r.With(a.RequireAuth()).Get("/me", func(w http.ResponseWriter, r *http.Request) {
+        user, _ := theauth.UserFromContext(r.Context())
+        w.Write([]byte("hello " + user.Email))
+    })
+
+    http.ListenAndServe(":8080", r)
+}
+```
+
+Run it:
+
+```bash
+go run main.go
+# POST http://localhost:8080/auth/magic-link  {"email":"you@example.com"}
+```
+
+For postgres storage:
+
+```go
+pool, _ := pgxpool.New(ctx, os.Getenv("DATABASE_URL"))
+a, _ := theauth.New(theauth.Config{
+    Storage: postgres.New(pool),
+    BaseURL: "https://myapp.com",
+})
+```
+
+---
+
+## MCP resource server quickstart
 
 ```bash
 go get github.com/glincker/theauth-go/mcpresource
 ```
 
-A consumer pulling `mcpresource` does NOT transitively pull theauth core or
-any storage adapter. Both modules version together at every theauth-go tag.
-
----
-
-## What's new in 2.0
-
-v2.0 turns theauth-go into a full MCP authorization stack while keeping the
-v1.0 surface untouched. Every v2.0 feature is opt-in via additional `Config`
-fields; a consumer who upgrades to v2.0 without setting
-`AuthorizationServer`, `AgentIdentity`, or `AccountUX` continues to behave
-identically to v1.0.
-
-- **OAuth 2.1 Authorization Server**: `/.well-known/oauth-authorization-server`,
-  `/oauth/{authorize,token,revoke,introspect,register,jwks}`. RFC 9068
-  EdDSA JWT access tokens. RFC 8707 mandatory audience binding. RFC 9700
-  refresh-token rotation with family revocation. RFC 7591 dynamic client
-  registration. RFC 9728 protected-resource metadata.
-- **Agent identities + delegation chains**: agents owned by a user or
-  organization, the `client_credentials` grant for agent self-tokens, and
-  the RFC 8693 token-exchange grant for delegated calls with a hard chain
-  depth cap of 3, strict scope narrowing, strict duration tightening.
-- **`mcpresource` SDK**: a separately importable, zero-dependency Go
-  module that gives a resource server JWT validation, audience binding,
-  RFC 8693 actor chain walking, and RFC 9728 metadata pointers in a
-  single import + a single middleware line.
-- **Admin and end-user UX**: organization-scoped agent and delegation
-  management at `/admin/v1/.../agents` and `/.../delegations` (RBAC
-  gated). End-user self-service at `/account/agents` and
-  `/account/delegations` (session-cookie gated).
-
-Full positioning: [docs/positioning.md](docs/positioning.md). The
-[CHANGELOG](CHANGELOG.md) carries the per-phase summary; the
-[STABILITY](STABILITY.md) document enumerates the v2.0 stability surface.
-
----
-
-## mcpresource quickstart
-
-If you are building an MCP server and want to outsource auth to an OAuth
-2.1 AS (theauth-go's own or any RFC 9068 + RFC 9728 compliant one), the
-import + middleware look like this:
+The `mcpresource` module has no third-party dependencies. Importing it does not pull in theauth core or any storage adapter.
 
 ```go
 package main
@@ -127,518 +170,67 @@ func main() {
 }
 ```
 
-The middleware validates the bearer JWT signature against a cached JWKS,
-enforces the audience claim against the resource URI, checks expiry with a
-60 second skew tolerance, walks the RFC 8693 `act` chain via the AS
-introspection endpoint, and on any failure emits 401 with
-`WWW-Authenticate: Bearer error="invalid_token", resource_metadata="..."`
-per RFC 6750 + RFC 9728. Cache TTL defaults to 60 seconds; tune with
-`WithCacheTTL`.
+The middleware validates the bearer JWT against a cached JWKS, enforces the audience claim, checks expiry with a 60-second skew tolerance, walks the RFC 8693 `act` chain via AS introspection, and on failure emits 401 with `WWW-Authenticate: Bearer error="invalid_token", resource_metadata="..."` per RFC 6750 and RFC 9728.
 
 Full runnable example: [`examples/mcp-server/`](./examples/mcp-server).
 
 ---
 
-## Quickstart
+## Documentation
 
-```go
-package main
-
-import (
-    "net/http"
-
-    "github.com/glincker/theauth-go"
-    "github.com/glincker/theauth-go/storage/memory"
-    "github.com/go-chi/chi/v5"
-)
-
-func main() {
-    a, _ := theauth.New(theauth.Config{
-        Storage: memory.New(),
-        BaseURL: "http://localhost:8080",
-    })
-
-    r := chi.NewRouter()
-    a.Mount(r) // wires /auth/* endpoints (magic-link, email-password, me, signout, ...)
-
-    r.With(a.RequireAuth()).Get("/me", func(w http.ResponseWriter, r *http.Request) {
-        user, _ := theauth.UserFromContext(r.Context())
-        w.Write([]byte("hello " + user.Email))
-    })
-
-    http.ListenAndServe(":8080", r)
-}
-```
-
-Email + password (v0.2) calls the same mounted routes:
-
-```go
-// signup
-resp, _ := http.Post("http://localhost:8080/auth/email-password/signup",
-    "application/json", strings.NewReader(`{"email":"you@example.com","password":"twelve-chars-min"}`))
-// signin same shape — POST /auth/email-password/signin
-```
-
-Full runnable example: [`examples/chi-app/`](./examples/chi-app).
-
----
-
-## Email + password (v0.2)
-
-Mounting `a.Mount(r)` also wires up the `/auth/email-password` route group:
-
-| Method + path                                | Body                              | Notes                                            |
-| -------------------------------------------- | --------------------------------- | ------------------------------------------------ |
-| `POST /auth/email-password/signup`           | `{email, password}`               | Creates user, sets session cookie, sends verify  |
-| `POST /auth/email-password/signin`           | `{email, password}`               | Sets session cookie                              |
-| `POST /auth/email-password/forgot`           | `{email}`                         | Silently 200 even for unknown emails             |
-| `POST /auth/email-password/reset`            | `{token, newPassword}`            | Revokes all of the user's existing sessions     |
-
-Built-in safeguards:
-
-- **Argon2id hashing** (OWASP 2026 defaults: 64 MiB / 3 iters / 4 threads)
-- **Minimum 12-char password** enforced in service layer (NIST 2024 baseline)
-- **Per-IP rate limit** (5/min default) on every credential endpoint
-- **Per-email rate limit** (3/min default) on signin + forgot
-- **Anti-enumeration**: unknown email and wrong password return the same `invalid_credentials` code; `/forgot` silently 200s for unknown emails
-- **Soft email verification**: signup issues a session immediately; the verify magic link is sent but signin does not block on `user.emailVerifiedAt` — gate sensitive features on the client side by checking `/auth/me`'s `emailVerifiedAt`
-
-Rate limits are configurable:
-
-```go
-theauth.New(theauth.Config{
-    RateLimitPerIP:    10,  // default 5
-    RateLimitPerEmail: 5,   // default 3
-    // ...
-})
-```
-
-Error responses on v0.2 endpoints use a stable `{code, message}` JSON shape — switch on `code`:
-
-| Code                       | HTTP  | When                                       |
-| -------------------------- | ----- | ------------------------------------------ |
-| `weak_password`            | 400   | password < 12 chars                        |
-| `email_taken`              | 409   | signup with existing email                 |
-| `invalid_credentials`      | 401   | wrong password OR unknown email at signin  |
-| `rate_limited`             | 429   | per-IP or per-email cap hit                |
-| `password_reset_invalid`   | 401   | reset token unknown or already used        |
-| `password_reset_expired`   | 401   | reset token past its TTL                   |
-
----
-
-## OAuth providers (v0.3 + v0.4)
-
-Each provider lives in its own sub-package so consumers only pull in the
-ones they want. v0.3 shipped GitHub; v0.4 adds Google, Microsoft, and
-Discord. All four implement the same `theauth.Provider` interface and
-mount the same `/start` + `/callback` route shape.
-
-### GitHub (v0.3)
-
-Register an OAuth app at https://github.com/settings/developers with a
-callback of `https://yourapp.com/auth/providers/github/callback`, then
-wire the provider into `theauth.New`:
-
-```go
-import (
-    "github.com/glincker/theauth-go"
-    "github.com/glincker/theauth-go/provider/github"
-)
-
-key := mustGetenv("THEAUTH_ENCRYPTION_KEY") // 32 raw bytes (AES-256)
-
-a, _ := theauth.New(theauth.Config{
-    Storage:       postgres.New(pool),
-    BaseURL:       "https://yourapp.com",
-    EncryptionKey: key,
-    Providers: []theauth.Provider{
-        github.New(github.Config{
-            ClientID:     os.Getenv("GITHUB_CLIENT_ID"),
-            ClientSecret: os.Getenv("GITHUB_CLIENT_SECRET"),
-        }),
-    },
-    PostLoginRedirect: "/dashboard",
-})
-```
-
-### Google (v0.4)
-
-Register at https://console.cloud.google.com/apis/credentials, set the
-authorized redirect URI to `https://yourapp.com/auth/providers/google/callback`,
-then add the provider to the slice above:
-
-```go
-import "github.com/glincker/theauth-go/provider/google"
-
-google.New(google.Config{
-    ClientID:     os.Getenv("GOOGLE_CLIENT_ID"),
-    ClientSecret: os.Getenv("GOOGLE_CLIENT_SECRET"),
-})
-```
-
-Default scopes are `openid email profile`. `EmailVerified` is mapped from
-Google's `email_verified` userinfo claim (true only when Google attests).
-
-### Microsoft (v0.4)
-
-Register at https://entra.microsoft.com/ under App registrations, add the
-redirect URI `https://yourapp.com/auth/providers/microsoft/callback`, then:
-
-```go
-import "github.com/glincker/theauth-go/provider/microsoft"
-
-microsoft.New(microsoft.Config{
-    ClientID:     os.Getenv("MS_CLIENT_ID"),
-    ClientSecret: os.Getenv("MS_CLIENT_SECRET"),
-    Tenant:       os.Getenv("MS_TENANT"), // optional; defaults to "common"
-})
-```
-
-`Tenant` is substituted into the authorize and token URLs. Valid values:
-
-- `common` (default): any work, school, or personal Microsoft account
-- `organizations`: work / school only
-- `consumers`: personal only
-- a tenant GUID or verified domain (e.g. `contoso.onmicrosoft.com`) for
-  single-tenant apps
-
-Microsoft's OIDC userinfo endpoint does not return an `email_verified`
-claim, so `ProviderUser.EmailVerified` is always `false`. The find or
-create flow treats this as soft verification: the address is surfaced for
-matching, but the user record is created with `EmailVerifiedAt=nil`, and
-your app can require an extra verification step before granting elevated
-permissions.
-
-### Discord (v0.4)
-
-Register at https://discord.com/developers/applications, add the redirect
-URI `https://yourapp.com/auth/providers/discord/callback`, then:
-
-```go
-import "github.com/glincker/theauth-go/provider/discord"
-
-discord.New(discord.Config{
-    ClientID:     os.Getenv("DISCORD_CLIENT_ID"),
-    ClientSecret: os.Getenv("DISCORD_CLIENT_SECRET"),
-})
-```
-
-Default scopes are `identify email`. The avatar URL is synthesized from
-the user's avatar hash (`https://cdn.discordapp.com/avatars/{id}/{hash}.png`);
-users without a custom avatar receive an empty `AvatarURL` so consumers
-can render their own placeholder.
-
-### Routes (any provider)
-
-`a.Mount(r)` adds two routes per registered provider, keyed by
-`Provider.Name()`:
-
-| Method + path                                          | Notes                                                  |
-| ------------------------------------------------------ | ------------------------------------------------------ |
-| `GET /auth/providers/{name}/start`                     | 302 to the provider's authorize URL, sets state cookie |
-| `GET /auth/providers/{name}/callback`                  | exchanges code, sets session cookie                    |
-
-`{name}` is `github`, `google`, `microsoft`, or `discord` depending on
-which providers you wired up.
-
-Built-in safeguards:
-
-- **PKCE S256** on every flow (no plaintext code_verifier on the wire)
-- **State cookie + query parameter** must match before code exchange (CSRF)
-- **State entries expire after 10 minutes** and are GC-swept every minute
-- **Tokens encrypted at rest** with AES-256-GCM via `Config.EncryptionKey`
-- **Primary verified email only** counts as verified on `User.EmailVerifiedAt`
-- **Same rate limit** as credential endpoints (5/min per IP by default)
-
-Find-or-create resolves a returning OAuth user in this order: (1) existing
-`oauth_accounts` row by provider + provider user id, (2) match by verified
-email on the existing users table, (3) create a brand new user. The
-upstream access/refresh tokens are persisted (encrypted) so v0.4 refresh
-rotation can light up without a schema change.
-
----
-
-## WebAuthn / passkeys (v0.5)
-
-WebAuthn ships behind `Config.WebAuthn`. Routes mount only when the block
-is non-nil, so existing apps see no behavior change after upgrading.
-
-```go
-import "github.com/glincker/theauth-go"
-
-a, _ := theauth.New(theauth.Config{
-    Storage:       postgres.New(pool),
-    BaseURL:       "https://yourapp.com",
-    EncryptionKey: key, // 32 bytes; reuses the same key OAuth tokens ride on
-    WebAuthn: &theauth.WebAuthnConfig{
-        RPID:          "yourapp.com",            // eTLD+1, no scheme, no port
-        RPDisplayName: "Your App",                // shown in browser prompts
-        RPOrigins:     []string{"https://yourapp.com"},
-    },
-})
-```
-
-Routes:
-
-| Method + path | Auth | Purpose |
-| --- | --- | --- |
-| `POST /auth/webauthn/register/begin` | RequireAuth (full) | Returns `protocol.CredentialCreation`, sets challenge cookie |
-| `POST /auth/webauthn/register/finish` | RequireAuth (full) | Validates attestation, stores credential row |
-| `POST /auth/webauthn/login/begin` | none | Returns discoverable `protocol.CredentialAssertion` |
-| `POST /auth/webauthn/login/finish` | none | Validates assertion, issues full session cookie |
-| `GET /auth/webauthn/credentials` | RequireAuth (full) | Lists the caller's registered credentials |
-| `DELETE /auth/webauthn/credentials/{id}` | RequireAuth (full) | Removes one credential |
-
-Built-in safeguards:
-
-- **PKCE-equivalent challenge binding** via an HttpOnly cookie scoped to `/auth/webauthn`
-- **Single-use challenge entries** (LoadAndDelete before validate)
-- **5 minute TTL** on every challenge, swept every 60s
-- **Sign-count replay protection** via an atomic `UPDATE ... WHERE sign_count < $new` plus a lookup follow-up to disambiguate replay from missing row
-- **Discoverable-only login** so the begin endpoint reveals nothing about user existence
-- **Single-factor-strong** per NIST SP 800-63B rev 4: a passkey login is a strong factor by itself, so the flow does NOT step up to TOTP
-
-Passkey ceremonies on the client side use the standard `navigator.credentials.create`
-and `navigator.credentials.get` APIs; the server returns the unmodified
-`protocol.CredentialCreation` / `protocol.CredentialAssertion` JSON for the
-browser to consume directly. See `examples/webauthn-passkey/` for a small
-single-page demo with a working register and login button pair.
-
----
-
-## TOTP 2FA + recovery codes (v0.5)
-
-TOTP ships behind `Config.TOTP`. Like WebAuthn, the routes only mount
-when the block is non-nil.
-
-```go
-import "github.com/glincker/theauth-go"
-
-a, _ := theauth.New(theauth.Config{
-    Storage:       postgres.New(pool),
-    BaseURL:       "https://yourapp.com",
-    EncryptionKey: key, // 32 bytes; required, used to encrypt totp_secrets.secret_enc
-    TOTP: &theauth.TOTPConfig{
-        Issuer: "Your App", // shown in Google Authenticator, Authy, 1Password
-        // RecoveryCodeCount defaults to 10
-    },
-})
-```
-
-Routes:
-
-| Method + path | Auth | Purpose |
-| --- | --- | --- |
-| `POST /auth/totp/enroll/begin` | RequireAuth (full) | Generates secret, returns `{secret, otpAuthUrl, enrollmentId}` |
-| `POST /auth/totp/enroll/finish` | RequireAuth (full) | Body `{enrollmentId, code}`. Confirms secret, returns 10 recovery codes (once) |
-| `POST /auth/totp/verify` | RequirePendingOrFull | Body `{code}`. Promotes pending session to full |
-| `POST /auth/totp/recovery` | RequirePendingOrFull | Body `{code}`. Consumes one recovery code, promotes session |
-| `DELETE /auth/totp` | RequireAuth (full) | Drops the secret + all recovery codes |
-
-When `Config.TOTP != nil` and a user has confirmed TOTP, the
-`POST /auth/email-password/signin` response shape becomes
-`{"step":"totp_required"}` and the session cookie carries a
-`pending_2fa` AuthLevel that only the two verify routes accept.
-
-Session state machine:
-
-```
-anon
-  |
-  | POST /auth/email-password/signin (no TOTP enrolled)
-  | GET  /auth/magic-link/verify
-  | GET  /auth/providers/{name}/callback
-  | POST /auth/webauthn/login/finish
-  v
-full  (auth_level = 'full', all RequireAuth routes)
-  |
-  | DELETE /auth/sessions/current
-  v
-anon
-
-anon
-  |
-  | POST /auth/email-password/signin (TOTP confirmed for user)
-  v
-pending_2fa  (auth_level = 'pending_2fa', 10 min TTL)
-  |
-  | POST /auth/totp/verify   (valid code)
-  | POST /auth/totp/recovery (valid unused recovery code)
-  v
-full
-```
-
-Built-in safeguards:
-
-- **AES-GCM at rest** for `totp_secrets.secret_enc` (mandatory; `New` errors if `EncryptionKey` is missing)
-- **Per-code salted SHA-256** for recovery codes (40 bit `crypto/rand` entropy makes Argon2id wasted latency; see `crypto/recoverycode.go`)
-- **Five-strike pending session revocation**: five consecutive wrong codes revoke the pending session and force a fresh password verify
-- **WebAuthn login bypasses TOTP**: NIST SP 800-63B rev 4 treats passkey as a single strong factor
-- **OAuth callbacks bypass TOTP**: the IdP already enforced its own factors
-
-See `examples/totp-stepup/` for a single-page demo of the full flow.
-
----
-
-## Organizations (v0.7)
-
-Multi-tenancy is opt-in. Set `Config.Organizations` to a non-nil value and
-the `/auth/orgs/*` routes mount. Existing single-tenant deployments leave
-the field nil and see zero behavior change.
-
-```go
-a, _ := theauth.New(theauth.Config{
-    Storage:       postgres.New(pool),
-    BaseURL:       "https://yourapp.com",
-    Organizations: &theauth.OrganizationsConfig{},
-})
-```
-
-Routes (all require an authenticated session):
-
-| Method + path | Auth | Purpose |
-| --- | --- | --- |
-| `POST   /auth/orgs` | RequireAuth | Create org, caller becomes owner |
-| `GET    /auth/orgs` | RequireAuth | List orgs the caller belongs to |
-| `GET    /auth/orgs/{id}` | member | Read one org |
-| `POST   /auth/orgs/{id}/members` | owner or admin | Add a member, body `{userId, role}` |
-| `DELETE /auth/orgs/{id}/members/{userId}` | owner | Remove a member (refuses last owner) |
-| `POST   /auth/orgs/{id}/activate` | member | Bind current session to this org |
-| `POST   /auth/orgs/clear-active` | RequireAuth | Clear the active-org binding |
-
-Roles: `owner`, `admin`, `member`. Sessions gain a nullable
-`ActiveOrganizationID` so downstream application code can scope queries
-without re-resolving membership.
-
----
-
-## SAML 2.0 SP (v0.7)
-
-The library is a Service Provider only. Each `saml_connections` row binds
-one organization to one IdP, signed assertions only, find-or-create by
-`(connection_id, name_id)` with an email fallback.
-
-```go
-a, _ := theauth.New(theauth.Config{
-    Storage:       postgres.New(pool),
-    BaseURL:       "https://yourapp.com",
-    Organizations: &theauth.OrganizationsConfig{},
-    SAML: &theauth.SAMLConfig{
-        SPCertificatePEM: spCertPEM, // PEM-encoded SP signing cert
-        SPPrivateKeyPEM:  spKeyPEM,  // PEM-encoded RSA key
-        // AuthnRequestTTL defaults to 10m; ClockSkew defaults to 30s
-    },
-})
-```
-
-Public-facing flow routes:
-
-| Method + path | Auth | Purpose |
-| --- | --- | --- |
-| `GET  /auth/saml/{connectionId}/login` | none | SP-initiated SSO, 302 to IdP |
-| `POST /auth/saml/{connectionId}/acs` | none | Assertion Consumer Service, runs find-or-create |
-| `GET  /auth/saml/{connectionId}/metadata` | none | SP metadata XML for the IdP admin |
-
-Per-organization connection CRUD (owner-only):
-
-| Method + path | Purpose |
+| Document | Description |
 | --- | --- |
-| `POST   /auth/orgs/{orgId}/saml/connections` | Create connection |
-| `GET    /auth/orgs/{orgId}/saml/connections` | List connections |
-| `GET    /auth/orgs/{orgId}/saml/connections/{id}` | Read one |
-| `PUT    /auth/orgs/{orgId}/saml/connections/{id}` | Replace (cert rotation) |
-| `DELETE /auth/orgs/{orgId}/saml/connections/{id}` | Delete |
+| [AGENTS.md](AGENTS.md) | Concise reference for AI coding assistants: patterns, anti-patterns, file map |
+| [STABILITY.md](STABILITY.md) | Public API surface, SemVer rules, Storage interface special rules |
+| [CHANGELOG.md](CHANGELOG.md) | Per-release notable changes following Keep a Changelog |
+| [SECURITY.md](SECURITY.md) | Vulnerability disclosure policy and contact |
+| [CONTRIBUTING.md](CONTRIBUTING.md) | Dev setup, test commands, commit convention, PR process |
+| [docs/positioning.md](docs/positioning.md) | Why MCP OAuth 2.1 matters and what theauth-go ships for it |
+| [internal/bench/BASELINES.md](internal/bench/BASELINES.md) | v0.6 benchmark baselines for five hot paths |
 
-Attribute mapping is per-connection JSON with WS-Federation defaults
-(Microsoft, Okta, OneLogin). Override only the keys that differ for a
-specific IdP. Standards: SAML 2.0 Core (OASIS), implemented via
-[`github.com/crewjam/saml`](https://github.com/crewjam/saml) v0.5.1.
+### HTTP surface reference
+
+**Auth flows** (mounted by `a.Mount(r)`):
+
+| Endpoint | Purpose |
+| --- | --- |
+| `POST /auth/magic-link` | Request a sign-in link |
+| `GET /auth/magic-link/verify` | Consume the link token, issue session |
+| `POST /auth/email-password/signup` | Register, sets session cookie |
+| `POST /auth/email-password/signin` | Sign in, sets session cookie |
+| `POST /auth/email-password/forgot` | Request a password reset (silently 200 for unknown emails) |
+| `POST /auth/email-password/reset` | Consume reset token, revoke all sessions |
+| `GET /auth/me` | Current user (requires auth) |
+| `DELETE /auth/sessions/current` | Sign out |
+
+**OAuth providers** (`GET /auth/providers/{name}/start` and `/callback`): github, google, microsoft, discord.
+
+**WebAuthn**: `/auth/webauthn/register/{begin,finish}`, `/auth/webauthn/login/{begin,finish}`, `/auth/webauthn/credentials`.
+
+**TOTP**: `/auth/totp/enroll/{begin,finish}`, `/auth/totp/verify`, `/auth/totp/recovery`, `DELETE /auth/totp`.
+
+**OAuth 2.1 AS** (enabled via `Config.AuthorizationServer`): `/.well-known/oauth-authorization-server`, `/oauth/{authorize,token,revoke,introspect,register,jwks}`, `/.well-known/oauth-protected-resource`.
+
+**Admin API** (enabled via `Config.Admin`, requires RBAC): `/admin/v1/users`, `/admin/v1/sessions`, `/admin/v1/audit`, `/admin/v1/organizations/{orgID}/agents`, `/admin/v1/organizations/{orgID}/delegations`.
+
+**Account UX** (enabled via `Config.AccountUX`): `/account/agents`, `/account/delegations`.
 
 ---
 
-## SCIM 2.0 provisioning (v0.7)
+## Examples
 
-Hand-rolled SCIM 2.0 (RFC 7643 + RFC 7644). Bearer auth, one or more
-sha256-hashed tokens per organization, idempotent upsert by
-`externalId`, PATCH per RFC 7644 §3.5.2.
-
-```go
-a, _ := theauth.New(theauth.Config{
-    Storage:       postgres.New(pool),
-    BaseURL:       "https://yourapp.com",
-    Organizations: &theauth.OrganizationsConfig{},
-    SCIM: &theauth.SCIMConfig{
-        RequireHTTPS: true, // default true; flip false only behind a TLS-terminating proxy that strips X-Forwarded-Proto
-        MaxPageSize:  200,  // default 200
-    },
-})
-```
-
-Token CRUD lives under the org tree (owner-only):
-
-| Method + path | Purpose |
+| Example | What it shows |
 | --- | --- |
-| `POST   /auth/orgs/{orgId}/scim/tokens` | Mint a token, plaintext returned once |
-| `GET    /auth/orgs/{orgId}/scim/tokens` | List tokens (hash never exposed) |
-| `DELETE /auth/orgs/{orgId}/scim/tokens/{id}` | Revoke |
+| [`examples/chi-app/`](./examples/chi-app) | Magic links and email/password with chi |
+| [`examples/gin-app/`](./examples/gin-app) | Drop-in with Gin |
+| [`examples/echo-app/`](./examples/echo-app) | Drop-in with Echo |
+| [`examples/stdlib-app/`](./examples/stdlib-app) | Pure `net/http`, no framework |
+| [`examples/oauth-multi-provider/`](./examples/oauth-multi-provider) | GitHub + Google + Microsoft + Discord in one app |
+| [`examples/webauthn-passkey/`](./examples/webauthn-passkey) | Passkey register and discoverable login |
+| [`examples/totp-stepup/`](./examples/totp-stepup) | Password + TOTP step-up flow |
+| [`examples/mcp-server/`](./examples/mcp-server) | MCP resource server using `mcpresource` middleware |
 
-Resource endpoints at `/scim/v2/` (bearer required):
-
-| Method + path | Purpose |
-| --- | --- |
-| `GET    /scim/v2/ServiceProviderConfig` | RFC 7644 §5 |
-| `GET    /scim/v2/ResourceTypes`         | RFC 7644 §6 |
-| `GET    /scim/v2/Schemas`               | RFC 7644 §6 |
-| `GET    /scim/v2/Users`                 | List users in org. eq filter on `userName`, `externalId`, `emails.value` |
-| `POST   /scim/v2/Users`                 | Create or upsert by `externalId` |
-| `GET    /scim/v2/Users/{id}`            | Read one |
-| `PATCH  /scim/v2/Users/{id}`            | RFC 7644 §3.5.2 add/replace/remove |
-| `PUT    /scim/v2/Users/{id}`            | 405, documented deviation (Okta and Azure AD default to PATCH) |
-| `DELETE /scim/v2/Users/{id}`            | Soft delete (removes from org, preserves user row) |
-| `GET    /scim/v2/Groups`                | List groups |
-| `POST   /scim/v2/Groups`                | Create or upsert |
-| `GET    /scim/v2/Groups/{id}`           | Read |
-| `PATCH  /scim/v2/Groups/{id}`           | Members add/remove |
-| `PUT    /scim/v2/Groups/{id}`           | 405 |
-| `DELETE /scim/v2/Groups/{id}`           | Delete |
-
-Documented deviations from RFC 7643:
-- `password` on User POST/PATCH is rejected with 400 `invalidValue`. Auth
-  credentials in theauth-go are owned by the user-facing endpoints, not
-  by SCIM clients.
-- Nested groups (a `members[i].type=="Group"`) are rejected with 400
-  `invalidValue`. v0.7 supports flat user membership only.
-- Only equality filters are accepted; other operators return 400
-  `invalidFilter` with the documented body.
-
-Audit hook: `Config.AuditHook` is invoked synchronously for every SCIM
-mutation and every successful SAML assertion. v0.7 ships a no-op default;
-v1.0 replaces this binding with the real async writer.
-
----
-
-## Comparison
-
-How `theauth-go` stacks up against the libraries and services you would actually consider in 2026:
-
-| Feature                       | theauth-go    | better-auth   | Auth0 SDK    | Stytch       | Ory Kratos    |
-| ----------------------------- | ------------- | ------------- | ------------ | ------------ | ------------- |
-| Language                      | Go            | TypeScript    | Multiple     | Multiple     | Go            |
-| Magic links                   | Shipping      | Shipping      | Shipping     | Shipping     | Shipping      |
-| Email / password              | Shipping      | Shipping      | Shipping     | Shipping     | Shipping      |
-| OAuth providers               | 4             | 17            | 30+          | 20+          | 10+           |
-| Passkeys / WebAuthn           | Shipping      | Shipping      | Shipping     | Shipping     | Shipping      |
-| TOTP 2FA + recovery codes     | Shipping      | Shipping      | Shipping     | Shipping     | Shipping      |
-| SAML 2.0 SP                   | Shipping      | Shipping      | Shipping     | Shipping     | Shipping      |
-| SCIM 2.0 provisioning         | Shipping      | Shipping      | Shipping     | Shipping     | Shipping      |
-| Multi-tenancy (organizations) | Shipping      | Shipping      | Shipping     | Shipping     | Shipping      |
-| Self-hosted                   | Yes           | Yes           | No           | No           | Yes           |
-| MCP OAuth 2.1 server          | Roadmap v2.0  | Roadmap v2.0  | No           | No           | No            |
-| Agent identity + delegation   | Roadmap v2.0  | Roadmap v2.0  | No           | No           | No            |
-| Hosting model                 | Library       | Library       | SaaS         | SaaS         | Service       |
-| Cost                          | Free (MIT)    | Free (MIT)    | Paid         | Paid         | Free (Apache) |
-
-Honest legend: **Shipping** = available today, **Roadmap vX** = planned for that version, **No** = not planned. Numbers reflect each vendor's 2026 documentation.
+Each example has a `README`, single-file `main.go`, `go.mod`, `docker-compose.yml`, `.env.example`, and `Makefile`.
 
 ---
 
@@ -646,7 +238,7 @@ Honest legend: **Shipping** = available today, **Roadmap vX** = planned for that
 
 ```
                 ┌──────────────────────────────┐
-   HTTP req ─►  │  chi / net/http router       │
+   HTTP req ->  │  chi / net/http router       │
                 │   ├── a.Mount(r)             │  /auth/* handlers
                 │   └── a.RequireAuth()        │  middleware
                 └──────────────┬───────────────┘
@@ -654,9 +246,10 @@ Honest legend: **Shipping** = available today, **Roadmap vX** = planned for that
                 ┌──────────────▼───────────────┐
                 │  theauth core                │
                 │   ├── magic-link service     │
-                │   ├── session service        │  opaque tokens, hashed in DB
-                │   ├── password service       │  argon2id, rate-limited (v0.2)
-                │   └── oauth / MCP / agents   │  (v0.3 → v2.0)
+                │   ├── session service        │  opaque tokens, SHA-256 in DB
+                │   ├── password service       │  argon2id, rate-limited
+                │   ├── oauth / MCP / agents   │  v0.3 to v2.0
+                │   └── audit / RBAC           │  v1.0+
                 └──────────────┬───────────────┘
                                │
                 ┌──────────────▼───────────────┐
@@ -666,108 +259,68 @@ Honest legend: **Shipping** = available today, **Roadmap vX** = planned for that
                 └──────────────────────────────┘
 ```
 
-Sessions are opaque tokens — the raw token lives only in the user's cookie; only a SHA-256 hash is persisted. Revocation is a single `UPDATE`. The `Storage` interface is the only surface a custom backend needs to implement.
+Sessions are opaque tokens. The raw token lives only in the user's cookie; only a SHA-256 hash is persisted. Revocation is a single `UPDATE`. The `Storage` interface is the only surface a custom backend needs to implement.
+
+The `mcpresource` module is a separately versioned zero-dependency module. A consumer importing it does not transitively pull theauth core or any storage adapter.
 
 ---
 
-## Storage backends
+## Security
 
-- **`storage/memory`** — in-memory, zero deps. Use for tests, local demos, and quickstarts
-- **`storage/postgres`** — `pgx/v5` + `sqlc`-generated queries. Migrations live in [`storage/postgres/migrations/`](./storage/postgres/migrations) and run via [golang-migrate](https://github.com/golang-migrate/migrate)
-- **Custom** — implement the `Storage` interface (one type, focused method set) to back theauth with anything: SQLite, MySQL, DynamoDB, your existing ORM
+See [SECURITY.md](SECURITY.md) for the vulnerability disclosure policy. Report security issues to `security@glincker.com`.
 
-Postgres example:
+Recent security work (2026-06-20 audit):
 
-```go
-pool, _ := pgxpool.New(ctx, "postgres://...")
-a, _ := theauth.New(theauth.Config{
-    Storage: postgres.New(pool),
-    BaseURL: "https://myapp.com",
-})
-```
+- POST `/oauth/register` bearer gate now validates tokens with `crypto/subtle.ConstantTimeCompare` against pre-hashed sha256 digests
+- POST `/oauth/register` is rate-limited per source IP (1 req/min for anonymous mode, 5 req/min for bearer-gated mode)
+- `X-Forwarded-For` is no longer trusted by default. Set `Config.TrustedProxies` to opt in
+- Cross-org delegation admin grants now verify `body.userId` is a member of the caller's organization
+- Password signin pays full Argon2id cost on unknown-email and empty-password branches (timing side-channel closed)
 
 ---
 
-## Email senders
+## Versioning and stability
 
-- **`email.Noop`** — logs to stdout. Default. Good for local dev; **never ship to production**
-- **`email.SMTP`** — minimal SMTP sender (host, port, from). Lands in v0.3
-- **Custom** — implement `email.Sender` to wire Resend, Postmark, SES, SendGrid, etc.
+The project follows [Semantic Versioning](https://semver.org/) from v1.0 forward. v2.0.0 is the current production release. The v1.0 public API surface is frozen. Every v2.0 feature (OAuth 2.1 AS, agent identities, delegation, `mcpresource`) is opt-in via additional `Config` fields; callers who upgrade from v1.0 without setting those fields see no behavior change.
 
----
-
-## Roadmap
-
-- **v0.1** Magic links, sessions, chi middleware, Postgres + in-memory storage (shipped)
-- **v0.2** Email + password (signup, signin, forgot, reset), argon2id, per-IP + per-email rate limiting, structured `TheAuthError` type (shipped)
-- **v0.3** GitHub OAuth (Provider interface + PKCE S256), AES-GCM token-at-rest encryption (shipped)
-- **v0.4** Google + Microsoft + Discord OAuth (shipped)
-- **v0.5** WebAuthn / passkeys, TOTP 2FA + recovery codes, session step-up state machine (shipped)
-- **v0.6** Hardening pass: fuzz matrix, race tests, examples, benchmarks, godoc, STABILITY.md (shipped)
-- **v0.7** SAML 2.0 SP, SCIM 2.0 provisioning, organizations multi-tenancy (shipped)
-- **v1.0** RBAC, async audit log writer, admin API surface
-- **v2.0 phase 1 + 2** (shipped, pre-release `v2.0.0-alpha.1`): OAuth 2.1 authorization server, dynamic client registration (RFC 7591), JWKS rotation (30-day Ed25519), RFC 9068 signed JWT access tokens, RFC 8707 mandatory audience binding, PKCE S256 mandatory. Enable via `Config.AuthorizationServer`; v1.0 behavior is unchanged when this field is nil.
-- **v2.0 phase 3 + 4** (shipped, pre-release `v2.0.0-alpha.2`): agent identity (Agent, AgentCredential, owner = user or organization), `client_credentials` grant for agent self-tokens, delegation grants (one row per `(user, agent, resource)` triple), and RFC 8693 token exchange with strict scope narrowing, strict duration tightening, nested `act` claim, and a hard chain depth cap of 3. Introspection walks the actor chain on every call so revocations propagate within `IntrospectionCacheTTL`. Enable via `Config.AgentIdentity`; requires `Config.AuthorizationServer`.
-- **v2.0 phase 5 + 6** (planned): `mcpresource` SDK, admin + account UX (`/admin/v1/.../agents`, `/account/delegations`)
-- **v2.0 final** all of the above plus budget policies
-
-Track the work in [GitHub Issues](https://github.com/glincker/theauth-go/issues) and [Releases](https://github.com/glincker/theauth-go/releases).
+See [STABILITY.md](STABILITY.md) for the complete list of stable symbols, the Storage interface special rule, and the migration append-only guarantee.
 
 ---
-
-## FAQ
-
-### Is `theauth-go` production-ready?
-
-v0.1 ships sessions and magic links and is covered by unit + integration tests against Postgres. v0.2 adds email + password with argon2id hashing, rate limiting, and anti-enumeration safeguards. It is appropriate for greenfield projects and side projects today. OAuth lands in v0.3. If you need OAuth, passkeys, or 2FA right now, check the roadmap and pick the right version — or use one of the alternatives above and migrate later.
-
-### Why not just use Auth0 or Clerk?
-
-Both are excellent if you are happy paying per monthly active user and letting a third party hold your identity data. `theauth-go` exists for teams that want self-hosted, MIT-licensed, no-per-MAU-cost auth they fully control — including the code path that runs at login.
-
-### Why not Ory Kratos?
-
-Kratos is a separate service you run alongside your app. `theauth-go` is a library you import — same process, same DB, same deploy. Fewer moving parts, less ops burden, but you give up Kratos's UI flows and multi-language SDK. Pick Kratos if you need a polyglot stack; pick `theauth-go` if your backend is Go and you want library-grade simplicity.
-
-### Why not better-auth?
-
-`better-auth` is the TypeScript reference for this design. If your stack is Node/Next.js, use it (or use the sibling [`glincker/theauth`](https://github.com/glincker/theauth) TS implementation). `theauth-go` exists because the Go ecosystem deserves the same ergonomics natively, not via a Node sidecar.
-
-### Why a new Go auth library?
-
-No Go library today combines agent identity + MCP OAuth 2.1 + traditional human auth in a single package. `theauth-go` is built for the moment human and agent auth converge — sessions, magic links, and email + password today, OAuth and passkeys in 2026, MCP OAuth 2.1 server + delegation in v2.0.
-
-### What is MCP OAuth 2.1?
-
-The Model Context Protocol's authorization spec — built on RFC 9728 (Protected Resource Metadata), RFC 8707 (Resource Indicators), RFC 8414 (Authorization Server Metadata), and RFC 7591 (Dynamic Client Registration). It lets AI agents authenticate to MCP servers with proper scope, audience, and delegation. v2.0 of `theauth-go` will be the Go reference implementation.
-
-### Does it work with `net/http` only, no chi?
-
-Yes. `chi` is recommended because middleware composition is cleaner, but `Mount` accepts anything that satisfies `http.Handler` registration, and `RequireAuth()` returns a standard `func(http.Handler) http.Handler`.
-
-### How are sessions stored?
-
-Sessions are opaque tokens. The raw token is set in an `HttpOnly`, `Secure`, `SameSite=Lax` cookie. The DB only stores a SHA-256 hash plus metadata (user ID, created/expires, revoked flag). Revocation is a single `UPDATE`.
-
----
-
-## Stability and benchmarks
-
-- [STABILITY.md](STABILITY.md) lists the public API surface and the rules that govern v1.0 and beyond.
-- [internal/bench/BASELINES.md](internal/bench/BASELINES.md) records the v0.6 benchmark numbers for the five hot paths.
-- [CHANGELOG.md](CHANGELOG.md) tracks notable changes per release.
 
 ## Contributing
 
+See [CONTRIBUTING.md](CONTRIBUTING.md) for dev setup, test commands, lint, commit convention, and the PR process.
+
 - Bug reports and feature requests: [GitHub Issues](https://github.com/glincker/theauth-go/issues)
-- Questions, design discussion, RFC threads: [GitHub Discussions](https://github.com/glincker/theauth-go/discussions)
-- Pull requests welcome — please open an issue first for anything beyond a typo or one-file fix
-- Run `go test ./...` and `go vet ./...` before pushing
+- Design discussions and RFC threads: [GitHub Discussions](https://github.com/glincker/theauth-go/discussions)
+- Pull requests: open an issue first for anything beyond a typo or one-file fix
 
-## Sibling project
-
-[`github.com/glincker/theauth`](https://github.com/glincker/theauth) — TypeScript implementation (formerly `kavachos`, rebranded 2026-06). Shares the same design language and roadmap; pick the one that matches your backend.
+---
 
 ## License
 
-MIT — see [LICENSE](./LICENSE).
+MIT. See [LICENSE](./LICENSE).
+
+---
+
+## Acknowledgements
+
+Built on and interoperating with:
+
+- [RFC 6749](https://www.rfc-editor.org/rfc/rfc6749) OAuth 2.0 Authorization Framework
+- [RFC 6750](https://www.rfc-editor.org/rfc/rfc6750) Bearer Token Usage
+- [RFC 7517](https://www.rfc-editor.org/rfc/rfc7517) JSON Web Key
+- [RFC 7591](https://www.rfc-editor.org/rfc/rfc7591) Dynamic Client Registration
+- [RFC 7636](https://www.rfc-editor.org/rfc/rfc7636) PKCE
+- [RFC 7662](https://www.rfc-editor.org/rfc/rfc7662) Token Introspection
+- [RFC 7807](https://www.rfc-editor.org/rfc/rfc7807) Problem Details for HTTP APIs
+- [RFC 8414](https://www.rfc-editor.org/rfc/rfc8414) Authorization Server Metadata
+- [RFC 8693](https://www.rfc-editor.org/rfc/rfc8693) OAuth 2.0 Token Exchange
+- [RFC 8707](https://www.rfc-editor.org/rfc/rfc8707) Resource Indicators
+- [RFC 9068](https://www.rfc-editor.org/rfc/rfc9068) JWT Profile for OAuth 2.0 Access Tokens
+- [RFC 9700](https://www.rfc-editor.org/rfc/rfc9700) OAuth 2.0 Best Current Practices
+- [RFC 9728](https://www.rfc-editor.org/rfc/rfc9728) OAuth 2.0 Protected Resource Metadata
+- OAuth 2.1 draft and MCP Authorization specification (2025-11-25)
+- [crewjam/saml](https://github.com/crewjam/saml) v0.5.1 for SAML 2.0 SP ceremonies
+- [go-webauthn/webauthn](https://github.com/go-webauthn/webauthn) for WebAuthn / passkey ceremonies
+- TypeScript sibling: [glincker/theauth](https://github.com/glincker/theauth)
