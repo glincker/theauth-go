@@ -56,6 +56,52 @@ type Storage interface {
 	// OAuthAccountByProviderUserID looks up the row for a provider/user
 	// pair. Returns ErrStorageNotFound when no row exists.
 	OAuthAccountByProviderUserID(ctx context.Context, provider, providerUserID string) (*OAuthAccount, error)
+
+	// Sessions: v0.5 step-up additions
+	// CreateSessionWithAuthLevel mints a session whose AuthLevel column is
+	// set to the supplied value (typically AuthLevelPending2FA). Mirrors
+	// CreateSession otherwise. CreateSession itself continues to default
+	// to AuthLevelFull at the DDL layer so older callers see no change.
+	CreateSessionWithAuthLevel(ctx context.Context, s Session) (Session, error)
+	// UpdateSessionAuthLevel rewrites a single session's AuthLevel column.
+	// Used by /auth/totp/verify to promote a pending session to full.
+	UpdateSessionAuthLevel(ctx context.Context, id ULID, level string) error
+
+	// WebAuthn (v0.5)
+	InsertWebAuthnCredential(ctx context.Context, c WebAuthnCredential) (WebAuthnCredential, error)
+	WebAuthnCredentialsByUserID(ctx context.Context, userID ULID) ([]WebAuthnCredential, error)
+	// WebAuthnCredentialByCredentialID returns the row keyed by the raw
+	// authenticator credential ID, or ErrStorageNotFound when missing.
+	WebAuthnCredentialByCredentialID(ctx context.Context, credentialID []byte) (*WebAuthnCredential, error)
+	// UpdateWebAuthnSignCount atomically writes a strictly greater sign
+	// count and bumps last_used_at. Returns ErrReplayDetected when the
+	// new count is not strictly greater than the stored value (the
+	// canonical replay signal per WebAuthn L2 / L3). Returns
+	// ErrStorageNotFound when the credential does not exist.
+	UpdateWebAuthnSignCount(ctx context.Context, credentialID []byte, newCount uint32, usedAt time.Time) error
+	// DeleteWebAuthnCredential removes a credential by ID, scoped to the
+	// owning user. Returns ErrStorageNotFound when the row does not exist
+	// or does not belong to the caller (no leak on cross-user lookup).
+	DeleteWebAuthnCredential(ctx context.Context, id ULID, userID ULID) error
+
+	// TOTP (v0.5)
+	// UpsertPendingTOTPSecret writes an encrypted secret with
+	// confirmed_at = NULL. Replaces any prior unconfirmed secret for the
+	// same user; preserves a confirmed one untouched (re-enrollment
+	// requires DeleteTOTPSecret first).
+	UpsertPendingTOTPSecret(ctx context.Context, s TOTPSecret) error
+	// ConfirmTOTPSecret sets confirmed_at on the user's pending secret.
+	// Returns ErrStorageNotFound when no pending row exists.
+	ConfirmTOTPSecret(ctx context.Context, userID ULID, at time.Time) error
+	TOTPSecretByUserID(ctx context.Context, userID ULID) (*TOTPSecret, error)
+	DeleteTOTPSecret(ctx context.Context, userID ULID) error
+
+	InsertRecoveryCodes(ctx context.Context, codes []RecoveryCode) error
+	// ConsumeRecoveryCode walks the user's unused codes, locates the one
+	// whose hash matches via crypto.VerifyRecoveryCode, and marks it used
+	// atomically. Returns ErrStorageNotFound when no matching unused code
+	// exists (covers wrong code, reused code, and cross-user mismatch).
+	ConsumeRecoveryCode(ctx context.Context, userID ULID, code string, at time.Time) error
 }
 
 // Config holds the wiring for a TheAuth instance.

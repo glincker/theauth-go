@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/glincker/theauth-go"
+	"github.com/glincker/theauth-go/crypto"
 	"github.com/glincker/theauth-go/storage"
 )
 
@@ -18,6 +19,10 @@ type Store struct {
 	passwordHashes map[theauth.ULID]string
 	resetTokens    map[theauth.ULID]theauth.PasswordResetToken
 	oauthAccounts  map[theauth.ULID]theauth.OAuthAccount
+	// v0.5
+	webauthnCreds map[theauth.ULID]theauth.WebAuthnCredential
+	totpSecrets   map[theauth.ULID]theauth.TOTPSecret
+	recoveryCodes map[theauth.ULID]theauth.RecoveryCode
 }
 
 func New() *Store {
@@ -28,6 +33,9 @@ func New() *Store {
 		passwordHashes: map[theauth.ULID]string{},
 		resetTokens:    map[theauth.ULID]theauth.PasswordResetToken{},
 		oauthAccounts:  map[theauth.ULID]theauth.OAuthAccount{},
+		webauthnCreds:  map[theauth.ULID]theauth.WebAuthnCredential{},
+		totpSecrets:    map[theauth.ULID]theauth.TOTPSecret{},
+		recoveryCodes:  map[theauth.ULID]theauth.RecoveryCode{},
 	}
 }
 
@@ -76,6 +84,11 @@ func (s *Store) MarkEmailVerified(_ context.Context, userID theauth.ULID) error 
 func (s *Store) CreateSession(_ context.Context, sess theauth.Session) (theauth.Session, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if sess.AuthLevel == "" {
+		// Mirror the Postgres DDL default so callers that pre-date v0.5
+		// see "full" without having to set the field explicitly.
+		sess.AuthLevel = theauth.AuthLevelFull
+	}
 	s.sessions[sess.ID] = sess
 	return sess, nil
 }
@@ -229,4 +242,198 @@ func (s *Store) OAuthAccountByProviderUserID(_ context.Context, provider, provid
 		}
 	}
 	return nil, storage.ErrNotFound
+}
+
+// ---------- Sessions (v0.5 step-up) ----------
+
+// CreateSessionWithAuthLevel is identical to CreateSession but honors the
+// AuthLevel field explicitly (defaulting to AuthLevelFull when blank for
+// safety). Service code uses this path when minting a pending_2fa session.
+func (s *Store) CreateSessionWithAuthLevel(_ context.Context, sess theauth.Session) (theauth.Session, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if sess.AuthLevel == "" {
+		sess.AuthLevel = theauth.AuthLevelFull
+	}
+	s.sessions[sess.ID] = sess
+	return sess, nil
+}
+
+// UpdateSessionAuthLevel rewrites the AuthLevel column on the named session.
+// Used to promote pending_2fa to full after a successful TOTP verify.
+func (s *Store) UpdateSessionAuthLevel(_ context.Context, id theauth.ULID, level string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	sess, ok := s.sessions[id]
+	if !ok {
+		return storage.ErrNotFound
+	}
+	sess.AuthLevel = level
+	s.sessions[id] = sess
+	return nil
+}
+
+// ---------- WebAuthn credentials (v0.5) ----------
+
+func (s *Store) InsertWebAuthnCredential(_ context.Context, c theauth.WebAuthnCredential) (theauth.WebAuthnCredential, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	// Enforce credential_id uniqueness across all users to mirror the
+	// Postgres UNIQUE constraint; a stolen credential cannot be re-pinned
+	// to a different account.
+	for _, existing := range s.webauthnCreds {
+		if bytes.Equal(existing.CredentialID, c.CredentialID) {
+			return theauth.WebAuthnCredential{}, storage.ErrNotFound
+		}
+	}
+	s.webauthnCreds[c.ID] = c
+	return c, nil
+}
+
+func (s *Store) WebAuthnCredentialsByUserID(_ context.Context, userID theauth.ULID) ([]theauth.WebAuthnCredential, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	var out []theauth.WebAuthnCredential
+	for _, c := range s.webauthnCreds {
+		if c.UserID == userID {
+			out = append(out, c)
+		}
+	}
+	return out, nil
+}
+
+func (s *Store) WebAuthnCredentialByCredentialID(_ context.Context, credentialID []byte) (*theauth.WebAuthnCredential, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	for _, c := range s.webauthnCreds {
+		if bytes.Equal(c.CredentialID, credentialID) {
+			cp := c
+			return &cp, nil
+		}
+	}
+	return nil, storage.ErrNotFound
+}
+
+func (s *Store) UpdateWebAuthnSignCount(_ context.Context, credentialID []byte, newCount uint32, usedAt time.Time) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for id, c := range s.webauthnCreds {
+		if !bytes.Equal(c.CredentialID, credentialID) {
+			continue
+		}
+		// Strictly-greater guard. Authenticators that do not implement
+		// counters always send 0; the service layer recognises that
+		// special case and either skips this update entirely or compares
+		// only when both sides are > 0.
+		if newCount <= c.SignCount {
+			return theauth.ErrReplayDetected
+		}
+		c.SignCount = newCount
+		t := usedAt
+		c.LastUsedAt = &t
+		s.webauthnCreds[id] = c
+		return nil
+	}
+	return storage.ErrNotFound
+}
+
+func (s *Store) DeleteWebAuthnCredential(_ context.Context, id theauth.ULID, userID theauth.ULID) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	c, ok := s.webauthnCreds[id]
+	if !ok || c.UserID != userID {
+		return storage.ErrNotFound
+	}
+	delete(s.webauthnCreds, id)
+	return nil
+}
+
+// ---------- TOTP secrets (v0.5) ----------
+
+func (s *Store) UpsertPendingTOTPSecret(_ context.Context, sec theauth.TOTPSecret) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	// Preserve a confirmed secret: re-enrollment requires explicit delete.
+	if existing, ok := s.totpSecrets[sec.UserID]; ok && existing.ConfirmedAt != nil {
+		return nil
+	}
+	sec.ConfirmedAt = nil
+	if sec.CreatedAt.IsZero() {
+		sec.CreatedAt = time.Now()
+	}
+	sec.UpdatedAt = sec.CreatedAt
+	s.totpSecrets[sec.UserID] = sec
+	return nil
+}
+
+func (s *Store) ConfirmTOTPSecret(_ context.Context, userID theauth.ULID, at time.Time) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	sec, ok := s.totpSecrets[userID]
+	if !ok || sec.ConfirmedAt != nil {
+		return storage.ErrNotFound
+	}
+	t := at
+	sec.ConfirmedAt = &t
+	sec.UpdatedAt = at
+	s.totpSecrets[userID] = sec
+	return nil
+}
+
+func (s *Store) TOTPSecretByUserID(_ context.Context, userID theauth.ULID) (*theauth.TOTPSecret, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	sec, ok := s.totpSecrets[userID]
+	if !ok {
+		return nil, storage.ErrNotFound
+	}
+	cp := sec
+	return &cp, nil
+}
+
+func (s *Store) DeleteTOTPSecret(_ context.Context, userID theauth.ULID) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	delete(s.totpSecrets, userID)
+	// Cascade: drop recovery codes when secret goes away.
+	for id, rc := range s.recoveryCodes {
+		if rc.UserID == userID {
+			delete(s.recoveryCodes, id)
+		}
+	}
+	return nil
+}
+
+// ---------- Recovery codes (v0.5) ----------
+
+func (s *Store) InsertRecoveryCodes(_ context.Context, codes []theauth.RecoveryCode) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, c := range codes {
+		s.recoveryCodes[c.ID] = c
+	}
+	return nil
+}
+
+// ConsumeRecoveryCode walks the user's unused codes and constant-time-checks
+// each against the supplied plaintext. The first hit is marked used and
+// returns nil. No match returns ErrNotFound. Matches the Postgres
+// semantics (linear scan over the per-user slice is fine because N is
+// bounded by RecoveryCodeCount, defaulting to 10).
+func (s *Store) ConsumeRecoveryCode(_ context.Context, userID theauth.ULID, code string, at time.Time) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for id, rc := range s.recoveryCodes {
+		if rc.UserID != userID || rc.UsedAt != nil {
+			continue
+		}
+		if !crypto.VerifyRecoveryCode(rc.CodeHash, code) {
+			continue
+		}
+		t := at
+		rc.UsedAt = &t
+		s.recoveryCodes[id] = rc
+		return nil
+	}
+	return storage.ErrNotFound
 }
