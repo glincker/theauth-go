@@ -43,10 +43,7 @@ func (a *TheAuth) Mount(r chi.Router) {
 		r.Get("/magic-link/verify", a.handleMagicLinkVerify)
 
 		r.Route("/email-password", func(r chi.Router) {
-			r.With(ipLimit).Post("/signup", a.handlePasswordSignup)
-			r.With(ipLimit, emailLimit).Post("/signin", a.handlePasswordSignin)
-			r.With(ipLimit, emailLimit).Post("/forgot", a.handlePasswordForgot)
-			r.With(ipLimit).Post("/reset", a.handlePasswordReset)
+			a.mountPasswordHandlers(r, ipLimit, emailLimit)
 		})
 
 		// OAuth providers (v0.3). Only mounted when at least one provider
