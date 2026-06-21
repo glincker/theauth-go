@@ -17,6 +17,7 @@ type Store struct {
 	magicLinks     map[theauth.ULID]theauth.MagicLink
 	passwordHashes map[theauth.ULID]string
 	resetTokens    map[theauth.ULID]theauth.PasswordResetToken
+	oauthAccounts  map[theauth.ULID]theauth.OAuthAccount
 }
 
 func New() *Store {
@@ -26,6 +27,7 @@ func New() *Store {
 		magicLinks:     map[theauth.ULID]theauth.MagicLink{},
 		passwordHashes: map[theauth.ULID]string{},
 		resetTokens:    map[theauth.ULID]theauth.PasswordResetToken{},
+		oauthAccounts:  map[theauth.ULID]theauth.OAuthAccount{},
 	}
 }
 
@@ -181,6 +183,48 @@ func (s *Store) ConsumePasswordResetToken(_ context.Context, hash []byte) (*thea
 			rt.UsedAt = &now
 			s.resetTokens[id] = rt
 			cp := rt
+			return &cp, nil
+		}
+	}
+	return nil, storage.ErrNotFound
+}
+
+// ---------- OAuth accounts (v0.3) ----------
+
+// UpsertOAuthAccount mirrors the Postgres ON CONFLICT (provider, provider_user_id)
+// DO UPDATE behavior: if a row with the same (provider, provider_user_id)
+// already exists, its mutable fields are refreshed in place (keeping the
+// original ID + CreatedAt). Otherwise the supplied row is inserted as-is.
+func (s *Store) UpsertOAuthAccount(_ context.Context, a theauth.OAuthAccount) (theauth.OAuthAccount, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	now := time.Now()
+	for id, existing := range s.oauthAccounts {
+		if existing.Provider == a.Provider && existing.ProviderUserID == a.ProviderUserID {
+			existing.UserID = a.UserID
+			existing.AccessTokenEnc = a.AccessTokenEnc
+			existing.RefreshTokenEnc = a.RefreshTokenEnc
+			existing.ExpiresAt = a.ExpiresAt
+			existing.Scope = a.Scope
+			existing.UpdatedAt = now
+			s.oauthAccounts[id] = existing
+			return existing, nil
+		}
+	}
+	if a.CreatedAt.IsZero() {
+		a.CreatedAt = now
+	}
+	a.UpdatedAt = now
+	s.oauthAccounts[a.ID] = a
+	return a, nil
+}
+
+func (s *Store) OAuthAccountByProviderUserID(_ context.Context, provider, providerUserID string) (*theauth.OAuthAccount, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	for _, a := range s.oauthAccounts {
+		if a.Provider == provider && a.ProviderUserID == providerUserID {
+			cp := a
 			return &cp, nil
 		}
 	}

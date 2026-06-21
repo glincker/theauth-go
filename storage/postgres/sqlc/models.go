@@ -49,3 +49,16 @@ type User struct {
 	UpdatedAt       pgtype.Timestamptz
 	PasswordHash    *string
 }
+
+type OauthAccount struct {
+	ID              pgtype.UUID
+	UserID          pgtype.UUID
+	Provider        string
+	ProviderUserID  string
+	AccessTokenEnc  []byte
+	RefreshTokenEnc []byte
+	ExpiresAt       pgtype.Timestamptz
+	Scope           string
+	CreatedAt       pgtype.Timestamptz
+	UpdatedAt       pgtype.Timestamptz
+}

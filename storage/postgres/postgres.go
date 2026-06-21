@@ -126,6 +126,29 @@ func rowToResetToken(r sqlcgen.PasswordResetToken) theauth.PasswordResetToken {
 	}
 }
 
+func rowToOAuthAccount(r sqlcgen.OauthAccount) theauth.OAuthAccount {
+	return theauth.OAuthAccount{
+		ID:              pgUUIDToULID(r.ID),
+		UserID:          pgUUIDToULID(r.UserID),
+		Provider:        r.Provider,
+		ProviderUserID:  r.ProviderUserID,
+		AccessTokenEnc:  r.AccessTokenEnc,
+		RefreshTokenEnc: r.RefreshTokenEnc,
+		ExpiresAt:       tsToTimePtr(r.ExpiresAt),
+		Scope:           r.Scope,
+		CreatedAt:       tsToTime(r.CreatedAt),
+		UpdatedAt:       tsToTime(r.UpdatedAt),
+	}
+}
+
+// timePtrToTs returns a nullable pgtype.Timestamptz from an optional time.
+func timePtrToTs(t *time.Time) pgtype.Timestamptz {
+	if t == nil {
+		return pgtype.Timestamptz{Valid: false}
+	}
+	return pgtype.Timestamptz{Time: *t, Valid: true}
+}
+
 // ---------- Users ----------
 
 func (s *Store) CreateUser(ctx context.Context, u theauth.User) (theauth.User, error) {
@@ -307,4 +330,40 @@ func (s *Store) ConsumePasswordResetToken(ctx context.Context, tokenHash []byte)
 	}
 	rt := rowToResetToken(row)
 	return &rt, nil
+}
+
+// ---------- OAuth accounts (v0.3) ----------
+
+func (s *Store) UpsertOAuthAccount(ctx context.Context, a theauth.OAuthAccount) (theauth.OAuthAccount, error) {
+	row, err := s.q.UpsertOAuthAccount(ctx, sqlcgen.UpsertOAuthAccountParams{
+		ID:              ulidToPgUUID(a.ID),
+		UserID:          ulidToPgUUID(a.UserID),
+		Provider:        a.Provider,
+		ProviderUserID:  a.ProviderUserID,
+		AccessTokenEnc:  a.AccessTokenEnc,
+		RefreshTokenEnc: a.RefreshTokenEnc,
+		ExpiresAt:       timePtrToTs(a.ExpiresAt),
+		Scope:           a.Scope,
+		CreatedAt:       timeToTs(a.CreatedAt),
+		UpdatedAt:       timeToTs(a.UpdatedAt),
+	})
+	if err != nil {
+		return theauth.OAuthAccount{}, err
+	}
+	return rowToOAuthAccount(row), nil
+}
+
+func (s *Store) OAuthAccountByProviderUserID(ctx context.Context, provider, providerUserID string) (*theauth.OAuthAccount, error) {
+	row, err := s.q.OAuthAccountByProviderUserID(ctx, sqlcgen.OAuthAccountByProviderUserIDParams{
+		Provider:       provider,
+		ProviderUserID: providerUserID,
+	})
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, storage.ErrNotFound
+		}
+		return nil, err
+	}
+	acct := rowToOAuthAccount(row)
+	return &acct, nil
 }
