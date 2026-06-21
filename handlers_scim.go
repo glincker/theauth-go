@@ -149,9 +149,22 @@ func (a *TheAuth) handleSCIMUserCreate(w http.ResponseWriter, r *http.Request) {
 		email = e
 	}
 
-	// Idempotent upsert by externalId scoped to org.
+	// Idempotent upsert by externalId scoped to org. We first try the
+	// scoped query (joins through organization_members); if the user has
+	// been soft-deleted (membership removed) the scoped query misses, so
+	// we fall back to a global by-email lookup for the same externalId
+	// so the second POST re-attaches them to the org instead of
+	// double-creating.
 	if body.ExternalID != "" {
-		if existing, err := a.storage.UserByExternalIDInOrg(r.Context(), orgID, body.ExternalID); err == nil {
+		existing, err := a.storage.UserByExternalIDInOrg(r.Context(), orgID, body.ExternalID)
+		if errors.Is(err, ErrStorageNotFound) {
+			// Soft-deleted: try by-email and verify the externalId matches.
+			if byEmail, eerr := a.storage.UserByEmail(r.Context(), email); eerr == nil && byEmail.ExternalID == body.ExternalID {
+				existing = byEmail
+				err = nil
+			}
+		}
+		if err == nil && existing != nil {
 			// Update names in place to honour idempotent re-POST.
 			existing.Email = email
 			existing.GivenName = body.Name.GivenName
@@ -162,8 +175,8 @@ func (a *TheAuth) handleSCIMUserCreate(w http.ResponseWriter, r *http.Request) {
 				writeSCIMError(w, http.StatusInternalServerError, "", "update failed")
 				return
 			}
-			// Make sure they're still a member of the org (re-POST after
-			// a soft-delete should re-enable).
+			// Make sure they're a member of the org (re-POST after a
+			// soft-delete should re-enable).
 			_ = a.ensureOrgMembership(r.Context(), orgID, existing.ID)
 			a.emitSCIMAudit(r.Context(), "scim.user.create", orgID, existing.ID, "idempotent")
 			writeSCIMJSON(w, http.StatusOK, userToSCIM(*existing, a.baseURL))

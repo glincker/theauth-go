@@ -16,7 +16,7 @@ import (
 //	emails.value eq "alice@x"
 //
 // Whitespace is collapsed; the value is unquoted. We do not implement
-// pr / co / sw / ne / and / or — Okta and Azure AD only ever issue eq
+// pr / co / sw / ne / and / or. Okta and Azure AD only ever issue eq
 // against this whitelist on the User list endpoint.
 func parseSCIMUserFilter(s string) (SCIMUserFilter, error) {
 	var out SCIMUserFilter

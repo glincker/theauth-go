@@ -352,14 +352,14 @@ type TheAuth struct {
 	totpEnrollmentStop chan struct{}
 
 	// v0.7
-	orgsCfg          *OrganizationsConfig
-	samlCfg          *SAMLConfig
-	samlSPCert       *x509.Certificate
-	samlSPKey        *rsa.PrivateKey
+	orgsCfg           *OrganizationsConfig
+	samlCfg           *SAMLConfig
+	samlSPCert        *x509.Certificate
+	samlSPKey         *rsa.PrivateKey
 	samlAuthnInFlight sync.Map // map[string]time.Time -- AuthnRequest ID -> deadline
-	samlAuthnStop    chan struct{}
-	scimCfg          *SCIMConfig
-	auditHook        AuditHook
+	samlAuthnStop     chan struct{}
+	scimCfg           *SCIMConfig
+	auditHook         AuditHook
 }
 
 // New validates the Config, applies defaults, and returns a ready TheAuth.

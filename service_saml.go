@@ -136,6 +136,15 @@ func (a *TheAuth) FinishSAMLLogin(ctx context.Context, connectionID ULID, samlRe
 	if err != nil {
 		return "", Session{}, fmt.Errorf("theauth: saml response base64 decode: %w", err)
 	}
+	// Explicit signed-assertion gate runs against the raw XML before we
+	// hand it to crewjam/saml. Once ParseXMLResponse normalises the
+	// document it may strip the signature element after verification, so
+	// post-parse introspection is unreliable across crewjam versions. The
+	// raw-text check is what catches a syntactically valid but unsigned
+	// assertion before any state mutation happens.
+	if !rawHasAssertionSignature(rawBytes) {
+		return "", Session{}, ErrSAMLUnsignedAssertion
+	}
 	acsURL, err := url.Parse(conn.SPACSURL)
 	if err != nil {
 		return "", Session{}, fmt.Errorf("theauth: sp acs url invalid: %w", err)
@@ -154,11 +163,6 @@ func (a *TheAuth) FinishSAMLLogin(ctx context.Context, connectionID ULID, samlRe
 				a.samlAuthnInFlight.Delete(sc.SubjectConfirmationData.InResponseTo)
 			}
 		}
-	}
-
-	// Explicit "assertion must be signed" gate per spec note 2 of v0.7.
-	if !assertionIsSigned(assertion) {
-		return "", Session{}, ErrSAMLUnsignedAssertion
 	}
 
 	mapped := mapAssertion(conn, assertion)
@@ -249,18 +253,109 @@ func flattenAttributes(a *saml.Assertion) map[string][]string {
 	return out
 }
 
-// assertionIsSigned verifies that the assertion carries an XML Signature
-// element. crewjam/saml validates the signature at parse time when the SP
-// is configured to do so; this gate makes the requirement explicit so a
-// future library default flip cannot silently accept unsigned assertions.
-func assertionIsSigned(a *saml.Assertion) bool {
-	if a == nil || a.Signature == nil {
+// rawHasAssertionSignature scans the raw XML response (post-base64) for
+// a ds:Signature element nested inside an Assertion. This is a textual
+// check rather than a full XML parse because:
+//
+//  1. crewjam/saml's ParseXMLResponse normalises and may strip the
+//     signature element after verification; post-parse introspection
+//     varies across versions.
+//  2. We only need a defensive "did anyone bother to sign?" gate; the
+//     cryptographic validation is owned by ParseXMLResponse downstream.
+//
+// We accept either the default ds:Signature prefix or the local-name
+// "Signature" inside the Assertion subtree. A response with a Signature
+// only on the Response wrapper (and not on the Assertion itself) is
+// still flagged as unsigned, matching the v0.7 spec requirement that
+// the assertion be signed.
+func rawHasAssertionSignature(raw []byte) bool {
+	// Find an Assertion open tag and verify a Signature element appears
+	// before the matching close tag. We avoid pulling encoding/xml here
+	// because we want to remain robust against namespace-prefix variation.
+	s := string(raw)
+	open := indexOpenTag(s, "Assertion")
+	if open < 0 {
 		return false
 	}
-	// etree.Element.FindElement("./SignedInfo") returns non-nil only when
-	// the assertion was actually signed (the signature element carries a
-	// SignedInfo child by definition).
-	return a.Signature.FindElement("./SignedInfo") != nil
+	close := indexCloseTag(s[open:], "Assertion")
+	if close < 0 {
+		return false
+	}
+	subtree := s[open : open+close]
+	return indexOpenTag(subtree, "Signature") >= 0
+}
+
+// indexOpenTag returns the index of the first opening tag with the given
+// local name (i.e. "<name " or "<prefix:name "), or -1 if absent.
+func indexOpenTag(s, name string) int {
+	for i := 0; i < len(s); i++ {
+		if s[i] != '<' {
+			continue
+		}
+		// Skip processing instructions, comments, closing tags.
+		if i+1 < len(s) && (s[i+1] == '/' || s[i+1] == '!' || s[i+1] == '?') {
+			continue
+		}
+		// Read tag name (after optional prefix).
+		j := i + 1
+		// skip prefix:
+		colon := -1
+		for k := j; k < len(s) && (isNameChar(s[k]) || s[k] == ':'); k++ {
+			if s[k] == ':' {
+				colon = k
+			}
+		}
+		nameStart := j
+		if colon > 0 {
+			nameStart = colon + 1
+		}
+		nameEnd := nameStart
+		for nameEnd < len(s) && isNameChar(s[nameEnd]) {
+			nameEnd++
+		}
+		if nameEnd > nameStart && s[nameStart:nameEnd] == name {
+			return i
+		}
+	}
+	return -1
+}
+
+// indexCloseTag returns the index of the closing tag </name> (with or
+// without namespace prefix) relative to the start of s, or -1 if absent.
+func indexCloseTag(s, name string) int {
+	for i := 0; i+1 < len(s); i++ {
+		if s[i] != '<' || s[i+1] != '/' {
+			continue
+		}
+		j := i + 2
+		colon := -1
+		for k := j; k < len(s) && (isNameChar(s[k]) || s[k] == ':'); k++ {
+			if s[k] == ':' {
+				colon = k
+			}
+		}
+		nameStart := j
+		if colon > 0 {
+			nameStart = colon + 1
+		}
+		nameEnd := nameStart
+		for nameEnd < len(s) && isNameChar(s[nameEnd]) {
+			nameEnd++
+		}
+		if nameEnd > nameStart && s[nameStart:nameEnd] == name {
+			// Find the > that closes this tag.
+			for k := nameEnd; k < len(s); k++ {
+				if s[k] == '>' {
+					return k + 1
+				}
+			}
+		}
+	}
+	return -1
+}
+
+func isNameChar(b byte) bool {
+	return (b >= 'a' && b <= 'z') || (b >= 'A' && b <= 'Z') || (b >= '0' && b <= '9') || b == '_' || b == '-' || b == '.'
 }
 
 // findOrCreateSAMLUser resolves the find-or-create cascade documented in

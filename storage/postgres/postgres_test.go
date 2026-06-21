@@ -44,19 +44,39 @@ func testPool(t *testing.T) *pgxpool.Pool {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// Drop + recreate for clean state. Order matters: v0.5 tables reference
-	// users, so they must drop first.
+	mig6, err := os.ReadFile("migrations/0006_organizations.up.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	mig7, err := os.ReadFile("migrations/0007_saml.up.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	mig8, err := os.ReadFile("migrations/0008_scim.up.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Drop + recreate for clean state. Order matters: dependent tables
+	// drop first (v0.5 + v0.7 reference users; v0.7 SAML/SCIM reference
+	// organizations).
 	_, _ = pool.Exec(context.Background(), `
-		DROP TABLE IF EXISTS totp_recovery_codes;
-		DROP TABLE IF EXISTS totp_secrets;
-		DROP TABLE IF EXISTS webauthn_credentials;
-		DROP TABLE IF EXISTS oauth_accounts;
-		DROP TABLE IF EXISTS password_reset_tokens;
-		DROP TABLE IF EXISTS magic_links;
-		DROP TABLE IF EXISTS sessions;
-		DROP TABLE IF EXISTS users;
+		DROP TABLE IF EXISTS group_members CASCADE;
+		DROP TABLE IF EXISTS groups CASCADE;
+		DROP TABLE IF EXISTS scim_tokens CASCADE;
+		DROP TABLE IF EXISTS saml_identities CASCADE;
+		DROP TABLE IF EXISTS saml_connections CASCADE;
+		DROP TABLE IF EXISTS organization_members CASCADE;
+		DROP TABLE IF EXISTS organizations CASCADE;
+		DROP TABLE IF EXISTS totp_recovery_codes CASCADE;
+		DROP TABLE IF EXISTS totp_secrets CASCADE;
+		DROP TABLE IF EXISTS webauthn_credentials CASCADE;
+		DROP TABLE IF EXISTS oauth_accounts CASCADE;
+		DROP TABLE IF EXISTS password_reset_tokens CASCADE;
+		DROP TABLE IF EXISTS magic_links CASCADE;
+		DROP TABLE IF EXISTS sessions CASCADE;
+		DROP TABLE IF EXISTS users CASCADE;
 	`)
-	for _, m := range [][]byte{mig1, mig2, mig3, mig4, mig5} {
+	for _, m := range [][]byte{mig1, mig2, mig3, mig4, mig5, mig6, mig7, mig8} {
 		if _, err := pool.Exec(context.Background(), string(m)); err != nil {
 			t.Fatal(err)
 		}

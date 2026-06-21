@@ -43,16 +43,16 @@ func newSCIMError(status int, scimType, detail string) scimError {
 // scimUserResource is the wire format for a SCIM User. We only emit a
 // subset of RFC 7643 §4.1; see v0.7 spec §6.1 for the deviations.
 type scimUserResource struct {
-	Schemas     []string         `json:"schemas"`
-	ID          string           `json:"id"`
-	ExternalID  string           `json:"externalId,omitempty"`
-	UserName    string           `json:"userName"`
-	Name        *scimUserName    `json:"name,omitempty"`
-	DisplayName string           `json:"displayName,omitempty"`
-	Emails      []scimUserEmail  `json:"emails,omitempty"`
-	Active      bool             `json:"active"`
-	Meta        scimMeta         `json:"meta"`
-	Groups      []scimGroupRef   `json:"groups,omitempty"`
+	Schemas     []string        `json:"schemas"`
+	ID          string          `json:"id"`
+	ExternalID  string          `json:"externalId,omitempty"`
+	UserName    string          `json:"userName"`
+	Name        *scimUserName   `json:"name,omitempty"`
+	DisplayName string          `json:"displayName,omitempty"`
+	Emails      []scimUserEmail `json:"emails,omitempty"`
+	Active      bool            `json:"active"`
+	Meta        scimMeta        `json:"meta"`
+	Groups      []scimGroupRef  `json:"groups,omitempty"`
 }
 
 type scimUserName struct {
@@ -84,12 +84,12 @@ type scimMeta struct {
 
 // scimGroupResource is the wire format for a SCIM Group (RFC 7643 §4.2).
 type scimGroupResource struct {
-	Schemas     []string         `json:"schemas"`
-	ID          string           `json:"id"`
-	ExternalID  string           `json:"externalId,omitempty"`
-	DisplayName string           `json:"displayName"`
-	Members     []scimGroupRef   `json:"members,omitempty"`
-	Meta        scimMeta         `json:"meta"`
+	Schemas     []string       `json:"schemas"`
+	ID          string         `json:"id"`
+	ExternalID  string         `json:"externalId,omitempty"`
+	DisplayName string         `json:"displayName"`
+	Members     []scimGroupRef `json:"members,omitempty"`
+	Meta        scimMeta       `json:"meta"`
 }
 
 // scimListResponse wraps a list endpoint payload.
