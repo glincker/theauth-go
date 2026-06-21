@@ -70,3 +70,65 @@ RETURNING *;
 -- name: OAuthAccountByProviderUserID :one
 SELECT * FROM oauth_accounts
 WHERE provider = $1 AND provider_user_id = $2;
+
+-- name: CreateSessionWithAuthLevel :one
+INSERT INTO sessions (id, user_id, token_hash, user_agent, ip, created_at, expires_at, auth_level)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+RETURNING *;
+
+-- name: UpdateSessionAuthLevel :exec
+UPDATE sessions SET auth_level = $2 WHERE id = $1;
+
+-- name: InsertWebAuthnCredential :one
+INSERT INTO webauthn_credentials (
+    id, user_id, credential_id, public_key, sign_count,
+    transports, aaguid, name, created_at, last_used_at
+) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+RETURNING *;
+
+-- name: WebAuthnCredentialsByUserID :many
+SELECT * FROM webauthn_credentials WHERE user_id = $1 ORDER BY created_at ASC;
+
+-- name: WebAuthnCredentialByCredentialID :one
+SELECT * FROM webauthn_credentials WHERE credential_id = $1;
+
+-- name: UpdateWebAuthnSignCount :execrows
+UPDATE webauthn_credentials
+SET sign_count = $2, last_used_at = $3
+WHERE credential_id = $1 AND sign_count < $2;
+
+-- name: DeleteWebAuthnCredential :execrows
+DELETE FROM webauthn_credentials WHERE id = $1 AND user_id = $2;
+
+-- name: UpsertPendingTOTPSecret :exec
+INSERT INTO totp_secrets (user_id, secret_enc, confirmed_at, created_at, updated_at)
+VALUES ($1, $2, NULL, $3, $3)
+ON CONFLICT (user_id) DO UPDATE SET
+    secret_enc = EXCLUDED.secret_enc,
+    confirmed_at = NULL,
+    updated_at = EXCLUDED.updated_at
+WHERE totp_secrets.confirmed_at IS NULL;
+
+-- name: ConfirmTOTPSecret :execrows
+UPDATE totp_secrets SET confirmed_at = $2, updated_at = $2
+WHERE user_id = $1 AND confirmed_at IS NULL;
+
+-- name: TOTPSecretByUserID :one
+SELECT * FROM totp_secrets WHERE user_id = $1;
+
+-- name: DeleteTOTPSecret :exec
+DELETE FROM totp_secrets WHERE user_id = $1;
+
+-- name: DeleteRecoveryCodesByUserID :exec
+DELETE FROM totp_recovery_codes WHERE user_id = $1;
+
+-- name: InsertRecoveryCode :exec
+INSERT INTO totp_recovery_codes (id, user_id, code_hash, created_at)
+VALUES ($1, $2, $3, $4);
+
+-- name: RecoveryCodesByUserID :many
+SELECT * FROM totp_recovery_codes WHERE user_id = $1 AND used_at IS NULL;
+
+-- name: ConsumeRecoveryCodeByID :execrows
+UPDATE totp_recovery_codes SET used_at = $2
+WHERE id = $1 AND used_at IS NULL;

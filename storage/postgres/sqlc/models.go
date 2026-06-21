@@ -37,6 +37,7 @@ type Session struct {
 	CreatedAt pgtype.Timestamptz
 	ExpiresAt pgtype.Timestamptz
 	RevokedAt pgtype.Timestamptz
+	AuthLevel string
 }
 
 type User struct {
@@ -61,4 +62,33 @@ type OauthAccount struct {
 	Scope           string
 	CreatedAt       pgtype.Timestamptz
 	UpdatedAt       pgtype.Timestamptz
+}
+
+type WebauthnCredential struct {
+	ID           pgtype.UUID
+	UserID       pgtype.UUID
+	CredentialID []byte
+	PublicKey    []byte
+	SignCount    int64
+	Transports   []string
+	Aaguid       []byte
+	Name         string
+	CreatedAt    pgtype.Timestamptz
+	LastUsedAt   pgtype.Timestamptz
+}
+
+type TotpSecret struct {
+	UserID      pgtype.UUID
+	SecretEnc   []byte
+	ConfirmedAt pgtype.Timestamptz
+	CreatedAt   pgtype.Timestamptz
+	UpdatedAt   pgtype.Timestamptz
+}
+
+type TotpRecoveryCode struct {
+	ID        pgtype.UUID
+	UserID    pgtype.UUID
+	CodeHash  []byte
+	UsedAt    pgtype.Timestamptz
+	CreatedAt pgtype.Timestamptz
 }
