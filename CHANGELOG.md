@@ -4,6 +4,62 @@ All notable changes to theauth-go are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/) from v1.0 forward.
 
+## [Unreleased]
+
+### Added in v2.0 phase 3 + 4 (targeted for `v2.0.0-alpha.2`)
+
+- Agents: `Agent`, `AgentCredential`, `AgentOwner`, `CreateAgentInput`,
+  `AgentSecret` models. `CreateAgent`, `MintAgentCredential`,
+  `RotateAgentSecret`, `ListAgentsByOwner`, `GetAgent`, `SuspendAgent`,
+  `ResumeAgent`, `RevokeAgent` service methods. Agent credential kinds:
+  `secret` (Argon2id-hashed), `x509`, `jwk`. The X.509 and JWK kinds return
+  `ErrNotImplemented` in this phase so callers see a typed error.
+- Delegations: `DelegationGrant`, `GrantDelegationInput` models.
+  `GrantDelegation`, `ListDelegationsForUser`, `ListDelegationsForAgent`,
+  `RevokeDelegation` service methods. Uniqueness on `(user_id, agent_id,
+  resource)` enforced at the database layer. Revoking a grant invalidates
+  every derived token at the next introspection refresh.
+- Grants on `/oauth/token`:
+  - `client_credentials` mints an agent self-token (`sub=agent:<id>`,
+    `aud` bound to the supplied resource).
+  - `urn:ietf:params:oauth:grant-type:token-exchange` (RFC 8693) accepts a
+    user (or agent) `subject_token` plus an agent `actor_token`, looks up
+    the matching delegation grant, and mints a new JWT with the nested
+    `act` chain (RFC 8693 section 4.1). Chain depth is capped at 3; deeper
+    chains are rejected with `invalid_request` "actor chain depth exceeded".
+- Introspection now walks the full `act` chain on every call and re-checks
+  the delegation grant. Any inactive actor or revoked grant flips
+  `active=false`, even on a cache hit.
+- AS metadata advertises `client_credentials` and the token-exchange URN in
+  `grant_types_supported` whenever `Config.AgentIdentity` is configured.
+- Audit emissions added: `agent.created`, `agent.suspended`, `agent.resumed`,
+  `agent.revoked`, `agent_credential.minted`, `agent_credential.revoked`,
+  `agent.token_minted`, `delegation.granted`, `delegation.revoked`,
+  `token.exchanged`.
+- Migrations: `0012_agents.up.sql` (agents + agent_credentials),
+  `0013_delegations.up.sql` (delegation_grants + audit_events.actor_agent_id).
+  Down migrations included.
+- Storage interface: `OAuthServerStorage` extended with agent + delegation
+  methods. v1.0 root `Storage` interface unchanged. Both in-tree adapters
+  (memory + postgres) implement the new methods.
+- Errors: `ErrAgentNotFound`, `ErrAgentInactive`, `ErrDelegationNotFound`,
+  `ErrDelegationRevoked`, `ErrChainDepthExceeded`, `ErrSubjectTokenInvalid`,
+  `ErrActorTokenInvalid`, `ErrNotImplemented`, `ErrAgentRequiresAS`,
+  `ErrAgentChainDepthTooHigh`.
+
+### Added in v2.0 phase 1 + 2 (targeted for `v2.0.0-alpha.1`)
+
+- OAuth 2.1 Authorization Server with `/.well-known/oauth-authorization-server`,
+  `/oauth/authorize`, `/oauth/token` (authorization_code + refresh_token),
+  `/oauth/revoke`, `/oauth/introspect`, `/oauth/register` (RFC 7591 dynamic
+  client registration), `/oauth/jwks` (Ed25519, 30 day rotation). Mandatory
+  PKCE S256; mandatory RFC 8707 resource binding; RFC 9068 JWT access
+  tokens; RFC 9700 refresh-token rotation with family revocation.
+- New config: `AuthorizationServer *AuthorizationServerConfig`. New
+  storage extension interface `OAuthServerStorage`. Migrations 0011
+  (oauth_clients + authorization_codes + refresh_tokens) and 0014
+  (jwks_keys); 0012 / 0013 reserved as placeholders for phase 3 + 4.
+
 ## [1.0.0] - 2026-06-20
 
 First production-ready release. Public API frozen per STABILITY.md. From
