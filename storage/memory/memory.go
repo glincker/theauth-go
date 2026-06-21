@@ -28,6 +28,8 @@ type Store struct {
 	v07 *v07State
 	// v1.0 RBAC + audit. See memory_v10.go.
 	v10 *v10State
+	// v2.0 phase 1 + 2: OAuth 2.1 AS + DCR + JWKS. See memory_v20.go.
+	v20 *v20State
 }
 
 func New() *Store {
