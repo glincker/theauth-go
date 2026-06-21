@@ -615,7 +615,9 @@ a, _ := theauth.New(theauth.Config{
 - **v0.6** Hardening pass: fuzz matrix, race tests, examples, benchmarks, godoc, STABILITY.md (shipped)
 - **v0.7** SAML 2.0 SP, SCIM 2.0 provisioning, organizations multi-tenancy (shipped)
 - **v1.0** RBAC, async audit log writer, admin API surface
-- **v2.0** MCP OAuth 2.1 server, agent identity, delegation chains, budget policies
+- **v2.0 phase 1 + 2** (in flight, pre-release `v2.0.0-alpha.1`): OAuth 2.1 authorization server, dynamic client registration (RFC 7591), JWKS rotation (30-day Ed25519), RFC 9068 signed JWT access tokens, RFC 8707 mandatory audience binding, PKCE S256 mandatory. Enable via `Config.AuthorizationServer`; v1.0 behavior is unchanged when this field is nil.
+- **v2.0 phase 3 - 6** MCP OAuth 2.1 server completion: agent identity, delegation chains, RFC 8693 token exchange, `mcpresource` SDK, admin + account UX
+- **v2.0 final** all of the above plus budget policies
 
 Track the work in [GitHub Issues](https://github.com/glincker/theauth-go/issues) and [Releases](https://github.com/glincker/theauth-go/releases).
 
