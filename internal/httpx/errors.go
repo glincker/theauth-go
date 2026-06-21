@@ -80,3 +80,11 @@ func ClientIP(r *http.Request) string {
 	}
 	return host
 }
+
+// WriteJSON marshals v as a JSON body with status. Used by every
+// extracted handler package; identical to the legacy root writeJSON.
+func WriteJSON(w http.ResponseWriter, status int, v any) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(v)
+}

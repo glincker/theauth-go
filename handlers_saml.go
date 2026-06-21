@@ -1,97 +1,51 @@
 package theauth
 
 import (
+	"context"
 	"encoding/json"
-	"errors"
 	"net/http"
-	"time"
 
+	"github.com/glincker/theauth-go/internal/models"
+	samlhandlers "github.com/glincker/theauth-go/internal/saml/handlers"
 	"github.com/go-chi/chi/v5"
 )
 
-// mountSAML registers the public-facing SAML SP flow endpoints (login,
-// ACS, metadata). The connection CRUD endpoints live under
-// /auth/orgs/{orgId}/saml/connections and are mounted by
-// mountOrganizations.
+// samlServiceAdapter implements internal/saml/handlers.Service on top
+// of the root *TheAuth, exposing the three SP-flow methods the
+// extracted handler needs (BeginLogin, FinishLogin, MetadataXML).
+// FinishLogin discards the second return (Session) because the
+// handler only writes the cookie.
+type samlServiceAdapter struct{ a *TheAuth }
+
+func (s samlServiceAdapter) BeginLogin(ctx context.Context, id models.ULID, relayState string) (string, error) {
+	return s.a.BeginSAMLLogin(ctx, id, relayState)
+}
+
+func (s samlServiceAdapter) FinishLogin(ctx context.Context, id models.ULID, samlResp, ua, ip string) (string, error) {
+	tok, _, err := s.a.FinishSAMLLogin(ctx, id, samlResp, ua, ip)
+	return tok, err
+}
+
+func (s samlServiceAdapter) MetadataXML(ctx context.Context, id models.ULID) ([]byte, error) {
+	return s.a.SAMLMetadataXML(ctx, id)
+}
+
+// mountSAML wires the public-facing SAML SP-flow endpoints (login,
+// ACS, metadata) via the extracted internal/saml/handlers package.
+// PR E architecture reorg (2026-06-20) moved the three SP endpoints
+// there; the per-org SAML connection CRUD endpoints below stay in
+// root because they depend on the unextracted requireOrgRole helper.
 func (a *TheAuth) mountSAML(r chi.Router) {
-	r.Route("/saml", func(r chi.Router) {
-		r.Get("/{connectionId}/login", a.handleSAMLLogin)
-		r.Post("/{connectionId}/acs", a.handleSAMLACS)
-		r.Get("/{connectionId}/metadata", a.handleSAMLMetadata)
-	})
-}
-
-func (a *TheAuth) handleSAMLLogin(w http.ResponseWriter, r *http.Request) {
-	id, ok := pathULID(w, r, "connectionId")
-	if !ok {
-		return
-	}
-	relay := r.URL.Query().Get("RelayState")
-	if relay == "" {
-		relay = a.postLoginRedirect
-	}
-	redirect, err := a.BeginSAMLLogin(r.Context(), id, relay)
-	if err != nil {
-		http.Error(w, "saml login failed", http.StatusBadRequest)
-		return
-	}
-	http.Redirect(w, r, redirect, http.StatusFound)
-}
-
-func (a *TheAuth) handleSAMLACS(w http.ResponseWriter, r *http.Request) {
-	id, ok := pathULID(w, r, "connectionId")
-	if !ok {
-		return
-	}
-	if err := r.ParseForm(); err != nil {
-		http.Error(w, "invalid form", http.StatusBadRequest)
-		return
-	}
-	samlResponse := r.FormValue("SAMLResponse")
-	if samlResponse == "" {
-		http.Error(w, "missing SAMLResponse", http.StatusBadRequest)
-		return
-	}
-	relayState := r.FormValue("RelayState")
-	token, _, err := a.FinishSAMLLogin(r.Context(), id, samlResponse, r.UserAgent(), clientIP(r))
-	if err != nil {
-		switch {
-		case errors.Is(err, ErrSAMLUnsignedAssertion), errors.Is(err, ErrSAMLMissingEmail):
-			http.Error(w, err.Error(), http.StatusForbidden)
-		case errors.Is(err, ErrSAMLInvalidAssertion):
-			http.Error(w, "invalid saml assertion", http.StatusForbidden)
-		default:
-			http.Error(w, "internal error", http.StatusInternalServerError)
-		}
-		return
-	}
-	http.SetCookie(w, &http.Cookie{
-		Name:     a.cookieName,
-		Value:    token,
-		Path:     "/",
-		HttpOnly: true,
-		Secure:   a.secureCookie,
-		SameSite: http.SameSiteLaxMode,
-		Expires:  time.Now().Add(a.sessionTTL),
-	})
-	if relayState == "" {
-		relayState = a.postLoginRedirect
-	}
-	http.Redirect(w, r, relayState, http.StatusFound)
-}
-
-func (a *TheAuth) handleSAMLMetadata(w http.ResponseWriter, r *http.Request) {
-	id, ok := pathULID(w, r, "connectionId")
-	if !ok {
-		return
-	}
-	xmlBytes, err := a.SAMLMetadataXML(r.Context(), id)
-	if err != nil {
-		http.Error(w, "not found", http.StatusNotFound)
-		return
-	}
-	w.Header().Set("Content-Type", "application/samlmetadata+xml")
-	_, _ = w.Write(xmlBytes)
+	h := samlhandlers.New(
+		samlServiceAdapter{a: a},
+		samlhandlers.SessionCookieConfig{
+			Name:       a.cookieName,
+			SecureFlag: a.secureCookie,
+			TTL:        a.sessionTTL,
+		},
+		a.postLoginRedirect,
+	)
+	h.Mount(r)
 }
 
 // ---------- SAML connection CRUD (mounted under /auth/orgs/{orgId}/saml/connections) ----------
