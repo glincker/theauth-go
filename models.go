@@ -58,3 +58,22 @@ type PasswordResetToken struct {
 	UsedAt    *time.Time `json:"usedAt,omitempty"`
 	CreatedAt time.Time  `json:"createdAt"`
 }
+
+// OAuthAccount records the linkage between one of our Users and a remote
+// OAuth provider identity (e.g. user X authenticates via GitHub). The
+// (provider, provider_user_id) pair is unique — re-running the OAuth flow
+// for the same provider account upserts this row rather than creating a
+// duplicate. Tokens are encrypted at rest via crypto.Encrypt and are
+// never serialized over JSON.
+type OAuthAccount struct {
+	ID              ULID       `json:"id"`
+	UserID          ULID       `json:"userId"`
+	Provider        string     `json:"provider"`
+	ProviderUserID  string     `json:"providerUserId"`
+	AccessTokenEnc  []byte     `json:"-"`
+	RefreshTokenEnc []byte     `json:"-"`
+	ExpiresAt       *time.Time `json:"expiresAt,omitempty"`
+	Scope           string     `json:"scope"`
+	CreatedAt       time.Time  `json:"createdAt"`
+	UpdatedAt       time.Time  `json:"updatedAt"`
+}
