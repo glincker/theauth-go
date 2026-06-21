@@ -93,6 +93,14 @@ func (a *TheAuth) Mount(r chi.Router) {
 	if a.adminCfg != nil {
 		a.mountAdmin(r)
 	}
+
+	// OAuth 2.1 authorization server (v2.0 phase 1 + 2). Mounted at
+	// /.well-known/* and /oauth/* only when Config.AuthorizationServer is
+	// non-nil. Phase 3 + 4 (agent identity, delegation, token exchange) land
+	// in subsequent PRs.
+	if a.as != nil {
+		a.mountAS(r)
+	}
 }
 
 func (a *TheAuth) handleMagicLinkRequest(w http.ResponseWriter, r *http.Request) {
