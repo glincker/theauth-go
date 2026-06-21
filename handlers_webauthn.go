@@ -39,7 +39,7 @@ func (a *TheAuth) setWebAuthnChalCookie(w http.ResponseWriter, token string) {
 		HttpOnly: true,
 		Secure:   a.secureCookie,
 		SameSite: http.SameSiteLaxMode,
-		Expires:  time.Now().Add(a.webauthnChalTTL),
+		Expires:  time.Now().Add(a.webauthnCfg.ChallengeTTL),
 	})
 }
 

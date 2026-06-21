@@ -161,6 +161,28 @@ var (
 	ErrStorageMissingOAuthMethods = errors.New("theauth: Storage does not implement OAuthServerStorage")
 )
 
+// Stable error codes that callers can switch on. New endpoints return
+// TheAuthError; old endpoints keep returning the sentinels above. Lifted
+// to the models package (PR D architecture reorg, 2026-06-20) so internal
+// service packages (password, totp, webauthn, saml) can construct
+// TheAuthError with these codes without taking an import cycle on the
+// root package. Re-exported from root errors.go as untyped string
+// constants.
+const (
+	CodeWeakPassword         = "weak_password"
+	CodeEmailTaken           = "email_taken"
+	CodeInvalidCredentials   = "invalid_credentials"
+	CodeRateLimited          = "rate_limited"
+	CodePasswordResetExpired = "password_reset_expired"
+	CodePasswordResetInvalid = "password_reset_invalid"
+
+	// v0.5 codes.
+	CodeTOTPRequired    = "totp_required"
+	CodeInvalidTOTP     = "invalid_totp"
+	CodeAlreadyEnrolled = "already_enrolled"
+	CodeWebAuthn        = "webauthn_error"
+)
+
 // TheAuthError is the structured error type returned by v0.2+ service
 // methods. Callers can errors.As-extract it and switch on Code for stable
 // handling, or errors.Is-check against a value of the same Code for shorter
