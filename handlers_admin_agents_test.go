@@ -254,6 +254,53 @@ func TestAdminDelegations_CreateAndRevoke(t *testing.T) {
 	}
 }
 
+// TestAdminCreateDelegation_RejectsNonMemberUser locks in the security
+// audit H3 (2026-06-20) regression: an org admin must not be able to
+// declare a delegation_grant naming a user who is not a member of the
+// calling admin's organization.
+func TestAdminCreateDelegation_RejectsNonMemberUser(t *testing.T) {
+	fx := newAgentAdminFixture(t)
+	base := "/admin/v1/organizations/" + fx.orgID.String()
+
+	// Provision a second user that is NOT a member of fx.orgID.
+	outsider := theauth.User{ID: internalulid.New(), Email: "outsider@example.test"}
+	outsider, err := fx.store.CreateUser(t.Context(), outsider)
+	if err != nil {
+		t.Fatalf("CreateUser: %v", err)
+	}
+
+	// Provision an agent inside fx.orgID so the only authorization gap
+	// being exercised is the user-in-org check (not agent ownership).
+	agent, _, err := fx.auth.CreateAgent(t.Context(), theauth.CreateAgentInput{
+		Owner: theauth.AgentOwner{OrganizationID: &fx.orgID},
+		Name:  "deleg-bot-cross",
+		Scope: []string{"read"},
+	})
+	if err != nil {
+		t.Fatalf("CreateAgent: %v", err)
+	}
+
+	body := map[string]any{
+		"userId":             outsider.ID.String(),
+		"agentId":            agent.ID.String(),
+		"scope":              []string{"read"},
+		"resource":           "https://mcp.example.com",
+		"maxDurationSeconds": 3600,
+	}
+	resp, raw := fx.do(t, "POST", base+"/delegations", fx.ownerTok, body)
+	if resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("cross-org delegation must be 403; got %d body=%s", resp.StatusCode, raw)
+	}
+
+	// Member of the org is still permitted (sanity check that the
+	// rejection is keyed on membership, not on any other side-effect).
+	body["userId"] = fx.memberUser.ID.String()
+	resp, raw = fx.do(t, "POST", base+"/delegations", fx.ownerTok, body)
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("in-org delegation must be 201; got %d body=%s", resp.StatusCode, raw)
+	}
+}
+
 func TestAccountAgents_OwnerOnly(t *testing.T) {
 	fx := newAgentAdminFixture(t)
 
