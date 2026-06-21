@@ -48,7 +48,7 @@ func (a *TheAuth) mountAS(r chi.Router) {
 	// validateASConfig). A negative value disables the cap (operator
 	// opt-out). Security audit H2 (2026-06-20): the documented
 	// "1 req/min/IP" floor is now actually enforced.
-	if cap := a.as.cfg.RegistrationRateLimitPerMinute; cap > 0 {
+	if cap := a.as.Cfg.RegistrationRateLimitPerMinute; cap > 0 {
 		r.With(a.RateLimitByIP(cap)).Post("/oauth/register", a.handleRegister)
 	} else {
 		r.Post("/oauth/register", a.handleRegister)
@@ -85,7 +85,7 @@ func (a *TheAuth) handleProtectedResourceMetadata(w http.ResponseWriter, r *http
 		// Reconstruct the full resource URI from the AS Issuer host plus the
 		// wildcard tail. The AS Issuer scheme + host is canonical; tail must
 		// match the configured Identifier's path component.
-		ident = a.as.cfg.Issuer + "/" + strings.TrimPrefix(resourceID, "/")
+		ident = a.as.Cfg.Issuer + "/" + strings.TrimPrefix(resourceID, "/")
 		if _, ok := a.resourceByIdentifier(ident); !ok {
 			// Try the wildcard tail as a full URL too (covers cases where
 			// the resource lives on a different host than the AS).
@@ -94,11 +94,11 @@ func (a *TheAuth) handleProtectedResourceMetadata(w http.ResponseWriter, r *http
 			}
 		}
 	default:
-		if len(a.as.cfg.Resources) == 0 {
+		if len(a.as.Cfg.Resources) == 0 {
 			http.Error(w, "no resources configured", http.StatusNotFound)
 			return
 		}
-		ident = a.as.cfg.Resources[0].Identifier
+		ident = a.as.Cfg.Resources[0].Identifier
 	}
 	doc, err := a.ProtectedResourceMetadataDoc(ident)
 	if err != nil {
@@ -141,7 +141,7 @@ func (a *TheAuth) handleAuthorize(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		if IsLoginRequired(err) {
 			next := url.QueryEscape(r.URL.String())
-			http.Redirect(w, r, a.as.cfg.LoginURL+"?next="+next, http.StatusFound)
+			http.Redirect(w, r, a.as.Cfg.LoginURL+"?next="+next, http.StatusFound)
 			return
 		}
 		writeAuthorizeError(w, r, req, err)
@@ -307,7 +307,7 @@ func (a *TheAuth) handleIntrospect(w http.ResponseWriter, r *http.Request) {
 		writeOAuthError(w, http.StatusInternalServerError, OAuthErrServerError, err.Error())
 		return
 	}
-	maxAge := int(a.as.cfg.IntrospectionCacheTTL.Seconds())
+	maxAge := int(a.as.Cfg.IntrospectionCacheTTL.Seconds())
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "private, max-age="+strconv.Itoa(maxAge))
 	_, _ = w.Write(body)

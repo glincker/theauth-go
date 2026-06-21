@@ -109,7 +109,7 @@ func (a *TheAuth) accountRevokeAgent(w http.ResponseWriter, r *http.Request) {
 		admin.Write(w, http.StatusBadRequest, admin.CodeValidationInvalid, "invalid agentID", "")
 		return
 	}
-	ag, err := a.as.storage.AgentByID(r.Context(), agentID)
+	ag, err := a.oauthStorage.AgentByID(r.Context(), agentID)
 	if err != nil || ag == nil {
 		admin.Write(w, http.StatusNotFound, admin.CodeNotFound, "agent not found", "")
 		return
@@ -198,7 +198,7 @@ func (a *TheAuth) accountRevokeDelegation(w http.ResponseWriter, r *http.Request
 		admin.Write(w, http.StatusBadRequest, admin.CodeValidationInvalid, "invalid grantID", "")
 		return
 	}
-	grant, err := a.as.storage.DelegationGrantByID(r.Context(), grantID)
+	grant, err := a.oauthStorage.DelegationGrantByID(r.Context(), grantID)
 	if err != nil || grant == nil {
 		admin.Write(w, http.StatusNotFound, admin.CodeNotFound, "delegation grant not found", "")
 		return

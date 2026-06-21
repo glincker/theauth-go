@@ -1,0 +1,288 @@
+package as
+
+import (
+	"context"
+	"crypto/ed25519"
+	"errors"
+	"log/slog"
+	"strings"
+	"sync"
+	"time"
+
+	"github.com/glincker/theauth-go/internal/audit"
+	"github.com/glincker/theauth-go/internal/clientauthcache"
+	"github.com/glincker/theauth-go/internal/models"
+)
+
+// Service bundles the OAuth 2.1 authorization server runtime: JWKS state +
+// rotation goroutine, introspection cache, client-auth Argon2id cache, and
+// every per-request entry point (authorize, token, introspect, revoke,
+// metadata, DCR, token-exchange).
+//
+// Constructed exactly once by *theauth.TheAuth.New when
+// Config.AuthorizationServer is non-nil; root holds it on TheAuth.as and
+// per-method forwarders delegate to the entry points below. Stop() is
+// called by *TheAuth.Close so the rotation goroutine drains cleanly.
+//
+// The exported fields (Cfg, Storage, EncryptionKey, AgentPolicy) are
+// configuration set at New time; the unexported fields are the runtime
+// state. Root code (handlers, agent / delegation services that move in PR
+// C / PR E) reads Cfg and Storage directly while we incrementally extract;
+// no behavior change vs. the pre-PR-B *asState the field replaced.
+type Service struct {
+	// Cfg is the validated authorization server configuration. Read-only
+	// after New. Exposed so root files that have not yet moved into a
+	// dedicated internal package (handlers_oauth_server.go, service_agent.go,
+	// service_delegation.go, handlers_account.go, handlers_admin_agents.go)
+	// can read configuration the way the old *asState did.
+	Cfg Config
+
+	// Storage is the OAuthServerStorage adapter persisting AS state.
+	// Exposed for the same reason as Cfg.
+	Storage Storage
+
+	// EncryptionKey is the 32-byte AES-256 key used to seal JWKS private
+	// keys at rest. Not exposed via accessor; used internally by jwks.go.
+	encryptionKey []byte
+
+	// AgentPolicy is the subset of root *AgentConfig the AS needs at
+	// token-exchange time. Nil when the deployment does not configure an
+	// agent identity service; in that case ClientCredentialsToken and
+	// ExchangeToken short-circuit with unsupported_grant_type.
+	AgentPolicy *AgentPolicy
+
+	// Audit is the back-reference to the root audit emitter so AS-issued
+	// audit events flow through the same writer as the rest of the
+	// service. Defaults to audit.NoopEmitter when wiring code passes nil.
+	Audit audit.Emitter
+
+	// AgentLookup resolves an "agent:<id>" subject claim back to the
+	// owning Agent row. The implementation lives on the root *TheAuth
+	// (service_agent.go::agentBySubjectClaim) which moves in PR C; for
+	// now we depend on the interface so internal/as never references the
+	// root package.
+	AgentLookup AgentLookup
+
+	// signingKeys is the in-memory snapshot of the JWKS state machine.
+	// The rotation goroutine swaps it atomically under mu.
+	mu           sync.RWMutex
+	keys         []models.JWKSKey
+	keyMap       map[string]models.JWKSKey
+	privKeyByKID map[string]ed25519.PrivateKey
+
+	rotationStop chan struct{}
+	rotationDone chan struct{}
+
+	// introspectCache memoizes recent introspection responses keyed by
+	// token hash. Honors IntrospectionCacheTTL.
+	introspectCache sync.Map // map[string]*introspectCacheEntry
+
+	// clientAuthCache memoizes the result of an Argon2id verify on
+	// client_secret_hash. Keyed by client_id; cached entries bind the
+	// verified *OAuthClient snapshot to the sha256 of the presented secret.
+	clientAuthCache *clientauthcache.Cache[*models.OAuthClient]
+}
+
+// introspectCacheEntry holds one cached introspection response body plus
+// its expiry deadline. Replaced wholesale on cache miss; never mutated.
+type introspectCacheEntry struct {
+	expiresAt time.Time
+	body      []byte
+}
+
+// AgentLookup resolves an "agent:<id>" sub or act.sub claim into the
+// underlying Agent row. Implementations live outside the as package
+// because the agent identity service is owned by root (and moves in PR C).
+type AgentLookup interface {
+	// AgentBySubjectClaim parses the supplied claim and returns the agent
+	// row. Returns (nil, nil) when the claim does not name an agent so
+	// callers can branch cleanly. Returns (nil, models.ErrAgentNotFound)
+	// when the claim names an agent that does not exist.
+	AgentBySubjectClaim(ctx context.Context, sub string) (*models.Agent, error)
+}
+
+// AgentLookupFunc is a func adapter that lets root wire its own method
+// (TheAuth.agentBySubjectClaim) without declaring an explicit type.
+type AgentLookupFunc func(ctx context.Context, sub string) (*models.Agent, error)
+
+// AgentBySubjectClaim satisfies AgentLookup by calling the underlying
+// function. Returns (nil, nil) when the function is nil so the optional
+// dependency stays optional at no extra wiring cost.
+func (f AgentLookupFunc) AgentBySubjectClaim(ctx context.Context, sub string) (*models.Agent, error) {
+	if f == nil {
+		return nil, nil
+	}
+	return f(ctx, sub)
+}
+
+// Deps bundles the constructor inputs so New stays readable as the
+// authorization server picks up more knobs in future phases.
+type Deps struct {
+	Cfg           Config
+	Storage       Storage
+	EncryptionKey []byte
+	AgentPolicy   *AgentPolicy
+	Audit         audit.Emitter
+	AgentLookup   AgentLookup
+}
+
+// New constructs a Service. The supplied Config must already have been
+// validated via Validate(). The Service is inert until Start is called;
+// Start bootstraps the JWKS state and launches the rotation goroutine.
+func New(d Deps) *Service {
+	emitter := d.Audit
+	if emitter == nil {
+		emitter = audit.NoopEmitter{}
+	}
+	return &Service{
+		Cfg:             d.Cfg,
+		Storage:         d.Storage,
+		encryptionKey:   d.EncryptionKey,
+		AgentPolicy:     d.AgentPolicy,
+		Audit:           emitter,
+		AgentLookup:     d.AgentLookup,
+		keyMap:          map[string]models.JWKSKey{},
+		privKeyByKID:    map[string]ed25519.PrivateKey{},
+		clientAuthCache: clientauthcache.New[*models.OAuthClient](clientauthcache.DefaultMaxEntries, clientauthcache.DefaultTTL),
+	}
+}
+
+// Start bootstraps the JWKS state (loading existing keys or minting fresh
+// ones) and launches the rotation goroutine when DisableRotation is false.
+// Safe to call multiple times; the rotation goroutine is gated by a
+// non-nil rotationStop channel so a second call after Stop is a no-op.
+func (s *Service) Start(ctx context.Context) error {
+	if s == nil {
+		return nil
+	}
+	if err := s.bootstrapJWKS(ctx); err != nil {
+		return err
+	}
+	if s.Cfg.DisableRotation {
+		return nil
+	}
+	s.rotationStop = make(chan struct{})
+	s.rotationDone = make(chan struct{})
+	go s.jwksRotationLoop()
+	return nil
+}
+
+// Stop shuts the rotation goroutine and waits for it to finish. Idempotent.
+func (s *Service) Stop() {
+	if s == nil || s.rotationStop == nil {
+		return
+	}
+	select {
+	case <-s.rotationStop:
+		// already closed
+	default:
+		close(s.rotationStop)
+	}
+	if s.rotationDone != nil {
+		select {
+		case <-s.rotationDone:
+		case <-time.After(5 * time.Second):
+			slog.Warn("theauth: JWKS rotation goroutine did not drain in 5s")
+		}
+	}
+}
+
+// InvalidateClientAuthCache drops the cached Argon2-verified entry for
+// clientID. Called from every code path that rotates or removes the
+// stored client_secret_hash so a freshly minted secret is never shadowed
+// by a stale verified entry and a deleted client cannot continue
+// authenticating from cache.
+func (s *Service) InvalidateClientAuthCache(clientID string) {
+	if s == nil || s.clientAuthCache == nil {
+		return
+	}
+	s.clientAuthCache.Invalidate(clientID)
+}
+
+// ResourceByIdentifier returns the configured ProtectedResource matching
+// the supplied identifier, or false when not found. Identifier matching
+// is case sensitive and trims a single trailing slash on the input to
+// absorb caller inconsistency.
+func (s *Service) ResourceByIdentifier(id string) (models.ProtectedResource, bool) {
+	if s == nil {
+		return models.ProtectedResource{}, false
+	}
+	id = strings.TrimRight(id, "/")
+	for _, r := range s.Cfg.Resources {
+		canonical := strings.TrimRight(r.Identifier, "/")
+		if canonical == id {
+			return r, true
+		}
+	}
+	return models.ProtectedResource{}, false
+}
+
+// validateScopeAgainstResource returns the intersection of requested and
+// supported scopes; returns error if requested contains any scope outside
+// the resource's catalog. Mirror of root validateScopeAgainstResource.
+func validateScopeAgainstResource(requested []string, resource models.ProtectedResource) ([]string, error) {
+	if len(requested) == 0 {
+		return nil, errors.New("scope required")
+	}
+	if len(resource.Scopes) == 0 {
+		return requested, nil
+	}
+	supported := map[string]struct{}{}
+	for _, s := range resource.Scopes {
+		supported[s] = struct{}{}
+	}
+	out := make([]string, 0, len(requested))
+	for _, s := range requested {
+		if _, ok := supported[s]; !ok {
+			return nil, models.ErrOAuthInvalidScope
+		}
+		out = append(out, s)
+	}
+	return out, nil
+}
+
+// scopeSubset reports whether every element of sub is present in sup.
+func scopeSubset(sub, sup []string) bool {
+	have := map[string]struct{}{}
+	for _, s := range sup {
+		have[s] = struct{}{}
+	}
+	for _, s := range sub {
+		if _, ok := have[s]; !ok {
+			return false
+		}
+	}
+	return true
+}
+
+// scopeJoin renders a scope slice as the space-separated form used in JWT
+// claims, RFC 7591 client metadata, and Cache-Control responses.
+func scopeJoin(scope []string) string { return strings.Join(scope, " ") }
+
+// scopeSplit parses a space-separated scope string into a deduped slice
+// preserving order of first occurrence.
+func scopeSplit(s string) []string {
+	parts := strings.Fields(s)
+	seen := map[string]struct{}{}
+	out := make([]string, 0, len(parts))
+	for _, p := range parts {
+		if _, dup := seen[p]; dup {
+			continue
+		}
+		seen[p] = struct{}{}
+		out = append(out, p)
+	}
+	return out
+}
+
+// errAuthorizeLoginRequired is the sentinel returned by StartAuthorize
+// when the user is anonymous. Root maps this to a redirect to LoginURL.
+var errAuthorizeLoginRequired = errors.New("theauth: authorize requires user session")
+
+// IsLoginRequired reports whether the supplied error signals the
+// authorize path needs an authenticated user. Mirror of the root
+// IsLoginRequired; both must agree on the sentinel value, so the root
+// version simply delegates here.
+func IsLoginRequired(err error) bool {
+	return errors.Is(err, errAuthorizeLoginRequired)
+}
