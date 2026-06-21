@@ -56,7 +56,7 @@ func seedSAMLConnection(t *testing.T, a *theauth.TheAuth, store *memory.Store) (
 	if err != nil {
 		t.Fatal(err)
 	}
-	return *&org, conn
+	return org, conn
 }
 
 func TestSAMLFindOrCreate_NewUser(t *testing.T) {

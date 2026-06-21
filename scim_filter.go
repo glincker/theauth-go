@@ -92,5 +92,7 @@ func parseEqFilter(s string) (string, string, error) {
 	return field, value, nil
 }
 
-// ensure errors.Is still works for callers
+// Ensure errors.Is still works for callers (silences unused-import on the
+// off-chance that a future refactor moves the only direct errors usage
+// out of this file).
 var _ = errors.New

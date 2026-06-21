@@ -25,7 +25,6 @@ var (
 	idpKey      *rsa.PrivateKey
 	idpCert     *x509.Certificate
 	idpCertPEM  string
-	idpCertB64  string
 	idpEntityID = "http://idp.samltest.local/metadata"
 	idpSSOURL   = "http://idp.samltest.local/sso"
 )
@@ -54,7 +53,6 @@ func ensure() {
 		idpKey = k
 		idpCert = c
 		idpCertPEM = string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der}))
-		idpCertB64 = base64.StdEncoding.EncodeToString(der)
 	})
 }
 

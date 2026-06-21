@@ -31,7 +31,7 @@ var (
 	// must DELETE /auth/totp first to re-enroll.
 	ErrAlreadyEnrolled = errors.New("theauth: totp already enrolled")
 
-	// v0.7 sentinels
+	// v0.7 sentinels.
 
 	// ErrSCIMRequiresOrganizations is returned by New when Config.SCIM is
 	// non-nil but Config.Organizations is nil. SCIM is meaningless without

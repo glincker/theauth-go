@@ -87,7 +87,7 @@ func scimReq(t *testing.T, srv *httptest.Server, method, path, token string, bod
 
 func decodeBody(t *testing.T, r *http.Response, into interface{}) {
 	t.Helper()
-	defer r.Body.Close()
+	defer func() { _ = r.Body.Close() }()
 	if err := json.NewDecoder(r.Body).Decode(into); err != nil {
 		t.Fatalf("decode: %v", err)
 	}
@@ -96,7 +96,7 @@ func decodeBody(t *testing.T, r *http.Response, into interface{}) {
 func TestSCIM_RequiresBearer(t *testing.T) {
 	_, _, _, _, srv := newSCIMTestStack(t)
 	resp := scimReq(t, srv, "GET", "/scim/v2/Users", "", nil)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusUnauthorized {
 		t.Fatalf("want 401, got %d", resp.StatusCode)
 	}
@@ -105,7 +105,7 @@ func TestSCIM_RequiresBearer(t *testing.T) {
 func TestSCIM_RejectsInvalidToken(t *testing.T) {
 	_, _, _, _, srv := newSCIMTestStack(t)
 	resp := scimReq(t, srv, "GET", "/scim/v2/Users", "not-a-real-token", nil)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusUnauthorized {
 		t.Fatalf("want 401, got %d", resp.StatusCode)
 	}
@@ -118,7 +118,7 @@ func TestSCIM_RejectsRevokedToken(t *testing.T) {
 		t.Fatal(err)
 	}
 	resp := scimReq(t, srv, "GET", "/scim/v2/Users", token, nil)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusUnauthorized {
 		t.Fatalf("want 401, got %d", resp.StatusCode)
 	}
@@ -138,7 +138,7 @@ func TestSCIM_CreateUserOkta(t *testing.T) {
 	if resp.StatusCode != http.StatusCreated {
 		buf := new(bytes.Buffer)
 		_, _ = buf.ReadFrom(resp.Body)
-		resp.Body.Close()
+		_ = resp.Body.Close()
 		t.Fatalf("want 201, got %d: %s", resp.StatusCode, buf.String())
 	}
 	var got map[string]interface{}
@@ -182,10 +182,10 @@ func TestSCIM_ListAndPaginate(t *testing.T) {
 			"emails":   []map[string]interface{}{{"value": fmt.Sprintf("u%d@acme.test", i), "primary": true}},
 		}
 		r := scimReq(t, srv, "POST", "/scim/v2/Users", token, body)
-		r.Body.Close()
+		_ = r.Body.Close()
 	}
 	resp := scimReq(t, srv, "GET", "/scim/v2/Users?startIndex=1&count=2", token, nil)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	var got map[string]interface{}
 	decodeBody(t, resp, &got)
 	// 3 SCIM-created users + 1 owner = 4 members.
@@ -205,9 +205,9 @@ func TestSCIM_FilterByUserName(t *testing.T) {
 		"emails":   []map[string]interface{}{{"value": "find-me@acme.test", "primary": true}},
 	}
 	r := scimReq(t, srv, "POST", "/scim/v2/Users", token, body)
-	r.Body.Close()
+	_ = r.Body.Close()
 	resp := scimReq(t, srv, "GET", `/scim/v2/Users?filter=userName%20eq%20%22find-me@acme.test%22`, token, nil)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	var got map[string]interface{}
 	decodeBody(t, resp, &got)
 	if int(got["totalResults"].(float64)) != 1 {
@@ -227,7 +227,7 @@ func TestSCIM_PutReturns405(t *testing.T) {
 	decodeBody(t, c, &created)
 	id := created["id"].(string)
 	resp := scimReq(t, srv, "PUT", "/scim/v2/Users/"+id, token, body)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusMethodNotAllowed {
 		t.Fatalf("want 405, got %d", resp.StatusCode)
 	}
@@ -242,7 +242,7 @@ func TestSCIM_RejectsPassword(t *testing.T) {
 		"emails":   []map[string]interface{}{{"value": "p@acme.test", "primary": true}},
 	}
 	resp := scimReq(t, srv, "POST", "/scim/v2/Users", token, body)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusBadRequest {
 		t.Fatalf("want 400, got %d", resp.StatusCode)
 	}
@@ -295,7 +295,7 @@ func TestSCIM_DeactivateRemovesMembership(t *testing.T) {
 		},
 	}
 	r := scimReq(t, srv, "PATCH", "/scim/v2/Users/"+uid, token, patch)
-	r.Body.Close()
+	_ = r.Body.Close()
 	// user should no longer be in org membership
 	members, _ := a.ListOrganizationMembers(context.Background(), org.ID)
 	for _, m := range members {
@@ -391,7 +391,7 @@ func TestSCIM_GroupsRejectNested(t *testing.T) {
 		"members":     []map[string]interface{}{{"value": "01H00000000000000000000000", "type": "Group"}},
 	}
 	resp := scimReq(t, srv, "POST", "/scim/v2/Groups", token, body)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusBadRequest {
 		t.Fatalf("want 400, got %d", resp.StatusCode)
 	}
@@ -404,13 +404,13 @@ func TestSCIM_Discovery(t *testing.T) {
 		if r.StatusCode != http.StatusOK {
 			t.Fatalf("%s want 200, got %d", p, r.StatusCode)
 		}
-		r.Body.Close()
+		_ = r.Body.Close()
 	}
 	r := scimReq(t, srv, "GET", "/scim/v2/Schemas/urn:ietf:params:scim:schemas:core:2.0:User", token, nil)
 	if r.StatusCode != http.StatusOK {
 		t.Fatalf("schema by id want 200, got %d", r.StatusCode)
 	}
-	defer r.Body.Close()
+	defer func() { _ = r.Body.Close() }()
 	var got map[string]interface{}
 	decodeBody(t, r, &got)
 	if !strings.Contains(got["id"].(string), "User") {
@@ -438,7 +438,7 @@ func TestSCIM_RequiresHTTPS(t *testing.T) {
 	srv := httptest.NewServer(r)
 	defer srv.Close()
 	resp := scimReq(t, srv, "GET", "/scim/v2/Users", token, nil)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusForbidden {
 		t.Fatalf("want 403, got %d", resp.StatusCode)
 	}
@@ -473,7 +473,7 @@ func TestSCIM_ProvisioningCycle(t *testing.T) {
 	if p.StatusCode != http.StatusOK {
 		t.Fatalf("patch want 200, got %d", p.StatusCode)
 	}
-	p.Body.Close()
+	_ = p.Body.Close()
 
 	// 3. PATCH active=false -> removes membership
 	deact := map[string]interface{}{
@@ -483,7 +483,7 @@ func TestSCIM_ProvisioningCycle(t *testing.T) {
 		},
 	}
 	d := scimReq(t, srv, "PATCH", "/scim/v2/Users/"+uid, token, deact)
-	d.Body.Close()
+	_ = d.Body.Close()
 	_ = a
 	_ = org
 
@@ -492,7 +492,7 @@ func TestSCIM_ProvisioningCycle(t *testing.T) {
 	if re.StatusCode != http.StatusOK {
 		t.Fatalf("re-create want 200, got %d", re.StatusCode)
 	}
-	re.Body.Close()
+	_ = re.Body.Close()
 
 	// 5. DELETE -> 204
 	del := scimReq(t, srv, "DELETE", "/scim/v2/Users/"+uid, token, nil)
