@@ -4,9 +4,13 @@ on:
   push:
     branches: [main]
   pull_request:
+  schedule:
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
 
 jobs:
   test:
+    if: github.event_name != 'schedule'
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -33,6 +37,7 @@ jobs:
       - run: go test -bench=. -benchmem -run=^$ -benchtime=1x ./internal/bench/...
 
   fuzz:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -58,6 +63,7 @@ jobs:
         run: go test -run=^$ -fuzz=^${{ matrix.target.name }}$ -fuzztime=10s ${{ matrix.target.pkg }}
 
   lint:
+    if: github.event_name != 'schedule'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
