@@ -51,3 +51,22 @@ VALUES ($1, $2, $3, $4, $5);
 UPDATE password_reset_tokens SET used_at = now()
 WHERE token_hash = $1 AND used_at IS NULL AND expires_at > now()
 RETURNING *;
+
+-- name: UpsertOAuthAccount :one
+INSERT INTO oauth_accounts (
+    id, user_id, provider, provider_user_id,
+    access_token_enc, refresh_token_enc, expires_at, scope,
+    created_at, updated_at
+) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+ON CONFLICT (provider, provider_user_id) DO UPDATE SET
+    user_id           = EXCLUDED.user_id,
+    access_token_enc  = EXCLUDED.access_token_enc,
+    refresh_token_enc = EXCLUDED.refresh_token_enc,
+    expires_at        = EXCLUDED.expires_at,
+    scope             = EXCLUDED.scope,
+    updated_at        = now()
+RETURNING *;
+
+-- name: OAuthAccountByProviderUserID :one
+SELECT * FROM oauth_accounts
+WHERE provider = $1 AND provider_user_id = $2;

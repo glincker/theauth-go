@@ -4,8 +4,10 @@ import (
 	"context"
 	"crypto/ed25519"
 	"errors"
+	"sync"
 	"time"
 
+	"github.com/glincker/theauth-go/crypto"
 	"github.com/glincker/theauth-go/email"
 )
 
@@ -43,6 +45,17 @@ type Storage interface {
 	UserByEmailWithPassword(ctx context.Context, email string) (user *User, passwordHash string, err error)
 	CreatePasswordResetToken(ctx context.Context, t PasswordResetToken) error
 	ConsumePasswordResetToken(ctx context.Context, tokenHash []byte) (*PasswordResetToken, error)
+
+	// OAuth accounts (v0.3)
+	// UpsertOAuthAccount inserts or updates the row keyed by
+	// (provider, provider_user_id). Returns the resulting row so callers
+	// can use the assigned ID and timestamps. Implementations must encrypt
+	// any token bytes before they reach storage; this layer only persists
+	// what it is given.
+	UpsertOAuthAccount(ctx context.Context, a OAuthAccount) (OAuthAccount, error)
+	// OAuthAccountByProviderUserID looks up the row for a provider/user
+	// pair. Returns ErrStorageNotFound when no row exists.
+	OAuthAccountByProviderUserID(ctx context.Context, provider, providerUserID string) (*OAuthAccount, error)
 }
 
 // Config holds the wiring for a TheAuth instance.
@@ -66,9 +79,26 @@ type Config struct {
 	// RateLimitPerEmail is the per-email per-minute budget applied to signin
 	// + forgot. Defaults to 3 when zero.
 	RateLimitPerEmail int
+
+	// Providers is the list of OAuth providers exposed under
+	// /auth/providers/{name}/start and /callback. Leave nil to disable
+	// OAuth entirely (v0.1 / v0.2 behavior). Each provider's Name() must
+	// be unique within the slice.
+	Providers []Provider
+
+	// EncryptionKey is the 32-byte AES-256 key used to encrypt provider
+	// access/refresh tokens before they hit storage. Required when
+	// len(Providers) > 0; New returns an error otherwise. Source this from
+	// a secrets manager; never commit it.
+	EncryptionKey []byte
+
+	// PostLoginRedirect is where the OAuth callback handler 302s to after
+	// a successful sign-in. Defaults to "/" when empty. Set to a path on
+	// your own origin; cross-origin redirects are not validated here.
+	PostLoginRedirect string
 }
 
-// TheAuth is the public entry point — constructed once at app start and
+// TheAuth is the public entry point, constructed once at app start and
 // shared across handlers.
 type TheAuth struct {
 	storage           Storage
@@ -81,6 +111,13 @@ type TheAuth struct {
 	secureCookie      bool
 	rateLimitPerIP    int
 	rateLimitPerEmail int
+
+	// OAuth (v0.3)
+	providers         map[string]Provider
+	encryptionKey     []byte
+	postLoginRedirect string
+	oauthStates       sync.Map // map[string]*oauthState
+	oauthStateStop    chan struct{}
 }
 
 // New validates the Config, applies defaults, and returns a ready TheAuth.
@@ -109,7 +146,34 @@ func New(cfg Config) (*TheAuth, error) {
 	if cfg.RateLimitPerEmail <= 0 {
 		cfg.RateLimitPerEmail = 3
 	}
-	return &TheAuth{
+
+	// OAuth validation: any provider configured requires a 32-byte key, and
+	// every provider name must be unique within the slice. Empty Providers
+	// is fully backward compatible.
+	providers := map[string]Provider{}
+	if len(cfg.Providers) > 0 {
+		if len(cfg.EncryptionKey) != crypto.AESKeyLen {
+			return nil, errors.New("theauth: Config.EncryptionKey must be 32 bytes when Providers are configured")
+		}
+		for _, p := range cfg.Providers {
+			if p == nil {
+				return nil, errors.New("theauth: Config.Providers contains a nil entry")
+			}
+			name := p.Name()
+			if name == "" {
+				return nil, errors.New("theauth: provider returned an empty Name()")
+			}
+			if _, dup := providers[name]; dup {
+				return nil, errors.New("theauth: duplicate provider name: " + name)
+			}
+			providers[name] = p
+		}
+	}
+	if cfg.PostLoginRedirect == "" {
+		cfg.PostLoginRedirect = "/"
+	}
+
+	a := &TheAuth{
 		storage:           cfg.Storage,
 		emailSender:       cfg.EmailSender,
 		baseURL:           cfg.BaseURL,
@@ -120,5 +184,27 @@ func New(cfg Config) (*TheAuth, error) {
 		secureCookie:      cfg.SecureCookie,
 		rateLimitPerIP:    cfg.RateLimitPerIP,
 		rateLimitPerEmail: cfg.RateLimitPerEmail,
-	}, nil
+		providers:         providers,
+		encryptionKey:     cfg.EncryptionKey,
+		postLoginRedirect: cfg.PostLoginRedirect,
+	}
+	if len(providers) > 0 {
+		a.oauthStateStop = make(chan struct{})
+		go a.oauthStateGCLoop()
+	}
+	return a, nil
+}
+
+// Close releases background resources started by New (currently: the OAuth
+// state GC goroutine). Safe to call multiple times; safe to omit in tests
+// that don't configure providers.
+func (a *TheAuth) Close() {
+	if a.oauthStateStop != nil {
+		select {
+		case <-a.oauthStateStop:
+			// already closed
+		default:
+			close(a.oauthStateStop)
+		}
+	}
 }

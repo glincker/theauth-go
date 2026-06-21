@@ -311,3 +311,90 @@ func (q *Queries) UserByID(ctx context.Context, id pgtype.UUID) (User, error) {
 	)
 	return i, err
 }
+
+const upsertOAuthAccount = `-- name: UpsertOAuthAccount :one
+INSERT INTO oauth_accounts (
+    id, user_id, provider, provider_user_id,
+    access_token_enc, refresh_token_enc, expires_at, scope,
+    created_at, updated_at
+) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+ON CONFLICT (provider, provider_user_id) DO UPDATE SET
+    user_id           = EXCLUDED.user_id,
+    access_token_enc  = EXCLUDED.access_token_enc,
+    refresh_token_enc = EXCLUDED.refresh_token_enc,
+    expires_at        = EXCLUDED.expires_at,
+    scope             = EXCLUDED.scope,
+    updated_at        = now()
+RETURNING id, user_id, provider, provider_user_id, access_token_enc, refresh_token_enc, expires_at, scope, created_at, updated_at
+`
+
+type UpsertOAuthAccountParams struct {
+	ID              pgtype.UUID
+	UserID          pgtype.UUID
+	Provider        string
+	ProviderUserID  string
+	AccessTokenEnc  []byte
+	RefreshTokenEnc []byte
+	ExpiresAt       pgtype.Timestamptz
+	Scope           string
+	CreatedAt       pgtype.Timestamptz
+	UpdatedAt       pgtype.Timestamptz
+}
+
+func (q *Queries) UpsertOAuthAccount(ctx context.Context, arg UpsertOAuthAccountParams) (OauthAccount, error) {
+	row := q.db.QueryRow(ctx, upsertOAuthAccount,
+		arg.ID,
+		arg.UserID,
+		arg.Provider,
+		arg.ProviderUserID,
+		arg.AccessTokenEnc,
+		arg.RefreshTokenEnc,
+		arg.ExpiresAt,
+		arg.Scope,
+		arg.CreatedAt,
+		arg.UpdatedAt,
+	)
+	var i OauthAccount
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.Provider,
+		&i.ProviderUserID,
+		&i.AccessTokenEnc,
+		&i.RefreshTokenEnc,
+		&i.ExpiresAt,
+		&i.Scope,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const oauthAccountByProviderUserID = `-- name: OAuthAccountByProviderUserID :one
+SELECT id, user_id, provider, provider_user_id, access_token_enc, refresh_token_enc, expires_at, scope, created_at, updated_at
+FROM oauth_accounts
+WHERE provider = $1 AND provider_user_id = $2
+`
+
+type OAuthAccountByProviderUserIDParams struct {
+	Provider       string
+	ProviderUserID string
+}
+
+func (q *Queries) OAuthAccountByProviderUserID(ctx context.Context, arg OAuthAccountByProviderUserIDParams) (OauthAccount, error) {
+	row := q.db.QueryRow(ctx, oauthAccountByProviderUserID, arg.Provider, arg.ProviderUserID)
+	var i OauthAccount
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.Provider,
+		&i.ProviderUserID,
+		&i.AccessTokenEnc,
+		&i.RefreshTokenEnc,
+		&i.ExpiresAt,
+		&i.Scope,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}

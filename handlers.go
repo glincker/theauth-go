@@ -44,6 +44,12 @@ func (a *TheAuth) Mount(r chi.Router) {
 			r.With(ipLimit).Post("/reset", a.handlePasswordReset)
 		})
 
+		// OAuth providers (v0.3). Only mounted when at least one provider
+		// is registered; the routes 404 cleanly otherwise.
+		if len(a.providers) > 0 {
+			a.mountOAuth(r, ipLimit)
+		}
+
 		r.With(a.RequireAuth()).Delete("/sessions/current", a.handleSessionDelete)
 		r.With(a.RequireAuth()).Get("/me", a.handleMe)
 	})
