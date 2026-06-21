@@ -4,9 +4,11 @@ import (
 	"context"
 	"crypto/ed25519"
 	"crypto/rsa"
+	"crypto/sha256"
 	"crypto/x509"
 	"encoding/pem"
 	"errors"
+	"net/netip"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -219,6 +221,18 @@ type Config struct {
 	// RateLimitPerEmail is the per-email per-minute budget applied to signin
 	// + forgot. Defaults to 3 when zero.
 	RateLimitPerEmail int
+
+	// TrustedProxies is the operator-supplied allowlist of reverse-proxy
+	// networks whose X-Forwarded-For header is trusted by the rate
+	// limiter and the audit IP capture path. Default: empty slice (no XFF
+	// trust). Existing deployments that depend on XFF must opt in
+	// explicitly by listing their reverse-proxy CIDR(s) here (security
+	// audit H4, 2026-06-20).
+	//
+	// Example values: netip.MustParsePrefix("10.0.0.0/8"),
+	// netip.MustParsePrefix("172.16.0.0/12"). For single-host LB front
+	// ends pass a /32 (or /128 for IPv6) literal.
+	TrustedProxies []netip.Prefix
 
 	// Providers is the list of OAuth providers exposed under
 	// /auth/providers/{name}/start and /callback. Leave nil to disable
@@ -470,6 +484,14 @@ type TheAuth struct {
 	secureCookie      bool
 	rateLimitPerIP    int
 	rateLimitPerEmail int
+	trustedProxies    []netip.Prefix
+
+	// dcrRegistrationTokenHashes is the operator-supplied set of bearer
+	// tokens accepted by POST /oauth/register when DCR is bearer-gated.
+	// Each entry is the sha256 digest of one configured registration
+	// token; compares run with crypto/subtle.ConstantTimeCompare so token
+	// timing is not observable (security audit H1, 2026-06-20).
+	dcrRegistrationTokenHashes [][32]byte
 
 	// OAuth (v0.3)
 	providers         map[string]Provider
