@@ -42,6 +42,14 @@ type actorClaim struct {
 // matches the cacheTTL configured on the Validator; introspection responses
 // the AS marks with shorter Cache-Control max-age are honored down to one
 // second.
+//
+// Concurrency: the lock is a sync.RWMutex so the hit path (the common case
+// for a busy MCP resource server) can read in parallel across cores. The
+// insert path (cache miss) and the Invalidate path take the write lock.
+// Switching from sync.Mutex eliminates the serialisation bottleneck the
+// 2026-06-20 perf audit flagged (section 4.4 / 5.5): with N parallel
+// readers the hit path now scales with cores instead of queueing behind
+// a single mutex.
 type introspectCache struct {
 	uri        string
 	clientID   string
@@ -49,7 +57,7 @@ type introspectCache struct {
 	httpClient *http.Client
 	ttl        time.Duration
 
-	mu      sync.Mutex
+	mu      sync.RWMutex
 	entries map[string]*introspectCacheEntry
 }
 
@@ -86,13 +94,18 @@ func (c *introspectCache) Lookup(token, audience string) (*introspectionResult, 
 		return &introspectionResult{Active: false}, nil
 	}
 	key := cacheKey(token, audience)
-	c.mu.Lock()
+	// Hit path: read-lock only. Multiple readers can probe the cache in
+	// parallel; this is the dominant case for a busy resource server (one
+	// introspection per inbound bearer token, frequently the same token
+	// reused across many tool invocations inside the IntrospectionCacheTTL
+	// window).
+	c.mu.RLock()
 	if entry, ok := c.entries[key]; ok && time.Now().Before(entry.expiresAt) {
 		out := entry.result
-		c.mu.Unlock()
+		c.mu.RUnlock()
 		return out, nil
 	}
-	c.mu.Unlock()
+	c.mu.RUnlock()
 
 	res, ttl, err := c.fetch(token, audience)
 	if err != nil {
@@ -101,7 +114,17 @@ func (c *introspectCache) Lookup(token, audience string) (*introspectionResult, 
 	if ttl <= 0 {
 		ttl = c.ttl
 	}
+	// Miss path: write-lock to insert. Re-check the key under the write
+	// lock to coalesce concurrent miss-then-fetch races on the same token
+	// (without this guard, N goroutines that all miss the same key would
+	// each overwrite the entry; with it, the first writer wins and the
+	// rest no-op without overwriting a possibly-fresher entry).
 	c.mu.Lock()
+	if existing, ok := c.entries[key]; ok && time.Now().Before(existing.expiresAt) {
+		out := existing.result
+		c.mu.Unlock()
+		return out, nil
+	}
 	c.entries[key] = &introspectCacheEntry{
 		expiresAt: time.Now().Add(ttl),
 		result:    res,
