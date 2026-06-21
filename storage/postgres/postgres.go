@@ -436,13 +436,20 @@ func rowToWebAuthnCredential(r sqlcgen.WebauthnCredential) theauth.WebAuthnCrede
 }
 
 func (s *Store) InsertWebAuthnCredential(ctx context.Context, c theauth.WebAuthnCredential) (theauth.WebAuthnCredential, error) {
+	// Normalise nil to an empty slice so pgx serialises it as the text[]
+	// literal '{}' rather than SQL NULL (the column is NOT NULL with a
+	// DEFAULT '{}', and an explicit INSERT bypasses the default).
+	transports := c.Transports
+	if transports == nil {
+		transports = []string{}
+	}
 	row, err := s.q.InsertWebAuthnCredential(ctx, sqlcgen.InsertWebAuthnCredentialParams{
 		ID:           ulidToPgUUID(c.ID),
 		UserID:       ulidToPgUUID(c.UserID),
 		CredentialID: c.CredentialID,
 		PublicKey:    c.PublicKey,
 		SignCount:    int64(c.SignCount),
-		Transports:   c.Transports,
+		Transports:   transports,
 		Aaguid:       c.AAGUID,
 		Name:         c.Name,
 		CreatedAt:    timeToTs(c.CreatedAt),
