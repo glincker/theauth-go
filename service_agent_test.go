@@ -22,9 +22,10 @@ func newAgentASInstance(t *testing.T, mut ...func(*theauth.AuthorizationServerCo
 		t.Fatalf("rand: %v", err)
 	}
 	asCfg := &theauth.AuthorizationServerConfig{
-		Issuer:          "https://auth.example.com",
-		Resources:       []theauth.ProtectedResource{{Identifier: "https://files.example.com/mcp", Scopes: []string{"files.read", "files.write"}}},
-		DisableRotation: true,
+		Issuer:             "https://auth.example.com",
+		Resources:          []theauth.ProtectedResource{{Identifier: "https://files.example.com/mcp", Scopes: []string{"files.read", "files.write"}}},
+		DisableRotation:    true,
+		RegistrationTokens: []string{"initial-access-token"},
 	}
 	for _, m := range mut {
 		m(asCfg)
