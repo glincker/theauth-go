@@ -514,6 +514,12 @@ Sessions are opaque tokens. The raw token is set in an `HttpOnly`, `Secure`, `Sa
 
 ---
 
+## Stability and benchmarks
+
+- [STABILITY.md](STABILITY.md) lists the public API surface and the rules that govern v1.0 and beyond.
+- [internal/bench/BASELINES.md](internal/bench/BASELINES.md) records the v0.6 benchmark numbers for the five hot paths.
+- [CHANGELOG.md](CHANGELOG.md) tracks notable changes per release.
+
 ## Contributing
 
 - Bug reports and feature requests: [GitHub Issues](https://github.com/glincker/theauth-go/issues)
