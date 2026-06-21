@@ -61,7 +61,7 @@ type PasswordResetToken struct {
 
 // OAuthAccount records the linkage between one of our Users and a remote
 // OAuth provider identity (e.g. user X authenticates via GitHub). The
-// (provider, provider_user_id) pair is unique — re-running the OAuth flow
+// (provider, provider_user_id) pair is unique; re-running the OAuth flow
 // for the same provider account upserts this row rather than creating a
 // duplicate. Tokens are encrypted at rest via crypto.Encrypt and are
 // never serialized over JSON.

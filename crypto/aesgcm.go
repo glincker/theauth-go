@@ -39,7 +39,7 @@ func Encrypt(key, plaintext []byte) ([]byte, error) {
 		return nil, err
 	}
 	// Seal appends ciphertext to the dst slice (here: nonce), so the return
-	// is laid out as nonce || ciphertext_with_tag — exactly what Decrypt expects.
+	// is laid out as nonce || ciphertext_with_tag, exactly what Decrypt expects.
 	return gcm.Seal(nonce, nonce, plaintext, nil), nil
 }
 

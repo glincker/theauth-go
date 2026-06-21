@@ -89,7 +89,7 @@ type Config struct {
 	// EncryptionKey is the 32-byte AES-256 key used to encrypt provider
 	// access/refresh tokens before they hit storage. Required when
 	// len(Providers) > 0; New returns an error otherwise. Source this from
-	// a secrets manager — never commit it.
+	// a secrets manager; never commit it.
 	EncryptionKey []byte
 
 	// PostLoginRedirect is where the OAuth callback handler 302s to after

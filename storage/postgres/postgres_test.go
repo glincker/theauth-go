@@ -32,8 +32,13 @@ func testPool(t *testing.T) *pgxpool.Pool {
 	if err != nil {
 		t.Fatal(err)
 	}
+	mig3, err := os.ReadFile("migrations/0003_oauth_accounts.up.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
 	// Drop + recreate for clean state
 	_, _ = pool.Exec(context.Background(), `
+		DROP TABLE IF EXISTS oauth_accounts;
 		DROP TABLE IF EXISTS password_reset_tokens;
 		DROP TABLE IF EXISTS magic_links;
 		DROP TABLE IF EXISTS sessions;
@@ -43,6 +48,9 @@ func testPool(t *testing.T) *pgxpool.Pool {
 		t.Fatal(err)
 	}
 	if _, err := pool.Exec(context.Background(), string(mig2)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(context.Background(), string(mig3)); err != nil {
 		t.Fatal(err)
 	}
 	return pool
@@ -164,6 +172,74 @@ func TestPostgresPasswordResetTokenConsume(t *testing.T) {
 	}
 	if _, err := s.ConsumePasswordResetToken(ctx, tokenHash[:]); !errors.Is(err, storage.ErrNotFound) {
 		t.Fatalf("second consume should miss; got %v", err)
+	}
+}
+
+func TestPostgresOAuthAccountUpsertAndLookup(t *testing.T) {
+	pool := testPool(t)
+	defer pool.Close()
+	s := New(pool)
+	ctx := context.Background()
+
+	uid := ulid.New()
+	if _, err := s.CreateUser(ctx, theauth.User{ID: uid, Email: "oa@h.com", CreatedAt: time.Now(), UpdatedAt: time.Now()}); err != nil {
+		t.Fatal(err)
+	}
+	// Insert path.
+	first, err := s.UpsertOAuthAccount(ctx, theauth.OAuthAccount{
+		ID:             ulid.New(),
+		UserID:         uid,
+		Provider:       "github",
+		ProviderUserID: "42",
+		AccessTokenEnc: []byte("enc-1"),
+		Scope:          "read:user user:email",
+		CreatedAt:      time.Now(),
+		UpdatedAt:      time.Now(),
+	})
+	if err != nil {
+		t.Fatalf("insert upsert: %v", err)
+	}
+	if first.UserID != uid {
+		t.Fatalf("UserID mismatch after insert")
+	}
+
+	// Update path: same (provider, provider_user_id) should refresh tokens
+	// and bump updated_at, keep the original ID + created_at.
+	second, err := s.UpsertOAuthAccount(ctx, theauth.OAuthAccount{
+		ID:             ulid.New(), // ignored due to ON CONFLICT
+		UserID:         uid,
+		Provider:       "github",
+		ProviderUserID: "42",
+		AccessTokenEnc: []byte("enc-2"),
+		Scope:          "read:user",
+		CreatedAt:      time.Now(),
+		UpdatedAt:      time.Now(),
+	})
+	if err != nil {
+		t.Fatalf("update upsert: %v", err)
+	}
+	if second.ID != first.ID {
+		t.Fatalf("ID changed across upsert; got %v want %v", second.ID, first.ID)
+	}
+	if string(second.AccessTokenEnc) != "enc-2" {
+		t.Fatalf("access token not refreshed; got %q", second.AccessTokenEnc)
+	}
+	if second.Scope != "read:user" {
+		t.Fatalf("scope not refreshed; got %q", second.Scope)
+	}
+
+	// Lookup hit.
+	got, err := s.OAuthAccountByProviderUserID(ctx, "github", "42")
+	if err != nil {
+		t.Fatalf("lookup: %v", err)
+	}
+	if got.ID != first.ID {
+		t.Fatalf("lookup returned wrong row")
+	}
+
+	// Lookup miss.
+	if _, err := s.OAuthAccountByProviderUserID(ctx, "github", "does-not-exist"); !errors.Is(err, storage.ErrNotFound) {
+		t.Fatalf("expected ErrNotFound; got %v", err)
 	}
 }
 
