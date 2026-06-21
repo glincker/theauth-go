@@ -101,6 +101,12 @@ func (a *TheAuth) Mount(r chi.Router) {
 	if a.as != nil {
 		a.mountAS(r)
 	}
+
+	// End-user /account UX (v2.0 phase 6). Session-gated; mounted only when
+	// AccountUX is true (which already requires AgentIdentity at New time).
+	if a.accountUX {
+		a.mountAccount(r)
+	}
 }
 
 func (a *TheAuth) handleMagicLinkRequest(w http.ResponseWriter, r *http.Request) {

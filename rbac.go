@@ -26,6 +26,13 @@ const (
 	PermissionSAMLAdmin      = "saml:admin"
 	PermissionSCIMAdmin      = "scim:admin"
 	PermissionSessionsRevoke = "sessions:revoke"
+
+	// v2.0 phase 6 additions. agents:admin grants organization-scoped
+	// agent CRUD via /admin/v1/.../agents; delegations:admin grants
+	// delegation CRUD via /admin/v1/.../delegations. Seeded into every
+	// organization's "owner" and "admin" default roles.
+	PermissionAgentsAdmin      = "agents:admin"
+	PermissionDelegationsAdmin = "delegations:admin"
 )
 
 // SeededPermissions returns the v1.0 canonical permission catalog. The
@@ -44,6 +51,8 @@ func SeededPermissions() []Permission {
 		{Name: PermissionSAMLAdmin, Description: "Create, update, delete SAML connections."},
 		{Name: PermissionSCIMAdmin, Description: "Manage SCIM bearer tokens and provisioning."},
 		{Name: PermissionSessionsRevoke, Description: "Revoke another member's active sessions."},
+		{Name: PermissionAgentsAdmin, Description: "Create, update, suspend, revoke organization-owned agents."},
+		{Name: PermissionDelegationsAdmin, Description: "Create and revoke delegation grants on behalf of users in the organization."},
 	}
 }
 
