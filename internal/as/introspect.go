@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/glincker/theauth-go/crypto"
+	"github.com/glincker/theauth-go/internal/delegation"
 	"github.com/glincker/theauth-go/internal/jwt"
 	"github.com/glincker/theauth-go/internal/models"
 )
@@ -176,7 +177,7 @@ func (s *Service) chainStillActive(ctx context.Context, resp *IntrospectionRespo
 			if err != nil {
 				return false
 			}
-			if !delegationActive(g, now) {
+			if !delegation.Active(g, now) {
 				return false
 			}
 		}
@@ -300,17 +301,8 @@ func introspectCacheKey(token, aud string) string {
 	return string(out)
 }
 
-// delegationActive reports whether the supplied grant is still usable
-// (not revoked, not expired). Mirrors the root delegationActive in
-// service_delegation.go (which moves in PR C); duplicated here for now
-// so the introspection path can verify chains without depending on
-// root. Both versions MUST stay in sync until PR C unifies them.
-func delegationActive(g *models.DelegationGrant, now time.Time) bool {
-	if g == nil || g.RevokedAt != nil {
-		return false
-	}
-	if g.ExpiresAt != nil && !now.Before(*g.ExpiresAt) {
-		return false
-	}
-	return true
-}
+// delegationActive + narrowDelegatedScope previously lived here as
+// duplicates of the root service_delegation.go helpers. PR C of the
+// 2026-06 architecture reorg consolidated both into
+// internal/delegation; this file now imports delegation.Active and
+// delegation.NarrowScope so the helpers exist in exactly one place.
