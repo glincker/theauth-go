@@ -285,9 +285,42 @@ type Config struct {
 	// /oauth/authorize, /oauth/token, /oauth/revoke, /oauth/introspect,
 	// /oauth/register, and /oauth/jwks are mounted. Requires
 	// Config.EncryptionKey (32 bytes) and a Storage that satisfies
-	// OAuthServerStorage. Leave nil to keep v1.0 behavior. Phase 3 + 4
-	// (agent identity, delegation, token exchange) land in subsequent PRs.
+	// OAuthServerStorage.
 	AuthorizationServer *AuthorizationServerConfig
+
+	// AgentIdentity (v2.0 phase 3 + 4) enables the agent identity service
+	// surface (Create / Rotate / Suspend / Resume / Revoke), the
+	// client_credentials grant on /oauth/token, the delegation_grants
+	// service surface, and the RFC 8693 token-exchange grant on /oauth/token.
+	// Requires AuthorizationServer to be non-nil. Defaults applied at New:
+	// MaxChainDepth=3, MaxDelegationDuration=90d, DefaultDelegatedTokenTTL=15m,
+	// AgentSecretLength=32.
+	AgentIdentity *AgentConfig
+}
+
+// AgentConfig wires the agent-identity policy. Set on Config.AgentIdentity
+// to enable Phase 3 + 4 behavior (agents + delegations + token-exchange).
+// The zero value AgentConfig{} is valid and is interpreted as accept-all-
+// defaults at New.
+type AgentConfig struct {
+	// MaxChainDepth caps the actor chain length. Defaults to 3 (root subject
+	// plus two agents). Operators may lower (to 2, disabling sub-delegation)
+	// but never raise above 3 in v2.0; New returns an error if asked to.
+	MaxChainDepth int
+
+	// MaxDelegationDuration caps any single delegation_grants.max_duration.
+	// Defaults to 90 days. Per-grant max_duration_seconds MUST be <= this.
+	MaxDelegationDuration time.Duration
+
+	// DefaultDelegatedTokenTTL is the default exp window for tokens minted
+	// via the token-exchange grant when the requester does not narrow it
+	// further. Defaults to 15 minutes.
+	DefaultDelegatedTokenTTL time.Duration
+
+	// AgentSecretLength controls bytes of entropy in generated agent
+	// secrets. Defaults to 32 (256 bits). Stored hashed (Argon2id);
+	// transmitted exactly once at creation or rotation.
+	AgentSecretLength int
 }
 
 // RBACConfig configures organization-scoped roles and permissions. The zero
@@ -480,6 +513,11 @@ type TheAuth struct {
 	// v2.0 phase 1 + 2: OAuth 2.1 authorization server runtime state.
 	// Nil when Config.AuthorizationServer is not set.
 	as *asState
+
+	// v2.0 phase 3 + 4: agent identity + delegation policy. Nil when
+	// Config.AgentIdentity is not set; client_credentials and token-exchange
+	// grants short-circuit with unsupported_grant_type in that case.
+	agentCfg *AgentConfig
 }
 
 // New validates the Config, applies defaults, and returns a ready TheAuth.
@@ -664,6 +702,19 @@ func New(cfg Config) (*TheAuth, error) {
 		asRuntime = &asState{cfg: *cfg.AuthorizationServer, storage: oss, keyMap: map[string]JWKSKey{}}
 	}
 
+	// v2.0 phase 3 + 4: agent identity + delegation policy validation. Only
+	// meaningful when an authorization server is configured (the grants land
+	// at /oauth/token and the introspection chain walk reads agents and
+	// delegation_grants the AS storage owns).
+	if cfg.AgentIdentity != nil {
+		if cfg.AuthorizationServer == nil {
+			return nil, ErrAgentRequiresAS
+		}
+		if err := validateAgentConfig(cfg.AgentIdentity); err != nil {
+			return nil, err
+		}
+	}
+
 	a := &TheAuth{
 		storage:           cfg.Storage,
 		emailSender:       cfg.EmailSender,
@@ -693,6 +744,7 @@ func New(cfg Config) (*TheAuth, error) {
 		permIndex:         permIndex,
 		defaultRoleSeeds:  defaultSeeds,
 		as:                asRuntime,
+		agentCfg:          cfg.AgentIdentity,
 	}
 	if len(providers) > 0 {
 		a.oauthStateStop = make(chan struct{})
