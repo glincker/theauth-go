@@ -1,0 +1,19 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: theauth
+      POSTGRES_PASSWORD: theauth
+      POSTGRES_DB: theauth_chi
+    ports:
+      - "5432:5432"
+    volumes:
+      - theauth_chi_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U theauth"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  theauth_chi_pgdata:
