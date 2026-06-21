@@ -140,7 +140,6 @@ type countingStore struct {
 	calls  atomic.Uint64
 	rows   atomic.Uint64
 	signal chan struct{}
-	once   sync.Once
 }
 
 func newCountingStore() *countingStore {
