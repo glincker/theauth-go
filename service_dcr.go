@@ -50,29 +50,9 @@ type ClientRegistrationRequest struct {
 	SoftwareVersion         string   `json:"software_version,omitempty"`
 }
 
-// RegisteredClient is the JSON body returned on a successful registration
-// (RFC 7591 section 3.2.1). The client_secret is returned in plaintext
-// exactly once; the AS stores only the Argon2id hash.
-type RegisteredClient struct {
-	ClientID                string   `json:"client_id"`
-	ClientSecret            string   `json:"client_secret,omitempty"`
-	ClientIDIssuedAt        int64    `json:"client_id_issued_at"`
-	ClientSecretExpiresAt   int64    `json:"client_secret_expires_at,omitempty"`
-	RedirectURIs            []string `json:"redirect_uris"`
-	GrantTypes              []string `json:"grant_types"`
-	ResponseTypes           []string `json:"response_types"`
-	Scope                   string   `json:"scope,omitempty"`
-	TokenEndpointAuthMethod string   `json:"token_endpoint_auth_method"`
-	ApplicationType         string   `json:"application_type"`
-	ClientName              string   `json:"client_name,omitempty"`
-	Contacts                []string `json:"contacts,omitempty"`
-	LogoURI                 string   `json:"logo_uri,omitempty"`
-	PolicyURI               string   `json:"policy_uri,omitempty"`
-	TosURI                  string   `json:"tos_uri,omitempty"`
-	JwksURI                 string   `json:"jwks_uri,omitempty"`
-	SoftwareID              string   `json:"software_id,omitempty"`
-	SoftwareVersion         string   `json:"software_version,omitempty"`
-}
+// RegisteredClient is now defined in internal/models and re-exported from
+// models_v20.go as a type alias. The struct definition was relocated as
+// part of the arch-A0 models extraction.
 
 // RegisterClient validates the request, mints a client_id (and a secret for
 // confidential clients), persists the OAuthClient row, and returns the

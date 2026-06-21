@@ -1,23 +1,30 @@
 package theauth
 
-import "errors"
+import (
+	"errors"
 
-// Sentinel errors — retained for backward compatibility with v0.1 callers
+	"github.com/glincker/theauth-go/internal/models"
+)
+
+// Sentinel errors retained for backward compatibility with v0.1 callers
 // that errors.Is-check against them. New code should prefer TheAuthError +
 // the Code* constants below.
+//
+// Model-layer sentinels (storage misses, expiry states, RBAC catalog
+// rejections, organization invariants) are defined in internal/models and
+// re-exported here via var aliases. Service-flow and admin precondition
+// sentinels remain defined locally.
 var (
-	ErrInvalidToken     = errors.New("theauth: invalid token")
-	ErrSessionExpired   = errors.New("theauth: session expired")
+	ErrInvalidToken     = models.ErrInvalidToken
+	ErrSessionExpired   = models.ErrSessionExpired
 	ErrUserNotFound     = errors.New("theauth: user not found")
-	ErrMagicLinkExpired = errors.New("theauth: magic link expired")
+	ErrMagicLinkExpired = models.ErrMagicLinkExpired
 	ErrMagicLinkUsed    = errors.New("theauth: magic link already used")
 	ErrEmailNotVerified = errors.New("theauth: email not verified")
 
-	// ErrStorageNotFound is the canonical "row missing" sentinel that storage
-	// adapters return on lookup misses. Lives in the root package so service
-	// code can errors.Is-check without importing the storage package
-	// (which would create an import cycle).
-	ErrStorageNotFound = errors.New("theauth: storage row not found")
+	// ErrStorageNotFound is the canonical "row missing" sentinel that
+	// storage adapters return on lookup misses.
+	ErrStorageNotFound = models.ErrStorageNotFound
 
 	// ErrReplayDetected (v0.5) is returned by storage on a WebAuthn sign
 	// count update where the new count is not strictly greater than the
@@ -53,7 +60,7 @@ var (
 	ErrSAMLInvalidAssertion = errors.New("theauth: saml assertion invalid")
 	// ErrLastOwner is returned when an org member removal would leave the
 	// organization with zero owners.
-	ErrLastOwner = errors.New("theauth: cannot remove the last owner")
+	ErrLastOwner = models.ErrLastOwner
 	// ErrUnsupportedFilter is returned by the SCIM filter parser on any
 	// filter shape outside the documented eq-only whitelist.
 	ErrUnsupportedFilter = errors.New("theauth: scim filter not supported")
@@ -70,14 +77,14 @@ var (
 	// ErrForbidden indicates the caller lacks a required permission for
 	// the requested operation. Handlers map this to 403 with code
 	// "rbac.forbidden" in the RFC 7807 problem body.
-	ErrForbidden = errors.New("theauth: forbidden")
+	ErrForbidden = models.ErrForbidden
 	// ErrUnknownPermission indicates a permission name not present in the
 	// seeded or extended catalog. Mapped to 400 "rbac.unknown_permission".
-	ErrUnknownPermission = errors.New("theauth: unknown permission")
+	ErrUnknownPermission = models.ErrUnknownPermission
 	// ErrRoleInUse indicates a DELETE role would leave the organization
 	// without any user holding the "users:admin" permission. Mapped to
 	// 409 "rbac.role_in_use".
-	ErrRoleInUse = errors.New("theauth: role in use")
+	ErrRoleInUse = models.ErrRoleInUse
 	// ErrNoActiveOrg indicates the session has no active_organization_id
 	// set. Mapped to 403 "rbac.no_active_org".
 	ErrNoActiveOrg = errors.New("theauth: session has no active organization")
@@ -87,7 +94,7 @@ var (
 	// ErrRBACDisabled is returned by RBAC service methods invoked when
 	// Config.RBAC is nil. The RequirePermission middleware short-circuits
 	// to 500 rather than returning this error directly.
-	ErrRBACDisabled = errors.New("theauth: RBAC disabled (Config.RBAC is nil)")
+	ErrRBACDisabled = models.ErrRBACDisabled
 )
 
 // Stable error codes that callers can switch on. New endpoints return

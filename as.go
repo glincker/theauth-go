@@ -107,15 +107,10 @@ type AuthorizationServerConfig struct {
 	DisableRotation bool
 }
 
-// ProtectedResource describes one resource server protected by this AS. The
-// Identifier appears in the aud claim of issued tokens; it MUST be the URL the
-// resource server advertises in its own /.well-known/oauth-protected-resource
-// document.
-type ProtectedResource struct {
-	Identifier  string
-	DisplayName string
-	Scopes      []string
-}
+// ProtectedResource is now defined in internal/models and re-exported from
+// models_v20.go as a type alias. The struct definition was relocated as
+// part of the arch-A0 models extraction so that every persistent and
+// configuration entity lives in one package.
 
 // asState bundles the runtime state of the authorization server. Held on
 // TheAuth.as when AuthorizationServer is configured.
