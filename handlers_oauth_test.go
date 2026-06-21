@@ -114,7 +114,7 @@ func TestOAuthGitHubEndToEnd(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	resp.Body.Close()
+	_ = resp.Body.Close()
 	if resp.StatusCode != http.StatusFound {
 		t.Fatalf("/start: expected 302; got %d", resp.StatusCode)
 	}
@@ -156,7 +156,7 @@ func TestOAuthGitHubEndToEnd(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	resp.Body.Close()
+	_ = resp.Body.Close()
 	if resp.StatusCode != http.StatusFound {
 		t.Fatalf("/callback: expected 302; got %d", resp.StatusCode)
 	}
@@ -181,7 +181,7 @@ func TestOAuthGitHubEndToEnd(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer meResp.Body.Close()
+	defer func() { _ = meResp.Body.Close() }()
 	if meResp.StatusCode != http.StatusOK {
 		t.Fatalf("/auth/me: expected 200; got %d", meResp.StatusCode)
 	}
@@ -207,7 +207,7 @@ func TestOAuthGitHubEndToEnd(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	resp2.Body.Close()
+	_ = resp2.Body.Close()
 	if resp2.StatusCode != http.StatusBadRequest {
 		t.Fatalf("/callback replay: expected 400; got %d", resp2.StatusCode)
 	}
@@ -223,7 +223,7 @@ func TestOAuthCallbackStateMismatchRejected(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	resp.Body.Close()
+	_ = resp.Body.Close()
 	var stateCookie *http.Cookie
 	for _, c := range resp.Cookies() {
 		if c.Name == "theauth_oauth_state" {
@@ -241,7 +241,7 @@ func TestOAuthCallbackStateMismatchRejected(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	resp.Body.Close()
+	_ = resp.Body.Close()
 	if resp.StatusCode != http.StatusBadRequest {
 		t.Fatalf("expected 400 state mismatch; got %d", resp.StatusCode)
 	}
@@ -254,7 +254,7 @@ func TestOAuthUnknownProvider404(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	resp.Body.Close()
+	_ = resp.Body.Close()
 	if resp.StatusCode != http.StatusNotFound {
 		t.Fatalf("expected 404; got %d", resp.StatusCode)
 	}

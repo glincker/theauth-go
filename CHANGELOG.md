@@ -6,7 +6,86 @@ adheres to [Semantic Versioning](https://semver.org/) from v1.0 forward.
 
 ## [Unreleased]
 
-### Security (audit 2026-06-20)
+## [2.1.0] - 2026-06-21
+
+Internal architecture reorganization plus the v2.0 security audit followups.
+**The public API is byte-stable with v2.0**: every exported type, function,
+and method on `*theauth.TheAuth` keeps the same identifier, signature, and
+method set. Downstream consumers compile unchanged. Anyone relying on
+unexported symbols via `//go:linkname` or unsafe reflection may break (we
+deleted several dead unexported root methods and consolidated forwarders).
+
+### Internal package reorganization (PRs #20 through #28)
+
+The 1.9k-line monolithic root grew to 49 non-test root files at v2.0; PRs
+#20 through #28 extracted feature-by-feature implementations into
+`internal/<flow>` subpackages while the root kept the public surface as
+thin forwarders. PR G (this release) collapsed the remaining one-line
+forwarders into four grouped files and removed the dead bridges that
+earlier extractions left behind.
+
+- New internal packages added across the refactor: `internal/models`,
+  `internal/as`, `internal/as/handlers`, `internal/agent`,
+  `internal/agent/handlers`, `internal/delegation`, `internal/session`,
+  `internal/password`, `internal/password/handlers`, `internal/totp`,
+  `internal/totp/handlers`, `internal/webauthn`, `internal/webauthn/handlers`,
+  `internal/magiclink`, `internal/oauth/handlers`, `internal/saml`,
+  `internal/saml/handlers`, `internal/scim`, `internal/scim/handlers`,
+  `internal/organizations`, `internal/organizations/handlers`,
+  `internal/rbac`, `internal/audit`, `internal/account/handlers`,
+  `internal/admin/handlers`, `internal/clientauthcache`,
+  `internal/jwt`, `internal/chain`, `internal/httpx`, `internal/wavt`,
+  `internal/ulid`, `internal/bench`, `internal/samltest`.
+- Root non-test `.go` file count: 49 (v2.0) to 28 (v2.1). Public surface
+  unchanged.
+
+### Dead code purge (PR G)
+
+PR G deleted seven unused unexported root methods that lost their last
+in-tree caller during PRs B through F. Every one was forwarded to a
+`*as.Service` or `*<flow>.Service` method that handler packages now reach
+directly. None were on the public surface; consumers are unaffected.
+
+- `(*TheAuth).currentSigningKey` (was in `jwks.go`)
+- `(*TheAuth).publicKeyByKID` (was in `jwks.go`)
+- `(*TheAuth).invalidateClientAuthCache` (was in `as.go`)
+- `(*TheAuth).agentBySubjectClaim` (was in `service_agent.go`); the
+  `AgentLookup` adapter wired in `theauth.New` now points at
+  `a.agentSvc.AgentBySubjectClaim` directly.
+- `(*TheAuth).authenticateClient` (was in `service_token.go`)
+- `(*TheAuth).finishRegistrationFromRequest` (was in
+  `service_webauthn.go`); every handler now wraps the body in
+  `http.MaxBytesReader` itself.
+- `(*TheAuth).finishLoginFromRequest` (was in `service_webauthn.go`)
+
+### Forwarder consolidation (PR G)
+
+Twenty-one `service_*.go` forwarder files became three grouped files plus
+three substantive service files preserved as-is (because they still hold
+local logic, not just one-line thunks).
+
+- `forwarders_identity.go`: session, magic-link, password, TOTP,
+  WebAuthn, audit.
+- `forwarders_oauth.go`: DCR, introspect, revoke, token, token v3 / v4
+  grants, AS metadata, protected-resource metadata, authorize.
+- `forwarders_enterprise.go`: SCIM, organizations, RBAC, delegation.
+- Retained: `service_oauth.go` (OAuth state cache + GC + provider flow),
+  `service_agent.go` (`validateAgentConfig` plus the agent CRUD
+  forwarders), `service_saml.go` (`toInternal` adapter plus SAML
+  forwarders).
+
+Twelve root `handlers_*.go` files became eight: the five thinnest mount
+forwarders (oauth, password, totp, webauthn, oauth_server) collapsed
+into `mounts_extracted.go`; the six handler files that carry substantive
+service adapters (`handlers_account.go`, `handlers_admin.go`,
+`handlers_admin_agents.go`, `handlers_organizations.go`,
+`handlers_saml.go`, `handlers_scim.go`) plus the top-level `handlers.go`
+stay separate.
+
+`errors_v20.go` merged into `errors.go`; `models_v20.go` merged into
+`models.go`.
+
+### Security (audit 2026-06-20, shipped in PR #17)
 
 - H1: POST `/oauth/register` Bearer gate now validates the supplied token
   against `AuthorizationServerConfig.RegistrationTokens` under
@@ -24,29 +103,57 @@ adheres to [Semantic Versioning](https://semver.org/) from v1.0 forward.
 - H3: organization-scoped delegation admin (POST
   `/admin/v1/organizations/{orgID}/delegations`) now verifies that
   `body.userId` is a member of the calling admin's organization before
-  creating the grant. Cross-org targets return 403 problem+json
-  (`admin.user_not_in_org`). Previously the storage row could name any
-  user system-wide, which the introspection lookup would honor because
-  the per-grant query does not filter by organization.
+  creating the grant.
 - H4: `X-Forwarded-For` is no longer trusted by default. The new
   `Config.TrustedProxies []netip.Prefix` field gates XFF: the header is
   consulted only when the incoming `r.RemoteAddr` is inside one of the
-  configured prefixes. The legacy behavior (XFF honored unconditionally)
-  is gone; existing deployments behind a reverse proxy must list the
-  proxy's network explicitly. Operators on a direct public-internet bind
-  inherit the safe default automatically.
+  configured prefixes.
 - M2: `AddOrganizationMember` now refuses to demote the last owner of an
-  organization. The upsert path runs the same `ErrLastOwner` guard as
-  `RemoveOrganizationMember`. Fresh additions and promotions to owner
-  remain unaffected.
+  organization.
 - M6: the email + password signin path pays the Argon2id verify cost on
   the user-not-found and password-empty branches by verifying against a
-  fixed dummy PHC hash synthesized once at `New` time. Response time no
-  longer distinguishes registered from unregistered emails.
+  fixed dummy PHC hash synthesized once at `New` time.
 
-Deferred to follow-up PRs: M1 (SCIM cross-tenant email fallback), M3
+### Reliability (PR #18)
+
+- Closed the handleToken / SCIM PATCH / end-to-end AS to mcpresource
+  reliability gaps surfaced by the 2026-06 test audit.
+
+### Performance (PR #19)
+
+- `clientauthcache` interposes between the AS handlers and the Argon2id
+  client_secret verifier. First verification pays the Argon2id cost; every
+  subsequent verification of the same `(client_id, secret_hash)` pair is
+  served from the cache until the secret rotates or the entry ages out.
+- JWKS key cache: the AES-decrypted Ed25519 private key is decrypted once
+  per signing key version (rotation refreshes it) and stashed on
+  `*as.Service`. Cold path is unchanged; hot path drops one AES decrypt
+  per JWT mint.
+- `mcpresource` validator switched from `sync.Mutex` to `sync.RWMutex` on
+  the JWKS + introspection caches so concurrent reads no longer serialize.
+
+### Removed in PR G
+
+- Seven unused unexported methods on `*TheAuth` (see "Dead code purge"
+  above).
+- Twenty-one `service_*.go` files merged into three `forwarders_*.go`
+  files (see "Forwarder consolidation").
+- Five `handlers_*.go` files merged into one `mounts_extracted.go`.
+- `errors_v20.go` merged into `errors.go`.
+- `models_v20.go` merged into `models.go`.
+
+### Deferred from the 2026-06-20 audit
+
+Tracked as follow-up issues: M1 (SCIM cross-tenant email fallback), M3
 (SecureCookie default), M4 (JWKS rotation transaction), M5 (mcpresource
 missing-introspection startup warning), L1-L5, I1-I7.
+
+## [2.0.0] - 2026-06-20
+
+v2.0 ships the OAuth 2.1 Authorization Server, agent identity and
+delegation chains (RFC 8693), and the `mcpresource` validator SDK for MCP
+servers. Three alpha tags shipped phases incrementally
+(`v2.0.0-alpha.1` through `v2.0.0-alpha.3`); `v2.0.0` consolidated them.
 
 ### Added in v2.0 phase 5 + 6 (targeted for `v2.0.0`)
 
