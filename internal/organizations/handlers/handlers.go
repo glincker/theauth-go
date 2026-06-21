@@ -54,10 +54,10 @@ type SessionFromCtx func(r *http.Request) (*models.Session, bool)
 
 // Handler owns the seven /auth/orgs/* endpoints.
 type Handler struct {
-	svc           Service
-	requireRole   RoleChecker
-	userFromCtx   UserFromCtx
-	sessFromCtx   SessionFromCtx
+	svc         Service
+	requireRole RoleChecker
+	userFromCtx UserFromCtx
+	sessFromCtx SessionFromCtx
 }
 
 // New constructs a Handler with all of its callable dependencies.

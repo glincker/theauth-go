@@ -10,12 +10,7 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/oklog/ulid/v2"
 )
-
-// ulidParse aliases the upstream ULID Crockford parser so handler files do
-// not import oklog directly.
-var ulidParse = ulid.Parse
 
 // Mount wires TheAuth's HTTP routes onto the supplied chi router under /auth.
 // Routes:

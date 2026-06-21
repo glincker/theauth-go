@@ -2,8 +2,6 @@ package theauth
 
 import (
 	"context"
-
-	internalulid "github.com/glincker/theauth-go/internal/ulid"
 )
 
 // RBAC service forwarders. PR A architecture reorg (2026-06) moved the
@@ -13,15 +11,10 @@ import (
 // CreateRole / UpdateRole / DeleteRole) so handlers and consumer code
 // keep compiling.
 //
-// newULID stays defined here (lowercase, package-internal) because
-// service_audit.go and handlers_admin.go still call it. The internal rbac
-// package uses internal/ulid.New directly.
-
-// newULID returns a fresh ULID seeded with crypto/rand. Mirrors
-// internal/ulid.New so callers in this package do not need a second import.
-func newULID() ULID {
-	return internalulid.New()
-}
+// The legacy package-private newULID helper was removed in PR F when
+// its last in-package caller (handlers_admin.go) moved into
+// internal/admin/handlers; the extracted package uses internal/ulid.New
+// directly.
 
 // SeedPermissions ensures every seeded + consumer-extended permission row
 // exists in storage. Idempotent on the permissions.name unique index.

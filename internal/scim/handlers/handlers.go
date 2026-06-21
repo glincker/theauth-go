@@ -258,21 +258,21 @@ func (h *Handler) handleUsersList(w http.ResponseWriter, r *http.Request) {
 }
 
 type userCreateBody struct {
-	Schemas     []string                `json:"schemas"`
-	UserName    string                  `json:"userName"`
-	ExternalID  string                  `json:"externalId"`
-	Name        internalscim.UserName   `json:"name"`
-	DisplayName string                  `json:"displayName"`
+	Schemas     []string                 `json:"schemas"`
+	UserName    string                   `json:"userName"`
+	ExternalID  string                   `json:"externalId"`
+	Name        internalscim.UserName    `json:"name"`
+	DisplayName string                   `json:"displayName"`
 	Emails      []internalscim.UserEmail `json:"emails"`
-	Active      *bool                   `json:"active"`
-	Password    string                  `json:"password"`
+	Active      *bool                    `json:"active"`
+	Password    string                   `json:"password"`
 }
 
 type groupCreateBody struct {
-	Schemas     []string                 `json:"schemas"`
-	DisplayName string                   `json:"displayName"`
-	ExternalID  string                   `json:"externalId"`
-	Members     []internalscim.GroupRef  `json:"members"`
+	Schemas     []string                `json:"schemas"`
+	DisplayName string                  `json:"displayName"`
+	ExternalID  string                  `json:"externalId"`
+	Members     []internalscim.GroupRef `json:"members"`
 }
 
 func (h *Handler) handleUserCreate(w http.ResponseWriter, r *http.Request) {

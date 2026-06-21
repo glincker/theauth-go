@@ -4,7 +4,6 @@ import (
 	"context"
 	"net/http"
 
-	"github.com/glincker/theauth-go/internal/httpx"
 	"github.com/glincker/theauth-go/internal/models"
 	orghandlers "github.com/glincker/theauth-go/internal/organizations/handlers"
 	"github.com/go-chi/chi/v5"
@@ -12,11 +11,10 @@ import (
 
 // handlers_organizations.go: thin forwarder around the extracted
 // internal/organizations/handlers package. PR F architecture reorg
-// (2026-06-20) moved the seven /auth/orgs/* endpoints there. The
-// shared helpers (pathULID, writeJSON) now forward to internal/httpx;
-// root keeps a small forwarder so SAML and SCIM CRUD subroutes (whose
-// handlers still live in root for now) can be mounted against the
-// same /auth/orgs tree.
+// (2026-06-20) moved the seven /auth/orgs/* endpoints there. SAML
+// connection CRUD and SCIM token CRUD subroutes mount through the
+// same /auth/orgs tree via the mountSub callback below; both call
+// into their own extracted internal handler packages.
 
 // organizationsServiceAdapter implements orghandlers.Service on top of
 // the root *TheAuth, forwarding to the existing public methods so the
@@ -114,17 +112,4 @@ func (a *TheAuth) requireOrgRole(w http.ResponseWriter, r *http.Request, orgID, 
 	}
 	http.Error(w, "forbidden", http.StatusForbidden)
 	return false
-}
-
-// pathULID is kept in root because handlers_saml.go and handlers_scim.go
-// reference it directly. Forwards to httpx.PathULID so the legacy
-// surface is preserved without duplicating the helper.
-func pathULID(w http.ResponseWriter, r *http.Request, name string) (ULID, bool) {
-	return httpx.PathULID(w, r, name)
-}
-
-// writeJSON forwards to httpx.WriteJSON for the same reason as
-// pathULID above.
-func writeJSON(w http.ResponseWriter, status int, v interface{}) {
-	httpx.WriteJSON(w, status, v)
 }

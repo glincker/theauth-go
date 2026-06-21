@@ -37,8 +37,8 @@ import (
 
 // Handler owns the AS HTTP surface.
 type Handler struct {
-	svc         *internalas.Service
-	userFromCtx func(r *http.Request) (*models.User, bool)
+	svc          *internalas.Service
+	userFromCtx  func(r *http.Request) (*models.User, bool)
 	bearerHashes [][32]byte
 }
 
