@@ -12,8 +12,8 @@ This file helps AI coding assistants (Claude Code, Cursor, GitHub Copilot, Winds
 - **v0.4 (shipped)**: Google, Microsoft, Discord OAuth providers (same `Provider` interface, no core changes)
 - **v0.5 (shipped)**: WebAuthn / passkeys (discoverable login + replay-protected registration), TOTP 2FA + 10 single-use recovery codes, session step-up state machine (`pending_2fa` -> `full`)
 - **v0.6 (shipped)**: hardening release. Fuzz tests, race tests, benchmark baselines, four new examples (gin, echo, stdlib, oauth-multi-provider), package documentation, `STABILITY.md`, `CHANGELOG.md`. No new features.
-- **v0.7**: refresh-token rotation, JWKS-backed `id_token` verification, SMTP sender
-- **v1.0**: all 17 OAuth providers + SAML 2.0
+- **v0.7 (shipped)**: SAML 2.0 Service Provider (per-connection IdP binding, signed assertions only, find-or-create), SCIM 2.0 provisioning (Users + Groups + Discovery, eq-only filter, RFC 7644 PATCH, sha256 bearer tokens), organizations multi-tenancy (`organizations`, `organization_members`, `sessions.active_organization_id`). Migrations 0006 / 0007 / 0008. Audit hook stub (v1.0 wires the real async writer).
+- **v1.0**: RBAC on top of organization roles, async audit log writer, admin API surface
 - **v2.0**: MCP OAuth 2.1 server, agent identity, delegation chains, budget policies
 
 It is **not** a SaaS, **not** a port of a TypeScript library, and **not** a hosted IdP.

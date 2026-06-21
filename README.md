@@ -387,6 +387,143 @@ See `examples/totp-stepup/` for a single-page demo of the full flow.
 
 ---
 
+## Organizations (v0.7)
+
+Multi-tenancy is opt-in. Set `Config.Organizations` to a non-nil value and
+the `/auth/orgs/*` routes mount. Existing single-tenant deployments leave
+the field nil and see zero behavior change.
+
+```go
+a, _ := theauth.New(theauth.Config{
+    Storage:       postgres.New(pool),
+    BaseURL:       "https://yourapp.com",
+    Organizations: &theauth.OrganizationsConfig{},
+})
+```
+
+Routes (all require an authenticated session):
+
+| Method + path | Auth | Purpose |
+| --- | --- | --- |
+| `POST   /auth/orgs` | RequireAuth | Create org, caller becomes owner |
+| `GET    /auth/orgs` | RequireAuth | List orgs the caller belongs to |
+| `GET    /auth/orgs/{id}` | member | Read one org |
+| `POST   /auth/orgs/{id}/members` | owner or admin | Add a member, body `{userId, role}` |
+| `DELETE /auth/orgs/{id}/members/{userId}` | owner | Remove a member (refuses last owner) |
+| `POST   /auth/orgs/{id}/activate` | member | Bind current session to this org |
+| `POST   /auth/orgs/clear-active` | RequireAuth | Clear the active-org binding |
+
+Roles: `owner`, `admin`, `member`. Sessions gain a nullable
+`ActiveOrganizationID` so downstream application code can scope queries
+without re-resolving membership.
+
+---
+
+## SAML 2.0 SP (v0.7)
+
+The library is a Service Provider only. Each `saml_connections` row binds
+one organization to one IdP, signed assertions only, find-or-create by
+`(connection_id, name_id)` with an email fallback.
+
+```go
+a, _ := theauth.New(theauth.Config{
+    Storage:       postgres.New(pool),
+    BaseURL:       "https://yourapp.com",
+    Organizations: &theauth.OrganizationsConfig{},
+    SAML: &theauth.SAMLConfig{
+        SPCertificatePEM: spCertPEM, // PEM-encoded SP signing cert
+        SPPrivateKeyPEM:  spKeyPEM,  // PEM-encoded RSA key
+        // AuthnRequestTTL defaults to 10m; ClockSkew defaults to 30s
+    },
+})
+```
+
+Public-facing flow routes:
+
+| Method + path | Auth | Purpose |
+| --- | --- | --- |
+| `GET  /auth/saml/{connectionId}/login` | none | SP-initiated SSO, 302 to IdP |
+| `POST /auth/saml/{connectionId}/acs` | none | Assertion Consumer Service, runs find-or-create |
+| `GET  /auth/saml/{connectionId}/metadata` | none | SP metadata XML for the IdP admin |
+
+Per-organization connection CRUD (owner-only):
+
+| Method + path | Purpose |
+| --- | --- |
+| `POST   /auth/orgs/{orgId}/saml/connections` | Create connection |
+| `GET    /auth/orgs/{orgId}/saml/connections` | List connections |
+| `GET    /auth/orgs/{orgId}/saml/connections/{id}` | Read one |
+| `PUT    /auth/orgs/{orgId}/saml/connections/{id}` | Replace (cert rotation) |
+| `DELETE /auth/orgs/{orgId}/saml/connections/{id}` | Delete |
+
+Attribute mapping is per-connection JSON with WS-Federation defaults
+(Microsoft, Okta, OneLogin). Override only the keys that differ for a
+specific IdP. Standards: SAML 2.0 Core (OASIS), implemented via
+[`github.com/crewjam/saml`](https://github.com/crewjam/saml) v0.5.1.
+
+---
+
+## SCIM 2.0 provisioning (v0.7)
+
+Hand-rolled SCIM 2.0 (RFC 7643 + RFC 7644). Bearer auth, one or more
+sha256-hashed tokens per organization, idempotent upsert by
+`externalId`, PATCH per RFC 7644 §3.5.2.
+
+```go
+a, _ := theauth.New(theauth.Config{
+    Storage:       postgres.New(pool),
+    BaseURL:       "https://yourapp.com",
+    Organizations: &theauth.OrganizationsConfig{},
+    SCIM: &theauth.SCIMConfig{
+        RequireHTTPS: true, // default true; flip false only behind a TLS-terminating proxy that strips X-Forwarded-Proto
+        MaxPageSize:  200,  // default 200
+    },
+})
+```
+
+Token CRUD lives under the org tree (owner-only):
+
+| Method + path | Purpose |
+| --- | --- |
+| `POST   /auth/orgs/{orgId}/scim/tokens` | Mint a token, plaintext returned once |
+| `GET    /auth/orgs/{orgId}/scim/tokens` | List tokens (hash never exposed) |
+| `DELETE /auth/orgs/{orgId}/scim/tokens/{id}` | Revoke |
+
+Resource endpoints at `/scim/v2/` (bearer required):
+
+| Method + path | Purpose |
+| --- | --- |
+| `GET    /scim/v2/ServiceProviderConfig` | RFC 7644 §5 |
+| `GET    /scim/v2/ResourceTypes`         | RFC 7644 §6 |
+| `GET    /scim/v2/Schemas`               | RFC 7644 §6 |
+| `GET    /scim/v2/Users`                 | List users in org. eq filter on `userName`, `externalId`, `emails.value` |
+| `POST   /scim/v2/Users`                 | Create or upsert by `externalId` |
+| `GET    /scim/v2/Users/{id}`            | Read one |
+| `PATCH  /scim/v2/Users/{id}`            | RFC 7644 §3.5.2 add/replace/remove |
+| `PUT    /scim/v2/Users/{id}`            | 405, documented deviation (Okta and Azure AD default to PATCH) |
+| `DELETE /scim/v2/Users/{id}`            | Soft delete (removes from org, preserves user row) |
+| `GET    /scim/v2/Groups`                | List groups |
+| `POST   /scim/v2/Groups`                | Create or upsert |
+| `GET    /scim/v2/Groups/{id}`           | Read |
+| `PATCH  /scim/v2/Groups/{id}`           | Members add/remove |
+| `PUT    /scim/v2/Groups/{id}`           | 405 |
+| `DELETE /scim/v2/Groups/{id}`           | Delete |
+
+Documented deviations from RFC 7643:
+- `password` on User POST/PATCH is rejected with 400 `invalidValue`. Auth
+  credentials in theauth-go are owned by the user-facing endpoints, not
+  by SCIM clients.
+- Nested groups (a `members[i].type=="Group"`) are rejected with 400
+  `invalidValue`. v0.7 supports flat user membership only.
+- Only equality filters are accepted; other operators return 400
+  `invalidFilter` with the documented body.
+
+Audit hook: `Config.AuditHook` is invoked synchronously for every SCIM
+mutation and every successful SAML assertion. v0.7 ships a no-op default;
+v1.0 replaces this binding with the real async writer.
+
+---
+
 ## Comparison
 
 How `theauth-go` stacks up against the libraries and services you would actually consider in 2026:
@@ -399,6 +536,9 @@ How `theauth-go` stacks up against the libraries and services you would actually
 | OAuth providers               | 4             | 17            | 30+          | 20+          | 10+           |
 | Passkeys / WebAuthn           | Shipping      | Shipping      | Shipping     | Shipping     | Shipping      |
 | TOTP 2FA + recovery codes     | Shipping      | Shipping      | Shipping     | Shipping     | Shipping      |
+| SAML 2.0 SP                   | Shipping      | Shipping      | Shipping     | Shipping     | Shipping      |
+| SCIM 2.0 provisioning         | Shipping      | Shipping      | Shipping     | Shipping     | Shipping      |
+| Multi-tenancy (organizations) | Shipping      | Shipping      | Shipping     | Shipping     | Shipping      |
 | Self-hosted                   | Yes           | Yes           | No           | No           | Yes           |
 | MCP OAuth 2.1 server          | Roadmap v2.0  | Roadmap v2.0  | No           | No           | No            |
 | Agent identity + delegation   | Roadmap v2.0  | Roadmap v2.0  | No           | No           | No            |
@@ -470,8 +610,9 @@ a, _ := theauth.New(theauth.Config{
 - **v0.3** GitHub OAuth (Provider interface + PKCE S256), AES-GCM token-at-rest encryption (shipped)
 - **v0.4** Google + Microsoft + Discord OAuth (shipped)
 - **v0.5** WebAuthn / passkeys, TOTP 2FA + recovery codes, session step-up state machine (shipped)
-- **v0.6** Refresh-token rotation, JWKS-backed `id_token` verification, SMTP sender
-- **v1.0** All 17 OAuth providers + SAML 2.0
+- **v0.6** Hardening pass: fuzz matrix, race tests, examples, benchmarks, godoc, STABILITY.md (shipped)
+- **v0.7** SAML 2.0 SP, SCIM 2.0 provisioning, organizations multi-tenancy (shipped)
+- **v1.0** RBAC, async audit log writer, admin API surface
 - **v2.0** MCP OAuth 2.1 server, agent identity, delegation chains, budget policies
 
 Track the work in [GitHub Issues](https://github.com/glincker/theauth-go/issues) and [Releases](https://github.com/glincker/theauth-go/releases).
