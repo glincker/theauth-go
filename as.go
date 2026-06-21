@@ -64,6 +64,31 @@ type AuthorizationServerConfig struct {
 	// AnonymousRegistered = true for operator auditing.
 	AllowAnonymousRegistration bool
 
+	// RegistrationTokens is the operator-supplied set of bearer initial
+	// access tokens that POST /oauth/register accepts when DCR is bearer
+	// gated (the default). Each entry is the raw token string; it is
+	// sha256-hashed at New time and the plaintext is dropped, so the
+	// in-memory state never carries the secret value. Token comparisons
+	// run under crypto/subtle.ConstantTimeCompare so token-presence
+	// timing is not observable.
+	//
+	// When AllowAnonymousRegistration is false (the default and the
+	// production-recommended value) and RegistrationTokens is empty,
+	// POST /oauth/register returns 401 access_denied to every caller,
+	// because no operator-issued token can possibly match. Operators
+	// that want a truly open DCR endpoint must flip
+	// AllowAnonymousRegistration to true explicitly (security audit H1,
+	// 2026-06-20).
+	RegistrationTokens []string
+
+	// RegistrationRateLimitPerMinute caps POST /oauth/register at this
+	// many requests per source IP per minute. Defaults: 1 when
+	// AllowAnonymousRegistration is true (matches the documented public
+	// MCP profile), 5 otherwise. Set to a negative value to disable the
+	// per-IP cap entirely (operator opt-out; not recommended on a
+	// public-internet bind) (security audit H2, 2026-06-20).
+	RegistrationRateLimitPerMinute int
+
 	// IntrospectionCacheTTL is the Cache-Control max-age the introspection
 	// endpoint emits. Defaults to 60 seconds. Resource servers may cache
 	// responses up to this duration.
@@ -156,6 +181,19 @@ func validateASConfig(cfg *AuthorizationServerConfig, encryptionKey []byte) erro
 	}
 	if cfg.LoginURL == "" {
 		cfg.LoginURL = "/auth/login"
+	}
+	// security audit H2 (2026-06-20): documented per-IP cap is now
+	// enforced. Defaults match the docstring on AllowAnonymousRegistration:
+	// 1 req/min/IP for the anonymous public-MCP profile, 5 req/min/IP for
+	// the bearer-gated profile. Operators that need different limits set
+	// RegistrationRateLimitPerMinute explicitly; a negative value disables
+	// the cap.
+	if cfg.RegistrationRateLimitPerMinute == 0 {
+		if cfg.AllowAnonymousRegistration {
+			cfg.RegistrationRateLimitPerMinute = 1
+		} else {
+			cfg.RegistrationRateLimitPerMinute = 5
+		}
 	}
 	return nil
 }

@@ -4,9 +4,11 @@ import (
 	"context"
 	"crypto/ed25519"
 	"crypto/rsa"
+	"crypto/sha256"
 	"crypto/x509"
 	"encoding/pem"
 	"errors"
+	"net/netip"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -219,6 +221,18 @@ type Config struct {
 	// RateLimitPerEmail is the per-email per-minute budget applied to signin
 	// + forgot. Defaults to 3 when zero.
 	RateLimitPerEmail int
+
+	// TrustedProxies is the operator-supplied allowlist of reverse-proxy
+	// networks whose X-Forwarded-For header is trusted by the rate
+	// limiter and the audit IP capture path. Default: empty slice (no
+	// XFF trust). Existing deployments that depend on XFF must opt in
+	// explicitly by listing their reverse-proxy CIDR(s) here (security
+	// audit H4, 2026-06-20).
+	//
+	// Example values: netip.MustParsePrefix("10.0.0.0/8"),
+	// netip.MustParsePrefix("172.16.0.0/12"). For a single-host LB front
+	// end pass a /32 (or /128 for IPv6) literal.
+	TrustedProxies []netip.Prefix
 
 	// Providers is the list of OAuth providers exposed under
 	// /auth/providers/{name}/start and /callback. Leave nil to disable
@@ -470,6 +484,15 @@ type TheAuth struct {
 	secureCookie      bool
 	rateLimitPerIP    int
 	rateLimitPerEmail int
+	trustedProxies    []netip.Prefix
+
+	// dcrRegistrationTokenHashes is the sha256-hashed set of operator
+	// initial access tokens accepted by POST /oauth/register when DCR is
+	// bearer gated. Compares run with crypto/subtle.ConstantTimeCompare so
+	// token-presence timing is not observable. Empty when no tokens are
+	// configured; the handler then rejects every Authorization-bearing
+	// request (security audit H1, 2026-06-20).
+	dcrRegistrationTokenHashes [][32]byte
 
 	// OAuth (v0.3)
 	providers         map[string]Provider
@@ -731,37 +754,56 @@ func New(cfg Config) (*TheAuth, error) {
 		return nil, ErrAccountUXRequiresAgents
 	}
 
+	// security audit H1 (2026-06-20): pre-hash any operator-configured
+	// initial access tokens so the plaintext never survives past New.
+	// Storage is in-memory only; nothing is written to disk by the
+	// library. Operators that rotate tokens out of band must
+	// reinstantiate TheAuth.
+	var dcrTokenHashes [][32]byte
+	if cfg.AuthorizationServer != nil && len(cfg.AuthorizationServer.RegistrationTokens) > 0 {
+		dcrTokenHashes = make([][32]byte, 0, len(cfg.AuthorizationServer.RegistrationTokens))
+		for _, tok := range cfg.AuthorizationServer.RegistrationTokens {
+			trimmed := tok
+			if trimmed == "" {
+				return nil, errors.New("theauth: AuthorizationServer.RegistrationTokens contains an empty entry")
+			}
+			dcrTokenHashes = append(dcrTokenHashes, sha256.Sum256([]byte(trimmed)))
+		}
+	}
+
 	a := &TheAuth{
-		storage:           cfg.Storage,
-		emailSender:       cfg.EmailSender,
-		baseURL:           cfg.BaseURL,
-		signingKey:        cfg.SigningKey,
-		sessionTTL:        cfg.SessionTTL,
-		magicLinkTTL:      cfg.MagicLinkTTL,
-		cookieName:        cfg.CookieName,
-		secureCookie:      cfg.SecureCookie,
-		rateLimitPerIP:    cfg.RateLimitPerIP,
-		rateLimitPerEmail: cfg.RateLimitPerEmail,
-		providers:         providers,
-		encryptionKey:     cfg.EncryptionKey,
-		postLoginRedirect: cfg.PostLoginRedirect,
-		webauthn:          wa,
-		webauthnCfg:       cfg.WebAuthn,
-		totpCfg:           cfg.TOTP,
-		orgsCfg:           cfg.Organizations,
-		samlCfg:           cfg.SAML,
-		samlSPCert:        samlCert,
-		samlSPKey:         samlKey,
-		scimCfg:           cfg.SCIM,
-		rbacCfg:           cfg.RBAC,
-		auditCfg:          cfg.Audit,
-		adminCfg:          cfg.Admin,
-		permCatalog:       permCatalog,
-		permIndex:         permIndex,
-		defaultRoleSeeds:  defaultSeeds,
-		as:                asRuntime,
-		agentCfg:          cfg.AgentIdentity,
-		accountUX:         cfg.AccountUX,
+		storage:                    cfg.Storage,
+		emailSender:                cfg.EmailSender,
+		baseURL:                    cfg.BaseURL,
+		signingKey:                 cfg.SigningKey,
+		sessionTTL:                 cfg.SessionTTL,
+		magicLinkTTL:               cfg.MagicLinkTTL,
+		cookieName:                 cfg.CookieName,
+		secureCookie:               cfg.SecureCookie,
+		rateLimitPerIP:             cfg.RateLimitPerIP,
+		rateLimitPerEmail:          cfg.RateLimitPerEmail,
+		trustedProxies:             append([]netip.Prefix(nil), cfg.TrustedProxies...),
+		dcrRegistrationTokenHashes: dcrTokenHashes,
+		providers:                  providers,
+		encryptionKey:              cfg.EncryptionKey,
+		postLoginRedirect:          cfg.PostLoginRedirect,
+		webauthn:                   wa,
+		webauthnCfg:                cfg.WebAuthn,
+		totpCfg:                    cfg.TOTP,
+		orgsCfg:                    cfg.Organizations,
+		samlCfg:                    cfg.SAML,
+		samlSPCert:                 samlCert,
+		samlSPKey:                  samlKey,
+		scimCfg:                    cfg.SCIM,
+		rbacCfg:                    cfg.RBAC,
+		auditCfg:                   cfg.Audit,
+		adminCfg:                   cfg.Admin,
+		permCatalog:                permCatalog,
+		permIndex:                  permIndex,
+		defaultRoleSeeds:           defaultSeeds,
+		as:                         asRuntime,
+		agentCfg:                   cfg.AgentIdentity,
+		accountUX:                  cfg.AccountUX,
 	}
 	if len(providers) > 0 {
 		a.oauthStateStop = make(chan struct{})
