@@ -2,8 +2,11 @@ package theauth
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"strings"
+
+	internalscim "github.com/glincker/theauth-go/internal/scim"
 )
 
 type scimCtxKey int
@@ -15,30 +18,30 @@ const (
 )
 
 // scimAuth is the bearer-auth middleware for /scim/v2/*. It enforces
-// HTTPS (per SCIMConfig.RequireHTTPS), extracts the Authorization: Bearer
-// token, resolves it to an organization via sha256 lookup, and stashes
-// both the orgID and the token row ID in the context for downstream
-// handlers + audit emission.
+// HTTPS (per SCIMConfig.RequireHTTPS), extracts the Authorization:
+// Bearer token, resolves it to an organization via sha256 lookup, and
+// stashes both the orgID and the token row ID in the context for
+// downstream handlers + audit emission.
 func (a *TheAuth) scimAuth() func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if a.scimCfg == nil {
-				writeSCIMError(w, http.StatusNotFound, "", "scim not enabled")
+				writeSCIMMiddlewareError(w, http.StatusNotFound, "scim not enabled")
 				return
 			}
 			if a.scimCfg.RequireHTTPS && !isHTTPS(r) {
-				writeSCIMError(w, http.StatusForbidden, "", "scim requires https")
+				writeSCIMMiddlewareError(w, http.StatusForbidden, "scim requires https")
 				return
 			}
 			authz := r.Header.Get("Authorization")
 			if !strings.HasPrefix(authz, "Bearer ") {
-				writeSCIMError(w, http.StatusUnauthorized, "", "missing bearer token")
+				writeSCIMMiddlewareError(w, http.StatusUnauthorized, "missing bearer token")
 				return
 			}
 			token := strings.TrimSpace(strings.TrimPrefix(authz, "Bearer "))
 			orgID, err := a.AuthenticateSCIMToken(r.Context(), token)
 			if err != nil {
-				writeSCIMError(w, http.StatusUnauthorized, "", "invalid bearer token")
+				writeSCIMMiddlewareError(w, http.StatusUnauthorized, "invalid bearer token")
 				return
 			}
 			tokID := a.scimTokenIDByPresented(r.Context(), token)
@@ -56,8 +59,8 @@ func scimOrgFromContext(ctx context.Context) (ULID, bool) {
 	return v, ok
 }
 
-// scimTokenIDFromContext returns the SCIM token row ID resolved by scimAuth.
-// Used as the actor for SCIM audit events.
+// scimTokenIDFromContext returns the SCIM token row ID resolved by
+// scimAuth. Used as the actor for SCIM audit events.
 func scimTokenIDFromContext(ctx context.Context) ULID {
 	if v, ok := ctx.Value(scimTokenIDKey).(ULID); ok {
 		return v
@@ -72,4 +75,15 @@ func isHTTPS(r *http.Request) bool {
 		return true
 	}
 	return strings.EqualFold(r.Header.Get("X-Forwarded-Proto"), "https")
+}
+
+// writeSCIMMiddlewareError emits the SCIM error body shape from the
+// bearer middleware path. PR F architecture reorg (2026-06-20): we
+// can no longer call the package-private writeSCIMError because the
+// handler moved into internal/scim/handlers; we re-marshal directly
+// using the wire helpers exported from internal/scim.
+func writeSCIMMiddlewareError(w http.ResponseWriter, status int, detail string) {
+	w.Header().Set("Content-Type", internalscim.ContentType)
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(internalscim.NewError(status, "", detail))
 }

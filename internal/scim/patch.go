@@ -1,21 +1,24 @@
-package theauth
+package scim
 
 import (
 	"encoding/json"
 	"errors"
 	"strings"
+
+	"github.com/glincker/theauth-go/internal/models"
+	"github.com/oklog/ulid/v2"
 )
 
-// applySCIMUserPatch applies a sequence of PATCH operations to a User.
+// ApplyUserPatch applies a sequence of PATCH operations to a User.
 // Supported ops: replace and add against the attribute paths active,
 // userName, displayName, externalId, name.givenName, name.familyName,
-// name.formatted, emails. remove against active flips the user to
-// inactive (which the handler maps to membership removal).
+// name.formatted, name, emails. remove against active flips the user
+// to inactive (the handler maps this to membership removal).
 //
 // On an unsupported path or op we return ErrUnsupportedFilter (reused
 // here as a generic "this PATCH is outside our subset" signal); the
 // handler maps it to 400 invalidValue.
-func applySCIMUserPatch(u *User, ops []scimPatchOp, activeOut *bool) error {
+func ApplyUserPatch(u *models.User, ops []PatchOp, activeOut *bool) error {
 	for _, op := range ops {
 		opName := strings.ToLower(op.Op)
 		path := op.Path
@@ -35,11 +38,7 @@ func applySCIMUserPatch(u *User, ops []scimPatchOp, activeOut *bool) error {
 	return nil
 }
 
-func applyUserSet(u *User, activeOut *bool, path string, value json.RawMessage) error {
-	// PATCH ops without a path put the full object literal in Value (and
-	// the SCIM spec defines that as a merge against the top-level
-	// resource). We handle the common Okta / Azure AD shape of "replace
-	// the active flag at the root via a value object".
+func applyUserSet(u *models.User, activeOut *bool, path string, value json.RawMessage) error {
 	if path == "" {
 		var obj map[string]json.RawMessage
 		if err := json.Unmarshal(value, &obj); err != nil {
@@ -99,7 +98,7 @@ func applyUserSet(u *User, activeOut *bool, path string, value json.RawMessage) 
 		}
 		u.Name = s
 	case "name":
-		var n scimUserName
+		var n UserName
 		if err := json.Unmarshal(value, &n); err != nil {
 			return err
 		}
@@ -113,11 +112,11 @@ func applyUserSet(u *User, activeOut *bool, path string, value json.RawMessage) 
 			u.Name = n.Formatted
 		}
 	case "emails":
-		var emails []scimUserEmail
+		var emails []UserEmail
 		if err := json.Unmarshal(value, &emails); err != nil {
 			return err
 		}
-		if e := parsePrimaryEmail(emails); e != "" {
+		if e := ParsePrimaryEmail(emails); e != "" {
 			u.Email = e
 		}
 	default:
@@ -126,7 +125,7 @@ func applyUserSet(u *User, activeOut *bool, path string, value json.RawMessage) 
 	return nil
 }
 
-func applyUserRemove(u *User, activeOut *bool, path string) error {
+func applyUserRemove(u *models.User, activeOut *bool, path string) error {
 	switch path {
 	case "active":
 		*activeOut = false
@@ -141,11 +140,11 @@ func applyUserRemove(u *User, activeOut *bool, path string) error {
 	return nil
 }
 
-// applySCIMGroupPatch returns the lists of members to add or remove for a
+// ApplyGroupPatch returns the lists of members to add or remove for a
 // PATCH against a Group's members attribute. Other paths are not
-// implemented; v0.7 only needs displayName replace and members add/remove
-// for the Okta / Azure AD provisioning cycle.
-func applySCIMGroupPatch(g *Group, ops []scimPatchOp) (addUsers []ULID, removeUsers []ULID, err error) {
+// implemented; v0.7 only needs displayName replace and members
+// add/remove for the Okta / Azure AD provisioning cycle.
+func ApplyGroupPatch(g *models.Group, ops []PatchOp) (addUsers []models.ULID, removeUsers []models.ULID, err error) {
 	for _, op := range ops {
 		opName := strings.ToLower(op.Op)
 		path := op.Path
@@ -179,17 +178,7 @@ func applySCIMGroupPatch(g *Group, ops []scimPatchOp) (addUsers []ULID, removeUs
 			if terr != nil {
 				return nil, nil, terr
 			}
-			// Replace is "swap to this exact set"; we model that by
-			// signalling the entire desired set as adds + a sentinel.
-			// The handler interprets a replace by calling SetGroupMembers
-			// directly; here we just return the new set as the "add" list
-			// and an explicit empty remove. The handler must distinguish
-			// replace from add. To keep the shape simple, we forbid
-			// replace at the path level by returning errors.New so callers
-			// that intentionally PUT-via-PATCH (Azure AD does this) can
-			// fall back to a separate code path. For v0.7 we accept it as
-			// "remove all, then add these".
-			removeUsers = append(removeUsers, sentinelClearAll)
+			removeUsers = append(removeUsers, SentinelClearAll)
 			addUsers = append(addUsers, ids...)
 		default:
 			return nil, nil, ErrUnsupportedFilter
@@ -198,38 +187,38 @@ func applySCIMGroupPatch(g *Group, ops []scimPatchOp) (addUsers []ULID, removeUs
 	return addUsers, removeUsers, nil
 }
 
-// sentinelClearAll is a placeholder ULID used to signal "wipe the member
-// set before applying the add list". The handler treats the presence of
-// this ULID in the remove list as "call SetGroupMembers with addUsers".
-var sentinelClearAll = ULID{}
+// SentinelClearAll is a placeholder ULID used to signal "wipe the
+// member set before applying the add list". The handler treats the
+// presence of this ULID in the remove list as "call SetGroupMembers
+// with addUsers".
+var SentinelClearAll = models.ULID{}
 
 // parseGroupMemberRefs reads a SCIM PATCH members value (either a
-// single object or an array of objects) and returns the contained ULIDs.
-// Rejects nested groups (type=="Group") per v0.7 §6.2 deviation.
-func parseGroupMemberRefs(raw json.RawMessage) ([]ULID, error) {
+// single object or an array of objects) and returns the contained
+// ULIDs. Rejects nested groups (type=="Group") per v0.7 §6.2
+// deviation.
+func parseGroupMemberRefs(raw json.RawMessage) ([]models.ULID, error) {
 	if len(raw) == 0 {
 		return nil, errors.New("empty members value")
 	}
-	// Try array first; SCIM PATCH on multi-valued attributes is canonical
-	// in the array form.
-	var arr []scimGroupRef
+	var arr []GroupRef
 	if err := json.Unmarshal(raw, &arr); err == nil {
 		return resolveRefs(arr)
 	}
-	var one scimGroupRef
+	var one GroupRef
 	if err := json.Unmarshal(raw, &one); err != nil {
 		return nil, err
 	}
-	return resolveRefs([]scimGroupRef{one})
+	return resolveRefs([]GroupRef{one})
 }
 
-func resolveRefs(refs []scimGroupRef) ([]ULID, error) {
-	out := make([]ULID, 0, len(refs))
+func resolveRefs(refs []GroupRef) ([]models.ULID, error) {
+	out := make([]models.ULID, 0, len(refs))
 	for _, r := range refs {
 		if strings.EqualFold(r.Type, "Group") {
 			return nil, ErrUnsupportedFilter
 		}
-		id, err := ulidParse(r.Value)
+		id, err := ulid.Parse(r.Value)
 		if err != nil {
 			return nil, err
 		}

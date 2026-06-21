@@ -70,9 +70,8 @@ func (a *TheAuth) mountOrganizations(r chi.Router) {
 		}
 		if a.scimCfg != nil {
 			r.Route("/{orgId}/scim/tokens", func(r chi.Router) {
-				r.With(requireAuth).Post("/", a.handleSCIMTokenCreate)
-				r.With(requireAuth).Get("/", a.handleSCIMTokenList)
-				r.With(requireAuth).Delete("/{id}", a.handleSCIMTokenDelete)
+				r.Use(requireAuth)
+				a.mountSCIMTokenCRUD(r)
 			})
 		}
 	}
