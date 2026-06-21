@@ -133,11 +133,18 @@ Error responses on v0.2 endpoints use a stable `{code, message}` JSON shape — 
 
 ---
 
-## GitHub OAuth (v0.3)
+## OAuth providers (v0.3 + v0.4)
+
+Each provider lives in its own sub-package so consumers only pull in the
+ones they want. v0.3 shipped GitHub; v0.4 adds Google, Microsoft, and
+Discord. All four implement the same `theauth.Provider` interface and
+mount the same `/start` + `/callback` route shape.
+
+### GitHub (v0.3)
 
 Register an OAuth app at https://github.com/settings/developers with a
-callback of `https://yourapp.com/auth/providers/github/callback`, then wire
-the provider into `theauth.New`:
+callback of `https://yourapp.com/auth/providers/github/callback`, then
+wire the provider into `theauth.New`:
 
 ```go
 import (
@@ -161,12 +168,85 @@ a, _ := theauth.New(theauth.Config{
 })
 ```
 
-`a.Mount(r)` then adds:
+### Google (v0.4)
 
-| Method + path                                  | Notes                                          |
-| ---------------------------------------------- | ---------------------------------------------- |
-| `GET /auth/providers/github/start`             | 302 to GitHub authorize URL, sets state cookie |
-| `GET /auth/providers/github/callback`          | exchanges code, sets session cookie            |
+Register at https://console.cloud.google.com/apis/credentials, set the
+authorized redirect URI to `https://yourapp.com/auth/providers/google/callback`,
+then add the provider to the slice above:
+
+```go
+import "github.com/glincker/theauth-go/provider/google"
+
+google.New(google.Config{
+    ClientID:     os.Getenv("GOOGLE_CLIENT_ID"),
+    ClientSecret: os.Getenv("GOOGLE_CLIENT_SECRET"),
+})
+```
+
+Default scopes are `openid email profile`. `EmailVerified` is mapped from
+Google's `email_verified` userinfo claim (true only when Google attests).
+
+### Microsoft (v0.4)
+
+Register at https://entra.microsoft.com/ under App registrations, add the
+redirect URI `https://yourapp.com/auth/providers/microsoft/callback`, then:
+
+```go
+import "github.com/glincker/theauth-go/provider/microsoft"
+
+microsoft.New(microsoft.Config{
+    ClientID:     os.Getenv("MS_CLIENT_ID"),
+    ClientSecret: os.Getenv("MS_CLIENT_SECRET"),
+    Tenant:       os.Getenv("MS_TENANT"), // optional; defaults to "common"
+})
+```
+
+`Tenant` is substituted into the authorize and token URLs. Valid values:
+
+- `common` (default): any work, school, or personal Microsoft account
+- `organizations`: work / school only
+- `consumers`: personal only
+- a tenant GUID or verified domain (e.g. `contoso.onmicrosoft.com`) for
+  single-tenant apps
+
+Microsoft's OIDC userinfo endpoint does not return an `email_verified`
+claim, so `ProviderUser.EmailVerified` is always `false`. The find or
+create flow treats this as soft verification: the address is surfaced for
+matching, but the user record is created with `EmailVerifiedAt=nil`, and
+your app can require an extra verification step before granting elevated
+permissions.
+
+### Discord (v0.4)
+
+Register at https://discord.com/developers/applications, add the redirect
+URI `https://yourapp.com/auth/providers/discord/callback`, then:
+
+```go
+import "github.com/glincker/theauth-go/provider/discord"
+
+discord.New(discord.Config{
+    ClientID:     os.Getenv("DISCORD_CLIENT_ID"),
+    ClientSecret: os.Getenv("DISCORD_CLIENT_SECRET"),
+})
+```
+
+Default scopes are `identify email`. The avatar URL is synthesized from
+the user's avatar hash (`https://cdn.discordapp.com/avatars/{id}/{hash}.png`);
+users without a custom avatar receive an empty `AvatarURL` so consumers
+can render their own placeholder.
+
+### Routes (any provider)
+
+`a.Mount(r)` adds two routes per registered provider, keyed by
+`Provider.Name()`:
+
+| Method + path                                          | Notes                                                  |
+| ------------------------------------------------------ | ------------------------------------------------------ |
+| `GET /auth/providers/{name}/start`                     | 302 to the provider's authorize URL, sets state cookie |
+| `GET /auth/providers/{name}/callback`                  | exchanges code, sets session cookie                    |
+
+`{name}` is `github`, `google`, `microsoft`, or `discord` depending on
+which providers you wired up.
 
 Built-in safeguards:
 
@@ -194,7 +274,7 @@ How `theauth-go` stacks up against the libraries and services you would actually
 | Language                      | Go            | TypeScript    | Multiple     | Multiple     | Go            |
 | Magic links                   | Shipping      | Shipping      | Shipping     | Shipping     | Shipping      |
 | Email / password              | Shipping      | Shipping      | Shipping     | Shipping     | Shipping      |
-| OAuth providers               | 1 (GitHub)    | 17            | 30+          | 20+          | 10+           |
+| OAuth providers               | 4             | 17            | 30+          | 20+          | 10+           |
 | Passkeys / WebAuthn           | Roadmap v0.5  | Shipping      | Shipping     | Shipping     | Shipping      |
 | Self-hosted                   | Yes           | Yes           | No           | No           | Yes           |
 | MCP OAuth 2.1 server          | Roadmap v2.0  | Roadmap v2.0  | No           | No           | No            |
@@ -265,8 +345,8 @@ a, _ := theauth.New(theauth.Config{
 - **v0.1** Magic links, sessions, chi middleware, Postgres + in-memory storage (shipped)
 - **v0.2** Email + password (signup, signin, forgot, reset), argon2id, per-IP + per-email rate limiting, structured `TheAuthError` type (shipped)
 - **v0.3** GitHub OAuth (Provider interface + PKCE S256), AES-GCM token-at-rest encryption (shipped)
-- **v0.3.x / v0.4** Google + Discord + Microsoft OAuth, refresh-token rotation, SMTP sender, TOTP 2FA
-- **v0.5** WebAuthn / passkeys
+- **v0.4** Google + Microsoft + Discord OAuth (shipped)
+- **v0.5** Refresh-token rotation, JWKS-backed `id_token` verification, SMTP sender, TOTP 2FA, WebAuthn / passkeys
 - **v1.0** All 17 OAuth providers + SAML 2.0
 - **v2.0** MCP OAuth 2.1 server, agent identity, delegation chains, budget policies
 
