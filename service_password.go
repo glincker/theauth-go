@@ -28,6 +28,19 @@ func normalizeEmail(e string) string {
 	return strings.ToLower(strings.TrimSpace(e))
 }
 
+// validateEmail wraps mail.ParseAddress and returns the normalized form
+// when the input is a syntactically valid address. Exposed for fuzzing
+// via export_test.go; production code goes through the handler edge
+// parser. The contract: never panic for any input, return a non-nil
+// error for any unparseable address.
+func validateEmail(raw string) (string, error) {
+	addr, err := mail.ParseAddress(raw)
+	if err != nil {
+		return "", err
+	}
+	return normalizeEmail(addr.Address), nil
+}
+
 // signupWithPassword creates a new user with email + password credentials and
 // issues a session. Also fires a magic-link verification email (best-effort).
 // Returns CodeEmailTaken if the email is already registered, CodeWeakPassword

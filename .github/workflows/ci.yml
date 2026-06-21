@@ -27,6 +27,47 @@ jobs:
         with:
           go-version: "1.25"
       - run: go vet ./...
-      - run: go test -race -coverprofile=coverage.out ./...
+      - run: go test -race -timeout=120s -coverprofile=coverage.out ./...
         env:
           POSTGRES_TEST_URL: postgres://theauth:theauth@localhost:5432/theauth_test?sslmode=disable
+      - run: go test -bench=. -benchmem -run=^$ -benchtime=1x ./internal/bench/...
+
+  fuzz:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - { pkg: ./crypto, name: FuzzEncryptDecrypt }
+          - { pkg: ./crypto, name: FuzzDecryptArbitrary }
+          - { pkg: ./crypto, name: FuzzVerifierToChallenge }
+          - { pkg: ./crypto, name: FuzzGenerateCodeVerifier }
+          - { pkg: ./crypto, name: FuzzTokenHashRoundTrip }
+          - { pkg: ./crypto, name: FuzzBase64URLDecode }
+          - { pkg: ".", name: FuzzParseSessionCookie }
+          - { pkg: ".", name: FuzzParseStateCookie }
+          - { pkg: ".", name: FuzzEmailValidation }
+          - { pkg: ".", name: FuzzCallbackQueryParams }
+          - { pkg: ".", name: FuzzCallbackProviderName }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+      - name: Fuzz ${{ matrix.target.name }}
+        run: go test -run=^$ -fuzz=^${{ matrix.target.name }}$ -fuzztime=10s ${{ matrix.target.pkg }}
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - run: git fetch origin main:refs/remotes/origin/main
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+      - uses: golangci/golangci-lint-action@v7
+        with:
+          version: v2.12.2
+          args: --timeout=3m --new-from-rev=origin/main

@@ -5,6 +5,12 @@ import (
 	"time"
 )
 
+// ValidateEmailForTest exposes the unexported validateEmail helper for
+// fuzzing. Returns the normalized address on success, an error otherwise.
+func ValidateEmailForTest(raw string) (string, error) {
+	return validateEmail(raw)
+}
+
 // IssueSessionForTest exposes the unexported issueSession for external tests.
 func IssueSessionForTest(a *TheAuth, ctx context.Context, user User, userAgent, ip string) (string, Session, error) {
 	return a.issueSession(ctx, user, userAgent, ip)
