@@ -279,6 +279,15 @@ type Config struct {
 	// non-nil. The PathPrefix can be moved (e.g. "/api/admin/v1") but the
 	// trailing version segment is always v1.
 	Admin *AdminConfig
+
+	// AuthorizationServer (v2.0 phase 1 + 2) enables the OAuth 2.1 + MCP
+	// authorization server. When non-nil, /.well-known/oauth-authorization-server,
+	// /oauth/authorize, /oauth/token, /oauth/revoke, /oauth/introspect,
+	// /oauth/register, and /oauth/jwks are mounted. Requires
+	// Config.EncryptionKey (32 bytes) and a Storage that satisfies
+	// OAuthServerStorage. Leave nil to keep v1.0 behavior. Phase 3 + 4
+	// (agent identity, delegation, token exchange) land in subsequent PRs.
+	AuthorizationServer *AuthorizationServerConfig
 }
 
 // RBACConfig configures organization-scoped roles and permissions. The zero
@@ -467,6 +476,10 @@ type TheAuth struct {
 	permCatalog      []Permission          // immutable snapshot for validation
 	permIndex        map[string]Permission // name -> Permission, lookup cache
 	defaultRoleSeeds []RoleSeed
+
+	// v2.0 phase 1 + 2: OAuth 2.1 authorization server runtime state.
+	// Nil when Config.AuthorizationServer is not set.
+	as *asState
 }
 
 // New validates the Config, applies defaults, and returns a ready TheAuth.
@@ -635,6 +648,22 @@ func New(cfg Config) (*TheAuth, error) {
 		return nil, err
 	}
 
+	// v2.0 phase 1 + 2: authorization server validation. Requires a 32-byte
+	// EncryptionKey (used to seal JWKS private keys at rest) and a storage
+	// adapter satisfying OAuthServerStorage. validateASConfig mutates the
+	// struct to apply defaults.
+	var asRuntime *asState
+	if cfg.AuthorizationServer != nil {
+		if err := validateASConfig(cfg.AuthorizationServer, cfg.EncryptionKey); err != nil {
+			return nil, err
+		}
+		oss, ok := cfg.Storage.(OAuthServerStorage)
+		if !ok {
+			return nil, ErrStorageMissingOAuthMethods
+		}
+		asRuntime = &asState{cfg: *cfg.AuthorizationServer, storage: oss, keyMap: map[string]JWKSKey{}}
+	}
+
 	a := &TheAuth{
 		storage:           cfg.Storage,
 		emailSender:       cfg.EmailSender,
@@ -663,6 +692,7 @@ func New(cfg Config) (*TheAuth, error) {
 		permCatalog:       permCatalog,
 		permIndex:         permIndex,
 		defaultRoleSeeds:  defaultSeeds,
+		as:                asRuntime,
 	}
 	if len(providers) > 0 {
 		a.oauthStateStop = make(chan struct{})
@@ -682,6 +712,9 @@ func New(cfg Config) (*TheAuth, error) {
 		go a.samlAuthnGCLoop()
 	}
 	if err := a.Start(); err != nil {
+		return nil, err
+	}
+	if err := a.startAS(context.Background()); err != nil {
 		return nil, err
 	}
 	return a, nil
@@ -730,6 +763,7 @@ func (a *TheAuth) Close() {
 	closeOnce(a.webauthnStop)
 	closeOnce(a.totpEnrollmentStop)
 	closeOnce(a.samlAuthnStop)
+	a.stopAS()
 	// Audit shutdown: mark closed (so EmitAudit becomes a drop), close the
 	// stop channel, then wait for the writer goroutine to drain remaining
 	// events. The auditClosed flag protects EmitAudit from racing on a
