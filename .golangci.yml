@@ -1,40 +1,40 @@
-# golangci-lint configuration for theauth-go.
+# golangci-lint configuration for theauth-go (v2 format).
 #
-# v0.6 adds the godot and godox checks to keep doc comments well
-# punctuated and to flag stray TODO or FIXME markers. The default set
-# (errcheck, govet, ineffassign, staticcheck, unused) remains enabled
-# implicitly; we only enable extras here.
+# v0.6 adds godot and godox checks to keep doc comments well punctuated
+# and to flag stray TODO / FIXME markers. The default set (errcheck,
+# govet, ineffassign, staticcheck, unused) stays enabled implicitly; we
+# only enable extras here.
 #
 # CI runs `golangci-lint run --timeout=3m`. Findings on lines not
-# introduced by the current change set are out of scope for the v0.6
-# hardening pass.
+# introduced by the current change set are out of scope for v0.6.
+
+version: "2"
 
 run:
   timeout: 3m
   tests: true
 
 linters:
+  default: standard
   enable:
     - godot
     - godox
-
-linters-settings:
-  godot:
-    scope: declarations
-    capital: false
-  godox:
-    keywords:
-      - TODO
-      - FIXME
-      - HACK
-
-issues:
-  exclude-rules:
-    - path: _test\.go
-      linters:
-        - godot
-        - godox
-    - path: testdata/
-      linters:
-        - godot
-        - godox
+  settings:
+    godot:
+      scope: declarations
+      capital: false
+    godox:
+      keywords:
+        - TODO
+        - FIXME
+        - HACK
+  exclusions:
+    rules:
+      - path: _test\.go
+        linters:
+          - godot
+          - godox
+      - path: testdata/
+        linters:
+          - godot
+          - godox
