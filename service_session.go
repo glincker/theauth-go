@@ -2,61 +2,27 @@ package theauth
 
 import (
 	"context"
-	"errors"
-	"log/slog"
-	"time"
-
-	"github.com/glincker/theauth-go/crypto"
-	"github.com/glincker/theauth-go/internal/ulid"
 )
 
-// issueSession mints a fresh opaque token, stores its sha256 hash with a new
-// Session row, and returns the raw token. The raw token is what the caller
-// puts in a cookie / sends to the user; the hash is what's persisted.
+// Session issue / validate forwarders. PR A architecture reorg (2026-06)
+// moved the implementations to internal/session; the unexported
+// issueSession / validateSession entry points kept their exact signatures
+// so callers in this package (service_oauth, service_password, service_saml,
+// service_totp, service_webauthn, middleware) continue to compile unchanged
+// and the export_test.go shims (IssueSessionForTest / ValidateSessionForTest)
+// keep working.
+
+// issueSession mints a fresh opaque token, stores its sha256 hash with a
+// new Session row, and returns the raw token. The raw token is what the
+// caller puts in a cookie / sends to the user; the hash is what's persisted.
 func (a *TheAuth) issueSession(ctx context.Context, user User, userAgent, ip string) (token string, sess Session, err error) {
-	token, err = crypto.NewToken()
-	if err != nil {
-		return "", Session{}, err
-	}
-	now := time.Now()
-	sess = Session{
-		ID:        ulid.New(),
-		UserID:    user.ID,
-		TokenHash: crypto.HashToken(token),
-		UserAgent: userAgent,
-		IP:        ip,
-		CreatedAt: now,
-		ExpiresAt: now.Add(a.sessionTTL),
-	}
-	sess, err = a.storage.CreateSession(ctx, sess)
-	if err != nil {
-		return "", Session{}, err
-	}
-	slog.Info("theauth: session issued", "user_id", sess.UserID.String(), "session_id", sess.ID.String())
-	return token, sess, nil
+	return a.sessionSvc.Issue(ctx, user, userAgent, ip)
 }
 
 // validateSession looks up a session by the hash of the supplied token,
-// verifies it isn't expired or revoked, and returns the session and its user.
-// Returns ErrInvalidToken for missing/unknown tokens and ErrSessionExpired
-// for expired or revoked sessions.
+// verifies it is not expired or revoked, and returns the session and its
+// user. Returns ErrInvalidToken for missing/unknown tokens and
+// ErrSessionExpired for expired or revoked sessions.
 func (a *TheAuth) validateSession(ctx context.Context, token string) (*Session, *User, error) {
-	if token == "" {
-		return nil, nil, ErrInvalidToken
-	}
-	sess, err := a.storage.SessionByTokenHash(ctx, crypto.HashToken(token))
-	if errors.Is(err, ErrStorageNotFound) {
-		return nil, nil, ErrInvalidToken
-	}
-	if err != nil {
-		return nil, nil, err
-	}
-	if sess.Expired(time.Now()) {
-		return nil, nil, ErrSessionExpired
-	}
-	user, err := a.storage.UserByID(ctx, sess.UserID)
-	if err != nil {
-		return nil, nil, err
-	}
-	return sess, user, nil
+	return a.sessionSvc.Validate(ctx, token)
 }
