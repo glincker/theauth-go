@@ -4,6 +4,8 @@ sql:
       - "storage/postgres/migrations/0001_init.up.sql"
       - "storage/postgres/migrations/0002_passwords.up.sql"
       - "storage/postgres/migrations/0003_oauth_accounts.up.sql"
+      - "storage/postgres/migrations/0004_webauthn_credentials.up.sql"
+      - "storage/postgres/migrations/0005_totp.up.sql"
     queries: "storage/postgres/queries.sql"
     engine: "postgresql"
     gen:

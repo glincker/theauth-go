@@ -36,9 +36,12 @@ func SignupWithPasswordForTest(a *TheAuth, ctx context.Context, email, password 
 	return a.signupWithPassword(ctx, email, password)
 }
 
-// SigninWithPasswordForTest exposes the unexported signinWithPassword for external tests.
+// SigninWithPasswordForTest exposes the unexported signinWithPassword for
+// external tests. v0.5 added the SigninStep return value; older tests pass
+// nil for the step pointer.
 func SigninWithPasswordForTest(a *TheAuth, ctx context.Context, email, password, ua, ip string) (string, *User, error) {
-	return a.signinWithPassword(ctx, email, password, ua, ip)
+	tok, u, _, err := a.signinWithPassword(ctx, email, password, ua, ip)
+	return tok, u, err
 }
 
 // RequestPasswordResetForTest exposes the unexported requestPasswordResetForTest for external tests.
@@ -69,9 +72,34 @@ func (k *KeyedLimiterForTest) Allow(key string) bool { return k.inner.Allow(key)
 // Stop forwards to the inner limiter.
 func (k *KeyedLimiterForTest) Stop() { k.inner.Stop() }
 
-// EntryCount returns the live key count — for verifying GC behavior.
+// EntryCount returns the live key count for verifying GC behavior.
 func (k *KeyedLimiterForTest) EntryCount() int {
 	k.inner.mu.Lock()
 	defer k.inner.mu.Unlock()
 	return len(k.inner.limits)
+}
+
+// IssuePending2FAForTest exposes the unexported IssuePending2FA for tests.
+func IssuePending2FAForTest(a *TheAuth, ctx context.Context, userID ULID, ua, ip string) (string, Session, error) {
+	return a.IssuePending2FA(ctx, userID, ua, ip)
+}
+
+// BeginTOTPEnrollmentForTest exposes BeginTOTPEnrollment for tests.
+func BeginTOTPEnrollmentForTest(a *TheAuth, ctx context.Context, userID ULID, accountName string) (EnrollTOTPResult, error) {
+	return a.BeginTOTPEnrollment(ctx, userID, accountName)
+}
+
+// FinishTOTPEnrollmentForTest exposes FinishTOTPEnrollment for tests.
+func FinishTOTPEnrollmentForTest(a *TheAuth, ctx context.Context, userID ULID, enrollmentID, code string) ([]string, error) {
+	return a.FinishTOTPEnrollment(ctx, userID, enrollmentID, code)
+}
+
+// VerifyTOTPForTest exposes VerifyTOTP for tests.
+func VerifyTOTPForTest(a *TheAuth, ctx context.Context, pendingToken, code string) (string, Session, error) {
+	return a.VerifyTOTP(ctx, pendingToken, code)
+}
+
+// ConsumeRecoveryCodeForTest exposes ConsumeRecoveryCode for tests.
+func ConsumeRecoveryCodeForTest(a *TheAuth, ctx context.Context, pendingToken, code string) (string, Session, error) {
+	return a.ConsumeRecoveryCode(ctx, pendingToken, code)
 }

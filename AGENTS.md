@@ -10,7 +10,8 @@ This file helps AI coding assistants (Claude Code, Cursor, GitHub Copilot, Winds
 - **v0.2 (shipped)**: email + password (signup, signin, forgot, reset), argon2id hashing, per-IP + per-email rate limiting, structured `TheAuthError` type
 - **v0.3 (shipped)**: GitHub OAuth, extensible `Provider` interface, PKCE S256, AES-GCM token-at-rest encryption
 - **v0.4 (shipped)**: Google, Microsoft, Discord OAuth providers (same `Provider` interface, no core changes)
-- **v0.5**: refresh-token rotation, JWKS-backed `id_token` verification, SMTP sender, TOTP 2FA, passkeys (WebAuthn)
+- **v0.5 (shipped)**: WebAuthn / passkeys (discoverable login + replay-protected registration), TOTP 2FA + 10 single-use recovery codes, session step-up state machine (`pending_2fa` -> `full`)
+- **v0.6**: refresh-token rotation, JWKS-backed `id_token` verification, SMTP sender
 - **v1.0**: all 17 OAuth providers + SAML 2.0
 - **v2.0**: MCP OAuth 2.1 server, agent identity, delegation chains, budget policies
 
@@ -71,13 +72,15 @@ This compiles and runs as-is against `go 1.25`, `github.com/glincker/theauth-go 
 - **Handle v0.2 errors** — switch on the `code` field of the `{code, message}` JSON response body: `weak_password`, `email_taken`, `invalid_credentials`, `rate_limited`, `password_reset_invalid`, `password_reset_expired`
 - **Enable GitHub OAuth (v0.3)**: import `github.com/glincker/theauth-go/provider/github`, pass `github.New(github.Config{ClientID, ClientSecret})` into `theauth.Config.Providers`, and set a 32-byte `Config.EncryptionKey` (AES-256). `a.Mount(r)` then adds `GET /auth/providers/github/start` and `/callback`. PKCE S256 is enforced; provider tokens are AES-GCM encrypted at rest
 - **Enable Google / Microsoft / Discord OAuth (v0.4)**: same pattern as GitHub. Import the relevant sub-package (`provider/google`, `provider/microsoft`, `provider/discord`), construct with `<pkg>.New(<pkg>.Config{ClientID, ClientSecret})`, and add to `Config.Providers`. Microsoft also accepts `Tenant` (defaults to `"common"`; pass a tenant GUID or verified domain for single tenant apps). Routes mount at `/auth/providers/{name}/start` and `/callback` per provider
+- **Enable WebAuthn passkeys (v0.5)**: set `Config.WebAuthn = &theauth.WebAuthnConfig{RPID: "yourapp.com", RPDisplayName: "Your App", RPOrigins: []string{"https://yourapp.com"}}`. Routes mount at `/auth/webauthn/register/{begin,finish}`, `/auth/webauthn/login/{begin,finish}`, and `/auth/webauthn/credentials`. Passkey login bypasses TOTP step-up by design (single-factor-strong per NIST SP 800-63B rev 4)
+- **Enable TOTP 2FA (v0.5)**: set `Config.TOTP = &theauth.TOTPConfig{Issuer: "Your App"}` plus a 32 byte `Config.EncryptionKey`. Routes mount at `/auth/totp/enroll/{begin,finish}`, `/auth/totp/verify`, `/auth/totp/recovery`, and `DELETE /auth/totp`. Password signin returns `{"step":"totp_required"}` when the user has a confirmed secret; the cookie carries a `pending_2fa` session that only the verify routes accept
 
 ## What NOT to do
 
 - **Do not hash tokens client-side** — pass the raw token from the cookie to the lib; it handles hashing
 - **Do not use `email.Noop` in production** — it logs to stdout and never sends mail. Wire `email.SMTP` (v0.2+) or a custom `email.Sender`
 - **Do not bypass `RequireAuth()` to check sessions manually** unless you are inside the library itself; the middleware enforces token shape, expiry, and revocation in one place
-- **Do not invent OAuth or passkey APIs beyond the four shipped providers**: GitHub, Google, Microsoft, and Discord ship today (v0.3 + v0.4) via `provider/<name>`. Passkeys, refresh-token rotation, and the remaining 13 OAuth providers (Apple, Facebook, Twitter / X, LinkedIn, GitLab, Bitbucket, etc.) are NOT shipped yet. Check the [roadmap](./README.md#roadmap) before generating
+- **Do not invent OAuth APIs beyond the four shipped providers**: GitHub, Google, Microsoft, and Discord ship today (v0.3 + v0.4) via `provider/<name>`. WebAuthn passkeys and TOTP 2FA ship in v0.5. Refresh-token rotation and the remaining 13 OAuth providers (Apple, Facebook, Twitter / X, LinkedIn, GitLab, Bitbucket, etc.) are NOT shipped yet. Check the [roadmap](./README.md#roadmap) before generating
 - **Do not store the raw session token in any DB column** — only the `HttpOnly` cookie holds the raw token; the lib stores only a SHA-256 hash
 - **Do not assume MCP OAuth 2.1 endpoints exist** — those ship in v2.0; today's API has no `theauth.MCP*` surface
 
@@ -102,9 +105,14 @@ This compiles and runs as-is against `go 1.25`, `github.com/glincker/theauth-go 
 - `provider/github/`: GitHub `Provider` implementation (v0.3)
 - `provider/google/`, `provider/microsoft/`, `provider/discord/`: v0.4 `Provider` implementations
 - `provider/internal/oauthtest/`: shared httptest scaffolding used by the v0.4 provider tests; internal so external consumers cannot import it
-- `crypto/aesgcm.go` + `crypto/pkce.go`: encryption + PKCE primitives
+- `service_webauthn.go` + `handlers_webauthn.go`: WebAuthn passkey registration + discoverable login (v0.5)
+- `service_totp.go` + `handlers_totp.go`: TOTP enrollment, verify, recovery-code consumption, pending_2fa session state machine (v0.5)
+- `crypto/aesgcm.go` + `crypto/pkce.go` + `crypto/recoverycode.go`: encryption, PKCE, recovery-code hashing primitives
+- `internal/wavt/`: WebAuthn virtual-authenticator helper used by ceremony tests; internal
 - `storage/` — `memory` and `postgres` adapters; the `Storage` interface lives at the package root
 - `examples/chi-app/` — full runnable example
+- `examples/webauthn-passkey/`: single-page passkey register + login demo (v0.5)
+- `examples/totp-stepup/`: single-page password + TOTP step-up demo (v0.5)
 
 ## License and sibling project
 

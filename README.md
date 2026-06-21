@@ -265,6 +265,128 @@ rotation can light up without a schema change.
 
 ---
 
+## WebAuthn / passkeys (v0.5)
+
+WebAuthn ships behind `Config.WebAuthn`. Routes mount only when the block
+is non-nil, so existing apps see no behavior change after upgrading.
+
+```go
+import "github.com/glincker/theauth-go"
+
+a, _ := theauth.New(theauth.Config{
+    Storage:       postgres.New(pool),
+    BaseURL:       "https://yourapp.com",
+    EncryptionKey: key, // 32 bytes; reuses the same key OAuth tokens ride on
+    WebAuthn: &theauth.WebAuthnConfig{
+        RPID:          "yourapp.com",            // eTLD+1, no scheme, no port
+        RPDisplayName: "Your App",                // shown in browser prompts
+        RPOrigins:     []string{"https://yourapp.com"},
+    },
+})
+```
+
+Routes:
+
+| Method + path | Auth | Purpose |
+| --- | --- | --- |
+| `POST /auth/webauthn/register/begin` | RequireAuth (full) | Returns `protocol.CredentialCreation`, sets challenge cookie |
+| `POST /auth/webauthn/register/finish` | RequireAuth (full) | Validates attestation, stores credential row |
+| `POST /auth/webauthn/login/begin` | none | Returns discoverable `protocol.CredentialAssertion` |
+| `POST /auth/webauthn/login/finish` | none | Validates assertion, issues full session cookie |
+| `GET /auth/webauthn/credentials` | RequireAuth (full) | Lists the caller's registered credentials |
+| `DELETE /auth/webauthn/credentials/{id}` | RequireAuth (full) | Removes one credential |
+
+Built-in safeguards:
+
+- **PKCE-equivalent challenge binding** via an HttpOnly cookie scoped to `/auth/webauthn`
+- **Single-use challenge entries** (LoadAndDelete before validate)
+- **5 minute TTL** on every challenge, swept every 60s
+- **Sign-count replay protection** via an atomic `UPDATE ... WHERE sign_count < $new` plus a lookup follow-up to disambiguate replay from missing row
+- **Discoverable-only login** so the begin endpoint reveals nothing about user existence
+- **Single-factor-strong** per NIST SP 800-63B rev 4: a passkey login is a strong factor by itself, so the flow does NOT step up to TOTP
+
+Passkey ceremonies on the client side use the standard `navigator.credentials.create`
+and `navigator.credentials.get` APIs; the server returns the unmodified
+`protocol.CredentialCreation` / `protocol.CredentialAssertion` JSON for the
+browser to consume directly. See `examples/webauthn-passkey/` for a small
+single-page demo with a working register and login button pair.
+
+---
+
+## TOTP 2FA + recovery codes (v0.5)
+
+TOTP ships behind `Config.TOTP`. Like WebAuthn, the routes only mount
+when the block is non-nil.
+
+```go
+import "github.com/glincker/theauth-go"
+
+a, _ := theauth.New(theauth.Config{
+    Storage:       postgres.New(pool),
+    BaseURL:       "https://yourapp.com",
+    EncryptionKey: key, // 32 bytes; required, used to encrypt totp_secrets.secret_enc
+    TOTP: &theauth.TOTPConfig{
+        Issuer: "Your App", // shown in Google Authenticator, Authy, 1Password
+        // RecoveryCodeCount defaults to 10
+    },
+})
+```
+
+Routes:
+
+| Method + path | Auth | Purpose |
+| --- | --- | --- |
+| `POST /auth/totp/enroll/begin` | RequireAuth (full) | Generates secret, returns `{secret, otpAuthUrl, enrollmentId}` |
+| `POST /auth/totp/enroll/finish` | RequireAuth (full) | Body `{enrollmentId, code}`. Confirms secret, returns 10 recovery codes (once) |
+| `POST /auth/totp/verify` | RequirePendingOrFull | Body `{code}`. Promotes pending session to full |
+| `POST /auth/totp/recovery` | RequirePendingOrFull | Body `{code}`. Consumes one recovery code, promotes session |
+| `DELETE /auth/totp` | RequireAuth (full) | Drops the secret + all recovery codes |
+
+When `Config.TOTP != nil` and a user has confirmed TOTP, the
+`POST /auth/email-password/signin` response shape becomes
+`{"step":"totp_required"}` and the session cookie carries a
+`pending_2fa` AuthLevel that only the two verify routes accept.
+
+Session state machine:
+
+```
+anon
+  |
+  | POST /auth/email-password/signin (no TOTP enrolled)
+  | GET  /auth/magic-link/verify
+  | GET  /auth/providers/{name}/callback
+  | POST /auth/webauthn/login/finish
+  v
+full  (auth_level = 'full', all RequireAuth routes)
+  |
+  | DELETE /auth/sessions/current
+  v
+anon
+
+anon
+  |
+  | POST /auth/email-password/signin (TOTP confirmed for user)
+  v
+pending_2fa  (auth_level = 'pending_2fa', 10 min TTL)
+  |
+  | POST /auth/totp/verify   (valid code)
+  | POST /auth/totp/recovery (valid unused recovery code)
+  v
+full
+```
+
+Built-in safeguards:
+
+- **AES-GCM at rest** for `totp_secrets.secret_enc` (mandatory; `New` errors if `EncryptionKey` is missing)
+- **Per-code salted SHA-256** for recovery codes (40 bit `crypto/rand` entropy makes Argon2id wasted latency; see `crypto/recoverycode.go`)
+- **Five-strike pending session revocation**: five consecutive wrong codes revoke the pending session and force a fresh password verify
+- **WebAuthn login bypasses TOTP**: NIST SP 800-63B rev 4 treats passkey as a single strong factor
+- **OAuth callbacks bypass TOTP**: the IdP already enforced its own factors
+
+See `examples/totp-stepup/` for a single-page demo of the full flow.
+
+---
+
 ## Comparison
 
 How `theauth-go` stacks up against the libraries and services you would actually consider in 2026:
@@ -275,7 +397,8 @@ How `theauth-go` stacks up against the libraries and services you would actually
 | Magic links                   | Shipping      | Shipping      | Shipping     | Shipping     | Shipping      |
 | Email / password              | Shipping      | Shipping      | Shipping     | Shipping     | Shipping      |
 | OAuth providers               | 4             | 17            | 30+          | 20+          | 10+           |
-| Passkeys / WebAuthn           | Roadmap v0.5  | Shipping      | Shipping     | Shipping     | Shipping      |
+| Passkeys / WebAuthn           | Shipping      | Shipping      | Shipping     | Shipping     | Shipping      |
+| TOTP 2FA + recovery codes     | Shipping      | Shipping      | Shipping     | Shipping     | Shipping      |
 | Self-hosted                   | Yes           | Yes           | No           | No           | Yes           |
 | MCP OAuth 2.1 server          | Roadmap v2.0  | Roadmap v2.0  | No           | No           | No            |
 | Agent identity + delegation   | Roadmap v2.0  | Roadmap v2.0  | No           | No           | No            |
@@ -346,7 +469,8 @@ a, _ := theauth.New(theauth.Config{
 - **v0.2** Email + password (signup, signin, forgot, reset), argon2id, per-IP + per-email rate limiting, structured `TheAuthError` type (shipped)
 - **v0.3** GitHub OAuth (Provider interface + PKCE S256), AES-GCM token-at-rest encryption (shipped)
 - **v0.4** Google + Microsoft + Discord OAuth (shipped)
-- **v0.5** Refresh-token rotation, JWKS-backed `id_token` verification, SMTP sender, TOTP 2FA, WebAuthn / passkeys
+- **v0.5** WebAuthn / passkeys, TOTP 2FA + recovery codes, session step-up state machine (shipped)
+- **v0.6** Refresh-token rotation, JWKS-backed `id_token` verification, SMTP sender
 - **v1.0** All 17 OAuth providers + SAML 2.0
 - **v2.0** MCP OAuth 2.1 server, agent identity, delegation chains, budget policies
 

@@ -36,22 +36,30 @@ func testPool(t *testing.T) *pgxpool.Pool {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// Drop + recreate for clean state
+	mig4, err := os.ReadFile("migrations/0004_webauthn_credentials.up.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	mig5, err := os.ReadFile("migrations/0005_totp.up.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Drop + recreate for clean state. Order matters: v0.5 tables reference
+	// users, so they must drop first.
 	_, _ = pool.Exec(context.Background(), `
+		DROP TABLE IF EXISTS totp_recovery_codes;
+		DROP TABLE IF EXISTS totp_secrets;
+		DROP TABLE IF EXISTS webauthn_credentials;
 		DROP TABLE IF EXISTS oauth_accounts;
 		DROP TABLE IF EXISTS password_reset_tokens;
 		DROP TABLE IF EXISTS magic_links;
 		DROP TABLE IF EXISTS sessions;
 		DROP TABLE IF EXISTS users;
 	`)
-	if _, err := pool.Exec(context.Background(), string(mig1)); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := pool.Exec(context.Background(), string(mig2)); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := pool.Exec(context.Background(), string(mig3)); err != nil {
-		t.Fatal(err)
+	for _, m := range [][]byte{mig1, mig2, mig3, mig4, mig5} {
+		if _, err := pool.Exec(context.Background(), string(m)); err != nil {
+			t.Fatal(err)
+		}
 	}
 	return pool
 }

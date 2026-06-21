@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/glincker/theauth-go"
+	"github.com/glincker/theauth-go/crypto"
 	"github.com/glincker/theauth-go/storage"
 	sqlcgen "github.com/glincker/theauth-go/storage/postgres/sqlc"
 	"github.com/jackc/pgx/v5"
@@ -101,6 +102,7 @@ func rowToSession(r sqlcgen.Session) theauth.Session {
 		CreatedAt: tsToTime(r.CreatedAt),
 		ExpiresAt: tsToTime(r.ExpiresAt),
 		RevokedAt: tsToTimePtr(r.RevokedAt),
+		AuthLevel: r.AuthLevel,
 	}
 }
 
@@ -366,4 +368,263 @@ func (s *Store) OAuthAccountByProviderUserID(ctx context.Context, provider, prov
 	}
 	acct := rowToOAuthAccount(row)
 	return &acct, nil
+}
+
+// ---------- Sessions (v0.5 step-up) ----------
+
+func (s *Store) CreateSessionWithAuthLevel(ctx context.Context, sess theauth.Session) (theauth.Session, error) {
+	level := sess.AuthLevel
+	if level == "" {
+		level = theauth.AuthLevelFull
+	}
+	row, err := s.q.CreateSessionWithAuthLevel(ctx, sqlcgen.CreateSessionWithAuthLevelParams{
+		ID:        ulidToPgUUID(sess.ID),
+		UserID:    ulidToPgUUID(sess.UserID),
+		TokenHash: sess.TokenHash,
+		UserAgent: sess.UserAgent,
+		Ip:        ipStrToPg(sess.IP),
+		CreatedAt: timeToTs(sess.CreatedAt),
+		ExpiresAt: timeToTs(sess.ExpiresAt),
+		AuthLevel: level,
+	})
+	if err != nil {
+		return theauth.Session{}, err
+	}
+	return rowToSession(row), nil
+}
+
+func (s *Store) UpdateSessionAuthLevel(ctx context.Context, id theauth.ULID, level string) error {
+	if err := s.q.UpdateSessionAuthLevel(ctx, sqlcgen.UpdateSessionAuthLevelParams{
+		ID:        ulidToPgUUID(id),
+		AuthLevel: level,
+	}); err != nil {
+		return err
+	}
+	return nil
+}
+
+// ---------- WebAuthn credentials (v0.5) ----------
+
+// signCountInt64ToUint32 narrows a Postgres bigint column to the uint32 that
+// the WebAuthn spec requires. Values outside the uint32 range (which the
+// spec forbids; authenticators MUST emit a 32-bit counter) are clamped to
+// the maximum to keep replay detection safe-by-default rather than wrapping.
+func signCountInt64ToUint32(v int64) uint32 {
+	if v < 0 {
+		return 0
+	}
+	const maxU32 = int64(^uint32(0))
+	if v > maxU32 {
+		return ^uint32(0)
+	}
+	return uint32(v)
+}
+
+func rowToWebAuthnCredential(r sqlcgen.WebauthnCredential) theauth.WebAuthnCredential {
+	return theauth.WebAuthnCredential{
+		ID:           pgUUIDToULID(r.ID),
+		UserID:       pgUUIDToULID(r.UserID),
+		CredentialID: r.CredentialID,
+		PublicKey:    r.PublicKey,
+		SignCount:    signCountInt64ToUint32(r.SignCount),
+		Transports:   r.Transports,
+		AAGUID:       r.Aaguid,
+		Name:         r.Name,
+		CreatedAt:    tsToTime(r.CreatedAt),
+		LastUsedAt:   tsToTimePtr(r.LastUsedAt),
+	}
+}
+
+func (s *Store) InsertWebAuthnCredential(ctx context.Context, c theauth.WebAuthnCredential) (theauth.WebAuthnCredential, error) {
+	// Normalise nil to an empty slice so pgx serialises it as the text[]
+	// literal '{}' rather than SQL NULL (the column is NOT NULL with a
+	// DEFAULT '{}', and an explicit INSERT bypasses the default).
+	transports := c.Transports
+	if transports == nil {
+		transports = []string{}
+	}
+	row, err := s.q.InsertWebAuthnCredential(ctx, sqlcgen.InsertWebAuthnCredentialParams{
+		ID:           ulidToPgUUID(c.ID),
+		UserID:       ulidToPgUUID(c.UserID),
+		CredentialID: c.CredentialID,
+		PublicKey:    c.PublicKey,
+		SignCount:    int64(c.SignCount),
+		Transports:   transports,
+		Aaguid:       c.AAGUID,
+		Name:         c.Name,
+		CreatedAt:    timeToTs(c.CreatedAt),
+		LastUsedAt:   timePtrToTs(c.LastUsedAt),
+	})
+	if err != nil {
+		return theauth.WebAuthnCredential{}, err
+	}
+	return rowToWebAuthnCredential(row), nil
+}
+
+func (s *Store) WebAuthnCredentialsByUserID(ctx context.Context, userID theauth.ULID) ([]theauth.WebAuthnCredential, error) {
+	rows, err := s.q.WebAuthnCredentialsByUserID(ctx, ulidToPgUUID(userID))
+	if err != nil {
+		return nil, err
+	}
+	out := make([]theauth.WebAuthnCredential, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, rowToWebAuthnCredential(r))
+	}
+	return out, nil
+}
+
+func (s *Store) WebAuthnCredentialByCredentialID(ctx context.Context, credentialID []byte) (*theauth.WebAuthnCredential, error) {
+	row, err := s.q.WebAuthnCredentialByCredentialID(ctx, credentialID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, storage.ErrNotFound
+		}
+		return nil, err
+	}
+	c := rowToWebAuthnCredential(row)
+	return &c, nil
+}
+
+// UpdateWebAuthnSignCount executes the strictly-greater UPDATE; zero rows
+// affected with the credential present means the supplied count was not
+// strictly greater than the stored one, which is the WebAuthn replay
+// signal. We disambiguate "no such credential" from "replay" via a follow
+// up SELECT only when the UPDATE is a miss, to keep the happy path single
+// round-trip.
+func (s *Store) UpdateWebAuthnSignCount(ctx context.Context, credentialID []byte, newCount uint32, usedAt time.Time) error {
+	affected, err := s.q.UpdateWebAuthnSignCount(ctx, sqlcgen.UpdateWebAuthnSignCountParams{
+		CredentialID: credentialID,
+		SignCount:    int64(newCount),
+		LastUsedAt:   timeToTs(usedAt),
+	})
+	if err != nil {
+		return err
+	}
+	if affected == 1 {
+		return nil
+	}
+	// Zero rows: either the credential is gone or sign_count didn't move
+	// forward. A targeted lookup distinguishes the two without leaking any
+	// information beyond what the caller already sees.
+	if _, lookupErr := s.q.WebAuthnCredentialByCredentialID(ctx, credentialID); errors.Is(lookupErr, pgx.ErrNoRows) {
+		return storage.ErrNotFound
+	}
+	return theauth.ErrReplayDetected
+}
+
+func (s *Store) DeleteWebAuthnCredential(ctx context.Context, id theauth.ULID, userID theauth.ULID) error {
+	affected, err := s.q.DeleteWebAuthnCredential(ctx, sqlcgen.DeleteWebAuthnCredentialParams{
+		ID:     ulidToPgUUID(id),
+		UserID: ulidToPgUUID(userID),
+	})
+	if err != nil {
+		return err
+	}
+	if affected == 0 {
+		return storage.ErrNotFound
+	}
+	return nil
+}
+
+// ---------- TOTP secrets (v0.5) ----------
+
+func rowToTOTPSecret(r sqlcgen.TotpSecret) theauth.TOTPSecret {
+	return theauth.TOTPSecret{
+		UserID:      pgUUIDToULID(r.UserID),
+		SecretEnc:   r.SecretEnc,
+		ConfirmedAt: tsToTimePtr(r.ConfirmedAt),
+		CreatedAt:   tsToTime(r.CreatedAt),
+		UpdatedAt:   tsToTime(r.UpdatedAt),
+	}
+}
+
+func (s *Store) UpsertPendingTOTPSecret(ctx context.Context, sec theauth.TOTPSecret) error {
+	created := sec.CreatedAt
+	if created.IsZero() {
+		created = time.Now()
+	}
+	return s.q.UpsertPendingTOTPSecret(ctx, sqlcgen.UpsertPendingTOTPSecretParams{
+		UserID:    ulidToPgUUID(sec.UserID),
+		SecretEnc: sec.SecretEnc,
+		CreatedAt: timeToTs(created),
+	})
+}
+
+func (s *Store) ConfirmTOTPSecret(ctx context.Context, userID theauth.ULID, at time.Time) error {
+	affected, err := s.q.ConfirmTOTPSecret(ctx, sqlcgen.ConfirmTOTPSecretParams{
+		UserID:      ulidToPgUUID(userID),
+		ConfirmedAt: timeToTs(at),
+	})
+	if err != nil {
+		return err
+	}
+	if affected == 0 {
+		return storage.ErrNotFound
+	}
+	return nil
+}
+
+func (s *Store) TOTPSecretByUserID(ctx context.Context, userID theauth.ULID) (*theauth.TOTPSecret, error) {
+	row, err := s.q.TOTPSecretByUserID(ctx, ulidToPgUUID(userID))
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, storage.ErrNotFound
+		}
+		return nil, err
+	}
+	sec := rowToTOTPSecret(row)
+	return &sec, nil
+}
+
+func (s *Store) DeleteTOTPSecret(ctx context.Context, userID theauth.ULID) error {
+	// FK is ON DELETE CASCADE so dropping totp_secrets via the user row
+	// would cascade, but here we delete by user_id directly and also
+	// clear recovery codes to keep the in-memory and postgres adapters
+	// observably identical.
+	if err := s.q.DeleteRecoveryCodesByUserID(ctx, ulidToPgUUID(userID)); err != nil {
+		return err
+	}
+	return s.q.DeleteTOTPSecret(ctx, ulidToPgUUID(userID))
+}
+
+// ---------- Recovery codes (v0.5) ----------
+
+func (s *Store) InsertRecoveryCodes(ctx context.Context, codes []theauth.RecoveryCode) error {
+	for _, c := range codes {
+		if err := s.q.InsertRecoveryCode(ctx, sqlcgen.InsertRecoveryCodeParams{
+			ID:        ulidToPgUUID(c.ID),
+			UserID:    ulidToPgUUID(c.UserID),
+			CodeHash:  c.CodeHash,
+			CreatedAt: timeToTs(c.CreatedAt),
+		}); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (s *Store) ConsumeRecoveryCode(ctx context.Context, userID theauth.ULID, code string, at time.Time) error {
+	rows, err := s.q.RecoveryCodesByUserID(ctx, ulidToPgUUID(userID))
+	if err != nil {
+		return err
+	}
+	for _, r := range rows {
+		if !crypto.VerifyRecoveryCode(r.CodeHash, code) {
+			continue
+		}
+		affected, err := s.q.ConsumeRecoveryCodeByID(ctx, sqlcgen.ConsumeRecoveryCodeByIDParams{
+			ID:     r.ID,
+			UsedAt: timeToTs(at),
+		})
+		if err != nil {
+			return err
+		}
+		if affected == 0 {
+			// Lost a race to another concurrent verify; keep walking the
+			// remaining unused codes in case there is another match.
+			continue
+		}
+		return nil
+	}
+	return storage.ErrNotFound
 }

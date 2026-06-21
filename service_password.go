@@ -86,39 +86,69 @@ func (a *TheAuth) signupWithPassword(ctx context.Context, emailAddr, password st
 	return &user, sessToken, nil
 }
 
-// signinWithPassword verifies credentials and issues a session. Always returns
-// CodeInvalidCredentials for "no such user" AND "wrong password" so callers
-// can't enumerate registered emails. Returns the session token + user on
-// success.
-func (a *TheAuth) signinWithPassword(ctx context.Context, emailAddr, password, userAgent, ip string) (string, *User, error) {
+// SigninStep is the v0.5 indicator returned alongside the session token by
+// signinWithPassword: "full" when the cookie is immediately usable,
+// "totp_required" when the cookie is a pending_2fa session that can only
+// hit /auth/totp/verify and /auth/totp/recovery.
+type SigninStep string
+
+const (
+	SigninStepFull         SigninStep = "full"
+	SigninStepTOTPRequired SigninStep = "totp_required"
+)
+
+// signinWithPassword verifies credentials and issues a session. Always
+// returns CodeInvalidCredentials for "no such user" AND "wrong password" so
+// callers can't enumerate registered emails. Returns the session token,
+// user, and a step indicator: when the user has a confirmed TOTP secret
+// the step is "totp_required" and the session is pending_2fa instead of
+// full.
+func (a *TheAuth) signinWithPassword(ctx context.Context, emailAddr, password, userAgent, ip string) (string, *User, SigninStep, error) {
 	emailAddr = normalizeEmail(emailAddr)
 	user, hash, err := a.storage.UserByEmailWithPassword(ctx, emailAddr)
 	if errors.Is(err, ErrStorageNotFound) {
-		return "", nil, NewError(CodeInvalidCredentials, "invalid email or password", nil)
+		return "", nil, "", NewError(CodeInvalidCredentials, "invalid email or password", nil)
 	}
 	if err != nil {
-		return "", nil, err
+		return "", nil, "", err
 	}
 	if hash == "" {
 		// Account exists but has no password set (magic-link-only signup).
 		// Indistinguishable from "wrong password" to avoid enumeration.
-		return "", nil, NewError(CodeInvalidCredentials, "invalid email or password", nil)
+		return "", nil, "", NewError(CodeInvalidCredentials, "invalid email or password", nil)
 	}
 	ok, err := crypto.VerifyPassword(password, hash)
 	if err != nil {
-		// Malformed stored hash — server-side fault, not a credential miss.
+		// Malformed stored hash, server-side fault, not a credential miss.
 		slog.Error("theauth: stored password hash unparseable", "user_id", user.ID.String(), "err", err.Error())
-		return "", nil, err
+		return "", nil, "", err
 	}
 	if !ok {
-		return "", nil, NewError(CodeInvalidCredentials, "invalid email or password", nil)
+		return "", nil, "", NewError(CodeInvalidCredentials, "invalid email or password", nil)
+	}
+	// v0.5 step-up: when TOTP is enrolled and confirmed for this user,
+	// mint a pending_2fa session instead of a full one. The caller (the
+	// HTTP handler) renders {"step":"totp_required"} so the client knows
+	// to prompt for the 6-digit code.
+	if a.totpCfg != nil {
+		secret, err := a.storage.TOTPSecretByUserID(ctx, user.ID)
+		if err == nil && secret != nil && secret.ConfirmedAt != nil {
+			pendTok, _, err := a.IssuePending2FA(ctx, user.ID, userAgent, ip)
+			if err != nil {
+				return "", nil, "", err
+			}
+			slog.Info("theauth: password signin (pending 2fa)", "user_id", user.ID.String(), "email", emailAddr)
+			return pendTok, user, SigninStepTOTPRequired, nil
+		} else if err != nil && !errors.Is(err, ErrStorageNotFound) {
+			return "", nil, "", err
+		}
 	}
 	sessToken, _, err := a.issueSession(ctx, *user, userAgent, ip)
 	if err != nil {
-		return "", nil, err
+		return "", nil, "", err
 	}
 	slog.Info("theauth: password signin", "user_id", user.ID.String(), "email", emailAddr)
-	return sessToken, user, nil
+	return sessToken, user, SigninStepFull, nil
 }
 
 // requestPasswordReset always returns nil error on "user does not exist" to

@@ -9,6 +9,7 @@ import (
 
 	"github.com/glincker/theauth-go/crypto"
 	"github.com/glincker/theauth-go/email"
+	gowebauthn "github.com/go-webauthn/webauthn/webauthn"
 )
 
 // Storage is the persistence contract TheAuth depends on. Adapters live in
@@ -56,6 +57,52 @@ type Storage interface {
 	// OAuthAccountByProviderUserID looks up the row for a provider/user
 	// pair. Returns ErrStorageNotFound when no row exists.
 	OAuthAccountByProviderUserID(ctx context.Context, provider, providerUserID string) (*OAuthAccount, error)
+
+	// Sessions: v0.5 step-up additions
+	// CreateSessionWithAuthLevel mints a session whose AuthLevel column is
+	// set to the supplied value (typically AuthLevelPending2FA). Mirrors
+	// CreateSession otherwise. CreateSession itself continues to default
+	// to AuthLevelFull at the DDL layer so older callers see no change.
+	CreateSessionWithAuthLevel(ctx context.Context, s Session) (Session, error)
+	// UpdateSessionAuthLevel rewrites a single session's AuthLevel column.
+	// Used by /auth/totp/verify to promote a pending session to full.
+	UpdateSessionAuthLevel(ctx context.Context, id ULID, level string) error
+
+	// WebAuthn (v0.5)
+	InsertWebAuthnCredential(ctx context.Context, c WebAuthnCredential) (WebAuthnCredential, error)
+	WebAuthnCredentialsByUserID(ctx context.Context, userID ULID) ([]WebAuthnCredential, error)
+	// WebAuthnCredentialByCredentialID returns the row keyed by the raw
+	// authenticator credential ID, or ErrStorageNotFound when missing.
+	WebAuthnCredentialByCredentialID(ctx context.Context, credentialID []byte) (*WebAuthnCredential, error)
+	// UpdateWebAuthnSignCount atomically writes a strictly greater sign
+	// count and bumps last_used_at. Returns ErrReplayDetected when the
+	// new count is not strictly greater than the stored value (the
+	// canonical replay signal per WebAuthn L2 / L3). Returns
+	// ErrStorageNotFound when the credential does not exist.
+	UpdateWebAuthnSignCount(ctx context.Context, credentialID []byte, newCount uint32, usedAt time.Time) error
+	// DeleteWebAuthnCredential removes a credential by ID, scoped to the
+	// owning user. Returns ErrStorageNotFound when the row does not exist
+	// or does not belong to the caller (no leak on cross-user lookup).
+	DeleteWebAuthnCredential(ctx context.Context, id ULID, userID ULID) error
+
+	// TOTP (v0.5)
+	// UpsertPendingTOTPSecret writes an encrypted secret with
+	// confirmed_at = NULL. Replaces any prior unconfirmed secret for the
+	// same user; preserves a confirmed one untouched (re-enrollment
+	// requires DeleteTOTPSecret first).
+	UpsertPendingTOTPSecret(ctx context.Context, s TOTPSecret) error
+	// ConfirmTOTPSecret sets confirmed_at on the user's pending secret.
+	// Returns ErrStorageNotFound when no pending row exists.
+	ConfirmTOTPSecret(ctx context.Context, userID ULID, at time.Time) error
+	TOTPSecretByUserID(ctx context.Context, userID ULID) (*TOTPSecret, error)
+	DeleteTOTPSecret(ctx context.Context, userID ULID) error
+
+	InsertRecoveryCodes(ctx context.Context, codes []RecoveryCode) error
+	// ConsumeRecoveryCode walks the user's unused codes, locates the one
+	// whose hash matches via crypto.VerifyRecoveryCode, and marks it used
+	// atomically. Returns ErrStorageNotFound when no matching unused code
+	// exists (covers wrong code, reused code, and cross-user mismatch).
+	ConsumeRecoveryCode(ctx context.Context, userID ULID, code string, at time.Time) error
 }
 
 // Config holds the wiring for a TheAuth instance.
@@ -96,6 +143,45 @@ type Config struct {
 	// a successful sign-in. Defaults to "/" when empty. Set to a path on
 	// your own origin; cross-origin redirects are not validated here.
 	PostLoginRedirect string
+
+	// WebAuthn enables passkey registration + discoverable login when non-nil.
+	// RPID and RPOrigins are mandatory per spec. Leave nil to keep v0.4 behavior.
+	WebAuthn *WebAuthnConfig
+
+	// TOTP enables time-based second-factor enrollment + verification when non-nil.
+	// Requires Config.EncryptionKey (already required by v0.3 OAuth) so the stored
+	// secret is encrypted at rest. New returns an error if TOTP is set without a key.
+	TOTP *TOTPConfig
+}
+
+// WebAuthnConfig wires the Relying Party identity. Field names mirror the
+// upstream go-webauthn/webauthn.Config so consumers reading either set of
+// docs see the same vocabulary.
+type WebAuthnConfig struct {
+	// RPID is the Relying Party Server ID. e.g. "glinr.com" (eTLD+1 of the
+	// origin, no scheme, no port). Required.
+	RPID string
+	// RPDisplayName is shown by browsers and authenticators. Required.
+	RPDisplayName string
+	// RPOrigins is the fully qualified origins permitted to invoke the
+	// API, e.g. ["https://glinr.com"]. At least one required.
+	RPOrigins []string
+	// ChallengeTTL caps how long the in-memory challenge session is valid.
+	// Defaults to 5 minutes; challenges are single-use regardless.
+	ChallengeTTL time.Duration
+}
+
+// TOTPConfig wires the second-factor TOTP behavior. Algorithm is fixed at
+// SHA-1 / 30s / 6 digits for compatibility with Google Authenticator, Authy,
+// 1Password, and every other mainstream authenticator app. Skew is fixed at
+// one period before/after (the pquerna/otp default) to absorb client clock
+// drift.
+type TOTPConfig struct {
+	// Issuer is shown in the authenticator app, e.g. "GLINR Quarter".
+	Issuer string
+	// RecoveryCodeCount defaults to 10 when zero. Each code is 10 hex chars
+	// (40 bits of entropy) generated via crypto/rand.
+	RecoveryCodeCount int
 }
 
 // TheAuth is the public entry point, constructed once at app start and
@@ -118,6 +204,18 @@ type TheAuth struct {
 	postLoginRedirect string
 	oauthStates       sync.Map // map[string]*oauthState
 	oauthStateStop    chan struct{}
+
+	// WebAuthn (v0.5). nil when Config.WebAuthn was not set; routes are
+	// only mounted in that case.
+	webauthn           *gowebauthn.WebAuthn
+	webauthnCfg        *WebAuthnConfig
+	webauthnChals      sync.Map // map[string]*webauthnChallenge
+	webauthnStop       chan struct{}
+	webauthnChalTTL    time.Duration
+	pendingFailures    sync.Map // map[ULID]*pendingFailureCounter
+	totpCfg            *TOTPConfig
+	totpEnrollments    sync.Map // map[string]*totpEnrollment
+	totpEnrollmentStop chan struct{}
 }
 
 // New validates the Config, applies defaults, and returns a ready TheAuth.
@@ -173,6 +271,46 @@ func New(cfg Config) (*TheAuth, error) {
 		cfg.PostLoginRedirect = "/"
 	}
 
+	// v0.5: WebAuthn + TOTP validation. Both blocks are optional and
+	// orthogonal; consumers can wire either, both, or neither.
+	var wa *gowebauthn.WebAuthn
+	if cfg.WebAuthn != nil {
+		if cfg.WebAuthn.RPID == "" {
+			return nil, errors.New("theauth: Config.WebAuthn.RPID is required")
+		}
+		if len(cfg.WebAuthn.RPOrigins) == 0 {
+			return nil, errors.New("theauth: Config.WebAuthn.RPOrigins must have at least one entry")
+		}
+		display := cfg.WebAuthn.RPDisplayName
+		if display == "" {
+			display = cfg.WebAuthn.RPID
+		}
+		w, err := gowebauthn.New(&gowebauthn.Config{
+			RPID:                  cfg.WebAuthn.RPID,
+			RPDisplayName:         display,
+			RPOrigins:             cfg.WebAuthn.RPOrigins,
+			AttestationPreference: "none", // matches passkey UX guidance; MDS3 deferred to a future config
+		})
+		if err != nil {
+			return nil, errors.New("theauth: webauthn config: " + err.Error())
+		}
+		wa = w
+		if cfg.WebAuthn.ChallengeTTL == 0 {
+			cfg.WebAuthn.ChallengeTTL = 5 * time.Minute
+		}
+	}
+	if cfg.TOTP != nil {
+		if len(cfg.EncryptionKey) != crypto.AESKeyLen {
+			return nil, errors.New("theauth: Config.EncryptionKey must be 32 bytes when TOTP is configured")
+		}
+		if cfg.TOTP.Issuer == "" {
+			return nil, errors.New("theauth: Config.TOTP.Issuer is required")
+		}
+		if cfg.TOTP.RecoveryCodeCount == 0 {
+			cfg.TOTP.RecoveryCodeCount = 10
+		}
+	}
+
 	a := &TheAuth{
 		storage:           cfg.Storage,
 		emailSender:       cfg.EmailSender,
@@ -187,24 +325,43 @@ func New(cfg Config) (*TheAuth, error) {
 		providers:         providers,
 		encryptionKey:     cfg.EncryptionKey,
 		postLoginRedirect: cfg.PostLoginRedirect,
+		webauthn:          wa,
+		webauthnCfg:       cfg.WebAuthn,
+		totpCfg:           cfg.TOTP,
 	}
 	if len(providers) > 0 {
 		a.oauthStateStop = make(chan struct{})
 		go a.oauthStateGCLoop()
 	}
+	if wa != nil {
+		a.webauthnChalTTL = cfg.WebAuthn.ChallengeTTL
+		a.webauthnStop = make(chan struct{})
+		go a.webauthnChallengeGCLoop()
+	}
+	if cfg.TOTP != nil {
+		a.totpEnrollmentStop = make(chan struct{})
+		go a.totpEnrollmentGCLoop()
+	}
 	return a, nil
 }
 
-// Close releases background resources started by New (currently: the OAuth
-// state GC goroutine). Safe to call multiple times; safe to omit in tests
-// that don't configure providers.
+// Close releases background resources started by New: the OAuth state GC
+// loop (v0.3) and the WebAuthn challenge / TOTP enrollment GC loops (v0.5).
+// Safe to call multiple times; safe to omit in tests that don't configure
+// the corresponding feature.
 func (a *TheAuth) Close() {
-	if a.oauthStateStop != nil {
+	closeOnce := func(ch chan struct{}) {
+		if ch == nil {
+			return
+		}
 		select {
-		case <-a.oauthStateStop:
+		case <-ch:
 			// already closed
 		default:
-			close(a.oauthStateStop)
+			close(ch)
 		}
 	}
+	closeOnce(a.oauthStateStop)
+	closeOnce(a.webauthnStop)
+	closeOnce(a.totpEnrollmentStop)
 }
