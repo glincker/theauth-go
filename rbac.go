@@ -4,6 +4,8 @@ import (
 	"context"
 	"sort"
 	"sync"
+
+	"github.com/glincker/theauth-go/internal/models"
 )
 
 // Seeded permission catalog. Every consumer's permission set extends (never
@@ -11,28 +13,30 @@ import (
 // duplicates a seeded one with a different description (defensive against
 // silent overrides).
 //
+// The catalog values live in internal/models so storage adapters can
+// reference the same string literals without importing the root package.
 // The list is intentionally finite and small. Wildcards and ABAC are
 // deferred to v1.x per the v1.0 design document.
 const (
-	PermissionBillingRead    = "billing:read"
-	PermissionBillingWrite   = "billing:write"
-	PermissionBillingAdmin   = "billing:admin"
-	PermissionUsersRead      = "users:read"
-	PermissionUsersInvite    = "users:invite"
-	PermissionUsersAdmin     = "users:admin"
-	PermissionRolesRead      = "roles:read"
-	PermissionRolesAdmin     = "roles:admin"
-	PermissionAuditRead      = "audit:read"
-	PermissionSAMLAdmin      = "saml:admin"
-	PermissionSCIMAdmin      = "scim:admin"
-	PermissionSessionsRevoke = "sessions:revoke"
+	PermissionBillingRead    = models.PermissionBillingRead
+	PermissionBillingWrite   = models.PermissionBillingWrite
+	PermissionBillingAdmin   = models.PermissionBillingAdmin
+	PermissionUsersRead      = models.PermissionUsersRead
+	PermissionUsersInvite    = models.PermissionUsersInvite
+	PermissionUsersAdmin     = models.PermissionUsersAdmin
+	PermissionRolesRead      = models.PermissionRolesRead
+	PermissionRolesAdmin     = models.PermissionRolesAdmin
+	PermissionAuditRead      = models.PermissionAuditRead
+	PermissionSAMLAdmin      = models.PermissionSAMLAdmin
+	PermissionSCIMAdmin      = models.PermissionSCIMAdmin
+	PermissionSessionsRevoke = models.PermissionSessionsRevoke
 
 	// v2.0 phase 6 additions. agents:admin grants organization-scoped
 	// agent CRUD via /admin/v1/.../agents; delegations:admin grants
 	// delegation CRUD via /admin/v1/.../delegations. Seeded into every
 	// organization's "owner" and "admin" default roles.
-	PermissionAgentsAdmin      = "agents:admin"
-	PermissionDelegationsAdmin = "delegations:admin"
+	PermissionAgentsAdmin      = models.PermissionAgentsAdmin
+	PermissionDelegationsAdmin = models.PermissionDelegationsAdmin
 )
 
 // SeededPermissions returns the v1.0 canonical permission catalog. The

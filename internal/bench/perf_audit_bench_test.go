@@ -43,7 +43,6 @@ const (
 	perfBenchResource = "https://files.example.com/mcp"
 )
 
-
 // seedRefreshToken inserts a fresh refresh token into the store and returns
 // it. Used by benchmarks that need a single-shot refresh_token grant per
 // iteration. The token + family-id combo is unique per call.
@@ -212,4 +211,3 @@ func BenchmarkJWKSEndpoint(b *testing.B) {
 		_ = rec.Body.Bytes()
 	}
 }
-
