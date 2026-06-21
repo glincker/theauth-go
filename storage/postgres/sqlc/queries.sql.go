@@ -103,7 +103,7 @@ func (q *Queries) CreatePasswordResetToken(ctx context.Context, arg CreatePasswo
 const createSession = `-- name: CreateSession :one
 INSERT INTO sessions (id, user_id, token_hash, user_agent, ip, created_at, expires_at)
 VALUES ($1, $2, $3, $4, $5, $6, $7)
-RETURNING id, user_id, token_hash, user_agent, ip, created_at, expires_at, revoked_at, auth_level
+RETURNING id, user_id, token_hash, user_agent, ip, created_at, expires_at, revoked_at, auth_level, active_organization_id
 `
 
 type CreateSessionParams struct {
@@ -137,6 +137,7 @@ func (q *Queries) CreateSession(ctx context.Context, arg CreateSessionParams) (S
 		&i.ExpiresAt,
 		&i.RevokedAt,
 		&i.AuthLevel,
+		&i.ActiveOrganizationID,
 	)
 	return i, err
 }
@@ -207,7 +208,7 @@ func (q *Queries) RevokeUserSessions(ctx context.Context, userID pgtype.UUID) er
 }
 
 const sessionByTokenHash = `-- name: SessionByTokenHash :one
-SELECT id, user_id, token_hash, user_agent, ip, created_at, expires_at, revoked_at, auth_level FROM sessions WHERE token_hash = $1
+SELECT id, user_id, token_hash, user_agent, ip, created_at, expires_at, revoked_at, auth_level, active_organization_id FROM sessions WHERE token_hash = $1
 `
 
 func (q *Queries) SessionByTokenHash(ctx context.Context, tokenHash []byte) (Session, error) {
@@ -223,6 +224,7 @@ func (q *Queries) SessionByTokenHash(ctx context.Context, tokenHash []byte) (Ses
 		&i.ExpiresAt,
 		&i.RevokedAt,
 		&i.AuthLevel,
+		&i.ActiveOrganizationID,
 	)
 	return i, err
 }

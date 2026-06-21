@@ -93,7 +93,7 @@ func rowToUser(r sqlcgen.User) theauth.User {
 }
 
 func rowToSession(r sqlcgen.Session) theauth.Session {
-	return theauth.Session{
+	s := theauth.Session{
 		ID:        pgUUIDToULID(r.ID),
 		UserID:    pgUUIDToULID(r.UserID),
 		TokenHash: r.TokenHash,
@@ -104,6 +104,11 @@ func rowToSession(r sqlcgen.Session) theauth.Session {
 		RevokedAt: tsToTimePtr(r.RevokedAt),
 		AuthLevel: r.AuthLevel,
 	}
+	if r.ActiveOrganizationID.Valid {
+		id := pgUUIDToULID(r.ActiveOrganizationID)
+		s.ActiveOrganizationID = &id
+	}
+	return s
 }
 
 func rowToMagicLink(r sqlcgen.MagicLink) theauth.MagicLink {

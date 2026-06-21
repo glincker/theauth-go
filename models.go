@@ -17,6 +17,15 @@ type User struct {
 	AvatarURL       string     `json:"avatarUrl"`
 	CreatedAt       time.Time  `json:"createdAt"`
 	UpdatedAt       time.Time  `json:"updatedAt"`
+	// ExternalID (v0.7 SCIM) stores the SCIM client's stable identifier so
+	// upsert by externalId works. Empty for users not created via SCIM.
+	ExternalID string `json:"externalId,omitempty"`
+	// GivenName / FamilyName / DisplayName (v0.7 SCIM) capture the structured
+	// name attributes SCIM clients provision; they are best-effort projections
+	// alongside Name and may be empty for users created via other flows.
+	GivenName   string `json:"givenName,omitempty"`
+	FamilyName  string `json:"familyName,omitempty"`
+	DisplayName string `json:"displayName,omitempty"`
 }
 
 // Session auth levels (v0.5). AuthLevelFull is the post-MFA, full-access
@@ -41,6 +50,10 @@ type Session struct {
 	// AuthLevel is "full" or "pending_2fa" (v0.5). Sessions issued by code
 	// paths predating v0.5 default to "full" so existing rows keep working.
 	AuthLevel string `json:"authLevel,omitempty"`
+	// ActiveOrganizationID (v0.7) scopes a session to one organization for
+	// the duration of the session. Nil in single-tenant deployments and on
+	// any session that has not picked an org yet.
+	ActiveOrganizationID *ULID `json:"activeOrganizationId,omitempty"`
 }
 
 // Expired reports whether the session is no longer usable at the given time.
@@ -139,4 +152,125 @@ type RecoveryCode struct {
 	CodeHash  []byte     `json:"-"`
 	UsedAt    *time.Time `json:"usedAt,omitempty"`
 	CreatedAt time.Time  `json:"createdAt"`
+}
+
+// ---------- v0.7 multi-tenancy + SAML + SCIM ----------
+
+// Organization role constants. Scoped to one organization each.
+const (
+	OrgRoleOwner  = "owner"
+	OrgRoleAdmin  = "admin"
+	OrgRoleMember = "member"
+)
+
+// Organization is the top-level multi-tenant container. Slug is a citext
+// unique URL-safe handle (lowercased on write).
+type Organization struct {
+	ID        ULID      `json:"id"`
+	Name      string    `json:"name"`
+	Slug      string    `json:"slug"`
+	CreatedAt time.Time `json:"createdAt"`
+	UpdatedAt time.Time `json:"updatedAt"`
+}
+
+// OrganizationMember binds a user to an organization with a single role.
+// Role values: "owner", "admin", "member". owner can manage SAML and SCIM,
+// admin can manage SCIM only, member is read-only against org metadata.
+type OrganizationMember struct {
+	OrganizationID ULID      `json:"organizationId"`
+	UserID         ULID      `json:"userId"`
+	Role           string    `json:"role"`
+	JoinedAt       time.Time `json:"joinedAt"`
+}
+
+// SAMLAttributeMap projects SAML attribute names to canonical user fields.
+// Stored as jsonb in saml_connections.attribute_map.
+type SAMLAttributeMap struct {
+	Email      string            `json:"email"`
+	Name       string            `json:"name,omitempty"`
+	GivenName  string            `json:"givenName,omitempty"`
+	FamilyName string            `json:"familyName,omitempty"`
+	Groups     string            `json:"groups,omitempty"`
+	Extra      map[string]string `json:"extra,omitempty"`
+}
+
+// DefaultSAMLAttributeMap returns the WS-Federation claim URIs that Microsoft,
+// Okta, and OneLogin emit by default. A per-connection map can override any
+// of these by writing a non-empty string for the field.
+func DefaultSAMLAttributeMap() SAMLAttributeMap {
+	return SAMLAttributeMap{
+		Email:      "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress",
+		Name:       "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name",
+		GivenName:  "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/givenname",
+		FamilyName: "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/surname",
+		Groups:     "http://schemas.xmlsoap.org/claims/Group",
+	}
+}
+
+// SAMLConnection is one IdP binding for one organization. An organization can
+// hold multiple connections (e.g. two distinct Okta tenants for subsidiaries),
+// each routed by id in the URL.
+type SAMLConnection struct {
+	ID             ULID             `json:"id"`
+	OrganizationID ULID             `json:"organizationId"`
+	IdPEntityID    string           `json:"idpEntityId"`
+	IdPSSOURL      string           `json:"idpSsoUrl"`
+	IdPX509Cert    string           `json:"idpX509Cert"`
+	SPEntityID     string           `json:"spEntityId"`
+	SPACSURL       string           `json:"spAcsUrl"`
+	AttributeMap   SAMLAttributeMap `json:"attributeMap"`
+	CreatedAt      time.Time        `json:"createdAt"`
+	UpdatedAt      time.Time        `json:"updatedAt"`
+}
+
+// SAMLIdentity links a successful SAML login to a user. Lookup key is
+// (connection_id, name_id); name_id is whatever Subject.NameID.Value the IdP
+// emitted, opaque and stable across sessions for most IdPs.
+type SAMLIdentity struct {
+	ID           ULID       `json:"id"`
+	ConnectionID ULID       `json:"connectionId"`
+	UserID       ULID       `json:"userId"`
+	NameID       string     `json:"nameId"`
+	NameIDFormat string     `json:"nameIdFormat"`
+	LastLoginAt  *time.Time `json:"lastLoginAt,omitempty"`
+	CreatedAt    time.Time  `json:"createdAt"`
+}
+
+// SCIMToken is a hashed bearer token bound to one organization. Plaintext is
+// only ever returned from CreateSCIMToken; subsequent reads only ever see the
+// hash. Hash is sha256(token); rationale documented in the v0.7 spec.
+type SCIMToken struct {
+	ID             ULID       `json:"id"`
+	OrganizationID ULID       `json:"organizationId"`
+	Name           string     `json:"name"`
+	TokenHash      []byte     `json:"-"`
+	CreatedAt      time.Time  `json:"createdAt"`
+	LastUsedAt     *time.Time `json:"lastUsedAt,omitempty"`
+	RevokedAt      *time.Time `json:"revokedAt,omitempty"`
+}
+
+// Group is a SCIM-first concept. v0.7 stores them flat (no nesting), scoped
+// to one organization. Application semantics (mapping a group to a role) land
+// in v0.8 RBAC.
+type Group struct {
+	ID             ULID      `json:"id"`
+	OrganizationID ULID      `json:"organizationId"`
+	DisplayName    string    `json:"displayName"`
+	ExternalID     string    `json:"externalId,omitempty"`
+	CreatedAt      time.Time `json:"createdAt"`
+	UpdatedAt      time.Time `json:"updatedAt"`
+}
+
+// SCIMUserFilter is the equality-only filter accepted on /scim/v2/Users.
+// Anything outside this whitelist returns 400 invalidFilter.
+type SCIMUserFilter struct {
+	UserName   string
+	ExternalID string
+	Email      string
+}
+
+// SCIMGroupFilter is the equality-only filter accepted on /scim/v2/Groups.
+type SCIMGroupFilter struct {
+	DisplayName string
+	ExternalID  string
 }

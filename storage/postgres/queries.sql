@@ -15,10 +15,11 @@ UPDATE users SET email_verified_at = now(), updated_at = now() WHERE id = $1;
 -- name: CreateSession :one
 INSERT INTO sessions (id, user_id, token_hash, user_agent, ip, created_at, expires_at)
 VALUES ($1, $2, $3, $4, $5, $6, $7)
-RETURNING *;
+RETURNING id, user_id, token_hash, user_agent, ip, created_at, expires_at, revoked_at, auth_level, active_organization_id;
 
 -- name: SessionByTokenHash :one
-SELECT * FROM sessions WHERE token_hash = $1;
+SELECT id, user_id, token_hash, user_agent, ip, created_at, expires_at, revoked_at, auth_level, active_organization_id
+FROM sessions WHERE token_hash = $1;
 
 -- name: RevokeSession :exec
 UPDATE sessions SET revoked_at = now() WHERE id = $1;
@@ -74,7 +75,7 @@ WHERE provider = $1 AND provider_user_id = $2;
 -- name: CreateSessionWithAuthLevel :one
 INSERT INTO sessions (id, user_id, token_hash, user_agent, ip, created_at, expires_at, auth_level)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-RETURNING *;
+RETURNING id, user_id, token_hash, user_agent, ip, created_at, expires_at, revoked_at, auth_level, active_organization_id;
 
 -- name: UpdateSessionAuthLevel :exec
 UPDATE sessions SET auth_level = $2 WHERE id = $1;
@@ -132,3 +133,182 @@ SELECT * FROM totp_recovery_codes WHERE user_id = $1 AND used_at IS NULL;
 -- name: ConsumeRecoveryCodeByID :execrows
 UPDATE totp_recovery_codes SET used_at = $2
 WHERE id = $1 AND used_at IS NULL;
+
+-- ===== v0.7: organizations =====
+
+-- name: InsertOrganization :one
+INSERT INTO organizations (id, name, slug, created_at, updated_at)
+VALUES ($1, $2, $3, $4, $5)
+RETURNING *;
+
+-- name: OrganizationByID :one
+SELECT * FROM organizations WHERE id = $1;
+
+-- name: OrganizationBySlug :one
+SELECT * FROM organizations WHERE slug = $1;
+
+-- name: UpdateOrganization :execrows
+UPDATE organizations SET name = $2, slug = $3, updated_at = now() WHERE id = $1;
+
+-- name: DeleteOrganization :execrows
+DELETE FROM organizations WHERE id = $1;
+
+-- name: UpsertOrganizationMember :exec
+INSERT INTO organization_members (organization_id, user_id, role, joined_at)
+VALUES ($1, $2, $3, $4)
+ON CONFLICT (organization_id, user_id) DO UPDATE SET role = EXCLUDED.role;
+
+-- name: DeleteOrganizationMember :execrows
+DELETE FROM organization_members WHERE organization_id = $1 AND user_id = $2;
+
+-- name: OrganizationMembersByOrg :many
+SELECT * FROM organization_members WHERE organization_id = $1 ORDER BY joined_at ASC;
+
+-- name: OrganizationsByUser :many
+SELECT o.* FROM organizations o
+  JOIN organization_members m ON m.organization_id = o.id
+ WHERE m.user_id = $1
+ ORDER BY o.created_at ASC;
+
+-- name: OrganizationMemberRole :one
+SELECT role FROM organization_members WHERE organization_id = $1 AND user_id = $2;
+
+-- name: SetSessionActiveOrganization :execrows
+UPDATE sessions SET active_organization_id = $2 WHERE id = $1;
+
+-- ===== v0.7: saml =====
+
+-- name: InsertSAMLConnection :one
+INSERT INTO saml_connections (
+    id, organization_id, idp_entity_id, idp_sso_url, idp_x509_cert,
+    sp_entity_id, sp_acs_url, attribute_map, created_at, updated_at
+) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+RETURNING *;
+
+-- name: UpdateSAMLConnection :execrows
+UPDATE saml_connections SET
+    idp_entity_id = $2, idp_sso_url = $3, idp_x509_cert = $4,
+    sp_entity_id = $5, sp_acs_url = $6, attribute_map = $7,
+    updated_at = now()
+WHERE id = $1;
+
+-- name: DeleteSAMLConnection :execrows
+DELETE FROM saml_connections WHERE id = $1;
+
+-- name: SAMLConnectionByID :one
+SELECT * FROM saml_connections WHERE id = $1;
+
+-- name: SAMLConnectionsByOrg :many
+SELECT * FROM saml_connections WHERE organization_id = $1 ORDER BY created_at ASC;
+
+-- name: UpsertSAMLIdentity :one
+INSERT INTO saml_identities (id, connection_id, user_id, name_id, name_id_format, created_at)
+VALUES ($1, $2, $3, $4, $5, $6)
+ON CONFLICT (connection_id, name_id) DO UPDATE SET
+    user_id = EXCLUDED.user_id,
+    name_id_format = EXCLUDED.name_id_format
+RETURNING *;
+
+-- name: SAMLIdentityByConnectionAndNameID :one
+SELECT * FROM saml_identities WHERE connection_id = $1 AND name_id = $2;
+
+-- name: TouchSAMLIdentityLastLogin :exec
+UPDATE saml_identities SET last_login_at = $2 WHERE id = $1;
+
+-- ===== v0.7: scim tokens =====
+
+-- name: InsertSCIMToken :one
+INSERT INTO scim_tokens (id, organization_id, token_hash, name, created_at)
+VALUES ($1, $2, $3, $4, $5)
+RETURNING *;
+
+-- name: SCIMTokenByHash :one
+SELECT * FROM scim_tokens WHERE token_hash = $1;
+
+-- name: SCIMTokensByOrg :many
+SELECT * FROM scim_tokens WHERE organization_id = $1 ORDER BY created_at ASC;
+
+-- name: RevokeSCIMTokenByID :execrows
+UPDATE scim_tokens SET revoked_at = $2 WHERE id = $1;
+
+-- name: TouchSCIMTokenLastUsed :exec
+UPDATE scim_tokens SET last_used_at = $2 WHERE id = $1;
+
+-- ===== v0.7: users scoped queries =====
+
+-- name: ListUsersByOrganization :many
+SELECT u.* FROM users u
+  JOIN organization_members m ON m.user_id = u.id
+ WHERE m.organization_id = $1
+   AND ($2::text = '' OR u.email = $2)
+   AND ($3::text = '' OR u.external_id = $3)
+   AND ($4::text = '' OR u.email = $4)
+ ORDER BY u.created_at ASC
+ OFFSET $5 LIMIT $6;
+
+-- name: CountUsersByOrganization :one
+SELECT count(*) FROM users u
+  JOIN organization_members m ON m.user_id = u.id
+ WHERE m.organization_id = $1
+   AND ($2::text = '' OR u.email = $2)
+   AND ($3::text = '' OR u.external_id = $3)
+   AND ($4::text = '' OR u.email = $4);
+
+-- name: UserByExternalIDInOrg :one
+SELECT u.* FROM users u
+  JOIN organization_members m ON m.user_id = u.id
+ WHERE m.organization_id = $1 AND u.external_id = $2;
+
+-- name: UpdateUserSCIM :execrows
+UPDATE users SET
+    email = $2, name = $3, avatar_url = $4,
+    external_id = $5, given_name = $6, family_name = $7, display_name = $8,
+    updated_at = now()
+WHERE id = $1;
+
+-- ===== v0.7: groups =====
+
+-- name: InsertGroup :one
+INSERT INTO groups (id, organization_id, display_name, external_id, created_at)
+VALUES ($1, $2, $3, $4, $5)
+RETURNING *;
+
+-- name: GroupByID :one
+SELECT * FROM groups WHERE id = $1;
+
+-- name: GroupByExternalIDInOrg :one
+SELECT * FROM groups WHERE organization_id = $1 AND external_id = $2;
+
+-- name: UpdateGroup :execrows
+UPDATE groups SET display_name = $2, external_id = $3, updated_at = now() WHERE id = $1;
+
+-- name: DeleteGroup :execrows
+DELETE FROM groups WHERE id = $1;
+
+-- name: ListGroupsByOrganization :many
+SELECT * FROM groups
+ WHERE organization_id = $1
+   AND ($2::text = '' OR display_name = $2)
+   AND ($3::text = '' OR external_id = $3)
+ ORDER BY created_at ASC
+ OFFSET $4 LIMIT $5;
+
+-- name: CountGroupsByOrganization :one
+SELECT count(*) FROM groups
+ WHERE organization_id = $1
+   AND ($2::text = '' OR display_name = $2)
+   AND ($3::text = '' OR external_id = $3);
+
+-- name: DeleteAllGroupMembers :exec
+DELETE FROM group_members WHERE group_id = $1;
+
+-- name: InsertGroupMember :exec
+INSERT INTO group_members (group_id, user_id)
+VALUES ($1, $2)
+ON CONFLICT DO NOTHING;
+
+-- name: DeleteGroupMember :exec
+DELETE FROM group_members WHERE group_id = $1 AND user_id = $2;
+
+-- name: GroupMembersByGroupID :many
+SELECT user_id FROM group_members WHERE group_id = $1 ORDER BY user_id ASC;

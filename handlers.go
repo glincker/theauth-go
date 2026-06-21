@@ -65,9 +65,28 @@ func (a *TheAuth) Mount(r chi.Router) {
 			a.mountTOTP(r, ipLimit)
 		}
 
+		// Multi-tenancy (v0.7). Mounted only when Config.Organizations is
+		// set; the SAML connection CRUD and SCIM token CRUD subroutes hang
+		// off the org tree.
+		if a.orgsCfg != nil {
+			a.mountOrganizations(r)
+		}
+		// SAML flow endpoints (v0.7). Mounted only when Config.SAML is
+		// set; per-organization SAML connection CRUD lives under
+		// /auth/orgs/{orgId}/saml/connections.
+		if a.samlCfg != nil {
+			a.mountSAML(r)
+		}
+
 		r.With(a.RequireAuth()).Delete("/sessions/current", a.handleSessionDelete)
 		r.With(a.RequireAuth()).Get("/me", a.handleMe)
 	})
+
+	// SCIM 2.0 resource endpoints (v0.7). Mounted at /scim/v2/ rather than
+	// under /auth so the standard SCIM URL prefix is preserved.
+	if a.scimCfg != nil {
+		a.mountSCIM(r)
+	}
 }
 
 func (a *TheAuth) handleMagicLinkRequest(w http.ResponseWriter, r *http.Request) {
