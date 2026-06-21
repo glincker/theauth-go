@@ -11,7 +11,8 @@ This file helps AI coding assistants (Claude Code, Cursor, GitHub Copilot, Winds
 - **v0.3 (shipped)**: GitHub OAuth, extensible `Provider` interface, PKCE S256, AES-GCM token-at-rest encryption
 - **v0.4 (shipped)**: Google, Microsoft, Discord OAuth providers (same `Provider` interface, no core changes)
 - **v0.5 (shipped)**: WebAuthn / passkeys (discoverable login + replay-protected registration), TOTP 2FA + 10 single-use recovery codes, session step-up state machine (`pending_2fa` -> `full`)
-- **v0.6**: refresh-token rotation, JWKS-backed `id_token` verification, SMTP sender
+- **v0.6 (shipped)**: hardening release. Fuzz tests, race tests, benchmark baselines, four new examples (gin, echo, stdlib, oauth-multi-provider), package documentation, `STABILITY.md`, `CHANGELOG.md`. No new features.
+- **v0.7**: refresh-token rotation, JWKS-backed `id_token` verification, SMTP sender
 - **v1.0**: all 17 OAuth providers + SAML 2.0
 - **v2.0**: MCP OAuth 2.1 server, agent identity, delegation chains, budget policies
 
