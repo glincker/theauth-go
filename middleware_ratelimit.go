@@ -125,13 +125,6 @@ func extractClientIPTrusting(r *http.Request, trusted []netip.Prefix) string {
 	return remoteHost
 }
 
-// extractClientIP is the no-trust shim retained for callers that do not
-// have access to the TrustedProxies allowlist. It always reads
-// r.RemoteAddr and never trusts XFF.
-func extractClientIP(r *http.Request) string {
-	return remoteAddrHost(r)
-}
-
 // remoteAddrHost strips the port from r.RemoteAddr; if the address has no
 // port it is returned as-is.
 func remoteAddrHost(r *http.Request) string {

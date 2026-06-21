@@ -84,6 +84,7 @@ type Storage interface {
 	WebAuthnCredentialsByUserID(ctx context.Context, userID models.ULID) ([]models.WebAuthnCredential, error)
 	WebAuthnCredentialByCredentialID(ctx context.Context, credentialID []byte) (*models.WebAuthnCredential, error)
 	UpdateWebAuthnSignCount(ctx context.Context, credentialID []byte, newCount uint32, usedAt time.Time) error
+	DeleteWebAuthnCredential(ctx context.Context, id models.ULID, userID models.ULID) error
 }
 
 // SessionIssuer abstracts the session.Issue call so FinishLogin can mint a
@@ -442,4 +443,23 @@ func (s *Service) FinishLogin(ctx context.Context, challengeToken string, body i
 	}
 	slog.Info("theauth: passkey login", "user_id", user.ID.String(), "credential_id_len", len(stored.CredentialID))
 	return sessTok, sess, nil
+}
+
+// ListCredentials returns the stored WebAuthn credentials for a user.
+// Thin pass-through to storage; surfaced here so the handler does not
+// reach into root storage.
+func (s *Service) ListCredentials(ctx context.Context, userID models.ULID) ([]models.WebAuthnCredential, error) {
+	return s.storage.WebAuthnCredentialsByUserID(ctx, userID)
+}
+
+// DeleteCredential removes a single credential scoped to the owning
+// user (the userID parameter is enforced by the storage layer so a
+// caller cannot delete another user's passkey). Emits a passkey.deleted
+// audit on success.
+func (s *Service) DeleteCredential(ctx context.Context, id models.ULID, userID models.ULID) error {
+	if err := s.storage.DeleteWebAuthnCredential(ctx, id, userID); err != nil {
+		return err
+	}
+	s.auditEm.EmitAudit(ctx, "passkey.deleted", models.TargetRef{Type: "webauthn_credential", ID: id.String()}, nil)
+	return nil
 }

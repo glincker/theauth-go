@@ -1,93 +1,48 @@
 package theauth
 
 import (
+	"context"
 	"net/http"
-	"time"
 
+	oauthhandlers "github.com/glincker/theauth-go/internal/oauth/handlers"
 	"github.com/go-chi/chi/v5"
 )
 
-// oauthStateCookieName is the short-lived cookie set at /start carrying the
-// CSRF state token. The /callback handler compares it to the state query
-// param before doing anything else; mismatch -> 400.
-const oauthStateCookieName = "theauth_oauth_state"
+// oauthServiceAdapter implements internal/oauth/handlers.Service on
+// top of the root *TheAuth, exposing only the three methods that the
+// extracted handler needs. The OAuth service itself still lives in
+// root (service_oauth.go); a future PR can extract it into
+// internal/oauth like PR D did for password / totp / webauthn / saml.
+type oauthServiceAdapter struct{ a *TheAuth }
 
-// oauthStateCookieTTL caps how long the user has between /start and the
-// provider's redirect back to /callback. Matches oauthStateTTL on the
-// service side.
-const oauthStateCookieTTL = 10 * time.Minute
+func (s oauthServiceAdapter) HasProvider(name string) bool {
+	_, ok := s.a.providers[name]
+	return ok
+}
 
+func (s oauthServiceAdapter) Start(ctx context.Context, providerName string) (string, string, error) {
+	return s.a.startOAuth(ctx, providerName)
+}
+
+func (s oauthServiceAdapter) Callback(ctx context.Context, providerName, code, state, ua, ip string) (string, error) {
+	tok, _, err := s.a.callbackOAuth(ctx, providerName, code, state, ua, ip)
+	return tok, err
+}
+
+// mountOAuth wires /auth/providers/* under r via the extracted
+// internal/oauth/handlers package. PR E architecture reorg
+// (2026-06-20) moved the two endpoints to that package; the root
+// keeps this thin coordinator so handlers.go is the single Mount
+// caller.
 func (a *TheAuth) mountOAuth(r chi.Router, ipLimit func(http.Handler) http.Handler) {
-	r.Route("/providers", func(r chi.Router) {
-		r.With(ipLimit).Get("/{name}/start", a.handleOAuthStart)
-		r.With(ipLimit).Get("/{name}/callback", a.handleOAuthCallback)
-	})
-}
-
-func (a *TheAuth) handleOAuthStart(w http.ResponseWriter, r *http.Request) {
-	name := chi.URLParam(r, "name")
-	if _, ok := a.providers[name]; !ok {
-		http.Error(w, "unknown provider", http.StatusNotFound)
-		return
-	}
-	authURL, state, err := a.startOAuth(r.Context(), name)
-	if err != nil {
-		http.Error(w, "internal error", http.StatusInternalServerError)
-		return
-	}
-	http.SetCookie(w, &http.Cookie{
-		Name:     oauthStateCookieName,
-		Value:    state,
-		Path:     "/",
-		HttpOnly: true,
-		Secure:   a.secureCookie,
-		SameSite: http.SameSiteLaxMode,
-		Expires:  time.Now().Add(oauthStateCookieTTL),
-	})
-	http.Redirect(w, r, authURL, http.StatusFound)
-}
-
-func (a *TheAuth) handleOAuthCallback(w http.ResponseWriter, r *http.Request) {
-	name := chi.URLParam(r, "name")
-	if _, ok := a.providers[name]; !ok {
-		http.Error(w, "unknown provider", http.StatusNotFound)
-		return
-	}
-	q := r.URL.Query()
-	if errCode := q.Get("error"); errCode != "" {
-		// Provider rejected the user (denied consent, invalid client, etc).
-		// Surface a generic 400; production callers can layer a friendlier
-		// page on top by handling this status.
-		http.Error(w, "oauth provider error: "+errCode, http.StatusBadRequest)
-		return
-	}
-	state := q.Get("state")
-	code := q.Get("code")
-	if state == "" || code == "" {
-		http.Error(w, "missing state or code", http.StatusBadRequest)
-		return
-	}
-	cookie, err := r.Cookie(oauthStateCookieName)
-	if err != nil || cookie.Value == "" || cookie.Value != state {
-		http.Error(w, "state mismatch", http.StatusBadRequest)
-		return
-	}
-	// Clear the state cookie regardless of outcome below.
-	http.SetCookie(w, &http.Cookie{
-		Name:     oauthStateCookieName,
-		Value:    "",
-		Path:     "/",
-		MaxAge:   -1,
-		HttpOnly: true,
-		Secure:   a.secureCookie,
-		SameSite: http.SameSiteLaxMode,
-	})
-
-	sessToken, _, err := a.callbackOAuth(r.Context(), name, code, state, r.UserAgent(), extractClientIP(r))
-	if err != nil {
-		http.Error(w, "oauth callback failed", http.StatusBadRequest)
-		return
-	}
-	a.setSessionCookie(w, sessToken)
-	http.Redirect(w, r, a.postLoginRedirect, http.StatusFound)
+	h := oauthhandlers.New(
+		oauthServiceAdapter{a: a},
+		oauthhandlers.SessionCookieConfig{
+			Name:       a.cookieName,
+			SecureFlag: a.secureCookie,
+			TTL:        a.sessionTTL,
+		},
+		a.postLoginRedirect,
+	)
+	h.Mount(r, ipLimit)
 }
