@@ -3,6 +3,9 @@ package theauth
 import (
 	"context"
 	"crypto/ed25519"
+	"crypto/rsa"
+	"crypto/x509"
+	"encoding/pem"
 	"errors"
 	"sync"
 	"time"
@@ -103,6 +106,61 @@ type Storage interface {
 	// atomically. Returns ErrStorageNotFound when no matching unused code
 	// exists (covers wrong code, reused code, and cross-user mismatch).
 	ConsumeRecoveryCode(ctx context.Context, userID ULID, code string, at time.Time) error
+
+	// ---------- v0.7 multi-tenancy + SAML + SCIM ----------
+	// All methods below are additive; existing single-tenant deployments
+	// never invoke them because the corresponding handlers are mounted
+	// only when Config.Organizations / SAML / SCIM are non-nil.
+
+	// Organizations + membership
+	InsertOrganization(ctx context.Context, o Organization) (Organization, error)
+	OrganizationByID(ctx context.Context, id ULID) (*Organization, error)
+	OrganizationBySlug(ctx context.Context, slug string) (*Organization, error)
+	UpdateOrganization(ctx context.Context, o Organization) error
+	DeleteOrganization(ctx context.Context, id ULID) error
+
+	UpsertOrganizationMember(ctx context.Context, m OrganizationMember) error
+	DeleteOrganizationMember(ctx context.Context, orgID, userID ULID) error
+	OrganizationMembersByOrg(ctx context.Context, orgID ULID) ([]OrganizationMember, error)
+	OrganizationsByUser(ctx context.Context, userID ULID) ([]Organization, error)
+	OrganizationMemberRole(ctx context.Context, orgID, userID ULID) (string, error)
+
+	SetSessionActiveOrganization(ctx context.Context, sessionID ULID, orgID *ULID) error
+
+	// SAML connections and identities
+	InsertSAMLConnection(ctx context.Context, c SAMLConnection) (SAMLConnection, error)
+	UpdateSAMLConnectionRow(ctx context.Context, c SAMLConnection) error
+	DeleteSAMLConnection(ctx context.Context, id ULID) error
+	SAMLConnectionByID(ctx context.Context, id ULID) (*SAMLConnection, error)
+	SAMLConnectionsByOrg(ctx context.Context, orgID ULID) ([]SAMLConnection, error)
+
+	UpsertSAMLIdentity(ctx context.Context, i SAMLIdentity) (SAMLIdentity, error)
+	SAMLIdentityByConnectionAndNameID(ctx context.Context, connectionID ULID, nameID string) (*SAMLIdentity, error)
+	TouchSAMLIdentityLastLogin(ctx context.Context, id ULID, at time.Time) error
+
+	// SCIM tokens
+	InsertSCIMToken(ctx context.Context, t SCIMToken) (SCIMToken, error)
+	SCIMTokenByHash(ctx context.Context, hash []byte) (*SCIMToken, error)
+	SCIMTokensByOrg(ctx context.Context, orgID ULID) ([]SCIMToken, error)
+	RevokeSCIMTokenByID(ctx context.Context, id ULID, at time.Time) error
+	TouchSCIMTokenLastUsed(ctx context.Context, id ULID, at time.Time) error
+
+	// SCIM user + group lookups scoped to a single organization
+	ListUsersByOrganization(ctx context.Context, orgID ULID, offset, limit int, filter SCIMUserFilter) (users []User, total int, err error)
+	ListGroupsByOrganization(ctx context.Context, orgID ULID, offset, limit int, filter SCIMGroupFilter) (groups []Group, total int, err error)
+	UserByExternalIDInOrg(ctx context.Context, orgID ULID, externalID string) (*User, error)
+	UpdateUserSCIM(ctx context.Context, u User) error
+
+	// Groups (SCIM)
+	InsertGroup(ctx context.Context, g Group) (Group, error)
+	GroupByID(ctx context.Context, id ULID) (*Group, error)
+	GroupByExternalIDInOrg(ctx context.Context, orgID ULID, externalID string) (*Group, error)
+	UpdateGroup(ctx context.Context, g Group) error
+	DeleteGroup(ctx context.Context, id ULID) error
+	SetGroupMembers(ctx context.Context, groupID ULID, userIDs []ULID) error
+	AddGroupMembers(ctx context.Context, groupID ULID, userIDs []ULID) error
+	RemoveGroupMembers(ctx context.Context, groupID ULID, userIDs []ULID) error
+	GroupMembers(ctx context.Context, groupID ULID) ([]ULID, error)
 }
 
 // Config holds the wiring for a TheAuth instance.
@@ -152,6 +210,82 @@ type Config struct {
 	// Requires Config.EncryptionKey (already required by v0.3 OAuth) so the stored
 	// secret is encrypted at rest. New returns an error if TOTP is set without a key.
 	TOTP *TOTPConfig
+
+	// Organizations (v0.7) enables multi-tenancy when non-nil. Single-tenant
+	// deployments leave this nil; organization-scoped routes (SAML connection
+	// CRUD, SCIM token CRUD, /auth/orgs/*) are not mounted.
+	Organizations *OrganizationsConfig
+
+	// SAML (v0.7) enables the per-connection Service Provider routes when
+	// non-nil. The SP keypair lives on the config so multi-tenant deployments
+	// can rotate it centrally; every connection signs AuthnRequests with this
+	// single keypair. Requires Organizations to be non-nil.
+	SAML *SAMLConfig
+
+	// SCIM (v0.7) enables the /scim/v2 endpoints when non-nil. Requires
+	// Organizations to be non-nil.
+	SCIM *SCIMConfig
+
+	// AuditHook (v0.7) is invoked synchronously for every SCIM mutation and
+	// every successful SAML assertion. The hook is a stub for v0.7 and
+	// becomes the entry point for the real async writer in v1.0. Nil hooks
+	// are a no-op; the library never blocks on this call.
+	AuditHook AuditHook
+}
+
+// OrganizationsConfig is currently empty: there are no tunables for v0.7.
+// The presence of a non-nil value is the signal that multi-tenancy is on.
+// Future fields (default member role, invitation TTL, etc.) land here without
+// breaking the existing zero-value wiring.
+type OrganizationsConfig struct{}
+
+// SAMLConfig wires the Service Provider keypair and base behavior. Per-IdP
+// configuration lives in saml_connections rows, not here.
+type SAMLConfig struct {
+	// SPCertificatePEM and SPPrivateKeyPEM are PEM-encoded; they sign every
+	// outbound AuthnRequest and identify the SP in metadata XML. New returns
+	// an error if either is missing or unparseable.
+	SPCertificatePEM []byte
+	SPPrivateKeyPEM  []byte
+
+	// AuthnRequestTTL caps how long an outstanding SP-initiated AuthnRequest
+	// ID is tracked for replay protection. Defaults to 10 minutes.
+	AuthnRequestTTL time.Duration
+
+	// ClockSkew accepted on Conditions.NotBefore / NotOnOrAfter. Defaults to
+	// 30 seconds (matches crewjam default). Some IdPs (Okta on slow clocks)
+	// need 60s.
+	ClockSkew time.Duration
+}
+
+// SCIMConfig wires the SCIM 2.0 endpoint behavior.
+type SCIMConfig struct {
+	// RequireHTTPS rejects requests whose r.TLS is nil and whose
+	// X-Forwarded-Proto header is not "https". Default true. Set false only
+	// when SCIM is fronted by a TLS-terminating proxy that strips the header
+	// (in which case the proxy is responsible for TLS).
+	RequireHTTPS bool
+
+	// MaxPageSize caps the count parameter on list endpoints. Defaults to
+	// 200. RFC 7644 section 3.4.2 lets the server enforce a maximum.
+	MaxPageSize int
+}
+
+// AuditHook (v0.7) is the synchronous hook invoked for every SCIM mutation
+// and every successful SAML assertion. v0.7 ships a no-op default; v1.0
+// replaces this with the real async audit writer. Actor is either a SCIM
+// token ID (for SCIM mutations) or a SAML connection ID (for SAML logins).
+type AuditHook func(ctx context.Context, event AuditEvent)
+
+// AuditEvent is the payload passed to AuditHook. Token plaintext is never
+// included; only the hashed actor identifier and the resource id are.
+type AuditEvent struct {
+	Action         string
+	OrganizationID ULID
+	ActorID        ULID
+	ResourceID     ULID
+	Detail         string
+	At             time.Time
 }
 
 // WebAuthnConfig wires the Relying Party identity. Field names mirror the
@@ -216,6 +350,16 @@ type TheAuth struct {
 	totpCfg            *TOTPConfig
 	totpEnrollments    sync.Map // map[string]*totpEnrollment
 	totpEnrollmentStop chan struct{}
+
+	// v0.7
+	orgsCfg          *OrganizationsConfig
+	samlCfg          *SAMLConfig
+	samlSPCert       *x509.Certificate
+	samlSPKey        *rsa.PrivateKey
+	samlAuthnInFlight sync.Map // map[string]time.Time -- AuthnRequest ID -> deadline
+	samlAuthnStop    chan struct{}
+	scimCfg          *SCIMConfig
+	auditHook        AuditHook
 }
 
 // New validates the Config, applies defaults, and returns a ready TheAuth.
@@ -311,6 +455,74 @@ func New(cfg Config) (*TheAuth, error) {
 		}
 	}
 
+	// v0.7 validation. SAML and SCIM both require multi-tenancy because the
+	// per-connection routing keys off organization ownership.
+	if cfg.SCIM != nil && cfg.Organizations == nil {
+		return nil, ErrSCIMRequiresOrganizations
+	}
+	if cfg.SAML != nil && cfg.Organizations == nil {
+		return nil, ErrSAMLRequiresOrganizations
+	}
+	var samlCert *x509.Certificate
+	var samlKey *rsa.PrivateKey
+	if cfg.SAML != nil {
+		if len(cfg.SAML.SPCertificatePEM) == 0 {
+			return nil, errors.New("theauth: Config.SAML.SPCertificatePEM is required")
+		}
+		if len(cfg.SAML.SPPrivateKeyPEM) == 0 {
+			return nil, errors.New("theauth: Config.SAML.SPPrivateKeyPEM is required")
+		}
+		certBlock, _ := pem.Decode(cfg.SAML.SPCertificatePEM)
+		if certBlock == nil {
+			return nil, errors.New("theauth: Config.SAML.SPCertificatePEM is not valid PEM")
+		}
+		c, err := x509.ParseCertificate(certBlock.Bytes)
+		if err != nil {
+			return nil, errors.New("theauth: Config.SAML.SPCertificatePEM parse: " + err.Error())
+		}
+		samlCert = c
+		keyBlock, _ := pem.Decode(cfg.SAML.SPPrivateKeyPEM)
+		if keyBlock == nil {
+			return nil, errors.New("theauth: Config.SAML.SPPrivateKeyPEM is not valid PEM")
+		}
+		// Accept PKCS1 RSA, PKCS8 RSA, and EC-as-PKCS8 (Microsoft tooling
+		// often emits PKCS8 even for RSA keys); other key types reject.
+		switch keyBlock.Type {
+		case "RSA PRIVATE KEY":
+			k, kerr := x509.ParsePKCS1PrivateKey(keyBlock.Bytes)
+			if kerr != nil {
+				return nil, errors.New("theauth: Config.SAML.SPPrivateKeyPEM PKCS1 parse: " + kerr.Error())
+			}
+			samlKey = k
+		case "PRIVATE KEY":
+			anyKey, kerr := x509.ParsePKCS8PrivateKey(keyBlock.Bytes)
+			if kerr != nil {
+				return nil, errors.New("theauth: Config.SAML.SPPrivateKeyPEM PKCS8 parse: " + kerr.Error())
+			}
+			rk, ok := anyKey.(*rsa.PrivateKey)
+			if !ok {
+				return nil, errors.New("theauth: Config.SAML.SPPrivateKeyPEM must be an RSA key")
+			}
+			samlKey = rk
+		default:
+			return nil, errors.New("theauth: Config.SAML.SPPrivateKeyPEM unrecognised PEM type: " + keyBlock.Type)
+		}
+		if cfg.SAML.AuthnRequestTTL == 0 {
+			cfg.SAML.AuthnRequestTTL = 10 * time.Minute
+		}
+		if cfg.SAML.ClockSkew == 0 {
+			cfg.SAML.ClockSkew = 30 * time.Second
+		}
+	}
+	if cfg.SCIM != nil {
+		if cfg.SCIM.MaxPageSize == 0 {
+			cfg.SCIM.MaxPageSize = 200
+		}
+	}
+	if cfg.AuditHook == nil {
+		cfg.AuditHook = noopAuditHook
+	}
+
 	a := &TheAuth{
 		storage:           cfg.Storage,
 		emailSender:       cfg.EmailSender,
@@ -328,6 +540,12 @@ func New(cfg Config) (*TheAuth, error) {
 		webauthn:          wa,
 		webauthnCfg:       cfg.WebAuthn,
 		totpCfg:           cfg.TOTP,
+		orgsCfg:           cfg.Organizations,
+		samlCfg:           cfg.SAML,
+		samlSPCert:        samlCert,
+		samlSPKey:         samlKey,
+		scimCfg:           cfg.SCIM,
+		auditHook:         cfg.AuditHook,
 	}
 	if len(providers) > 0 {
 		a.oauthStateStop = make(chan struct{})
@@ -342,8 +560,17 @@ func New(cfg Config) (*TheAuth, error) {
 		a.totpEnrollmentStop = make(chan struct{})
 		go a.totpEnrollmentGCLoop()
 	}
+	if cfg.SAML != nil {
+		a.samlAuthnStop = make(chan struct{})
+		go a.samlAuthnGCLoop()
+	}
 	return a, nil
 }
+
+// noopAuditHook is the v0.7 default. v1.0 replaces this binding with the
+// real async writer; the signature stays stable so consumer code does not
+// need to change.
+func noopAuditHook(_ context.Context, _ AuditEvent) {}
 
 // Close releases background resources started by New: the OAuth state GC
 // loop (v0.3) and the WebAuthn challenge / TOTP enrollment GC loops (v0.5).
@@ -364,4 +591,5 @@ func (a *TheAuth) Close() {
 	closeOnce(a.oauthStateStop)
 	closeOnce(a.webauthnStop)
 	closeOnce(a.totpEnrollmentStop)
+	closeOnce(a.samlAuthnStop)
 }

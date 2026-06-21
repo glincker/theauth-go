@@ -30,6 +30,36 @@ var (
 	// called against a user who already has a confirmed TOTP secret. Callers
 	// must DELETE /auth/totp first to re-enroll.
 	ErrAlreadyEnrolled = errors.New("theauth: totp already enrolled")
+
+	// v0.7 sentinels
+
+	// ErrSCIMRequiresOrganizations is returned by New when Config.SCIM is
+	// non-nil but Config.Organizations is nil. SCIM is meaningless without
+	// multi-tenancy because every token is bound to one organization.
+	ErrSCIMRequiresOrganizations = errors.New("theauth: SCIM requires Organizations to be enabled")
+	// ErrSAMLRequiresOrganizations is returned by New when Config.SAML is
+	// non-nil but Config.Organizations is nil. Single-tenant SAML is
+	// meaningless; per-connection routing keys off organization ownership.
+	ErrSAMLRequiresOrganizations = errors.New("theauth: SAML requires Organizations to be enabled")
+	// ErrSAMLUnsignedAssertion is returned by FinishSAMLLogin when the
+	// inbound SAML Response parses but its assertion is not signed.
+	ErrSAMLUnsignedAssertion = errors.New("theauth: saml assertion not signed")
+	// ErrSAMLMissingEmail is returned by FinishSAMLLogin when the mapped
+	// email attribute is empty (the find-or-create email fallback path
+	// cannot proceed).
+	ErrSAMLMissingEmail = errors.New("theauth: saml assertion missing email attribute")
+	// ErrSAMLInvalidAssertion wraps the underlying crewjam/saml validation
+	// error for failed signature / conditions / replay checks.
+	ErrSAMLInvalidAssertion = errors.New("theauth: saml assertion invalid")
+	// ErrLastOwner is returned when an org member removal would leave the
+	// organization with zero owners.
+	ErrLastOwner = errors.New("theauth: cannot remove the last owner")
+	// ErrUnsupportedFilter is returned by the SCIM filter parser on any
+	// filter shape outside the documented eq-only whitelist.
+	ErrUnsupportedFilter = errors.New("theauth: scim filter not supported")
+	// ErrSlugTaken is returned when the supplied organization slug already
+	// exists.
+	ErrSlugTaken = errors.New("theauth: organization slug already taken")
 )
 
 // Stable error codes that callers can switch on. New endpoints return

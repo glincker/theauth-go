@@ -21,7 +21,7 @@ import (
 const createSessionWithAuthLevel = `-- name: CreateSessionWithAuthLevel :one
 INSERT INTO sessions (id, user_id, token_hash, user_agent, ip, created_at, expires_at, auth_level)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-RETURNING id, user_id, token_hash, user_agent, ip, created_at, expires_at, revoked_at, auth_level
+RETURNING id, user_id, token_hash, user_agent, ip, created_at, expires_at, revoked_at, auth_level, active_organization_id
 `
 
 type CreateSessionWithAuthLevelParams struct {
@@ -57,6 +57,7 @@ func (q *Queries) CreateSessionWithAuthLevel(ctx context.Context, arg CreateSess
 		&i.ExpiresAt,
 		&i.RevokedAt,
 		&i.AuthLevel,
+		&i.ActiveOrganizationID,
 	)
 	return i, err
 }

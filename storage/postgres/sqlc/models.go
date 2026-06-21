@@ -38,6 +38,10 @@ type Session struct {
 	ExpiresAt pgtype.Timestamptz
 	RevokedAt pgtype.Timestamptz
 	AuthLevel string
+	// v0.7. Pgx Scan target; the column is nullable (ON DELETE SET NULL on
+	// organizations). Existing queries that do not SELECT this column leave
+	// the field as zero-value pgtype.UUID{Valid:false}.
+	ActiveOrganizationID pgtype.UUID
 }
 
 type User struct {
@@ -49,6 +53,12 @@ type User struct {
 	CreatedAt       pgtype.Timestamptz
 	UpdatedAt       pgtype.Timestamptz
 	PasswordHash    *string
+	// v0.7 SCIM columns. Added with NOT NULL DEFAULT '' in migration 0008,
+	// so existing reads keep returning empty strings for non-SCIM users.
+	ExternalID  string
+	GivenName   string
+	FamilyName  string
+	DisplayName string
 }
 
 type OauthAccount struct {
