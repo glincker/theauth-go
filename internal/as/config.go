@@ -6,6 +6,7 @@ import (
 
 	"github.com/glincker/theauth-go/crypto"
 	"github.com/glincker/theauth-go/internal/cimd"
+	"github.com/glincker/theauth-go/internal/dpop"
 	"github.com/glincker/theauth-go/internal/models"
 )
 
@@ -88,6 +89,15 @@ type Config struct {
 	// disables CIMD entirely and the AS falls back to RFC 7591 DCR for
 	// every client_id.
 	CIMD *cimd.Config
+
+	// DPoP, when non-nil, enables RFC 9449 sender-constrained access
+	// tokens. When DPoP is set the token endpoint inspects every request
+	// for a DPoP header, verifies the proof JWT, and embeds the RFC 7800
+	// cnf.jkt confirmation claim in the issued access token. Resource
+	// servers re-verify the same proof on every protected call. Leave
+	// nil to disable DPoP entirely (pre-PR behavior; bearer tokens are
+	// not sender constrained).
+	DPoP *dpop.Config
 }
 
 // Validate applies defaults and screens required fields. Mirror of the

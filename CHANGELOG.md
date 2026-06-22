@@ -6,6 +6,33 @@ adheres to [Semantic Versioning](https://semver.org/) from v1.0 forward.
 
 ## [Unreleased]
 
+### Added
+
+- **RFC 9449 DPoP (Demonstrating Proof-of-Possession) support.** The
+  authorization server can now mint sender-constrained access tokens.
+  Enable by setting `Config.AuthorizationServer.DPoP = &DPoPConfig{...}`.
+  When a client presents a `DPoP` header on the token request, the AS
+  verifies the proof JWT (typ, alg, jwk, htm, htu, iat, jti, optional
+  nonce) and embeds an RFC 7800 `cnf.jkt` claim in the issued access
+  token. The response carries `token_type: "DPoP"` per RFC 9449.
+  Resource servers wired with `mcpresource.WithDPoPVerification(...)`
+  re-verify the proof on every request, including the `ath` claim that
+  binds the proof to the access token. A stolen token cannot be replayed
+  without the holder's private key.
+  - New public type: `theauth.DPoPConfig` (additive on
+    `AuthorizationServerConfig`; the field is nil by default so
+    pre-PR deployments retain Bearer-token semantics).
+  - New mcpresource option: `mcpresource.WithDPoPVerification(algs,
+    proofMaxAge, jtiReplayWindow)`. The mcpresource module gains no new
+    transitive dependencies.
+  - AS metadata now advertises `dpop_signing_alg_values_supported`
+    when DPoP is enabled.
+  - Supported proof signing algorithms: ES256, ES384, RS256, PS256,
+    EdDSA. HS* and `none` are unconditionally rejected.
+  - Deferred: authorization-code binding (RFC 9449 section 10),
+    refresh-token DPoP rotation. Both are forward-compatible additions
+    on top of this PR.
+
 ## [2.1.0] - 2026-06-21
 
 Internal architecture reorganization plus the v2.0 security audit followups.

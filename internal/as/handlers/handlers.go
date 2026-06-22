@@ -180,6 +180,12 @@ func (h *Handler) handleToken(w http.ResponseWriter, r *http.Request) {
 	}
 	clientID, clientSecret := parseClientCredentials(r)
 	grantType := r.PostFormValue("grant_type")
+	// DPoP proof comes in via the DPoP header (RFC 9449 section 4). The
+	// HTTPMethod / HTTPURL are passed through to the verifier so it can
+	// match against the htm / htu claims; the verifier strips fragment +
+	// query string from htu so it is fine to pass the full URL here.
+	dpopHeader := r.Header.Get("DPoP")
+	httpURL := tokenEndpointURL(r)
 	switch grantType {
 	case models.GrantTypeAuthorizationCode:
 		req := internalas.TokenRequest{
@@ -189,10 +195,13 @@ func (h *Handler) handleToken(w http.ResponseWriter, r *http.Request) {
 			Code:         r.PostFormValue("code"),
 			CodeVerifier: r.PostFormValue("code_verifier"),
 			RedirectURI:  r.PostFormValue("redirect_uri"),
+			DPoPProof:    dpopHeader,
+			HTTPMethod:   r.Method,
+			HTTPURL:      httpURL,
 		}
 		resp, err := h.svc.ExchangeAuthorizationCode(r.Context(), req)
 		if err != nil {
-			writeTokenError(w, err)
+			h.writeTokenErrorDPoP(w, err)
 			return
 		}
 		writeTokenJSON(w, resp)
@@ -204,10 +213,13 @@ func (h *Handler) handleToken(w http.ResponseWriter, r *http.Request) {
 			RefreshToken: r.PostFormValue("refresh_token"),
 			Resource:     r.PostFormValue("resource"),
 			Scope:        scopeSplit(r.PostFormValue("scope")),
+			DPoPProof:    dpopHeader,
+			HTTPMethod:   r.Method,
+			HTTPURL:      httpURL,
 		}
 		resp, err := h.svc.RefreshAccessToken(r.Context(), req)
 		if err != nil {
-			writeTokenError(w, err)
+			h.writeTokenErrorDPoP(w, err)
 			return
 		}
 		writeTokenJSON(w, resp)
@@ -450,7 +462,59 @@ const (
 	oauthErrAccessDenied            = "access_denied"
 	oauthErrServerError             = "server_error"
 	oauthErrInvalidTarget           = "invalid_target"
+	// RFC 9449 wire codes returned from the token endpoint when a DPoP
+	// proof is missing, malformed, or rejected.
+	oauthErrInvalidDPoPProof = "invalid_dpop_proof"
+	oauthErrUseDPoPNonce     = "use_dpop_nonce"
 )
+
+// tokenEndpointURL returns the canonical https://host/oauth/token URL
+// the DPoP verifier expects. We rebuild it from the request rather than
+// trusting r.URL because chi normalizes paths but does not populate
+// scheme/host. When the deployment uses a reverse proxy that terminates
+// TLS the X-Forwarded-Proto + Host headers are honored.
+func tokenEndpointURL(r *http.Request) string {
+	scheme := "http"
+	if r.TLS != nil {
+		scheme = "https"
+	}
+	if xfp := r.Header.Get("X-Forwarded-Proto"); xfp != "" {
+		scheme = xfp
+	}
+	host := r.Host
+	if xfh := r.Header.Get("X-Forwarded-Host"); xfh != "" {
+		host = xfh
+	}
+	return scheme + "://" + host + r.URL.Path
+}
+
+// writeTokenErrorDPoP extends writeTokenError with the RFC 9449
+// invalid_dpop_proof / use_dpop_nonce wire mapping. When the AS demands
+// a nonce, a fresh DPoP-Nonce header accompanies the 400 response so the
+// client can immediately retry.
+func (h *Handler) writeTokenErrorDPoP(w http.ResponseWriter, err error) {
+	if errors.Is(err, internalas.ErrDPoPNonceRequired) {
+		nonce := h.svc.IssueDPoPNonce()
+		if nonce != "" {
+			w.Header().Set("DPoP-Nonce", nonce)
+		}
+		writeOAuthError(w, http.StatusBadRequest, oauthErrUseDPoPNonce, "DPoP proof nonce required")
+		return
+	}
+	if errors.Is(err, internalas.ErrDPoPRequired) {
+		nonce := h.svc.IssueDPoPNonce()
+		if nonce != "" {
+			w.Header().Set("DPoP-Nonce", nonce)
+		}
+		writeOAuthError(w, http.StatusBadRequest, oauthErrInvalidDPoPProof, "DPoP proof required for this client")
+		return
+	}
+	if errors.Is(err, internalas.ErrDPoPInvalid) {
+		writeOAuthError(w, http.StatusBadRequest, oauthErrInvalidDPoPProof, err.Error())
+		return
+	}
+	writeTokenError(w, err)
+}
 
 // scopeSplit parses a space-separated scope string into a deduped
 // slice preserving order of first occurrence. Mirrors the legacy root

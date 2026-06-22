@@ -31,6 +31,19 @@ type TokenRequest struct {
 	RefreshToken string
 	Resource     string
 	Scope        []string
+
+	// DPoPProof, when non-empty, is the raw value of the request's DPoP
+	// header. When populated and the AS has DPoP enabled, the token
+	// endpoint verifies the proof and binds the issued access token to
+	// the proof key via cnf.jkt (RFC 7800 + RFC 9449).
+	DPoPProof string
+
+	// HTTPMethod + HTTPURL are the request method + canonical URL
+	// passed through to the DPoP verifier so it can check htm / htu.
+	// The handler populates these from the incoming http.Request; tests
+	// supply them directly.
+	HTTPMethod string
+	HTTPURL    string
 }
 
 // TokenResponse is the JSON body emitted by /oauth/token on success.
@@ -86,11 +99,16 @@ func (s *Service) ExchangeAuthorizationCode(ctx context.Context, req TokenReques
 		return TokenResponse{}, models.ErrOAuthInvalidResource
 	}
 	scope := codeRow.Scope
+	jkt, err := s.dpopThumbprintForRequest(req)
+	if err != nil {
+		return TokenResponse{}, err
+	}
 	return s.mintAccessAndRefresh(ctx, mintInput{
 		ClientID: client.ClientID,
 		UserID:   &codeRow.UserID,
 		Scope:    scope,
 		Resource: codeRow.Resource,
+		DPoPJKT:  jkt,
 	})
 }
 
@@ -148,12 +166,17 @@ func (s *Service) RefreshAccessToken(ctx context.Context, req TokenRequest) (Tok
 	if err := s.Storage.RevokeRefreshToken(ctx, hash, "rotated"); err != nil {
 		return TokenResponse{}, fmt.Errorf("revoke prior refresh: %w", err)
 	}
+	jkt, err := s.dpopThumbprintForRequest(req)
+	if err != nil {
+		return TokenResponse{}, err
+	}
 	return s.mintAccessAndRefresh(ctx, mintInput{
 		ClientID: client.ClientID,
 		UserID:   rt.UserID,
 		Scope:    scope,
 		Resource: resource,
 		FamilyID: &rt.FamilyID,
+		DPoPJKT:  jkt,
 	})
 }
 
@@ -165,6 +188,11 @@ type mintInput struct {
 	Scope    []string
 	Resource string
 	FamilyID *models.ULID // non-nil when continuing a rotation family
+	// DPoPJKT, when non-empty, embeds an RFC 7800 cnf.jkt confirmation
+	// claim in the access token, binding the token to the DPoP proof
+	// key. Resource servers MUST then require an inbound DPoP proof
+	// signed by the matching key on every protected call.
+	DPoPJKT string
 }
 
 // mintAccessAndRefresh signs a fresh access token JWT and stores a fresh
@@ -191,6 +219,20 @@ func (s *Service) mintAccessAndRefresh(ctx context.Context, in mintInput) (Token
 		ClientID: in.ClientID,
 		Scope:    scopeJoin(in.Scope),
 		Typ:      jwt.TypeAccessToken,
+	}
+	tokenType := "Bearer"
+	if in.DPoPJKT != "" {
+		// RFC 7800 confirmation claim: resource servers compare the
+		// thumbprint of the inbound DPoP proof key against this value
+		// before authorizing the call.
+		if claims.Extra == nil {
+			claims.Extra = map[string]any{}
+		}
+		claims.Extra["cnf"] = map[string]string{"jkt": in.DPoPJKT}
+		// RFC 9449 section 5: the token_type emitted alongside a
+		// DPoP-bound access token MUST be "DPoP", not "Bearer". The
+		// resource server keys its dispatching logic off of this.
+		tokenType = "DPoP"
 	}
 	access, err := jwt.Sign(claims, signingKey.KID, priv)
 	if err != nil {
@@ -222,7 +264,7 @@ func (s *Service) mintAccessAndRefresh(ctx context.Context, in mintInput) (Token
 	}
 	return TokenResponse{
 		AccessToken:  access,
-		TokenType:    "Bearer",
+		TokenType:    tokenType,
 		ExpiresIn:    int(s.Cfg.AccessTokenTTL.Seconds()),
 		RefreshToken: refreshToken,
 		Scope:        scopeJoin(in.Scope),
