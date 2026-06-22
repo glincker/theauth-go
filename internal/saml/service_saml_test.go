@@ -1,12 +1,13 @@
-package theauth_test
+package saml_test
 
 import (
 	"context"
 	"errors"
 	"testing"
 
-	"github.com/glincker/theauth-go"
+	theauth "github.com/glincker/theauth-go"
 	"github.com/glincker/theauth-go/internal/samltest"
+	"github.com/glincker/theauth-go/internal/theauthtest"
 	"github.com/glincker/theauth-go/internal/ulid"
 	"github.com/glincker/theauth-go/storage/memory"
 )
@@ -39,7 +40,7 @@ func newSAMLTestAuth(t *testing.T) (*theauth.TheAuth, *memory.Store, []byte, []b
 
 func seedSAMLConnection(t *testing.T, a *theauth.TheAuth, store *memory.Store) (theauth.Organization, theauth.SAMLConnection) {
 	t.Helper()
-	owner := newUser(t, store, "owner@x.test")
+	owner := theauthtest.NewUser(t, store, "owner@x.test")
 	org, err := a.CreateOrganization(context.Background(), "Acme", "acme", owner.ID)
 	if err != nil {
 		t.Fatal(err)
@@ -117,7 +118,7 @@ func TestSAMLFindOrCreate_EmailFallback(t *testing.T) {
 	a, store, _, _ := newSAMLTestAuth(t)
 	org, conn := seedSAMLConnection(t, a, store)
 	// Pre-seed a user with the same email but no SAML identity row.
-	preexisting := newUser(t, store, "fallback@samltest.local")
+	preexisting := theauthtest.NewUser(t, store, "fallback@samltest.local")
 	_ = org
 
 	a1 := samltest.Default(conn.SPEntityID, conn.SPACSURL)
@@ -195,7 +196,7 @@ func TestSAMLMetadataXML(t *testing.T) {
 
 func TestSAMLConnectionCRUD(t *testing.T) {
 	a, store, _, _ := newSAMLTestAuth(t)
-	owner := newUser(t, store, "o@x.test")
+	owner := theauthtest.NewUser(t, store, "o@x.test")
 	org, _ := a.CreateOrganization(context.Background(), "Acme", "acme", owner.ID)
 	in := theauth.SAMLConnectionInput{
 		OrganizationID: org.ID,

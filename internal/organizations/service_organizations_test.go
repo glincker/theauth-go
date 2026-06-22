@@ -1,4 +1,4 @@
-package theauth_test
+package organizations_test
 
 import (
 	"context"
@@ -6,7 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/glincker/theauth-go"
+	theauth "github.com/glincker/theauth-go"
+	"github.com/glincker/theauth-go/internal/theauthtest"
 	"github.com/glincker/theauth-go/internal/ulid"
 	"github.com/glincker/theauth-go/storage/memory"
 )
@@ -26,18 +27,9 @@ func newOrgTestAuth(t *testing.T) (*theauth.TheAuth, *memory.Store) {
 	return a, store
 }
 
-func newUser(t *testing.T, store *memory.Store, email string) theauth.User {
-	t.Helper()
-	u := theauth.User{ID: ulid.New(), Email: email, CreatedAt: time.Now(), UpdatedAt: time.Now()}
-	if _, err := store.CreateUser(context.Background(), u); err != nil {
-		t.Fatal(err)
-	}
-	return u
-}
-
 func TestOrganizationCreateAddsOwner(t *testing.T) {
 	a, store := newOrgTestAuth(t)
-	owner := newUser(t, store, "owner@x.test")
+	owner := theauthtest.NewUser(t, store, "owner@x.test")
 	org, err := a.CreateOrganization(context.Background(), "Acme", "acme", owner.ID)
 	if err != nil {
 		t.Fatal(err)
@@ -56,7 +48,7 @@ func TestOrganizationCreateAddsOwner(t *testing.T) {
 
 func TestOrganizationSlugUniqueness(t *testing.T) {
 	a, store := newOrgTestAuth(t)
-	owner := newUser(t, store, "owner@x.test")
+	owner := theauthtest.NewUser(t, store, "owner@x.test")
 	if _, err := a.CreateOrganization(context.Background(), "Acme", "acme", owner.ID); err != nil {
 		t.Fatal(err)
 	}
@@ -67,7 +59,7 @@ func TestOrganizationSlugUniqueness(t *testing.T) {
 
 func TestOrganizationSlugValidation(t *testing.T) {
 	a, store := newOrgTestAuth(t)
-	owner := newUser(t, store, "owner@x.test")
+	owner := theauthtest.NewUser(t, store, "owner@x.test")
 	cases := []string{"", "bad slug", "_underscore", "-leading", "trailing-", "with.dot"}
 	for _, c := range cases {
 		if _, err := a.CreateOrganization(context.Background(), "n", c, owner.ID); err == nil {
@@ -78,8 +70,8 @@ func TestOrganizationSlugValidation(t *testing.T) {
 
 func TestOrganizationMemberRoleAndRemoval(t *testing.T) {
 	a, store := newOrgTestAuth(t)
-	owner := newUser(t, store, "owner@x.test")
-	member := newUser(t, store, "member@x.test")
+	owner := theauthtest.NewUser(t, store, "owner@x.test")
+	member := theauthtest.NewUser(t, store, "member@x.test")
 	org, err := a.CreateOrganization(context.Background(), "Acme", "acme", owner.ID)
 	if err != nil {
 		t.Fatal(err)
@@ -98,7 +90,7 @@ func TestOrganizationMemberRoleAndRemoval(t *testing.T) {
 
 func TestSetActiveOrganization(t *testing.T) {
 	a, store := newOrgTestAuth(t)
-	owner := newUser(t, store, "owner@x.test")
+	owner := theauthtest.NewUser(t, store, "owner@x.test")
 	org, _ := a.CreateOrganization(context.Background(), "Acme", "acme", owner.ID)
 	// Mint a session for the owner directly via storage so we don't depend
 	// on the magic-link flow here.
