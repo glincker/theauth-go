@@ -235,7 +235,7 @@ func TestCIBASlowDown(t *testing.T) {
 
 	// First poll: pending (records LastPollAt).
 	r1 := pollCIBAToken(t, srv, client, bcResp.AuthReqID)
-	r1.Body.Close()
+	_ = r1.Body.Close()
 
 	// Immediate second poll (no sleep): should be slow_down.
 	r2 := pollCIBAToken(t, srv, client, bcResp.AuthReqID)
@@ -365,7 +365,7 @@ func TestCIBARequiresLoginHint(t *testing.T) {
 		"login_hint_token": "tok123",
 	})
 	if resp2.StatusCode != http.StatusBadRequest {
-		resp2.Body.Close()
+		_ = resp2.Body.Close()
 		t.Fatalf("multi hint: status %d (want 400)", resp2.StatusCode)
 	}
 	if code := oauthErrCode(t, resp2); code != "invalid_request" {
