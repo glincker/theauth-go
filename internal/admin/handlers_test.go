@@ -1,5 +1,5 @@
 // Package admin_handlers_test contains direct HTTP-layer table tests for
-// internal/admin/handlers. Each sub-test mounts Handler via Mount onto a
+// internal/admin/admin. Each sub-test mounts Handler via Mount onto a
 // chi.Router backed by stub implementations, then fires requests through
 // httptest so the full handler chain is exercised without any root TheAuth
 // state.
@@ -14,7 +14,7 @@
 //     malformed body 400
 //   - listOAuthAccounts: happy path 200
 //   - requireOrgMatch middleware: orgID mismatch 403, super_admin bypass
-package handlers_test
+package admin_test
 
 import (
 	"bytes"
@@ -25,7 +25,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/glincker/theauth-go/internal/admin/handlers"
+	admin "github.com/glincker/theauth-go/internal/admin"
 	"github.com/glincker/theauth-go/internal/models"
 	"github.com/glincker/theauth-go/internal/ulid"
 	"github.com/go-chi/chi/v5"
@@ -35,7 +35,7 @@ import (
 // Stub implementations
 // -----------------------------------------------------------------------------
 
-// stubAdminStorage satisfies handlers.Storage.
+// stubAdminStorage satisfies admin.Storage.
 type stubAdminStorage struct {
 	users    map[models.ULID]*models.User
 	sessions map[models.ULID]*models.Session
@@ -173,7 +173,7 @@ func (s *stubAdminStorage) RevokeSession(_ context.Context, id models.ULID) erro
 	return nil
 }
 
-// stubRBAC satisfies handlers.RBACService.
+// stubRBAC satisfies admin.RBACService.
 type stubRBAC struct {
 	grantErr  error
 	revokeErr error
@@ -210,7 +210,7 @@ func (r *stubRBAC) UpdateRole(_ context.Context, roleID models.ULID, name, desc 
 }
 func (r *stubRBAC) DeleteRole(_ context.Context, _ models.ULID) error { return r.deleteErr }
 
-// stubAudit satisfies handlers.AuditService.
+// stubAudit satisfies admin.AuditService.
 type stubAudit struct {
 	events   []models.AuditEvent
 	next     string
@@ -246,20 +246,20 @@ func buildAdminServer(
 	sess *models.Session,
 	allowPermission bool,
 ) *httptest.Server {
-	userFromCtx := handlers.UserFromCtx(func(_ *http.Request) (*models.User, bool) {
+	userFromCtx := admin.UserFromCtx(func(_ *http.Request) (*models.User, bool) {
 		if user == nil {
 			return nil, false
 		}
 		return user, true
 	})
-	sessFromCtx := handlers.SessionFromCtx(func(_ *http.Request) (*models.Session, bool) {
+	sessFromCtx := admin.SessionFromCtx(func(_ *http.Request) (*models.Session, bool) {
 		if sess == nil {
 			return nil, false
 		}
 		return sess, true
 	})
 	requireAuth := func(next http.Handler) http.Handler { return next }
-	requirePermission := handlers.PermissionGate(func(_ string) func(http.Handler) http.Handler {
+	requirePermission := admin.PermissionGate(func(_ string) func(http.Handler) http.Handler {
 		return func(next http.Handler) http.Handler {
 			return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				if !allowPermission {
@@ -271,7 +271,7 @@ func buildAdminServer(
 		}
 	})
 
-	h := handlers.New(store, rbac, audit, "", userFromCtx, sessFromCtx)
+	h := admin.New(store, rbac, audit, "", userFromCtx, sessFromCtx)
 	r := chi.NewRouter()
 	h.Mount(r, requireAuth, requirePermission, nil)
 	return httptest.NewServer(r)

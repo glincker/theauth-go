@@ -1,12 +1,15 @@
-// Package handlers exposes the /admin/v1 organization-scoped admin
+// Package admin exposes the /admin/v1 organization-scoped admin
 // API: user / session / role / audit / oauth-account management.
 //
 // Extracted from root handlers_admin.go in PR F of the 2026-06
-// architecture reorg. The agent + delegation admin routes live in a
-// sibling package (internal/agent/handlers) and are mounted as a
-// subtree of the same /admin/v1/organizations/{orgID} route via the
-// mountAgents callback supplied at Mount time.
-package handlers
+// architecture reorg. Collapsed from internal/admin/handlers into
+// internal/admin in PR H (2026-06-22): the handlers/ subdir was the
+// only child so the extra nesting added no value. The agent +
+// delegation admin routes live in a sibling package
+// (internal/agent/handlers) and are mounted as a subtree of the same
+// /admin/v1/organizations/{orgID} route via the mountAgents callback
+// supplied at Mount time.
+package admin
 
 import (
 	"context"
