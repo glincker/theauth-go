@@ -18,17 +18,15 @@ func openStorage(backend, dsn string) (internal.Storage, error) {
 		if dsn == "" {
 			return nil, fmt.Errorf("--dsn is required for --storage postgres")
 		}
-		// Postgres support requires importing storage/postgres, which pulls in
-		// pgx. The CLI binary does not currently link pgx to keep the binary
-		// lightweight and avoid the C dependency for operators who only need
-		// the export step. The apply-to-postgres path is available by calling
-		// internal.ApplyBundle directly from your own Go code with a
-		// *postgres.Store, or by using a future build tag.
+		// Postgres support requires importing storage/postgres, which pulls
+		// in pgx. The CLI binary does not link pgx today to keep the binary
+		// lightweight. Operators who want apply-to-postgres should call
+		// internal.ApplyBundle directly from their own Go code with a
+		// *postgres.Store, or wait for a future build-tag opt-in.
 		return nil, fmt.Errorf(
-			"postgres storage is not yet linked in this build; " +
-				"run the export step (--export) first, inspect the bundle, " +
-				"then use --storage memory for a dry-run or wire internal.ApplyBundle " +
-				"directly with a postgres.Store",
+			"postgres storage is not linked in this build, run the export step " +
+				"first and wire internal.ApplyBundle with a postgres.Store from " +
+				"your own Go code",
 		)
 	default:
 		return nil, fmt.Errorf("unknown storage backend %q; choose memory or postgres", backend)
