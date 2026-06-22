@@ -55,11 +55,18 @@ func (s *Service) RevokeToken(ctx context.Context, token, tokenTypeHint, clientI
 		return nil
 	}
 	hash := crypto.HashToken(token)
-	if err := s.Storage.RevokeRefreshToken(ctx, hash, "explicit revoke"); err != nil {
-		// Per RFC 7009 the AS MUST respond with 200 even when the token
-		// is unknown; we swallow ErrStorageNotFound rather than surface
-		// it.
-		return nil //nolint:nilerr // explicit RFC requirement
+	// security re-audit L3 (2026-06-22): explicit revoke should walk the
+	// entire rotation family (parent + all children) so that rotating a
+	// compromised token before calling revoke does not leave the fresh
+	// child alive. Mirror the reuse-detection family walk in
+	// RefreshAccessToken.
+	rt, err := s.Storage.RefreshTokenByHash(ctx, hash)
+	if err == nil {
+		// Token found: revoke the whole family then the token itself.
+		_ = s.Storage.RevokeRefreshTokenFamily(ctx, rt.FamilyID, "explicit revoke")
+		return nil
 	}
+	// Token not found (already expired, already revoked, or never issued).
+	// Per RFC 7009 the AS MUST respond with 200 on unknown tokens.
 	return nil
 }

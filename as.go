@@ -130,6 +130,14 @@ type AuthorizationServerConfig struct {
 	// key that signed the proof. Leave nil for pre-PR behavior
 	// (Bearer tokens, no sender constraint).
 	DPoP *DPoPConfig
+
+	// RequireState, when true, causes the /oauth/authorize endpoint to
+	// reject any request that omits a non-empty state parameter, returning
+	// invalid_request. Default false preserves existing behavior for
+	// backwards compatibility. Operators deploying browser-based clients
+	// should set this to true to enforce CSRF protection for every
+	// authorization request (security re-audit L5, 2026-06-22).
+	RequireState bool
 }
 
 // DPoPConfig configures the RFC 9449 DPoP verifier wired into both the
@@ -231,6 +239,7 @@ func validateASConfig(cfg *AuthorizationServerConfig, encryptionKey []byte) erro
 		LoginURL:                       cfg.LoginURL,
 		DisableRotation:                cfg.DisableRotation,
 		DPoP:                           dpopConfigFromRoot(cfg.DPoP),
+		RequireState:                   cfg.RequireState,
 	}
 	if err := internalas.Validate(&internal, encryptionKey); err != nil {
 		return err

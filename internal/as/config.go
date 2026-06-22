@@ -98,6 +98,13 @@ type Config struct {
 	// nil to disable DPoP entirely (pre-PR behavior; bearer tokens are
 	// not sender constrained).
 	DPoP *dpop.Config
+
+	// RequireState, when true, causes StartAuthorize to reject any
+	// /oauth/authorize request that omits a non-empty state parameter,
+	// returning invalid_request. Default false preserves existing
+	// behavior. Operators deploying browser-based clients should enable
+	// this to enforce CSRF protection (security re-audit L5, 2026-06-22).
+	RequireState bool
 }
 
 // Validate applies defaults and screens required fields. Mirror of the

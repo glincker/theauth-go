@@ -70,6 +70,12 @@ func (s *Service) StartAuthorize(ctx context.Context, req AuthorizeRequest, user
 	if req.CodeChallenge == "" || req.CodeChallengeMethod != "S256" {
 		return AuthorizeResult{}, models.ErrOAuthInvalidRequest
 	}
+	// security re-audit L5 (2026-06-22): when RequireState is enabled,
+	// reject requests that omit a non-empty state parameter. An absent
+	// state param removes the CSRF protection layer that state provides.
+	if s.Cfg.RequireState && req.State == "" {
+		return AuthorizeResult{}, models.ErrOAuthInvalidRequest
+	}
 	if req.Resource == "" {
 		return AuthorizeResult{}, models.ErrOAuthInvalidResource
 	}

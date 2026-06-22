@@ -2,6 +2,7 @@ package as
 
 import (
 	"context"
+	"crypto/subtle"
 	"errors"
 	"fmt"
 	"time"
@@ -95,7 +96,10 @@ func (s *Service) ExchangeAuthorizationCode(ctx context.Context, req TokenReques
 	if codeRow.CodeChallengeMethod != "S256" {
 		return TokenResponse{}, models.ErrOAuthInvalidGrant
 	}
-	if crypto.CodeChallenge(req.CodeVerifier) != codeRow.CodeChallenge {
+	// security re-audit L2 (2026-06-22): use constant-time compare to
+	// prevent timing oracle on the code_challenge comparison.
+	computed := crypto.CodeChallenge(req.CodeVerifier)
+	if subtle.ConstantTimeCompare([]byte(computed), []byte(codeRow.CodeChallenge)) != 1 {
 		return TokenResponse{}, models.ErrOAuthPKCEMismatch
 	}
 	if _, ok := s.ResourceByIdentifier(codeRow.Resource); !ok {
