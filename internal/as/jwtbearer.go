@@ -610,4 +610,3 @@ func jwtStringIn(s string, list []string) bool {
 	}
 	return false
 }
-
