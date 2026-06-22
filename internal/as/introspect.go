@@ -184,14 +184,24 @@ func (s *Service) introspectJWT(ctx context.Context, token, expectedAud string) 
 // chainStillActive walks the full actor chain (innermost-first) and
 // verifies every agent referenced is currently active, plus the
 // delegation grant (when present) is not revoked. Returns false if
-// anything is off; caller flips active=false. Background context
-// shielding is unnecessary because the introspection call itself is
-// request-scoped.
+// anything is off; caller flips active=false.
+//
+// Perf re-audit 2026-06-21 (item 3): when a token has an act chain but
+// NO delegation grant, the agent-walk result is cached in chainCache
+// keyed by the outermost agent ID for up to chainCacheTTL (5s). Callers
+// that suspend or revoke an agent MUST call InvalidateChainCache so the
+// next walk sees the fresh status without waiting for the TTL to expire.
+//
+// Tokens with a DelegationGrantID skip the cache because grant revocations
+// do not flow through the agent service; they are therefore always
+// re-checked against storage.
 func (s *Service) chainStillActive(ctx context.Context, resp *IntrospectionResponse) bool {
 	if s == nil {
 		return true
 	}
 	now := time.Now()
+
+	// Grant check is never cached: revocations must propagate immediately.
 	if resp.DelegationGrantID != "" {
 		var id models.ULID
 		if err := id.UnmarshalText([]byte(resp.DelegationGrantID)); err == nil {
@@ -204,16 +214,48 @@ func (s *Service) chainStillActive(ctx context.Context, resp *IntrospectionRespo
 			}
 		}
 	}
+
+	// Agent-chain walk: cache only when there is no delegation grant, so
+	// the cache key (outermost act.sub) uniquely identifies the chain
+	// state without needing to track grant invalidations. When a grant ID
+	// is present the grant check above already ran; fall through to the
+	// agent walk without caching.
+	cacheKey := ""
+	if resp.Act != nil && resp.DelegationGrantID == "" {
+		cacheKey = resp.Act.Sub
+	}
+	if cacheKey != "" {
+		if v, ok := s.chainCache.Load(cacheKey); ok {
+			if entry, ok := v.(*chainCacheEntry); ok {
+				if time.Since(entry.checkedAt) < chainCacheTTL {
+					return entry.active
+				}
+				// Stale: fall through to re-walk.
+				s.chainCache.Delete(cacheKey)
+			}
+		}
+	}
+
+	active := true
 	for cur := resp.Act; cur != nil; cur = cur.Act {
 		ag, err := s.lookupAgent(ctx, cur.Sub)
 		if err != nil || ag == nil {
-			return false
+			active = false
+			break
 		}
 		if ag.Status != models.AgentStatusActive {
-			return false
+			active = false
+			break
 		}
 	}
-	return true
+
+	if cacheKey != "" {
+		s.chainCache.Store(cacheKey, &chainCacheEntry{
+			active:    active,
+			checkedAt: time.Now(),
+		})
+	}
+	return active
 }
 
 // lookupAgent resolves an "agent:<id>" subject claim through the

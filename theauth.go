@@ -905,6 +905,10 @@ func New(cfg Config) (*TheAuth, error) {
 		}
 		a.agentSvc = agent.New(oss, agentPolicy, a, a.as.InvalidateClientAuthCache)
 		a.agentSvc.SetHooks(a.hooks)
+		// Wire the chain-walk cache invalidator so suspend/revoke immediately
+		// clears the cached chainStillActive result (perf re-audit
+		// 2026-06-21, item 3).
+		a.agentSvc.SetChainCacheInvalidator(a.as.InvalidateChainCache)
 		var delegationPolicy *delegation.Config
 		if cfg.AgentIdentity != nil {
 			delegationPolicy = &delegation.Config{
