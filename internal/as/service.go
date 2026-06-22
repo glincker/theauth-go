@@ -14,6 +14,7 @@ import (
 	"github.com/glincker/theauth-go/internal/clientauthcache"
 	"github.com/glincker/theauth-go/internal/dpop"
 	"github.com/glincker/theauth-go/internal/models"
+	obs "github.com/glincker/theauth-go/internal/observability"
 )
 
 // Service bundles the OAuth 2.1 authorization server runtime: JWKS state +
@@ -94,6 +95,20 @@ type Service struct {
 	// (DPoP disabled); the token endpoint short-circuits dpop handling
 	// in that case and never reads from this field.
 	dpopSvc *dpop.Service
+
+	// Hooks is the consumer-supplied observability bundle. Never nil:
+	// New substitutes the no-op bundle when Deps.Hooks is nil. Every
+	// instrumented path uses Hooks.StartSpan / Hooks.Counter directly so
+	// nil-checks live at the bundle level, not at every emit site.
+	Hooks *obs.Hooks
+
+	// cached instruments owned by the AS service. Constructed once at
+	// New time so the hot paths (token, introspect) do not pay a map
+	// lookup on every request. Each instrument is created with a fixed
+	// label SET; per-call label VALUES still flow through the factory
+	// (the adapter is expected to cache the resulting child instrument).
+	mIntrospectLatency obs.Histogram
+	mCacheSizeGauge    obs.Gauge
 }
 
 // introspectCacheEntry holds one cached introspection response body plus
@@ -137,6 +152,9 @@ type Deps struct {
 	AgentPolicy   *AgentPolicy
 	Audit         audit.Emitter
 	AgentLookup   AgentLookup
+	// Hooks wires the consumer-supplied tracer + metrics adapters. MAY
+	// be nil; New substitutes the no-op bundle.
+	Hooks *obs.Hooks
 }
 
 // New constructs a Service. The supplied Config must already have been
@@ -157,6 +175,10 @@ func New(d Deps) *Service {
 			dpopSvc = ds
 		}
 	}
+	hooks := d.Hooks
+	if hooks == nil {
+		hooks = &obs.Hooks{}
+	}
 	s := &Service{
 		Cfg:             d.Cfg,
 		Storage:         d.Storage,
@@ -168,10 +190,17 @@ func New(d Deps) *Service {
 		privKeyByKID:    map[string]ed25519.PrivateKey{},
 		clientAuthCache: clientauthcache.New[*models.OAuthClient](clientauthcache.DefaultMaxEntries, clientauthcache.DefaultTTL),
 		dpopSvc:         dpopSvc,
+		Hooks:           hooks,
 	}
 	if d.Cfg.CIMD != nil {
 		s.cimdSvc = cimd.NewService(*d.Cfg.CIMD, emitter)
 	}
+	// Pre-allocate the instruments with stable label sets so the hot
+	// path (introspect, clientauthcache size gauge) does not allocate
+	// per request. Per-request label VALUES that vary (grant_type,
+	// status) are looked up at emit time below.
+	s.mIntrospectLatency = hooks.Histogram(obs.MetricOAuthIntrospectLatency, obs.Labels{}, obs.LatencyBuckets)
+	s.mCacheSizeGauge = hooks.Gauge(obs.MetricClientAuthCacheSize, obs.Labels{"kind": "oauth_client"})
 	return s
 }
 
@@ -244,6 +273,7 @@ func (s *Service) InvalidateClientAuthCache(clientID string) {
 		return
 	}
 	s.clientAuthCache.Invalidate(clientID)
+	s.updateCacheSizeGauge()
 }
 
 // ResolveClient looks up an OAuth client by client_id, routing through

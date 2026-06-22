@@ -61,11 +61,14 @@ type TokenResponse struct {
 // ExchangeAuthorizationCode redeems a one-time authorization code for an
 // access token + refresh token pair. Enforces PKCE S256, redirect_uri
 // equality, audience binding (RFC 8707), and client authentication.
-func (s *Service) ExchangeAuthorizationCode(ctx context.Context, req TokenRequest) (TokenResponse, error) {
+func (s *Service) ExchangeAuthorizationCode(ctx context.Context, req TokenRequest) (resp TokenResponse, err error) {
 	if s == nil {
 		return TokenResponse{}, errors.New("theauth: authorization server not configured")
 	}
-	client, err := s.AuthenticateClient(ctx, req.ClientID, req.ClientSecret)
+	ctx, span, timer := s.startTokenSpan(ctx, "authorization_code")
+	defer func() { s.finishTokenSpan(span, timer, "authorization_code", err) }()
+	var client *models.OAuthClient
+	client, err = s.AuthenticateClient(ctx, req.ClientID, req.ClientSecret)
 	if err != nil {
 		return TokenResponse{}, err
 	}
@@ -116,11 +119,14 @@ func (s *Service) ExchangeAuthorizationCode(ctx context.Context, req TokenReques
 // token + refresh token pair. The old refresh token is revoked;
 // presenting it again triggers family-wide revocation per RFC 9700
 // section 4.14.
-func (s *Service) RefreshAccessToken(ctx context.Context, req TokenRequest) (TokenResponse, error) {
+func (s *Service) RefreshAccessToken(ctx context.Context, req TokenRequest) (resp TokenResponse, err error) {
 	if s == nil {
 		return TokenResponse{}, errors.New("theauth: authorization server not configured")
 	}
-	client, err := s.AuthenticateClient(ctx, req.ClientID, req.ClientSecret)
+	ctx, span, timer := s.startTokenSpan(ctx, "refresh_token")
+	defer func() { s.finishTokenSpan(span, timer, "refresh_token", err) }()
+	var client *models.OAuthClient
+	client, err = s.AuthenticateClient(ctx, req.ClientID, req.ClientSecret)
 	if err != nil {
 		return TokenResponse{}, err
 	}
@@ -300,8 +306,10 @@ func (s *Service) AuthenticateClient(ctx context.Context, clientID, clientSecret
 	// the digest we stored at insert.
 	if clientSecret != "" {
 		if cached, ok := s.clientAuthCache.Get(clientID, clientSecret); ok && cached != nil {
+			s.observeCacheHit("oauth_client")
 			return cached, nil
 		}
+		s.observeCacheMiss("oauth_client")
 	}
 	client, err := s.ResolveClient(ctx, clientID)
 	if err != nil {
@@ -327,6 +335,7 @@ func (s *Service) AuthenticateClient(ctx context.Context, clientID, clientSecret
 			return nil, models.ErrOAuthInvalidClient
 		}
 		s.clientAuthCache.Put(clientID, clientSecret, client)
+		s.updateCacheSizeGauge()
 		return client, nil
 	default:
 		return nil, models.ErrOAuthInvalidClient

@@ -21,6 +21,7 @@ import (
 	"github.com/glincker/theauth-go/crypto"
 	"github.com/glincker/theauth-go/internal/audit"
 	"github.com/glincker/theauth-go/internal/models"
+	obs "github.com/glincker/theauth-go/internal/observability"
 	"github.com/glincker/theauth-go/internal/ulid"
 	oklogulid "github.com/oklog/ulid/v2"
 )
@@ -73,6 +74,7 @@ type Service struct {
 	cfg        *Config
 	auditEm    audit.Emitter
 	invalidate CacheInvalidator
+	hooks      *obs.Hooks
 }
 
 // New constructs an agent Service. cfg may be nil; in that case every
@@ -87,7 +89,41 @@ func New(storage Storage, cfg *Config, em audit.Emitter, invalidate CacheInvalid
 	if invalidate == nil {
 		invalidate = func(string) {}
 	}
-	return &Service{storage: storage, cfg: cfg, auditEm: em, invalidate: invalidate}
+	return &Service{storage: storage, cfg: cfg, auditEm: em, invalidate: invalidate, hooks: &obs.Hooks{}}
+}
+
+// SetHooks installs the consumer-supplied observability bundle. Idempotent;
+// safe to call before the first lifecycle method. Root *theauth.TheAuth
+// calls this in New after the agent Service is constructed so the same
+// bundle reaches every internal service.
+func (s *Service) SetHooks(h *obs.Hooks) {
+	if s == nil {
+		return
+	}
+	if h == nil {
+		h = &obs.Hooks{}
+	}
+	s.hooks = h
+}
+
+// instrument wraps an agent-lifecycle entry in a span + status attribute
+// triple. Returns a deferred function the caller invokes via defer to
+// close the span with the function's named-return err.
+func (s *Service) instrument(ctx context.Context, name string) (context.Context, obs.Span, func(err error)) {
+	if s == nil {
+		return ctx, obs.NoopSpan{}, func(error) {}
+	}
+	ctx, span := s.hooks.StartSpan(ctx, name)
+	finish := func(err error) {
+		status := obs.StatusSuccess
+		if err != nil {
+			status = obs.StatusError
+			span.RecordError(err)
+		}
+		span.SetAttributes(obs.StringAttr(obs.AttrStatus, string(status)))
+		span.End()
+	}
+	return ctx, span, finish
 }
 
 // errNotConfigured matches the legacy "theauth: agent identity not
@@ -100,11 +136,14 @@ var errNotConfigured = errors.New("theauth: agent identity not configured")
 // secret on an agent_credentials row, and returns both the Agent record and
 // the one-shot AgentSecret. Audit emission: agent.created (without secret
 // material) plus agent_credential.minted.
-func (s *Service) CreateAgent(ctx context.Context, in models.CreateAgentInput) (models.Agent, models.AgentSecret, error) {
+func (s *Service) CreateAgent(ctx context.Context, in models.CreateAgentInput) (agentRow models.Agent, agentSecret models.AgentSecret, err error) {
 	if s == nil || s.cfg == nil {
 		return models.Agent{}, models.AgentSecret{}, errNotConfigured
 	}
-	if err := validateAgentOwner(in.Owner); err != nil {
+	ctx, _, finish := s.instrument(ctx, obs.SpanAgentCreate)
+	defer func() { finish(err) }()
+	if verr := validateAgentOwner(in.Owner); verr != nil {
+		err = verr
 		return models.Agent{}, models.AgentSecret{}, err
 	}
 	name := strings.TrimSpace(in.Name)
@@ -331,8 +370,11 @@ func (s *Service) GetAgent(ctx context.Context, agentID models.ULID) (*models.Ag
 // SuspendAgent flips status to suspended. Cascades: every existing access
 // token mentioning this agent in its actor chain becomes inactive on the
 // next introspection refresh.
-func (s *Service) SuspendAgent(ctx context.Context, agentID models.ULID, reason string) error {
-	return s.changeAgentStatus(ctx, agentID, models.AgentStatusSuspended, "agent.suspended", reason)
+func (s *Service) SuspendAgent(ctx context.Context, agentID models.ULID, reason string) (err error) {
+	ctx, _, finish := s.instrument(ctx, obs.SpanAgentSuspend)
+	defer func() { finish(err) }()
+	err = s.changeAgentStatus(ctx, agentID, models.AgentStatusSuspended, "agent.suspended", reason)
+	return err
 }
 
 // ResumeAgent flips status back to active. Only valid on a suspended agent;
@@ -351,8 +393,11 @@ func (s *Service) ResumeAgent(ctx context.Context, agentID models.ULID) error {
 // RevokeAgent flips status to revoked. Terminal: a revoked agent cannot be
 // resumed (operators create a fresh agent instead). Cascades to every token
 // in flight via introspection on next refresh.
-func (s *Service) RevokeAgent(ctx context.Context, agentID models.ULID, reason string) error {
-	return s.changeAgentStatus(ctx, agentID, models.AgentStatusRevoked, "agent.revoked", reason)
+func (s *Service) RevokeAgent(ctx context.Context, agentID models.ULID, reason string) (err error) {
+	ctx, _, finish := s.instrument(ctx, obs.SpanAgentRevoke)
+	defer func() { finish(err) }()
+	err = s.changeAgentStatus(ctx, agentID, models.AgentStatusRevoked, "agent.revoked", reason)
+	return err
 }
 
 func (s *Service) changeAgentStatus(ctx context.Context, agentID models.ULID, status, action, reason string) error {

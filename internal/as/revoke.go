@@ -5,6 +5,7 @@ import (
 	"errors"
 
 	"github.com/glincker/theauth-go/crypto"
+	obs "github.com/glincker/theauth-go/internal/observability"
 )
 
 // revoke.go: RFC 7009 token revocation.
@@ -20,11 +21,23 @@ import (
 // access tokens are out of scope for this entry: codes are single-use
 // anyway, and access tokens are stateless JWTs whose lifetime is bounded
 // by exp.
-func (s *Service) RevokeToken(ctx context.Context, token, tokenTypeHint, clientID, clientSecret string) error {
+func (s *Service) RevokeToken(ctx context.Context, token, tokenTypeHint, clientID, clientSecret string) (err error) {
 	if s == nil {
 		return errors.New("theauth: authorization server not configured")
 	}
-	if _, err := s.AuthenticateClient(ctx, clientID, clientSecret); err != nil {
+	ctx, span := s.Hooks.StartSpan(ctx, obs.SpanOAuthRevoke)
+	defer func() {
+		status := obs.StatusSuccess
+		if err != nil {
+			status = obs.StatusError
+			span.RecordError(err)
+			span.SetAttributes(obs.StringAttr(obs.AttrErrorCode, errorCode(err)))
+		}
+		span.SetAttributes(obs.StringAttr(obs.AttrStatus, string(status)))
+		span.End()
+	}()
+	if _, aerr := s.AuthenticateClient(ctx, clientID, clientSecret); aerr != nil {
+		err = aerr
 		return err
 	}
 	if token == "" {

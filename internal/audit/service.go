@@ -31,6 +31,7 @@ import (
 	"time"
 
 	"github.com/glincker/theauth-go/internal/models"
+	obs "github.com/glincker/theauth-go/internal/observability"
 	"github.com/glincker/theauth-go/internal/ulid"
 )
 
@@ -138,12 +139,40 @@ type Service struct {
 	written atomic.Uint64
 	dropped atomic.Uint64
 	failed  atomic.Uint64
+
+	// hooks routes audit drops + queue depth into the consumer-supplied
+	// metrics adapter. Installed via SetHooks; defaults to a no-op bundle
+	// so the service is usable without observability wiring.
+	hooks         *obs.Hooks
+	mDroppedTotal obs.Counter
+	mQueueDepth   obs.Gauge
 }
 
 // NewService constructs a Service. cfg may be the zero value; Start applies
 // defaults. The Service is not yet running until Start returns.
 func NewService(storage Storage, cfg Config) *Service {
-	return &Service{storage: storage, cfg: cfg}
+	s := &Service{storage: storage, cfg: cfg, hooks: &obs.Hooks{}}
+	s.mDroppedTotal = s.hooks.Counter(obs.MetricAuditDroppedTotal, nil)
+	s.mQueueDepth = s.hooks.Gauge(obs.MetricAuditQueueDepth, nil)
+	return s
+}
+
+// SetHooks installs the consumer-supplied observability bundle. MUST be
+// called before Start so the metrics instruments are bound to the live
+// adapter (not the no-op default the constructor wires). Calling after
+// Start is allowed and rebinds the instruments; per-instrument adapters
+// like Prometheus that cache by (name, label set) will return the same
+// underlying child instrument on the second bind.
+func (s *Service) SetHooks(h *obs.Hooks) {
+	if s == nil {
+		return
+	}
+	if h == nil {
+		h = &obs.Hooks{}
+	}
+	s.hooks = h
+	s.mDroppedTotal = s.hooks.Counter(obs.MetricAuditDroppedTotal, nil)
+	s.mQueueDepth = s.hooks.Gauge(obs.MetricAuditQueueDepth, nil)
 }
 
 // Start spawns the writer goroutine. Idempotent: a second call is a no-op
@@ -277,8 +306,14 @@ func (s *Service) Emit(ctx context.Context, action string, target models.TargetR
 
 	select {
 	case s.ch <- evt:
+		if s.mQueueDepth != nil {
+			s.mQueueDepth.Set(float64(len(s.ch)))
+		}
 	default:
 		s.dropped.Add(1)
+		if s.mDroppedTotal != nil {
+			s.mDroppedTotal.Inc()
+		}
 	}
 }
 
