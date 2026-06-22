@@ -418,6 +418,29 @@ actions, and new `Stats` fields without breaking existing callers.
 - CI workflow now runs a per-target fuzz job (`-fuzztime=10s`) on every
   PR alongside the existing race-enabled test job.
 
+### Post-G follow-up fixes (PRs #30, #31, #33)
+
+After PR G landed, three small follow-ups also shipped in v2.1.0:
+
+- **#30 chore: em-dash sweep** removed 17 surviving em or en dashes from
+  comments in `middleware_ratelimit.go`, `handlers.go`, `crypto/`,
+  `storage/memory/`, and the related tests. Brings the repo into full
+  compliance with the project rule banning em and en dashes anywhere.
+- **#31 fix(examples): go.work hygiene** added the five missing example
+  modules (`chi-app`, `echo-app`, `gin-app`, `oauth-multi-provider`,
+  `stdlib-app`) to `go.work` so all eight examples now build cleanly
+  with default workspace settings. Incidental: three SAML-related deps
+  (`beevik/etree`, `crewjam/saml`, `russellhaering/goxmldsig`) were
+  promoted from indirect to direct in root `go.mod` by `go work sync`.
+- **#33 fix(security): cache bust on agent suspend/revoke (N1)** closes
+  a v2.1 security re-audit finding: `SuspendAgent` and `RevokeAgent`
+  did not call `s.invalidate(cur.ClientID)`, so a revoked agent could
+  authenticate via the `clientauthcache` Argon2-verified snapshot for
+  up to the 5-minute TTL added in PR #19. The shared
+  `changeAgentStatus` now invalidates whenever the new status is not
+  active. Regression test:
+  `TestSuspendAgentBustsClientAuthCache`.
+
 ### Notes
 
 - No new features. Hardening only.
