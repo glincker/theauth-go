@@ -41,14 +41,17 @@ type TokenExchangeRequest struct {
 // wire).
 //
 // Audit emission: agent.token_minted on success.
-func (s *Service) ClientCredentialsToken(ctx context.Context, req TokenRequest) (TokenResponse, error) {
+func (s *Service) ClientCredentialsToken(ctx context.Context, req TokenRequest) (resp TokenResponse, err error) {
 	if s == nil {
 		return TokenResponse{}, errors.New("theauth: authorization server not configured")
 	}
 	if s.AgentPolicy == nil {
 		return TokenResponse{}, models.ErrOAuthUnsupportedGrantType
 	}
-	client, err := s.AuthenticateClient(ctx, req.ClientID, req.ClientSecret)
+	ctx, span, timer := s.startTokenSpan(ctx, "client_credentials")
+	defer func() { s.finishTokenSpan(span, timer, "client_credentials", err) }()
+	var client *models.OAuthClient
+	client, err = s.AuthenticateClient(ctx, req.ClientID, req.ClientSecret)
 	if err != nil {
 		return TokenResponse{}, err
 	}
@@ -142,15 +145,18 @@ func (s *Service) ClientCredentialsToken(ctx context.Context, req TokenRequest) 
 //
 // The eleven step validation in spec section 7 is enforced; see the
 // individual sub-helpers below.
-func (s *Service) ExchangeToken(ctx context.Context, req TokenExchangeRequest) (TokenResponse, error) {
+func (s *Service) ExchangeToken(ctx context.Context, req TokenExchangeRequest) (resp TokenResponse, err error) {
 	if s == nil {
 		return TokenResponse{}, errors.New("theauth: authorization server not configured")
 	}
 	if s.AgentPolicy == nil {
 		return TokenResponse{}, models.ErrOAuthUnsupportedGrantType
 	}
+	ctx, span, timer := s.startTokenSpan(ctx, "token-exchange")
+	defer func() { s.finishTokenSpan(span, timer, "token-exchange", err) }()
 	// Step 1: authenticate the requesting client (the agent).
-	client, err := s.AuthenticateClient(ctx, req.ClientID, req.ClientSecret)
+	var client *models.OAuthClient
+	client, err = s.AuthenticateClient(ctx, req.ClientID, req.ClientSecret)
 	if err != nil {
 		return TokenResponse{}, err
 	}

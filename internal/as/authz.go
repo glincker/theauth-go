@@ -8,6 +8,7 @@ import (
 
 	"github.com/glincker/theauth-go/crypto"
 	"github.com/glincker/theauth-go/internal/models"
+	obs "github.com/glincker/theauth-go/internal/observability"
 )
 
 // authz.go: GET /oauth/authorize state machine.
@@ -45,10 +46,21 @@ type AuthorizeResult struct {
 // non-nil, immediately mints an authorization code bound to the request
 // and returns a redirect URL with code + state. When user is nil the
 // caller should redirect to LoginURL so the user can sign in.
-func (s *Service) StartAuthorize(ctx context.Context, req AuthorizeRequest, user *models.User) (AuthorizeResult, error) {
+func (s *Service) StartAuthorize(ctx context.Context, req AuthorizeRequest, user *models.User) (result AuthorizeResult, err error) {
 	if s == nil {
 		return AuthorizeResult{}, errors.New("theauth: authorization server not configured")
 	}
+	ctx, span := s.Hooks.StartSpan(ctx, obs.SpanOAuthAuthorize)
+	defer func() {
+		status := obs.StatusSuccess
+		if err != nil && !errors.Is(err, errAuthorizeLoginRequired) {
+			status = obs.StatusError
+			span.RecordError(err)
+			span.SetAttributes(obs.StringAttr(obs.AttrErrorCode, errorCode(err)))
+		}
+		span.SetAttributes(obs.StringAttr(obs.AttrStatus, string(status)))
+		span.End()
+	}()
 	if req.ResponseType != models.ResponseTypeCode {
 		return AuthorizeResult{}, models.ErrOAuthUnsupportedResponseType
 	}

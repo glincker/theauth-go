@@ -327,6 +327,18 @@ type Config struct {
 	// session cookie auth only (no special permission): they manage the
 	// authenticated user's own agents and the user's own granted delegations.
 	AccountUX bool
+
+	// Observability optionally wires consumer-supplied Tracer + Metrics
+	// adapters. When nil the library uses no-op adapters and emits no
+	// spans or metrics. The adapter pattern keeps OpenTelemetry,
+	// Prometheus, and every other vendor out of theauth-go/go.mod;
+	// consumers pick the stack they want and bridge it via the
+	// Tracer/Metrics interfaces re-exported from this package.
+	//
+	// See observability.go for the re-exported types and
+	// examples/observability-otel + examples/observability-prom for
+	// reference implementations.
+	Observability *Hooks
 }
 
 // AgentConfig wires the agent-identity policy. Set on Config.AgentIdentity
@@ -554,6 +566,13 @@ type TheAuth struct {
 	// v2.0 phase 6: end-user self-service UX. When true, /account/agents and
 	// /account/delegations are mounted. Requires agentCfg to be non-nil.
 	accountUX bool
+
+	// hooks is the consumer-supplied observability bundle. Never nil: the
+	// constructor substitutes &Hooks{} when Config.Observability is nil so
+	// internal services can call hooks.StartSpan / hooks.Counter without
+	// nil-checking the pointer itself. The fields inside (Tracer, Metrics)
+	// MAY still be nil; the nil-safe helpers on *Hooks handle that path.
+	hooks *Hooks
 
 	// PR A architecture reorg (2026-06): low-complexity services are
 	// extracted into internal packages and held here. Root methods on
@@ -826,6 +845,7 @@ func New(cfg Config) (*TheAuth, error) {
 		defaultRoleSeeds:           defaultSeeds,
 		agentCfg:                   cfg.AgentIdentity,
 		accountUX:                  cfg.AccountUX,
+		hooks:                      coalesceHooks(cfg.Observability),
 	}
 
 	// PR D architecture reorg (2026-06-20): wire the audit Service first
@@ -842,6 +862,7 @@ func New(cfg Config) (*TheAuth, error) {
 			DefaultRedactor: internalaudit.Redactor(DefaultRedactor),
 			DrainTimeout:    cfg.Audit.DrainTimeout,
 		})
+		a.auditSvc.SetHooks(a.hooks)
 	}
 	// v2.0 phase 1 + 2: wire the extracted authorization server service.
 	// PR C architecture reorg (2026-06-20) removes the oauthStorage
@@ -867,6 +888,7 @@ func New(cfg Config) (*TheAuth, error) {
 			EncryptionKey: cfg.EncryptionKey,
 			AgentPolicy:   policy,
 			Audit:         a,
+			Hooks:         a.hooks,
 			// AgentLookup wired below once internal/agent.Service exists.
 		})
 		// PR C: wire agent + delegation services. The agent service
@@ -882,6 +904,7 @@ func New(cfg Config) (*TheAuth, error) {
 			}
 		}
 		a.agentSvc = agent.New(oss, agentPolicy, a, a.as.InvalidateClientAuthCache)
+		a.agentSvc.SetHooks(a.hooks)
 		var delegationPolicy *delegation.Config
 		if cfg.AgentIdentity != nil {
 			delegationPolicy = &delegation.Config{
@@ -889,6 +912,7 @@ func New(cfg Config) (*TheAuth, error) {
 			}
 		}
 		a.delegationSvc = delegation.New(oss, delegationPolicy, a.as, a)
+		a.delegationSvc.SetHooks(a.hooks)
 		// AS subject-claim lookup is now satisfied by internal/agent. The
 		// adapter closes over agentSvc directly so the AS package never
 		// imports internal/agent.

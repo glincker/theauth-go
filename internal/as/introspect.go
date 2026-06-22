@@ -70,11 +70,14 @@ type ConfirmationClaim struct {
 // passes its own identifier), tokens with a mismatching aud return
 // active=false. Tokens missing an aud claim are rejected; phase 1 + 2
 // mints them with a resource-derived aud unconditionally.
-func (s *Service) IntrospectToken(ctx context.Context, token, clientID, clientSecret, expectedAud string) (IntrospectionResponse, []byte, error) {
+func (s *Service) IntrospectToken(ctx context.Context, token, clientID, clientSecret, expectedAud string) (introResp IntrospectionResponse, body []byte, err error) {
 	if s == nil {
 		return IntrospectionResponse{}, nil, errors.New("theauth: authorization server not configured")
 	}
-	if _, err := s.AuthenticateClient(ctx, clientID, clientSecret); err != nil {
+	ctx, span, timer := s.startIntrospectSpan(ctx)
+	defer func() { s.finishIntrospectSpan(span, timer, err) }()
+	if _, aerr := s.AuthenticateClient(ctx, clientID, clientSecret); aerr != nil {
+		err = aerr
 		return IntrospectionResponse{}, nil, err
 	}
 	if token == "" {
@@ -103,12 +106,12 @@ func (s *Service) IntrospectToken(ctx context.Context, token, clientID, clientSe
 	// are base64url single segments.
 	if strings.Count(token, ".") == 2 {
 		resp := s.introspectJWT(ctx, token, expectedAud)
-		body, _ := json.Marshal(resp)
+		body, _ = json.Marshal(resp)
 		s.introspectCacheSet(token, expectedAud, body)
 		return resp, body, nil
 	}
 	resp := s.introspectRefreshToken(ctx, token)
-	body, _ := json.Marshal(resp)
+	body, _ = json.Marshal(resp)
 	s.introspectCacheSet(token, expectedAud, body)
 	return resp, body, nil
 }

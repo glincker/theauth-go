@@ -163,10 +163,12 @@ func remoteIsTrusted(ipLiteral string, trusted []netip.Prefix) bool {
 func (a *TheAuth) RateLimitByIP(perMinute int) func(http.Handler) http.Handler {
 	k := newKeyedLimiter(perMinute)
 	trusted := a.trustedProxies
+	blocked := a.hooks.Counter(MetricRateLimitBlockedTotal, Labels{AttrRule: "ip"})
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			ip := extractClientIPTrusting(r, trusted)
 			if !k.Allow(ip) {
+				blocked.Inc()
 				w.Header().Set("Retry-After", "60")
 				http.Error(w, "rate_limited", http.StatusTooManyRequests)
 				return
@@ -182,6 +184,7 @@ func (a *TheAuth) RateLimitByIP(perMinute int) func(http.Handler) http.Handler {
 // are passed through unlimited (handler will reject them on its own).
 func (a *TheAuth) RateLimitByEmail(perMinute int) func(http.Handler) http.Handler {
 	k := newKeyedLimiter(perMinute)
+	blocked := a.hooks.Counter(MetricRateLimitBlockedTotal, Labels{AttrRule: "email"})
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			buf, err := io.ReadAll(io.LimitReader(r.Body, 1<<14))
@@ -203,6 +206,7 @@ func (a *TheAuth) RateLimitByEmail(perMinute int) func(http.Handler) http.Handle
 			}
 			key := strings.ToLower(strings.TrimSpace(body.Email))
 			if !k.Allow(key) {
+				blocked.Inc()
 				w.Header().Set("Retry-After", "60")
 				http.Error(w, "rate_limited", http.StatusTooManyRequests)
 				return

@@ -10,6 +10,7 @@ import (
 
 	"github.com/glincker/theauth-go/crypto"
 	"github.com/glincker/theauth-go/internal/models"
+	obs "github.com/glincker/theauth-go/internal/observability"
 	"github.com/glincker/theauth-go/internal/ulid"
 )
 
@@ -56,10 +57,21 @@ type ClientRegistrationRequest struct {
 // the RFC 7591 response body. The plaintext secret is in the return
 // value; callers must surface it to the caller exactly once and never
 // log it.
-func (s *Service) RegisterClient(ctx context.Context, req ClientRegistrationRequest, anonymous bool) (models.RegisteredClient, error) {
+func (s *Service) RegisterClient(ctx context.Context, req ClientRegistrationRequest, anonymous bool) (registered models.RegisteredClient, err error) {
 	if s == nil {
 		return models.RegisteredClient{}, errors.New("theauth: authorization server not configured")
 	}
+	ctx, span := s.Hooks.StartSpan(ctx, obs.SpanOAuthDCRRegister, obs.BoolAttr("anonymous", anonymous))
+	defer func() {
+		status := obs.StatusSuccess
+		if err != nil {
+			status = obs.StatusError
+			span.RecordError(err)
+			span.SetAttributes(obs.StringAttr(obs.AttrErrorCode, errorCode(err)))
+		}
+		span.SetAttributes(obs.StringAttr(obs.AttrStatus, string(status)))
+		span.End()
+	}()
 	if anonymous && !s.Cfg.AllowAnonymousRegistration {
 		return models.RegisteredClient{}, models.ErrOAuthRegistrationDenied
 	}
