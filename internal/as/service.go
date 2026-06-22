@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/glincker/theauth-go/internal/audit"
+	"github.com/glincker/theauth-go/internal/cimd"
 	"github.com/glincker/theauth-go/internal/clientauthcache"
 	"github.com/glincker/theauth-go/internal/models"
 )
@@ -81,6 +82,12 @@ type Service struct {
 	// client_secret_hash. Keyed by client_id; cached entries bind the
 	// verified *OAuthClient snapshot to the sha256 of the presented secret.
 	clientAuthCache *clientauthcache.Cache[*models.OAuthClient]
+
+	// cimdSvc resolves https-URL client_ids per the MCP authorization
+	// spec 2025-11-25 (Client ID Metadata Documents). Nil when CIMD is
+	// not configured; in that case ResolveClient falls through to the
+	// legacy OAuthClientByClientID path for every client_id.
+	cimdSvc *cimd.Service
 }
 
 // introspectCacheEntry holds one cached introspection response body plus
@@ -134,7 +141,7 @@ func New(d Deps) *Service {
 	if emitter == nil {
 		emitter = audit.NoopEmitter{}
 	}
-	return &Service{
+	s := &Service{
 		Cfg:             d.Cfg,
 		Storage:         d.Storage,
 		encryptionKey:   d.EncryptionKey,
@@ -145,6 +152,10 @@ func New(d Deps) *Service {
 		privKeyByKID:    map[string]ed25519.PrivateKey{},
 		clientAuthCache: clientauthcache.New[*models.OAuthClient](clientauthcache.DefaultMaxEntries, clientauthcache.DefaultTTL),
 	}
+	if d.Cfg.CIMD != nil {
+		s.cimdSvc = cimd.NewService(*d.Cfg.CIMD, emitter)
+	}
+	return s
 }
 
 // Start bootstraps the JWKS state (loading existing keys or minting fresh
@@ -158,6 +169,9 @@ func (s *Service) Start(ctx context.Context) error {
 	if err := s.bootstrapJWKS(ctx); err != nil {
 		return err
 	}
+	if s.cimdSvc != nil {
+		s.cimdSvc.Start()
+	}
 	if s.Cfg.DisableRotation {
 		return nil
 	}
@@ -169,7 +183,13 @@ func (s *Service) Start(ctx context.Context) error {
 
 // Stop shuts the rotation goroutine and waits for it to finish. Idempotent.
 func (s *Service) Stop() {
-	if s == nil || s.rotationStop == nil {
+	if s == nil {
+		return
+	}
+	if s.cimdSvc != nil {
+		s.cimdSvc.Stop()
+	}
+	if s.rotationStop == nil {
 		return
 	}
 	select {
@@ -197,6 +217,48 @@ func (s *Service) InvalidateClientAuthCache(clientID string) {
 		return
 	}
 	s.clientAuthCache.Invalidate(clientID)
+}
+
+// ResolveClient looks up an OAuth client by client_id, routing through
+// the CIMD service when the client_id parses as an https URL, otherwise
+// falling through to the storage-backed DCR registration.
+//
+// Per the MCP authorization spec 2025-11-25, an https-shaped client_id
+// is canonically a CIMD URL. We honor that signal with no fallback:
+//
+//   - CIMD configured + policy allows: fetch the document, validate,
+//     synthesize an OAuthClient. Cache honors CIMDConfig.CacheTTL.
+//   - CIMD configured + policy denies: invalid_client. No silent fall
+//     through to storage; that would let a malicious client publish a
+//     URL whose host the operator does not trust and still authenticate
+//     by happening to have the same string registered as a DCR
+//     client_id.
+//   - CIMD not configured (Cfg.CIMD == nil) and client_id is an https
+//     URL: invalid_client. Same downgrade-attack reasoning. Operators
+//     who want to disable CIMD altogether should also reject https-
+//     shaped client_ids; allowing them through to storage opens the
+//     same hole.
+//   - Otherwise (client_id is an opaque string like "client-01J..."):
+//     consult Storage.OAuthClientByClientID. This is the v2.0 phase 1+2
+//     DCR path, unchanged.
+func (s *Service) ResolveClient(ctx context.Context, clientID string) (*models.OAuthClient, error) {
+	if s == nil {
+		return nil, errors.New("theauth: authorization server not configured")
+	}
+	if clientID == "" {
+		return nil, models.ErrOAuthInvalidClient
+	}
+	if cimd.LooksLikeCIMD(clientID) {
+		if s.cimdSvc == nil {
+			return nil, models.ErrOAuthInvalidClient
+		}
+		client, err := s.cimdSvc.Resolve(ctx, clientID)
+		if err != nil {
+			return nil, models.ErrOAuthInvalidClient
+		}
+		return client, nil
+	}
+	return s.Storage.OAuthClientByClientID(ctx, clientID)
 }
 
 // ResourceByIdentifier returns the configured ProtectedResource matching

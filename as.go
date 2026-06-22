@@ -107,6 +107,18 @@ type AuthorizationServerConfig struct {
 	// Tests use this to assert key state from a known fixture;
 	// production must leave it false.
 	DisableRotation bool
+
+	// CIMD wires the Client ID Metadata Documents resolver per the MCP
+	// authorization spec 2025-11-25. When non-nil, incoming
+	// /oauth/authorize and /oauth/token requests whose client_id parses
+	// as an https URL are resolved by fetching that URL and parsing the
+	// JSON metadata document, instead of consulting OAuthServerStorage.
+	// Nil disables CIMD and the AS falls back to RFC 7591 DCR for every
+	// client_id (the pre-CIMD behavior).
+	//
+	// Default policy MUST be DenyAll (fail-closed); operators opt in to
+	// AllowAnyHTTPS or AllowHTTPSHosts explicitly.
+	CIMD *CIMDConfig
 }
 
 // ProtectedResource is defined in internal/models and re-exported from

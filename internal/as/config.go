@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/glincker/theauth-go/crypto"
+	"github.com/glincker/theauth-go/internal/cimd"
 	"github.com/glincker/theauth-go/internal/models"
 )
 
@@ -78,6 +79,15 @@ type Config struct {
 	// use this to assert key state from a known fixture; production must
 	// leave it false.
 	DisableRotation bool
+
+	// CIMD wires the Client ID Metadata Documents resolver, per MCP
+	// authorization spec 2025-11-25. When non-nil, an incoming
+	// /oauth/authorize or /oauth/token request whose client_id parses as
+	// an https URL is resolved by fetching that URL and parsing the JSON
+	// metadata document, instead of consulting OAuthServerStorage. Nil
+	// disables CIMD entirely and the AS falls back to RFC 7591 DCR for
+	// every client_id.
+	CIMD *cimd.Config
 }
 
 // Validate applies defaults and screens required fields. Mirror of the

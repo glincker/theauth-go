@@ -261,7 +261,7 @@ func (s *Service) AuthenticateClient(ctx context.Context, clientID, clientSecret
 			return cached, nil
 		}
 	}
-	client, err := s.Storage.OAuthClientByClientID(ctx, clientID)
+	client, err := s.ResolveClient(ctx, clientID)
 	if err != nil {
 		return nil, models.ErrOAuthInvalidClient
 	}
