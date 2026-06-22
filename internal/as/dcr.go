@@ -2,6 +2,7 @@ package as
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/url"
@@ -48,8 +49,11 @@ type ClientRegistrationRequest struct {
 	PolicyURI               string   `json:"policy_uri,omitempty"`
 	TosURI                  string   `json:"tos_uri,omitempty"`
 	JwksURI                 string   `json:"jwks_uri,omitempty"`
-	SoftwareID              string   `json:"software_id,omitempty"`
-	SoftwareVersion         string   `json:"software_version,omitempty"`
+	// Jwks is the RFC 7517 JSON Web Key Set document (inline). Used by JAR
+	// (RFC 9101) to verify request object signatures when jwks_uri is not set.
+	Jwks            json.RawMessage `json:"jwks,omitempty"`
+	SoftwareID      string          `json:"software_id,omitempty"`
+	SoftwareVersion string          `json:"software_version,omitempty"`
 }
 
 // RegisterClient validates the request, mints a client_id (and a secret
@@ -95,6 +99,7 @@ func (s *Service) RegisterClient(ctx context.Context, req ClientRegistrationRequ
 		PolicyURI:               req.PolicyURI,
 		TosURI:                  req.TosURI,
 		JwksURI:                 req.JwksURI,
+		Jwks:                    []byte(req.Jwks),
 		SoftwareID:              req.SoftwareID,
 		SoftwareVersion:         req.SoftwareVersion,
 		AnonymousRegistered:     anonymous,

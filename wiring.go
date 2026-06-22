@@ -493,6 +493,8 @@ func asConfigFromRoot(c *AuthorizationServerConfig) internalas.Config {
 		CIMD:                           c.CIMD,
 		DPoP:                           dpopConfigFromRoot(c.DPoP),
 		RequireState:                   c.RequireState,
+		PAR:                            c.PAR,
+		JAR:                            c.JAR,
 	}
 }
 

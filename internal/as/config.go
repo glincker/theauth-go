@@ -105,6 +105,17 @@ type Config struct {
 	// behavior. Operators deploying browser-based clients should enable
 	// this to enforce CSRF protection (security re-audit L5, 2026-06-22).
 	RequireState bool
+
+	// PAR wires RFC 9126 Pushed Authorization Requests. When non-nil and
+	// the Storage backend implements PARStorage, POST /oauth/par is
+	// enabled and GET /oauth/authorize accepts request_uri. Nil (default)
+	// disables PAR entirely; existing deployments see no behavior change.
+	PAR *PARConfig
+
+	// JAR wires RFC 9101 JWT-Secured Authorization Requests. When
+	// non-nil, /oauth/authorize and /oauth/par accept a "request"
+	// parameter containing a signed JWT. Nil (default) disables JAR.
+	JAR *JARConfig
 }
 
 // Validate applies defaults and screens required fields. Mirror of the
@@ -162,6 +173,12 @@ func Validate(cfg *Config, encryptionKey []byte) error {
 		} else {
 			cfg.RegistrationRateLimitPerMinute = 5
 		}
+	}
+	if cfg.PAR != nil {
+		applyPARDefaults(cfg.PAR)
+	}
+	if cfg.JAR != nil {
+		applyJARDefaults(cfg.JAR)
 	}
 	return nil
 }
