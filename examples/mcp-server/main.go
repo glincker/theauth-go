@@ -28,6 +28,10 @@ func main() {
 		mcpresource.WithIntrospection(introspectURI, clientID, clientSecret),
 	)
 
+	for _, d := range v.Diagnostics() {
+		log.Printf("[mcpresource %s] %s (code: %s)", d.Severity, d.Message, d.Code)
+	}
+
 	r := chi.NewRouter()
 	r.Use(v.Middleware)
 

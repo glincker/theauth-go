@@ -169,3 +169,49 @@ func (v *Validator) validateConfig() error {
 	}
 	return nil
 }
+
+// Diagnostic describes a potential misconfiguration or notable condition
+// detected in the Validator at startup. It is informational only; the
+// Validator does not change runtime behavior based on diagnostics.
+type Diagnostic struct {
+	// Severity is either "warn" or "info".
+	Severity string
+	// Code is a short machine-readable identifier for the condition.
+	Code string
+	// Message is a human-readable description of the condition.
+	Message string
+}
+
+// Diagnostics returns a slice of Diagnostic values describing potential
+// misconfigurations in the Validator. Callers should log these at startup so
+// operators can spot configuration issues before tokens start being rejected.
+//
+// Current rules:
+//   - "warn" / "no-verification-source": neither JWKS URI nor introspection
+//     URI is configured; every token will be rejected as inactive, which
+//     looks identical to a bad-token bug and is almost certainly a
+//     misconfiguration.
+//   - "info" / "dual-verification": both JWKS URI and introspection URI are
+//     set; the validator uses JWKS for JWT validation and introspection for
+//     opaque tokens. This is a valid configuration but worth surfacing so
+//     operators know both paths are active.
+func (v *Validator) Diagnostics() []Diagnostic {
+	var out []Diagnostic
+	hasJWKS := v.jwksURI != ""
+	hasIntrospect := v.introspectURI != ""
+	if !hasJWKS && !hasIntrospect {
+		out = append(out, Diagnostic{
+			Severity: "warn",
+			Code:     "no-verification-source",
+			Message:  "mcpresource: neither JWKS URI nor introspection URI is configured; every token will be rejected as inactive",
+		})
+	}
+	if hasJWKS && hasIntrospect {
+		out = append(out, Diagnostic{
+			Severity: "info",
+			Code:     "dual-verification",
+			Message:  "mcpresource: both JWKS URI and introspection URI are configured; JWTs use JWKS, opaque tokens use introspection",
+		})
+	}
+	return out
+}

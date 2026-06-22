@@ -157,6 +157,50 @@ func TestNewRejectsRS256(t *testing.T) {
 	}
 }
 
+// TestJWKSRotationConcurrentSafe spawns N goroutines each calling
+// RotateSigningKey and asserts that exactly one row has state = current
+// when all goroutines finish. This guards against the race that previously
+// allowed two rows to hold state = current when rotations interleaved
+// between the demote-current and promote-next storage calls (M4, 2026-06-21).
+//
+// The memory storage backend serialises all JWKS writes under its own mutex,
+// so this test exercises the as-package coordination layer. Postgres-specific
+// transactional atomicity is validated by the integration suite gated on
+// THEAUTH_TEST_PG_DSN.
+func TestJWKSRotationConcurrentSafe(t *testing.T) {
+	a, store := newASInstance(t)
+	const goroutines = 8
+	var wg sync.WaitGroup
+	errCh := make(chan error, goroutines)
+	wg.Add(goroutines)
+	for i := 0; i < goroutines; i++ {
+		go func() {
+			defer wg.Done()
+			if err := a.RotateSigningKey(context.Background()); err != nil {
+				errCh <- err
+			}
+		}()
+	}
+	wg.Wait()
+	close(errCh)
+	for err := range errCh {
+		t.Errorf("RotateSigningKey error: %v", err)
+	}
+	keys, err := store.JWKSKeysAll(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	var currentCount int
+	for _, k := range keys {
+		if k.State == theauth.JWKSStateCurrent {
+			currentCount++
+		}
+	}
+	if currentCount != 1 {
+		t.Fatalf("expected exactly 1 current key after concurrent rotations, got %d", currentCount)
+	}
+}
+
 func TestRotationGoroutineStopsOnClose(t *testing.T) {
 	store := memory.New()
 	key := make([]byte, 32)

@@ -8,6 +8,7 @@ import (
 	"crypto/x509"
 	"encoding/pem"
 	"errors"
+	"log/slog"
 	"net/netip"
 	"sync"
 	"time"
@@ -226,6 +227,11 @@ type Config struct {
 	MagicLinkTTL time.Duration
 	CookieName   string
 	SecureCookie bool
+	// SuppressSecureCookieWarning silences the v2.2 deprecation WARN logged
+	// when SecureCookie is false. Set this to true in local/dev environments
+	// that run without TLS so the startup log stays clean. In production,
+	// prefer enabling SecureCookie instead.
+	SuppressSecureCookieWarning bool
 	// RateLimitPerIP is the per-IP per-minute budget applied to credential
 	// endpoints (signup/signin/forgot/reset). Defaults to 5 when zero.
 	RateLimitPerIP int
@@ -633,6 +639,13 @@ func New(cfg Config) (*TheAuth, error) {
 	}
 	if cfg.RateLimitPerEmail <= 0 {
 		cfg.RateLimitPerEmail = 3
+	}
+
+	// M3 (security audit 2026-06-21): warn when SecureCookie is false so
+	// operators notice before v3.0 flips the default to true. The knob
+	// SuppressSecureCookieWarning lets dev environments opt out cleanly.
+	if !cfg.SecureCookie && !cfg.SuppressSecureCookieWarning {
+		slog.Warn("SecureCookie: false is deprecated; v3.0 will default to true. Set Config.SuppressSecureCookieWarning=true to suppress this warning in dev.")
 	}
 
 	// OAuth validation: any provider configured requires a 32-byte key, and
