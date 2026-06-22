@@ -523,8 +523,8 @@ func GenerateECKeyJWK() (*ecdsa.PrivateKey, []byte, error) {
 	if err != nil {
 		return nil, nil, err
 	}
-	xBytes := priv.PublicKey.X.Bytes()
-	yBytes := priv.PublicKey.Y.Bytes()
+	xBytes := priv.X.Bytes()
+	yBytes := priv.Y.Bytes()
 	// Pad to curve field size (32 bytes for P-256).
 	xBytes = padTo(xBytes, 32)
 	yBytes = padTo(yBytes, 32)

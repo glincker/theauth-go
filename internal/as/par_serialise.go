@@ -2,7 +2,6 @@ package as
 
 import (
 	"encoding/json"
-	"strings"
 )
 
 // par_serialise.go: JSON serialisation helpers for pushed authorization
@@ -53,18 +52,3 @@ func deserializeAuthorizeRequest(payload []byte) (AuthorizeRequest, error) {
 	}, nil
 }
 
-// scopeSplitIntoSlice is a thin wrapper so par.go can use scope normalization.
-// Mirrors internal/as.scopeSplit.
-func scopeSplitIntoSlice(s string) []string {
-	parts := strings.Fields(s)
-	seen := map[string]struct{}{}
-	out := make([]string, 0, len(parts))
-	for _, p := range parts {
-		if _, dup := seen[p]; dup {
-			continue
-		}
-		seen[p] = struct{}{}
-		out = append(out, p)
-	}
-	return out
-}
