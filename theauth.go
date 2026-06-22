@@ -156,6 +156,30 @@ type Config struct {
 	// examples/observability-otel + examples/observability-prom for
 	// reference implementations.
 	Observability *Hooks
+
+	// PasswordPolicy controls optional extensions to the password-verification
+	// path. The zero value is safe (all extensions disabled).
+	PasswordPolicy PasswordPolicyConfig
+}
+
+// PasswordPolicyConfig holds optional password-verification extensions.
+// These are designed for migration windows; disable them once users have
+// been migrated and re-hashed.
+type PasswordPolicyConfig struct {
+	// AllowLegacyBcrypt enables the bcrypt fallback in VerifyPassword. When
+	// true, hashes starting with "$2a$", "$2b$", or "$2x$" are verified with
+	// golang.org/x/crypto/bcrypt. On a successful match the password is
+	// transparently re-hashed with Argon2id; callers receive the new hash via
+	// the OnLegacyHashAccepted callback so they can update storage
+	// asynchronously. Set to false (default) in all non-migration deployments.
+	AllowLegacyBcrypt bool
+
+	// OnLegacyHashAccepted is called (in the background) whenever a bcrypt
+	// hash is successfully verified and the password has been re-hashed. The
+	// caller receives (userID string, newArgon2idHash string). Persist the new
+	// hash to storage to complete the upgrade. If nil, upgrades are silently
+	// discarded (not recommended for production migration windows).
+	OnLegacyHashAccepted func(userID string, newArgon2idHash string)
 }
 
 // TheAuth is the public entry point, constructed once at app start and
