@@ -612,18 +612,3 @@ func jwtStringIn(s string, list []string) bool {
 	return false
 }
 
-// buildTestECKey generates a fresh P-256 key for tests; exported only for
-// the test package. Named with a "build" prefix so it is obviously a helper.
-// Production code fetches keys from JWKS endpoints.
-func buildTestECKey() (*ecdsa.PrivateKey, error) {
-	return ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-}
-
-// ecdsaSignJWT signs a JWT header.payload with the given ECDSA key using
-// SHA-256. Used by tests to produce test assertions.
-func ecdsaSignJWT(priv *ecdsa.PrivateKey, signingInput string) ([]byte, error) {
-	h := sha256.New()
-	h.Write([]byte(signingInput))
-	digest := h.Sum(nil)
-	return ecdsa.SignASN1(rand.Reader, priv, digest)
-}
