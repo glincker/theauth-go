@@ -1,4 +1,4 @@
-package theauth_test
+package scim_test
 
 import (
 	"bytes"
@@ -10,7 +10,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/glincker/theauth-go"
+	theauth "github.com/glincker/theauth-go"
+	"github.com/glincker/theauth-go/internal/theauthtest"
 	"github.com/glincker/theauth-go/storage/memory"
 	"github.com/go-chi/chi/v5"
 )
@@ -28,7 +29,7 @@ func newSCIMTestStack(t *testing.T) (*theauth.TheAuth, *memory.Store, theauth.Or
 		t.Fatal(err)
 	}
 	t.Cleanup(a.Close)
-	owner := newUser(t, store, "scim-owner@x.test")
+	owner := theauthtest.NewUser(t, store, "scim-owner@x.test")
 	org, err := a.CreateOrganization(context.Background(), "Acme", "acme", owner.ID)
 	if err != nil {
 		t.Fatal(err)
@@ -44,7 +45,7 @@ func newSCIMTestStack(t *testing.T) (*theauth.TheAuth, *memory.Store, theauth.Or
 	return a, store, org, token, srv
 }
 
-// scimPost is a small helper that wraps the bearer header + content-type
+// scimReq is a small helper that wraps the bearer header + content-type
 // boilerplate for the test stack.
 func scimReq(t *testing.T, srv *httptest.Server, method, path, token string, body interface{}) *http.Response {
 	t.Helper()
@@ -430,7 +431,7 @@ func TestSCIM_RequiresHTTPS(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer a.Close()
-	owner := newUser(t, store, "https-owner@x.test")
+	owner := theauthtest.NewUser(t, store, "https-owner@x.test")
 	org, _ := a.CreateOrganization(context.Background(), "Acme", "acme", owner.ID)
 	token, _, _ := a.CreateSCIMToken(context.Background(), org.ID, "t")
 	r := chi.NewRouter()

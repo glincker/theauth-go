@@ -1,4 +1,4 @@
-package theauth_test
+package audit_test
 
 import (
 	"context"
@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/glincker/theauth-go"
+	theauth "github.com/glincker/theauth-go"
 	"github.com/glincker/theauth-go/storage/memory"
 )
 

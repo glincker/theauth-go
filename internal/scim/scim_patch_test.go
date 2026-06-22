@@ -1,4 +1,4 @@
-package theauth_test
+package scim_test
 
 import (
 	"bytes"

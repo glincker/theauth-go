@@ -1,4 +1,4 @@
-package theauth_test
+package audit_test
 
 import (
 	"context"
@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/glincker/theauth-go"
+	theauth "github.com/glincker/theauth-go"
 	"github.com/glincker/theauth-go/storage/memory"
 )
 
@@ -143,16 +143,10 @@ func TestEmitAuditDropsOnFullBuffer(t *testing.T) {
 	if stats.AuditDropped == 0 {
 		t.Fatal("expected drops under saturated buffer with blocked writer")
 	}
-	if stats.AuditEmitted != stats.AuditWritten+stats.AuditDropped+stats.AuditFailed+inflightCount(stats) {
-		// emitted = written + dropped + inflight (which we cannot read precisely),
-		// so we only assert emitted >= written + dropped.
-		if stats.AuditEmitted < stats.AuditWritten+stats.AuditDropped {
-			t.Fatalf("emitted (%d) < written (%d) + dropped (%d)", stats.AuditEmitted, stats.AuditWritten, stats.AuditDropped)
-		}
+	if stats.AuditEmitted < stats.AuditWritten+stats.AuditDropped {
+		t.Fatalf("emitted (%d) < written (%d) + dropped (%d)", stats.AuditEmitted, stats.AuditWritten, stats.AuditDropped)
 	}
 }
-
-func inflightCount(_ theauth.Stats) uint64 { return 0 }
 
 func TestEmitAuditConcurrent(t *testing.T) {
 	store := memory.New()

@@ -1,4 +1,4 @@
-package theauth_test
+package audit_test
 
 import (
 	"context"
@@ -7,19 +7,19 @@ import (
 	"testing"
 	"time"
 
-	"github.com/glincker/theauth-go"
+	theauth "github.com/glincker/theauth-go"
 	"github.com/glincker/theauth-go/storage/memory"
 )
 
 // audit_redactor_depth_test.go closes two gaps the 2026-06-20 reliability
 // audit called out in section 2 (audit redactor):
 //
-//   1. DefaultRedactor is exercised at depth 1 and depth 2 only. Production
-//      callers can legitimately produce depth-5 metadata (a nested OAuth
-//      provider response, for example), and the redactor's recursion has
-//      never been asserted at those depths.
-//   2. The []map[string]any typed-slice branch (audit.go:70) is hit by no
-//      existing test; only the untyped []any path is covered.
+//  1. DefaultRedactor is exercised at depth 1 and depth 2 only. Production
+//     callers can legitimately produce depth-5 metadata (a nested OAuth
+//     provider response, for example), and the redactor's recursion has
+//     never been asserted at those depths.
+//  2. The []map[string]any typed-slice branch (audit.go:70) is hit by no
+//     existing test; only the untyped []any path is covered.
 //
 // We also stress-test EmitAudit under 4x the existing fan-out to back the
 // audit's "audit emission under realistic concurrency" recommendation
