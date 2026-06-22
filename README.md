@@ -14,6 +14,14 @@ It is the first Go auth library where oauth 2.1 mcp authorization, agent identit
 
 ---
 
+## Documentation
+
+Full documentation is available at **https://glincker.github.io/theauth-go/**
+
+The site covers getting started, concepts, guides, configuration reference, error catalog, metrics and spans, audit events, migration guides, and security.
+
+---
+
 ## Contents
 
 - [Features](#features)

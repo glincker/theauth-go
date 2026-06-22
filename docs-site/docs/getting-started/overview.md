@@ -1,0 +1,85 @@
+# Overview
+
+theauth-go is a production-ready Go auth library that covers the full authentication and authorization stack behind a single `go get`.
+
+## Feature surface
+
+### Identity and session management
+
+- Opaque session tokens with `HttpOnly`, `Secure`, `SameSite=Lax` cookies. Only a SHA-256 hash is persisted; the raw token never touches the database.
+- Magic-link sign-in.
+- Email and password with Argon2id (OWASP 2026 defaults), 12-character minimum enforcement, anti-enumeration safeguards.
+- Per-IP and per-email rate limiting on every credential endpoint.
+- WebAuthn / passkeys: discoverable login, sign-count replay protection, single-factor-strong per NIST SP 800-63B.
+- TOTP second factor with 10 single-use recovery codes and a `pending_2fa` session step-up state machine.
+- OAuth providers: GitHub, Google, Microsoft, Discord (PKCE-aware, AES-256-GCM at-rest token encryption).
+
+### OAuth 2.1 authorization server
+
+- `/.well-known/oauth-authorization-server` (RFC 8414), `/oauth/authorize`, `/oauth/token`, `/oauth/revoke`, `/oauth/introspect`, `/oauth/jwks`.
+- RFC 9068 JWT access tokens signed with Ed25519 (30-day JWKS rotation).
+- RFC 8707 mandatory audience binding.
+- PKCE S256 mandatory.
+- RFC 9700 refresh-token rotation with family revocation on replay.
+- RFC 7591 dynamic client registration with bearer-gated initial access tokens.
+
+### MCP authorization
+
+- First-class agent identities (user-owned or org-owned) with audited lifecycle (active, suspended, revoked).
+- `client_credentials` grant for agent self-tokens.
+- RFC 8693 token-exchange grant: scope narrowing, duration tightening, actor chain capped at 3.
+- RFC 9728 protected-resource metadata at `/.well-known/oauth-protected-resource`.
+- `mcpresource` SDK: a zero-dependency Go module for MCP resource servers. Wire one middleware for JWT validation, audience enforcement, actor-chain walking, and revocation propagation.
+
+### Enterprise
+
+- SAML 2.0 Service Provider (per-organization IdP binding, signed assertions only, find-or-create).
+- SCIM 2.0 provisioning: Users and Groups CRUD, RFC 7644 PATCH, sha256 bearer tokens, per-org isolation.
+- Organizations multi-tenancy with `active_organization_id` session scope.
+- RBAC with a closed permission catalog, seeded roles, and `RequirePermission` middleware.
+
+### Hardening and observability
+
+- Append-only async audit log with default redactor and keyset pagination.
+- Admin HTTP API at `/admin/v1` with RFC 7807 problem+json errors.
+- Fuzz tests, race-clean test suite, benchmark gate.
+- Pluggable `Storage` interface: in-memory (zero deps) or Postgres (`pgx/v5` + `sqlc`).
+- Pluggable `Tracer` and `Metrics` adapters (OpenTelemetry, Prometheus, or any custom backend).
+
+## Architecture
+
+```
+             HTTP req
+                |
+    +-----------v-----------+
+    |  chi / net/http router |
+    |   a.Mount(r)           |  /auth/* handlers
+    |   a.RequireAuth()      |  middleware
+    +-----------+-----------+
+                |
+    +-----------v-----------+
+    |     theauth core       |
+    |  magic-link service    |
+    |  session service       |  opaque tokens, SHA-256 in DB
+    |  password service      |  argon2id, rate-limited
+    |  oauth / MCP / agents  |  v2.0+
+    |  audit / RBAC          |  v1.0+
+    +-----------+-----------+
+                |
+    +-----------v-----------+
+    |  Storage interface     |  pluggable
+    |  storage/memory        |  tests, demos
+    |  storage/postgres      |  pgx + sqlc
+    +-----------------------+
+```
+
+Sessions are opaque tokens. The raw token lives only in the user's cookie; only a SHA-256 hash is persisted. Revocation is a single `UPDATE`. The `Storage` interface is the only surface a custom backend needs to implement.
+
+The `mcpresource` module is a separately versioned zero-dependency module. A consumer importing it does not transitively pull theauth core or any storage adapter.
+
+## Next steps
+
+- [Installation](installation.md) - Install the library and run your first request.
+- [Quick Start](quick-start.md) - Walkthrough of the five-line server.
+- [Storage Backends](storage-backends.md) - Choose between memory and Postgres.
+- [Example Apps](example-apps.md) - Runnable examples for chi, Gin, Echo, stdlib, and more.
