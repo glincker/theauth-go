@@ -126,6 +126,27 @@ func (a *TheAuth) ExchangeToken(ctx context.Context, req TokenExchangeRequest) (
 	return a.as.ExchangeToken(ctx, req)
 }
 
+// JWTBearerGrant implements RFC 7523 section 2.1: an externally-issued JWT
+// is exchanged for an AS-issued access token. The assertion parameter must
+// be the compact serialized JWT from a configured TrustedJWTIssuer.
+//
+// Requires Config.AuthorizationServer.JWTBearer to be non-nil; returns
+// ErrOAuthUnsupportedGrantType when not configured.
+func (a *TheAuth) JWTBearerGrant(ctx context.Context, req TokenRequest, assertion string) (TokenResponse, error) {
+	if a.as == nil {
+		return TokenResponse{}, ErrAuthorizationServerNotConfigured
+	}
+	return a.as.JWTBearerGrant(ctx, req, assertion)
+}
+
+// DCRRegister is a convenience wrapper around RegisterClient that registers
+// a new OAuth client with AllowAnonymousRegistration semantics. The returned
+// RegisteredClient carries ClientID and ClientSecret. This is the same
+// operation as POST /oauth/register but callable from Go code directly.
+func (a *TheAuth) DCRRegister(ctx context.Context, req ClientRegistrationRequest) (RegisteredClient, error) {
+	return a.RegisterClient(ctx, req, true)
+}
+
 // Note: the previous unexported helper authenticateClient was removed in
 // PR G (2026-06-21). Every in-tree caller now invokes
 // a.as.AuthenticateClient directly (the introspect / revoke / token

@@ -51,7 +51,7 @@ func (s *Service) ClientCredentialsToken(ctx context.Context, req TokenRequest) 
 	ctx, span, timer := s.startTokenSpan(ctx, "client_credentials")
 	defer func() { s.finishTokenSpan(span, timer, "client_credentials", err) }()
 	var client *models.OAuthClient
-	client, err = s.AuthenticateClient(ctx, req.ClientID, req.ClientSecret)
+	client, err = s.AuthenticateClientFromRequest(ctx, req, s.tokenEndpointURL())
 	if err != nil {
 		return TokenResponse{}, err
 	}
@@ -155,6 +155,8 @@ func (s *Service) ExchangeToken(ctx context.Context, req TokenExchangeRequest) (
 	ctx, span, timer := s.startTokenSpan(ctx, "token-exchange")
 	defer func() { s.finishTokenSpan(span, timer, "token-exchange", err) }()
 	// Step 1: authenticate the requesting client (the agent).
+	// Token exchange does not use JWT client assertions in the current spec;
+	// it uses the existing client_secret path. AuthenticateClient suffices.
 	var client *models.OAuthClient
 	client, err = s.AuthenticateClient(ctx, req.ClientID, req.ClientSecret)
 	if err != nil {
@@ -211,6 +213,15 @@ func (s *Service) ExchangeToken(ctx context.Context, req TokenExchangeRequest) (
 	if _, ok := s.ResourceByIdentifier(resourceID); !ok {
 		return TokenResponse{}, models.ErrOAuthInvalidResource
 	}
+	// Step 5b (RFC 8693 section 2.1): when the caller specifies an
+	// audience parameter, it must name a known resource. This prevents
+	// audience-confusion attacks where the caller requests a token for a
+	// resource the AS does not manage.
+	if req.Audience != "" {
+		if _, ok := s.ResourceByIdentifier(req.Audience); !ok {
+			return TokenResponse{}, models.ErrOAuthInvalidResource
+		}
+	}
 	// Step 6: resolve the principal (root subject of the chain) and
 	// walk the existing actor chain to verify each link is still
 	// active.
@@ -219,8 +230,14 @@ func (s *Service) ExchangeToken(ctx context.Context, req TokenExchangeRequest) (
 		return TokenResponse{}, err
 	}
 	// Step 7: chain depth. The new chain prepends the requesting agent.
+	// MaxActorChainDepth from JWTBearerConfig takes precedence when set;
+	// otherwise fall back to AgentPolicy.MaxChainDepth.
+	maxDepth := s.AgentPolicy.MaxChainDepth
+	if s.Cfg.JWTBearer != nil && s.Cfg.JWTBearer.MaxActorChainDepth > 0 {
+		maxDepth = s.Cfg.JWTBearer.MaxActorChainDepth
+	}
 	newDepth := chain.Depth(existingChain) + 1
-	if newDepth > s.AgentPolicy.MaxChainDepth {
+	if newDepth > maxDepth {
 		return TokenResponse{}, models.ErrChainDepthExceeded
 	}
 	// Step 8: locate delegation_grants for (root_user, requesting_agent,

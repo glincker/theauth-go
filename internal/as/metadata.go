@@ -23,10 +23,14 @@ type ASMetadata struct {
 	ResponseTypesSupported            []string `json:"response_types_supported"`
 	GrantTypesSupported               []string `json:"grant_types_supported"`
 	TokenEndpointAuthMethodsSupported []string `json:"token_endpoint_auth_methods_supported"`
-	CodeChallengeMethodsSupported     []string `json:"code_challenge_methods_supported"`
-	ScopesSupported                   []string `json:"scopes_supported,omitempty"`
-	ServiceDocumentation              string   `json:"service_documentation,omitempty"`
-	UILocalesSupported                []string `json:"ui_locales_supported,omitempty"`
+	// TokenEndpointAuthSigningAlgValuesSupported lists the JWS signing
+	// algorithms supported for private_key_jwt and client_secret_jwt
+	// client authentication. Omitted when JWT client auth is disabled.
+	TokenEndpointAuthSigningAlgValuesSupported []string `json:"token_endpoint_auth_signing_alg_values_supported,omitempty"`
+	CodeChallengeMethodsSupported              []string `json:"code_challenge_methods_supported"`
+	ScopesSupported                            []string `json:"scopes_supported,omitempty"`
+	ServiceDocumentation                       string   `json:"service_documentation,omitempty"`
+	UILocalesSupported                         []string `json:"ui_locales_supported,omitempty"`
 	// DPoPSigningAlgValuesSupported is the RFC 9449 section 5.1 metadata
 	// field advertising the proof-JWT signing algorithms this AS
 	// accepts. Omitted when DPoP is disabled.
@@ -83,6 +87,16 @@ func (s *Service) ASMetadataDoc() (ASMetadata, error) {
 		jarAlgs = s.jarAlgorithmsAdvertised()
 	}
 
+	authMethods := []string{
+		models.ClientAuthSecretBasic,
+		models.ClientAuthSecretPost,
+		models.ClientAuthNone,
+	}
+	var jwtAuthAlgs []string
+	if s.Cfg.JWTBearer != nil {
+		authMethods = append(authMethods, models.ClientAuthPrivateKeyJWT, models.ClientAuthClientSecretJWT)
+		jwtAuthAlgs = []string{"ES256", "ES384", "RS256", "PS256", "EdDSA"}
+	}
 	return ASMetadata{
 		Issuer:                s.Cfg.Issuer,
 		AuthorizationEndpoint: s.Cfg.Issuer + "/oauth/authorize",
@@ -94,19 +108,16 @@ func (s *Service) ASMetadataDoc() (ASMetadata, error) {
 		ResponseTypesSupported: []string{
 			models.ResponseTypeCode,
 		},
-		GrantTypesSupported: s.grantTypesAdvertised(),
-		TokenEndpointAuthMethodsSupported: []string{
-			models.ClientAuthSecretBasic,
-			models.ClientAuthSecretPost,
-			models.ClientAuthNone,
-		},
-		CodeChallengeMethodsSupported:          []string{"S256"},
-		ScopesSupported:                        scopeList,
-		DPoPSigningAlgValuesSupported:          dpopAlgs,
-		PushedAuthorizationRequestEndpoint:     parEndpoint,
-		RequirePushedAuthorizationRequests:     requirePAR,
-		RequestParameterSupported:              requestParamSupported,
-		RequestObjectSigningAlgValuesSupported: jarAlgs,
+		GrantTypesSupported:                        s.grantTypesAdvertised(),
+		TokenEndpointAuthMethodsSupported:          authMethods,
+		TokenEndpointAuthSigningAlgValuesSupported: jwtAuthAlgs,
+		CodeChallengeMethodsSupported:              []string{"S256"},
+		ScopesSupported:                            scopeList,
+		DPoPSigningAlgValuesSupported:              dpopAlgs,
+		PushedAuthorizationRequestEndpoint:         parEndpoint,
+		RequirePushedAuthorizationRequests:         requirePAR,
+		RequestParameterSupported:                  requestParamSupported,
+		RequestObjectSigningAlgValuesSupported:     jarAlgs,
 	}, nil
 }
 
@@ -119,11 +130,15 @@ var defaultDPoPAdvertisedAlgs = []string{"ES256", "ES384", "RS256", "PS256", "Ed
 // grantTypesAdvertised returns the grant types this AS supports. Phase
 // 1+2 supports authorization_code and refresh_token unconditionally;
 // phase 3+4 adds client_credentials and the RFC 8693 token-exchange URN
-// when the AgentPolicy is configured.
+// when the AgentPolicy is configured; RFC 7523 adds the jwt-bearer URN
+// when JWTBearer is configured.
 func (s *Service) grantTypesAdvertised() []string {
 	out := []string{models.GrantTypeAuthorizationCode, models.GrantTypeRefreshToken}
 	if s.AgentPolicy != nil {
 		out = append(out, models.GrantTypeClientCredentials, models.GrantTypeTokenExchange)
+	}
+	if s.Cfg.JWTBearer != nil {
+		out = append(out, models.GrantTypeJWTBearer)
 	}
 	return out
 }

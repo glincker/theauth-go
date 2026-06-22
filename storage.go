@@ -221,3 +221,27 @@ type Storage interface {
 	InsertAuditEvents(ctx context.Context, events []AuditEvent) error
 	QueryAuditEvents(ctx context.Context, q AuditQuery) (events []AuditEvent, nextCursor string, err error)
 }
+
+// JWTBearerStorage is an optional extension that backends may implement to
+// provide durable JTI replay prevention for RFC 7523 client assertions and
+// bearer grant assertions. When the Storage passed to New also satisfies
+// JWTBearerStorage, the AS uses it for all JTI checks; otherwise an
+// in-process sync.Map is used (replay protection is lost on restart).
+//
+// Replay protection requires only two methods; SweepExpiredJTIs is a
+// maintenance helper that operators call on a schedule (or via a
+// background goroutine).
+type JWTBearerStorage interface {
+	// InsertJTI records a new jti. Returns ErrStorageNotFound when the jti
+	// already exists within the replay window (the name is intentional: the
+	// replay cache shares the same sentinel as other "not found" checks;
+	// callers detect duplicates by inspecting whether the returned error is
+	// ErrStorageNotFound). expiresAt is when the jti may be pruned.
+	//
+	// Implementation note: use a unique constraint on (jti) and return
+	// ErrStorageNotFound on conflict (the generic "duplicate" signal).
+	InsertJTI(ctx context.Context, jti string, expiresAt time.Time) error
+	// SweepExpiredJTIs removes all jti rows whose expiresAt is before the
+	// supplied time. A no-op on an empty table.
+	SweepExpiredJTIs(ctx context.Context, before time.Time) error
+}

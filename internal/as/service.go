@@ -109,6 +109,15 @@ type Service struct {
 	// in that case and never reads from this field.
 	dpopSvc *dpop.Service
 
+	// jwtBearerStorage is the optional durable JTI replay cache. Set at New
+	// time when the root Storage also satisfies JWTBearerStorage. When nil
+	// the in-process jtiCache sync.Map is used (not durable across restarts).
+	jwtBearerStorage JWTBearerStorageAdapter
+
+	// jtiCache is the in-process fallback JTI replay cache used when
+	// jwtBearerStorage is nil. Keyed by "client:<jti>" or "grant:<jti>".
+	jtiCache sync.Map // map[string]time.Time
+
 	// Hooks is the consumer-supplied observability bundle. Never nil:
 	// New substitutes the no-op bundle when Deps.Hooks is nil. Every
 	// instrumented path uses Hooks.StartSpan / Hooks.Counter directly so
@@ -181,6 +190,9 @@ type Deps struct {
 	AgentPolicy   *AgentPolicy
 	Audit         audit.Emitter
 	AgentLookup   AgentLookup
+	// JWTBearerStorage is optional: when non-nil it backs the JTI replay
+	// cache with a durable store. When nil the in-process sync.Map is used.
+	JWTBearerStorage JWTBearerStorageAdapter
 	// Hooks wires the consumer-supplied tracer + metrics adapters. MAY
 	// be nil; New substitutes the no-op bundle.
 	Hooks *obs.Hooks
@@ -209,17 +221,18 @@ func New(d Deps) *Service {
 		hooks = &obs.Hooks{}
 	}
 	s := &Service{
-		Cfg:             d.Cfg,
-		Storage:         d.Storage,
-		encryptionKey:   d.EncryptionKey,
-		AgentPolicy:     d.AgentPolicy,
-		Audit:           emitter,
-		AgentLookup:     d.AgentLookup,
-		keyMap:          map[string]models.JWKSKey{},
-		privKeyByKID:    map[string]ed25519.PrivateKey{},
-		clientAuthCache: clientauthcache.New[*models.OAuthClient](clientauthcache.DefaultMaxEntries, clientauthcache.DefaultTTL),
-		dpopSvc:         dpopSvc,
-		Hooks:           hooks,
+		Cfg:              d.Cfg,
+		Storage:          d.Storage,
+		encryptionKey:    d.EncryptionKey,
+		AgentPolicy:      d.AgentPolicy,
+		Audit:            emitter,
+		AgentLookup:      d.AgentLookup,
+		keyMap:           map[string]models.JWKSKey{},
+		privKeyByKID:     map[string]ed25519.PrivateKey{},
+		clientAuthCache:  clientauthcache.New[*models.OAuthClient](clientauthcache.DefaultMaxEntries, clientauthcache.DefaultTTL),
+		dpopSvc:          dpopSvc,
+		jwtBearerStorage: d.JWTBearerStorage,
+		Hooks:            hooks,
 	}
 	if d.Cfg.CIMD != nil {
 		s.cimdSvc = cimd.NewService(*d.Cfg.CIMD, emitter)
@@ -241,6 +254,16 @@ func (s *Service) DPoP() *dpop.Service {
 		return nil
 	}
 	return s.dpopSvc
+}
+
+// tokenEndpointURL returns the canonical token endpoint URL derived from
+// the configured issuer. Used as the expected aud value in client assertions
+// per RFC 7523 section 3.
+func (s *Service) tokenEndpointURL() string {
+	if s == nil {
+		return ""
+	}
+	return s.Cfg.Issuer + "/oauth/token"
 }
 
 // Start bootstraps the JWKS state (loading existing keys or minting fresh

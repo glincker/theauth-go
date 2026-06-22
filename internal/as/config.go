@@ -116,6 +116,31 @@ type Config struct {
 	// non-nil, /oauth/authorize and /oauth/par accept a "request"
 	// parameter containing a signed JWT. Nil (default) disables JAR.
 	JAR *JARConfig
+
+	// JWTBearer, when non-nil, enables RFC 7523 client authentication and
+	// the jwt-bearer grant. Mirrored from root JWTBearerConfig.
+	JWTBearer *JWTBearerConfig
+}
+
+// JWTBearerConfig is the internal mirror of the root JWTBearerConfig.
+// Populated once at New time; read-only afterwards.
+type JWTBearerConfig struct {
+	TrustedJWTIssuers     []TrustedJWTIssuer
+	ClientAssertionMaxAge time.Duration
+	AssertionMaxAge       time.Duration
+	ReplayCacheTTL        time.Duration
+	MaxActorChainDepth    int
+}
+
+// TrustedJWTIssuer is the internal mirror of the root TrustedJWTIssuer.
+type TrustedJWTIssuer struct {
+	Issuer            string
+	JWKSURL           string
+	AllowedAlgorithms []string
+	// SubjectMapper resolves the "sub" (or other) claim to a local user ULID.
+	// The internal package holds it as a plain func to avoid a dependency on
+	// root interfaces.
+	SubjectMapper func(claims map[string]any) (models.ULID, error)
 }
 
 // Validate applies defaults and screens required fields. Mirror of the
@@ -179,6 +204,25 @@ func Validate(cfg *Config, encryptionKey []byte) error {
 	}
 	if cfg.JAR != nil {
 		applyJARDefaults(cfg.JAR)
+	}
+	if cfg.JWTBearer != nil {
+		if cfg.JWTBearer.ClientAssertionMaxAge <= 0 {
+			cfg.JWTBearer.ClientAssertionMaxAge = 60 * time.Second
+		}
+		if cfg.JWTBearer.AssertionMaxAge <= 0 {
+			cfg.JWTBearer.AssertionMaxAge = 300 * time.Second
+		}
+		if cfg.JWTBearer.ReplayCacheTTL <= 0 {
+			cfg.JWTBearer.ReplayCacheTTL = 600 * time.Second
+		}
+		if cfg.JWTBearer.MaxActorChainDepth <= 0 {
+			cfg.JWTBearer.MaxActorChainDepth = 5
+		}
+		for i, iss := range cfg.JWTBearer.TrustedJWTIssuers {
+			if len(iss.AllowedAlgorithms) == 0 {
+				cfg.JWTBearer.TrustedJWTIssuers[i].AllowedAlgorithms = []string{"ES256", "RS256", "EdDSA"}
+			}
+		}
 	}
 	return nil
 }
