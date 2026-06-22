@@ -24,6 +24,7 @@ It is the first Go auth library where oauth 2.1 mcp authorization, agent identit
 - [Architecture](#architecture)
 - [Security](#security)
 - [Versioning and stability](#versioning-and-stability)
+- [Verifying releases](#verifying-releases)
 - [Contributing](#contributing)
 - [License](#license)
 - [Acknowledgements](#acknowledgements)
@@ -307,6 +308,55 @@ Recent security work (2026-06-20 audit):
 The project follows [Semantic Versioning](https://semver.org/) from v1.0 forward. v2.0.0 is the current production release. The v1.0 public API surface is frozen. Every v2.0 feature (OAuth 2.1 AS, agent identities, delegation, `mcpresource`) is opt-in via additional `Config` fields; callers who upgrade from v1.0 without setting those fields see no behavior change.
 
 See [STABILITY.md](STABILITY.md) for the complete list of stable symbols, the Storage interface special rule, and the migration append-only guarantee.
+
+---
+
+## Verifying releases
+
+Every release is signed with [Sigstore](https://www.sigstore.dev/) keyless
+cosign and includes a CycloneDX SBOM. The full release process is documented
+in [docs/RELEASING.md](docs/RELEASING.md).
+
+### Install this library
+
+```bash
+go get github.com/glincker/theauth-go@vX.Y.Z
+```
+
+(`go install` is for CLI tools; this is a library, so `go get` is correct.)
+
+### Verify the SBOM signature
+
+Download the `.sbom.json`, `.sbom.json.sig`, and `.sbom.json.cert` files from
+the [GitHub release](https://github.com/glincker/theauth-go/releases), then:
+
+```bash
+cosign verify-blob \
+  --certificate-identity "https://github.com/glincker/theauth-go/.github/workflows/release.yml@refs/tags/vX.Y.Z" \
+  --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
+  --signature theauth-go-vX.Y.Z.tar.gz.sbom.json.sig \
+  --certificate theauth-go-vX.Y.Z.tar.gz.sbom.json.cert \
+  theauth-go-vX.Y.Z.tar.gz.sbom.json
+```
+
+A `Verified OK` response confirms the SBOM was produced by the official release
+workflow from the tagged commit with no tampering.
+
+### Read the SBOM
+
+The SBOM lists every Go module dependency, its version, and its license. Feed
+it to any CycloneDX-compatible scanner (e.g. `grype`, `trivy`, Dependency-Track)
+to run license compliance or vulnerability checks against the exact dependency
+set shipped in a given release.
+
+### Verify SLSA provenance
+
+The release workflow also generates a SLSA provenance attestation stored in
+GitHub's artifact store. Verify it with the `gh` CLI:
+
+```bash
+gh attestation verify theauth-go-vX.Y.Z.tar.gz --repo glincker/theauth-go
+```
 
 ---
 
