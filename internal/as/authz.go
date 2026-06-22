@@ -65,7 +65,7 @@ func (s *Service) StartAuthorize(ctx context.Context, req AuthorizeRequest, user
 	if !ok {
 		return AuthorizeResult{}, models.ErrOAuthInvalidResource
 	}
-	client, err := s.Storage.OAuthClientByClientID(ctx, req.ClientID)
+	client, err := s.ResolveClient(ctx, req.ClientID)
 	if err != nil {
 		return AuthorizeResult{}, models.ErrOAuthInvalidClient
 	}

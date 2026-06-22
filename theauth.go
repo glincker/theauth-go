@@ -1107,6 +1107,7 @@ func asConfigFromRoot(c *AuthorizationServerConfig) internalas.Config {
 		IntrospectionCacheTTL:          c.IntrospectionCacheTTL,
 		LoginURL:                       c.LoginURL,
 		DisableRotation:                c.DisableRotation,
+		CIMD:                           c.CIMD,
 	}
 }
 
