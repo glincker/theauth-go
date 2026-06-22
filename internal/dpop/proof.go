@@ -2,6 +2,7 @@ package dpop
 
 import (
 	"crypto"
+	"crypto/ecdh"
 	"crypto/ecdsa"
 	"crypto/ed25519"
 	"crypto/elliptic"
@@ -216,14 +217,31 @@ func verifyECDSA(jwk *JWK, signingInput, sig []byte, curve elliptic.Curve, h has
 	if err != nil {
 		return fmt.Errorf("%w: jwk y decode", ErrMalformedProof)
 	}
-	pub := &ecdsa.PublicKey{Curve: curve, X: new(big.Int).SetBytes(xBytes), Y: new(big.Int).SetBytes(yBytes)}
-	if !curve.IsOnCurve(pub.X, pub.Y) {
+	// On-curve check uses the modern crypto/ecdh API (the elliptic
+	// package equivalent, IsOnCurve, was deprecated in Go 1.21).
+	// crypto/ecdh.NewPublicKey validates that the encoded point lies on
+	// the curve and rejects the identity point, then we hand the
+	// big.Int coordinates to ecdsa.Verify.
+	byteSize := (curve.Params().BitSize + 7) / 8
+	uncompressed := make([]byte, 1+2*byteSize)
+	uncompressed[0] = 0x04
+	copy(uncompressed[1+byteSize-len(xBytes):], xBytes)
+	copy(uncompressed[1+2*byteSize-len(yBytes):], yBytes)
+	var ecdhCurve ecdh.Curve
+	switch curve {
+	case elliptic.P256():
+		ecdhCurve = ecdh.P256()
+	case elliptic.P384():
+		ecdhCurve = ecdh.P384()
+	default:
+		return fmt.Errorf("%w: unsupported curve", ErrMalformedProof)
+	}
+	if _, err := ecdhCurve.NewPublicKey(uncompressed); err != nil {
 		return fmt.Errorf("%w: jwk point off curve", ErrMalformedProof)
 	}
+	pub := &ecdsa.PublicKey{Curve: curve, X: new(big.Int).SetBytes(xBytes), Y: new(big.Int).SetBytes(yBytes)}
 	// JOSE ECDSA signatures are fixed-length: R||S with R and S each
 	// (curve order byte size) bytes. RFC 7515 section 3.4.
-	bitSize := curve.Params().BitSize
-	byteSize := (bitSize + 7) / 8
 	if len(sig) != 2*byteSize {
 		return fmt.Errorf("%w: signature length mismatch", ErrSignatureInvalid)
 	}

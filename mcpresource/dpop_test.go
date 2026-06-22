@@ -32,8 +32,8 @@ func signDPoPProofES256(t *testing.T, priv *ecdsa.PrivateKey, method, url, acces
 	jwk := map[string]string{
 		"kty": "EC",
 		"crv": "P-256",
-		"x":   base64.RawURLEncoding.EncodeToString(priv.PublicKey.X.Bytes()),
-		"y":   base64.RawURLEncoding.EncodeToString(priv.PublicKey.Y.Bytes()),
+		"x":   base64.RawURLEncoding.EncodeToString(priv.X.Bytes()),
+		"y":   base64.RawURLEncoding.EncodeToString(priv.Y.Bytes()),
 	}
 	header := map[string]any{"typ": "dpop+jwt", "alg": "ES256", "jwk": jwk}
 	athSum := sha256.Sum256([]byte(accessToken))

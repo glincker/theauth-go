@@ -37,8 +37,8 @@ func signedProofES256(t *testing.T, claims dpop.ProofClaims, mutateHeader func(*
 	jwk := &dpop.JWK{
 		Kty: "EC",
 		Crv: "P-256",
-		X:   base64.RawURLEncoding.EncodeToString(priv.PublicKey.X.Bytes()),
-		Y:   base64.RawURLEncoding.EncodeToString(priv.PublicKey.Y.Bytes()),
+		X:   base64.RawURLEncoding.EncodeToString(priv.X.Bytes()),
+		Y:   base64.RawURLEncoding.EncodeToString(priv.Y.Bytes()),
 	}
 	hdr := dpop.ProofHeader{Typ: dpop.ProofTyp, Alg: dpop.AlgES256, JWK: jwk}
 	if mutateHeader != nil {
