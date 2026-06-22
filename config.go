@@ -83,6 +83,15 @@ type AuditConfig struct {
 	// DrainTimeout caps how long Close waits for the writer goroutine to
 	// drain remaining events. Defaults to 5 seconds.
 	DrainTimeout time.Duration
+
+	// Sinks is the optional list of external SIEM streaming destinations.
+	// After each successful canonical storage write the writer goroutine
+	// fans out to every sink in a separate goroutine. A failing sink is
+	// logged at Warn level, counted in Stats.AuditSinkFailed, and
+	// silently dropped: sink failures NEVER block storage writes or delay
+	// the next batch. Built-in implementations are in sub-packages of
+	// audit/sinks/.
+	Sinks []AuditSink
 }
 
 // AdminConfig mounts /admin/v1/* when non-nil on the same chi router passed

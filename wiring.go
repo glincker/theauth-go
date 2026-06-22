@@ -13,11 +13,11 @@ import (
 	"github.com/glincker/theauth-go/crypto"
 	"github.com/glincker/theauth-go/email"
 	"github.com/glincker/theauth-go/internal/agent"
-	"github.com/glincker/theauth-go/internal/models"
 	internalas "github.com/glincker/theauth-go/internal/as"
 	internalaudit "github.com/glincker/theauth-go/internal/audit"
 	"github.com/glincker/theauth-go/internal/delegation"
 	"github.com/glincker/theauth-go/internal/magiclink"
+	"github.com/glincker/theauth-go/internal/models"
 	internaloauth "github.com/glincker/theauth-go/internal/oauth"
 	"github.com/glincker/theauth-go/internal/organizations"
 	"github.com/glincker/theauth-go/internal/password"
@@ -256,6 +256,10 @@ func wireServices(a *TheAuth, cfg Config, providers map[string]Provider, sp saml
 	// Wire audit first so subsequent constructors that take an audit.Emitter
 	// receive the live writer.
 	if cfg.Audit != nil {
+		internalSinks := make([]internalaudit.Sink, len(cfg.Audit.Sinks))
+		for i, s := range cfg.Audit.Sinks {
+			internalSinks[i] = auditSinkAdapter{s}
+		}
 		a.auditSvc = internalaudit.NewService(cfg.Storage, internalaudit.Config{
 			BufferSize:      cfg.Audit.BufferSize,
 			BatchSize:       cfg.Audit.BatchSize,
@@ -263,6 +267,7 @@ func wireServices(a *TheAuth, cfg Config, providers map[string]Provider, sp saml
 			CustomRedactor:  internalaudit.Redactor(cfg.Audit.Redactor),
 			DefaultRedactor: internalaudit.Redactor(DefaultRedactor),
 			DrainTimeout:    cfg.Audit.DrainTimeout,
+			Sinks:           internalSinks,
 		})
 		a.auditSvc.SetHooks(a.hooks)
 	}
@@ -363,6 +368,19 @@ func wireServices(a *TheAuth, cfg Config, providers map[string]Provider, sp saml
 	}
 	return nil
 }
+
+// auditSinkAdapter bridges the public AuditSink interface (which uses the
+// root-package type alias AuditEvent = models.AuditEvent) to the
+// internalaudit.Sink interface (which names models.AuditEvent directly).
+// Because AuditEvent is a type alias, the slice types are identical at
+// compile time; the adapter is purely a nominal bridge.
+type auditSinkAdapter struct{ inner AuditSink }
+
+func (a auditSinkAdapter) Stream(ctx context.Context, batch []models.AuditEvent) error {
+	return a.inner.Stream(ctx, batch)
+}
+
+func (a auditSinkAdapter) Name() string { return a.inner.Name() }
 
 // oauthSessionAdapter adapts *session.Service to the internaloauth.SessionIssuer
 // interface without creating an import cycle. session.Service.Issue has the

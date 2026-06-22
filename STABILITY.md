@@ -32,6 +32,32 @@ covered by the same SemVer guarantees from this point forward.
   zero-dependency Go module: a consumer pulling this package does NOT
   transitively pull theauth core or the storage adapters).
 
+## Stable packages (v2.3 additions)
+
+The v2.0 surface above is unchanged. v2.3 adds the following packages for
+SIEM audit log streaming, covered by the same SemVer guarantees from this
+point forward.
+
+- `github.com/glincker/theauth-go/audit/sinks/splunkhec`: Splunk HTTP Event
+  Collector sink. No new deps; importable as part of the root module.
+- `github.com/glincker/theauth-go/audit/sinks/webhook`: generic CloudEvents
+  1.0 POST sink with HMAC-SHA256 signing. No new deps; importable as part of
+  the root module.
+- `github.com/glincker/theauth-go/audit/sinks/otlp`: OTLP/HTTP logs sink.
+  Separately importable as its own Go module; adds
+  `go.opentelemetry.io/proto/otlp` and `google.golang.org/protobuf` to that
+  sub-module only. The root `theauth-go` module gains zero new dependencies.
+
+### Root package additions (v2.3, additive only)
+
+- `AuditSink` interface: streaming contract for external SIEM destinations.
+  Implementations must be best-effort; a failing `Stream` call must never
+  block the canonical storage write.
+- `AuditConfig.Sinks []AuditSink`: optional list of sinks; fan-out happens
+  after each successful `InsertAuditEvents` call.
+- `Stats.AuditSinkFailed uint64`: monotonically non-decreasing counter
+  incremented once per failing sink per batch. Existing fields are unchanged.
+
 ## Stable surface
 
 ### Root package: `github.com/glincker/theauth-go`
