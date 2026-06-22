@@ -367,6 +367,13 @@ func (s *Service) changeAgentStatus(ctx context.Context, agentID models.ULID, st
 	if err := s.storage.UpdateAgentStatus(ctx, agentID, status, now); err != nil {
 		return fmt.Errorf("update agent status: %w", err)
 	}
+	// Cache invalidation contract (clientauthcache): a suspended or revoked
+	// agent must not authenticate via a cached Argon2-verified snapshot from
+	// the last 5 minutes. Drop the entry so the next /oauth/token call sees
+	// the fresh status (or any future re-activation, in the suspend case).
+	if status != models.AgentStatusActive {
+		s.invalidate(cur.ClientID)
+	}
 	meta := map[string]any{
 		"agent_id": agentID.String(),
 		"from":     cur.Status,

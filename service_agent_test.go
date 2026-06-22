@@ -125,6 +125,44 @@ func TestClientCredentialsDeniedWhenAgentSuspended(t *testing.T) {
 	}
 }
 
+// TestSuspendAgentBustsClientAuthCache asserts that suspending an agent
+// invalidates the Argon2-verified entry in clientauthcache. Regression
+// guard for security re-audit N1: without the invalidate call, a revoked
+// agent could authenticate for up to the cache TTL (5 minutes) by hitting
+// a previously verified entry.
+func TestSuspendAgentBustsClientAuthCache(t *testing.T) {
+	a, store := newAgentASInstance(t)
+	ctx := context.Background()
+	user := theauth.User{ID: ulid.New(), Email: "owner@example.com"}
+	_, _ = store.CreateUser(ctx, user)
+	uid := user.ID
+	_, secret, err := a.CreateAgent(ctx, theauth.CreateAgentInput{
+		Owner: theauth.AgentOwner{UserID: &uid},
+		Name:  "demo",
+		Scope: []string{"files.read"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	req := theauth.TokenRequest{
+		GrantType:    theauth.GrantTypeClientCredentials,
+		ClientID:     secret.ClientID,
+		ClientSecret: secret.Secret,
+		Resource:     "https://files.example.com/mcp",
+		Scope:        []string{"files.read"},
+	}
+	if _, err := a.ClientCredentialsToken(ctx, req); err != nil {
+		t.Fatalf("priming auth call failed: %v", err)
+	}
+	ag, _ := a.ListAgentsByOwner(ctx, theauth.AgentOwner{UserID: &uid})
+	if err := a.SuspendAgent(ctx, ag[0].ID, "audit"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := a.ClientCredentialsToken(ctx, req); !errors.Is(err, theauth.ErrAgentInactive) {
+		t.Fatalf("post-suspend call must fail with ErrAgentInactive (cache bust regression), got %v", err)
+	}
+}
+
 func TestRotateAgentSecretRevokesPriorCredential(t *testing.T) {
 	a, store := newAgentASInstance(t)
 	ctx := context.Background()
