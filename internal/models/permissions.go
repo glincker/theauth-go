@@ -27,4 +27,12 @@ const (
 	// organization's "owner" and "admin" default roles.
 	PermissionAgentsAdmin      = "agents:admin"
 	PermissionDelegationsAdmin = "delegations:admin"
+
+	// v2.3 identity linking additions.
+	// account:link allows the caller to link or unlink OAuth providers
+	// and password credentials to their own account.
+	PermissionAccountLink = "account:link"
+	// account:merge allows the caller to initiate a destructive merge of
+	// a secondary user record into their own (primary) account.
+	PermissionAccountMerge = "account:merge"
 )

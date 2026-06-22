@@ -54,6 +54,38 @@ type Storage interface {
 	// pair. Returns ErrStorageNotFound when no row exists.
 	OAuthAccountByProviderUserID(ctx context.Context, provider, providerUserID string) (*OAuthAccount, error)
 
+	// OAuthAccountsByUserID returns all OAuth accounts linked to userID.
+	// Returns an empty slice (not an error) when none exist.
+	OAuthAccountsByUserID(ctx context.Context, userID ULID) ([]OAuthAccount, error)
+
+	// MoveOAuthAccount reassigns the OAuth account row identified by
+	// (provider, providerUserID) to newUserID. Returns ErrStorageNotFound
+	// when no matching row exists.
+	MoveOAuthAccount(ctx context.Context, provider, providerUserID string, newUserID ULID) error
+
+	// DeleteOAuthAccountByProvider removes a single oauth_accounts row for
+	// (userID, provider). Returns ErrStorageNotFound when no row exists.
+	DeleteOAuthAccountByProvider(ctx context.Context, userID ULID, provider string) error
+
+	// UserPasswordHashByID returns the stored Argon2id PHC string for the
+	// user, or "" when the user has no password set.
+	UserPasswordHashByID(ctx context.Context, userID ULID) (string, error)
+
+	// MovePasswordHash copies the Argon2id hash from secondaryID to
+	// primaryID (overwriting any hash primaryID already has) and then
+	// clears secondaryID's hash. A no-op if secondaryID has no hash.
+	MovePasswordHash(ctx context.Context, primaryID, secondaryID ULID) error
+
+	// MoveWebAuthnCredentials reassigns every WebAuthn credential row owned
+	// by secondaryID to primaryID.
+	MoveWebAuthnCredentials(ctx context.Context, primaryID, secondaryID ULID) error
+
+	// MoveTOTPSecret reassigns the TOTP secret row of secondaryID to
+	// primaryID. If primaryID already has a confirmed secret the secondary
+	// secret is dropped (not overwritten) to preserve the active primary
+	// factor. A no-op if secondaryID has no TOTP secret.
+	MoveTOTPSecret(ctx context.Context, primaryID, secondaryID ULID) error
+
 	// Sessions: v0.5 step-up additions
 	// CreateSessionWithAuthLevel mints a session whose AuthLevel column is
 	// set to the supplied value (typically AuthLevelPending2FA). Mirrors

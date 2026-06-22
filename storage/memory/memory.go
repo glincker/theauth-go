@@ -251,6 +251,102 @@ func (s *Store) OAuthAccountByProviderUserID(_ context.Context, provider, provid
 	return nil, storage.ErrNotFound
 }
 
+// OAuthAccountsByUserID returns every OAuth account row linked to userID.
+func (s *Store) OAuthAccountsByUserID(_ context.Context, userID theauth.ULID) ([]theauth.OAuthAccount, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	var out []theauth.OAuthAccount
+	for _, a := range s.oauthAccounts {
+		if a.UserID == userID {
+			out = append(out, a)
+		}
+	}
+	return out, nil
+}
+
+// MoveOAuthAccount reassigns a row identified by (provider, providerUserID)
+// to newUserID.
+func (s *Store) MoveOAuthAccount(_ context.Context, provider, providerUserID string, newUserID theauth.ULID) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for id, a := range s.oauthAccounts {
+		if a.Provider == provider && a.ProviderUserID == providerUserID {
+			a.UserID = newUserID
+			a.UpdatedAt = time.Now()
+			s.oauthAccounts[id] = a
+			return nil
+		}
+	}
+	return storage.ErrNotFound
+}
+
+// DeleteOAuthAccountByProvider removes the row for (userID, provider).
+func (s *Store) DeleteOAuthAccountByProvider(_ context.Context, userID theauth.ULID, provider string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for id, a := range s.oauthAccounts {
+		if a.UserID == userID && a.Provider == provider {
+			delete(s.oauthAccounts, id)
+			return nil
+		}
+	}
+	return storage.ErrNotFound
+}
+
+// UserPasswordHashByID returns the stored Argon2id PHC string, or "" when
+// the user has no password set.
+func (s *Store) UserPasswordHashByID(_ context.Context, userID theauth.ULID) (string, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.passwordHashes[userID], nil
+}
+
+// MovePasswordHash copies the Argon2id hash from secondaryID to primaryID
+// (overwriting any existing primary hash) then clears secondaryID's hash.
+func (s *Store) MovePasswordHash(_ context.Context, primaryID, secondaryID theauth.ULID) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	hash, ok := s.passwordHashes[secondaryID]
+	if !ok || hash == "" {
+		return nil // no-op
+	}
+	s.passwordHashes[primaryID] = hash
+	delete(s.passwordHashes, secondaryID)
+	return nil
+}
+
+// MoveWebAuthnCredentials reassigns every WebAuthn credential from
+// secondaryID to primaryID.
+func (s *Store) MoveWebAuthnCredentials(_ context.Context, primaryID, secondaryID theauth.ULID) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for id, cred := range s.webauthnCreds {
+		if cred.UserID == secondaryID {
+			cred.UserID = primaryID
+			s.webauthnCreds[id] = cred
+		}
+	}
+	return nil
+}
+
+// MoveTOTPSecret reassigns the TOTP secret from secondaryID to primaryID.
+// If primaryID already has a confirmed TOTP secret, the secondary secret is
+// dropped to avoid clobbering an active factor.
+func (s *Store) MoveTOTPSecret(_ context.Context, primaryID, secondaryID theauth.ULID) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	sec, ok := s.totpSecrets[secondaryID]
+	if !ok {
+		return nil // no-op
+	}
+	if _, hasPrimary := s.totpSecrets[primaryID]; !hasPrimary {
+		sec.UserID = primaryID
+		s.totpSecrets[primaryID] = sec
+	}
+	delete(s.totpSecrets, secondaryID)
+	return nil
+}
+
 // ---------- Sessions (v0.5 step-up) ----------
 
 // CreateSessionWithAuthLevel is identical to CreateSession but honors the

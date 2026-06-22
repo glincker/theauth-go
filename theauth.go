@@ -10,6 +10,7 @@ import (
 	internalas "github.com/glincker/theauth-go/internal/as"
 	internalaudit "github.com/glincker/theauth-go/internal/audit"
 	"github.com/glincker/theauth-go/internal/delegation"
+	"github.com/glincker/theauth-go/internal/identitylink"
 	"github.com/glincker/theauth-go/internal/magiclink"
 	internaloauth "github.com/glincker/theauth-go/internal/oauth"
 	"github.com/glincker/theauth-go/internal/organizations"
@@ -271,6 +272,11 @@ type TheAuth struct {
 	webauthnSvc *internalwebauthn.Service
 	samlSvc     *internalsaml.Service
 	auditSvc    *internalaudit.Service
+	// v2.3 identity-linking service. Non-nil whenever at least one OAuth
+	// provider or password auth is configured (which covers essentially all
+	// deployments). Gated at account handler mount time so non-AccountUX
+	// consumers are unaffected.
+	identityLinkSvc *identitylink.Service
 }
 
 // New validates the Config, applies defaults, and returns a ready TheAuth.

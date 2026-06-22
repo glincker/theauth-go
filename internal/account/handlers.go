@@ -47,16 +47,31 @@ type DelegationService interface {
 // context (every endpoint here runs through RequireAuth).
 type UserFromCtx func(r *http.Request) (*models.User, bool)
 
-// Handler owns the six /account/* endpoints.
+// Handler owns the /account/* endpoints.
 type Handler struct {
 	agents      AgentService
 	delegations DelegationService
 	userFromCtx UserFromCtx
+	// v2.3 identity-linking fields. Both are optional; routes are mounted
+	// only when identityLink is non-nil.
+	identityLink       IdentityLinkService
+	oauthLinkInitiator OAuthLinkInitiator
+	sessionToken       SessionTokenFromRequest
 }
 
-// New constructs a Handler.
+// New constructs a Handler with agent + delegation services.
 func New(agents AgentService, delegations DelegationService, userFromCtx UserFromCtx) *Handler {
 	return &Handler{agents: agents, delegations: delegations, userFromCtx: userFromCtx}
+}
+
+// WithIdentityLink attaches the identity-linking service to the handler.
+// sessToken is a function that extracts the raw session token from a cookie;
+// oauthInit is optional and enables the /oauth and /oauth/callback routes.
+func (h *Handler) WithIdentityLink(svc IdentityLinkService, sessToken SessionTokenFromRequest, oauthInit OAuthLinkInitiator) *Handler {
+	h.identityLink = svc
+	h.sessionToken = sessToken
+	h.oauthLinkInitiator = oauthInit
+	return h
 }
 
 // Mount wires /account/* under r. requireAuth is supplied by root
@@ -71,6 +86,9 @@ func (h *Handler) Mount(r chi.Router, requireAuth func(http.Handler) http.Handle
 		r.Post("/delegations", h.createDelegation)
 		r.Post("/delegations/{grantID}/revoke", h.revokeDelegation)
 	})
+	// Identity-linking routes (v2.3). Mounted outside /account so the path
+	// prefix is /account/identities as specified.
+	h.mountIdentityLink(r, requireAuth)
 }
 
 // ---------- agents ----------

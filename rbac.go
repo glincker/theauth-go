@@ -37,6 +37,12 @@ const (
 	// organization's "owner" and "admin" default roles.
 	PermissionAgentsAdmin      = models.PermissionAgentsAdmin
 	PermissionDelegationsAdmin = models.PermissionDelegationsAdmin
+
+	// v2.3 identity-linking permissions. Both are user-scoped (caller can
+	// only link/merge their own account); admin override paths go through
+	// the /admin/v1 surface.
+	PermissionAccountLink  = models.PermissionAccountLink
+	PermissionAccountMerge = models.PermissionAccountMerge
 )
 
 // SeededPermissions returns the v1.0 canonical permission catalog. The
