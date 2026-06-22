@@ -2,6 +2,11 @@ go 1.25.0
 
 use (
 	.
-	./mcpresource
+	./examples/chi-app
+	./examples/echo-app
+	./examples/gin-app
 	./examples/mcp-server
+	./examples/oauth-multi-provider
+	./examples/stdlib-app
+	./mcpresource
 )
