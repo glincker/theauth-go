@@ -20,7 +20,3 @@ func sha256Hash(b []byte) []byte {
 	return h[:]
 }
 
-// ptr returns a pointer to v.
-func ptr[T any](v T) *T {
-	return &v
-}
