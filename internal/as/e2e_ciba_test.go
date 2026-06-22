@@ -61,7 +61,7 @@ func registerCIBAClient(t *testing.T, srv *httptest.Server) theauth.RegisteredCl
 	if err != nil {
 		t.Fatalf("register: %v", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusCreated {
 		t.Fatalf("register: status %d", resp.StatusCode)
 	}
@@ -116,7 +116,7 @@ func pollCIBAToken(t *testing.T, srv *httptest.Server, client theauth.Registered
 // oauthErrCode decodes the "error" field from an OAuth JSON error body.
 func oauthErrCode(t *testing.T, resp *http.Response) string {
 	t.Helper()
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	var body struct {
 		Error string `json:"error"`
 	}
@@ -145,7 +145,7 @@ func TestCIBAPollHappyPath(t *testing.T) {
 		"login_hint":      "alice@example.com",
 		"binding_message": "Approve CIBA test",
 	})
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("bc-authorize: status %d", resp.StatusCode)
 	}
@@ -195,7 +195,7 @@ func TestCIBAPollHappyPath(t *testing.T) {
 
 	// Next poll: should return tokens.
 	pollResp2 := pollCIBAToken(t, srv, client, bcResp.AuthReqID)
-	defer pollResp2.Body.Close()
+	defer func() { _ = pollResp2.Body.Close() }()
 	if pollResp2.StatusCode != http.StatusOK {
 		t.Fatalf("approved poll: status %d", pollResp2.StatusCode)
 	}
@@ -224,7 +224,7 @@ func TestCIBASlowDown(t *testing.T) {
 		"scope":      "files.read",
 		"login_hint": "bob@example.com",
 	})
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("bc-authorize: status %d", resp.StatusCode)
 	}
@@ -262,7 +262,7 @@ func TestCIBAAccessDenied(t *testing.T) {
 		"scope":      "files.read",
 		"login_hint": "carol@example.com",
 	})
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("bc-authorize: status %d", resp.StatusCode)
 	}
@@ -314,7 +314,7 @@ func TestCIBAExpiredToken(t *testing.T) {
 		"scope":      "files.read",
 		"login_hint": "dave@example.com",
 	})
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("bc-authorize: status %d", resp.StatusCode)
 	}
@@ -390,7 +390,7 @@ func TestCIBABindingMessageInNotification(t *testing.T) {
 		"login_hint":      "alice@example.com",
 		"binding_message": wantMsg,
 	})
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("bc-authorize: status %d", resp.StatusCode)
 	}
@@ -439,7 +439,7 @@ func TestCIBAStorageMissing(t *testing.T) {
 	if err != nil {
 		t.Fatalf("bc-authorize: %v", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusNotFound {
 		t.Fatalf("bc-authorize: status %d (want 404)", resp.StatusCode)
 	}
@@ -449,7 +449,7 @@ func TestCIBAStorageMissing(t *testing.T) {
 	if err != nil {
 		t.Fatalf("metadata: %v", err)
 	}
-	defer metaResp.Body.Close()
+	defer func() { _ = metaResp.Body.Close() }()
 	var meta map[string]interface{}
 	if err := json.NewDecoder(metaResp.Body).Decode(&meta); err != nil {
 		t.Fatalf("decode metadata: %v", err)
