@@ -1,4 +1,4 @@
-package theauth_test
+package rbac_test
 
 import (
 	"context"

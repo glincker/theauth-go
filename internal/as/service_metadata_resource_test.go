@@ -1,4 +1,4 @@
-package theauth_test
+package as_test
 
 import (
 	"crypto/rand"

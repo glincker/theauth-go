@@ -1,4 +1,4 @@
-package theauth_test
+package webauthn_test
 
 import (
 	"bytes"
