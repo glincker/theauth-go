@@ -1,6 +1,7 @@
 package theauth
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"strings"
@@ -99,4 +100,25 @@ func redactValue(v any) any {
 func HashEmailForAudit(email string) string {
 	sum := sha256.Sum256([]byte(strings.ToLower(strings.TrimSpace(email))))
 	return hex.EncodeToString(sum[:])
+}
+
+// AuditSink streams audit events to an external SIEM or observability
+// system. Implementations must be best-effort: a failed Stream call must
+// never block writes to the canonical storage layer. Failures increment
+// Stats.AuditSinkFailed.
+//
+// Built-in implementations live under audit/sinks/:
+//
+//   - audit/sinks/otlp: OTLP/HTTP logs exporter
+//   - audit/sinks/splunkhec: Splunk HTTP Event Collector
+//   - audit/sinks/webhook: generic CloudEvents 1.0 POST
+type AuditSink interface {
+	// Stream sends a batch of audit events to the external system.
+	// Implementations should apply a reasonable timeout internally.
+	// A non-nil error is logged and counted in Stats.AuditSinkFailed;
+	// it does not affect storage writes.
+	Stream(ctx context.Context, batch []AuditEvent) error
+
+	// Name identifies the sink for logging and metrics labels.
+	Name() string
 }

@@ -52,6 +52,17 @@ type Storage interface {
 // secret-flavored keys.
 type Redactor func(metadata map[string]any) map[string]any
 
+// Sink mirrors the root AuditSink interface. Declared here so
+// internal/audit can accept sinks without importing the root package
+// (which would recreate the constructor cycle). The root AuditSink and
+// internal Sink have identical method sets; the root wiring converts
+// []theauth.AuditSink into []Sink via a type assertion that always
+// succeeds because theauth.AuditSink is a strict superset.
+type Sink interface {
+	Stream(ctx context.Context, batch []models.AuditEvent) error
+	Name() string
+}
+
 // Config bundles the runtime knobs for the writer. All fields have safe
 // defaults; the zero value Config{} is valid.
 type Config struct {
@@ -78,6 +89,12 @@ type Config struct {
 	// DrainTimeout caps how long Stop waits for the writer goroutine to
 	// drain remaining events. Defaults to 5 seconds.
 	DrainTimeout time.Duration
+
+	// Sinks is the list of external streaming sinks. After each successful
+	// InsertAuditEvents call the writer fans out to each sink in a
+	// separate goroutine. Failures are logged and counted in sinkFailed;
+	// they never block the canonical storage write or the next batch.
+	Sinks []Sink
 }
 
 // AuditMetadata is the optional bundle a caller may attach to a context to
@@ -135,10 +152,11 @@ type Service struct {
 
 	// Counters mirror the v1.0 root Stats fields. Snapshotted via the
 	// Counters method; the root Stats() forwarder reads them.
-	emitted atomic.Uint64
-	written atomic.Uint64
-	dropped atomic.Uint64
-	failed  atomic.Uint64
+	emitted    atomic.Uint64
+	written    atomic.Uint64
+	dropped    atomic.Uint64
+	failed     atomic.Uint64
+	sinkFailed atomic.Uint64
 
 	// hooks routes audit drops + queue depth into the consumer-supplied
 	// metrics adapter. Installed via SetHooks; defaults to a no-op bundle
@@ -333,19 +351,21 @@ func (s *Service) Query(ctx context.Context, q models.AuditQuery) ([]models.Audi
 // Counters snapshots the four runtime counters. The root Stats() forwarder
 // projects this into the public Stats struct.
 type Counters struct {
-	Emitted uint64
-	Written uint64
-	Dropped uint64
-	Failed  uint64
+	Emitted    uint64
+	Written    uint64
+	Dropped    uint64
+	Failed     uint64
+	SinkFailed uint64
 }
 
 // Counters returns the latest counter snapshot.
 func (s *Service) Counters() Counters {
 	return Counters{
-		Emitted: s.emitted.Load(),
-		Written: s.written.Load(),
-		Dropped: s.dropped.Load(),
-		Failed:  s.failed.Load(),
+		Emitted:    s.emitted.Load(),
+		Written:    s.written.Load(),
+		Dropped:    s.dropped.Load(),
+		Failed:     s.failed.Load(),
+		SinkFailed: s.sinkFailed.Load(),
 	}
 }
 
@@ -380,6 +400,28 @@ func (s *Service) writerLoop() {
 			slog.Error("theauth: audit insert failed", "count", len(buf), "err", err.Error())
 		} else {
 			s.written.Add(uint64(len(buf)))
+			// Fan out to each registered sink. Each sink runs in its own
+			// goroutine so a slow or failing sink never delays the writer
+			// loop. Failures are best-effort: logged, counted, discarded.
+			if len(s.cfg.Sinks) > 0 {
+				snapshot := make([]models.AuditEvent, len(buf))
+				copy(snapshot, buf)
+				for _, sink := range s.cfg.Sinks {
+					sink := sink // capture per-iteration
+					go func() {
+						sinkCtx, sinkCancel := context.WithTimeout(context.Background(), 10*time.Second)
+						defer sinkCancel()
+						if serr := sink.Stream(sinkCtx, snapshot); serr != nil {
+							s.sinkFailed.Add(1)
+							slog.Warn("theauth: audit sink failed",
+								"sink", sink.Name(),
+								"count", len(snapshot),
+								"err", serr.Error(),
+							)
+						}
+					}()
+				}
+			}
 		}
 		buf = buf[:0]
 	}

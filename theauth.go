@@ -375,9 +375,10 @@ func (a *TheAuth) Stats() Stats {
 	}
 	c := a.auditSvc.Counters()
 	return Stats{
-		AuditEmitted: c.Emitted,
-		AuditWritten: c.Written,
-		AuditDropped: c.Dropped,
-		AuditFailed:  c.Failed,
+		AuditEmitted:    c.Emitted,
+		AuditWritten:    c.Written,
+		AuditDropped:    c.Dropped,
+		AuditFailed:     c.Failed,
+		AuditSinkFailed: c.SinkFailed,
 	}
 }
