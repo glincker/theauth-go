@@ -63,7 +63,7 @@ func ApplyBundle(ctx context.Context, st Storage, b *Bundle, opts ApplyOptions) 
 		opts.Out = io.Discard
 	}
 	log := func(format string, args ...interface{}) {
-		fmt.Fprintf(opts.Out, format+"\n", args...)
+		_, _ = fmt.Fprintf(opts.Out, format+"\n", args...)
 	}
 
 	vr := ValidateBundle(b)

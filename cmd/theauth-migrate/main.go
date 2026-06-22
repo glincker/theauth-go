@@ -27,23 +27,23 @@ func main() {
 	switch sub {
 	case "cognito":
 		if err := runCognito(os.Args[2:]); err != nil {
-			fmt.Fprintf(os.Stderr, "cognito: %v\n", err)
+			_, _ = fmt.Fprintf(os.Stderr, "cognito: %v\n", err)
 			os.Exit(1)
 		}
 	case "auth0":
 		if err := runAuth0(os.Args[2:]); err != nil {
-			fmt.Fprintf(os.Stderr, "auth0: %v\n", err)
+			_, _ = fmt.Fprintf(os.Stderr, "auth0: %v\n", err)
 			os.Exit(1)
 		}
 	case "validate":
 		if err := runValidate(os.Args[2:]); err != nil {
-			fmt.Fprintf(os.Stderr, "validate: %v\n", err)
+			_, _ = fmt.Fprintf(os.Stderr, "validate: %v\n", err)
 			os.Exit(1)
 		}
 	case "-h", "--help", "help":
 		printUsage()
 	default:
-		fmt.Fprintf(os.Stderr, "unknown sub-command %q\n\n", sub)
+		_, _ = fmt.Fprintf(os.Stderr, "unknown sub-command %q\n\n", sub)
 		printUsage()
 		os.Exit(1)
 	}
@@ -123,28 +123,13 @@ func writeJSON(path string, v interface{}) error {
 	}
 	if path == "" {
 		_, err = os.Stdout.Write(data)
-		fmt.Fprintln(os.Stdout)
+		if err != nil {
+			return err
+		}
+		_, err = fmt.Fprintln(os.Stdout)
 		return err
 	}
 	return os.WriteFile(path, append(data, '\n'), 0o600)
-}
-
-// loadBundle reads and unmarshals a bundle JSON file from path.
-func loadBundle(path string) (*bundleJSON, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return nil, fmt.Errorf("read %q: %w", path, err)
-	}
-	var b bundleJSON
-	if err := json.Unmarshal(data, &b); err != nil {
-		return nil, fmt.Errorf("parse %q: %w", path, err)
-	}
-	return &b, nil
-}
-
-// bundleJSON is the top-level schema just used to peek at schema_version.
-type bundleJSON struct {
-	SchemaVersion string `json:"schema_version"`
 }
 
 // parseApplyFlags is a helper that adds the --input/--apply/--storage/--dsn/

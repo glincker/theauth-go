@@ -19,21 +19,16 @@ func openStorage(backend, dsn string) (internal.Storage, error) {
 			return nil, fmt.Errorf("--dsn is required for --storage postgres")
 		}
 		// Postgres support requires importing storage/postgres, which pulls in
-		// pgx. That import is deliberate: the migrate CLI is a standalone
-		// binary and the extra dependency is acceptable.
-		//
-		// For now, return an error directing the operator to use
-		// --storage memory for smoke-testing and then run the apply step
-		// against a real database via a migration-specific build tag.
-		//
-		// TODO: import storage/postgres once the CLI has a build tag that
-		// opts in to the pgx dependency. Track in:
-		// https://github.com/glincker/theauth-go/issues/TODO
+		// pgx. The CLI binary does not currently link pgx to keep the binary
+		// lightweight and avoid the C dependency for operators who only need
+		// the export step. The apply-to-postgres path is available by calling
+		// internal.ApplyBundle directly from your own Go code with a
+		// *postgres.Store, or by using a future build tag.
 		return nil, fmt.Errorf(
 			"postgres storage is not yet linked in this build; " +
-				"run the export step first (--export), inspect the bundle, " +
-				"then import into postgres using your preferred migration script. " +
-				"For integration testing use --storage memory.",
+				"run the export step (--export) first, inspect the bundle, " +
+				"then use --storage memory for a dry-run or wire internal.ApplyBundle " +
+				"directly with a postgres.Store",
 		)
 	default:
 		return nil, fmt.Errorf("unknown storage backend %q; choose memory or postgres", backend)

@@ -38,7 +38,7 @@ func runAuth0(args []string) error {
 	if err != nil {
 		return fmt.Errorf("open %q: %w", *input, err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	var bundle internal.Bundle
 	if err := decodeBundle(f, &bundle); err != nil {
@@ -55,9 +55,9 @@ func runAuth0(args []string) error {
 		Out:    os.Stdout,
 	})
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "apply errors:\n")
+		_, _ = fmt.Fprintf(os.Stderr, "apply errors:\n")
 		for _, e := range result.Errors {
-			fmt.Fprintf(os.Stderr, "  %s\n", e)
+			_, _ = fmt.Fprintf(os.Stderr, "  %s\n", e)
 		}
 		return err
 	}
@@ -69,14 +69,14 @@ func auth0Export(exportPath, outputPath string, forceReset bool) error {
 	if err != nil {
 		return fmt.Errorf("open %q: %w", exportPath, err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	bundle, err := auth0pkg.ReadJSON(f, forceReset)
 	if err != nil {
 		return fmt.Errorf("read auth0 export: %w", err)
 	}
 
-	fmt.Fprintf(os.Stderr, "auth0: read %d users, %d oauth accounts, %d passwords, %d MFA records\n",
+	_, _ = fmt.Fprintf(os.Stderr, "auth0: read %d users, %d oauth accounts, %d passwords, %d MFA records\n",
 		len(bundle.Users), len(bundle.OAuthAccounts), len(bundle.Passwords), len(bundle.MFAEnrolled))
 	return writeJSON(outputPath, bundle)
 }

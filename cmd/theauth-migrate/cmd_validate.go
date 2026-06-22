@@ -31,16 +31,16 @@ func runValidate(args []string) error {
 
 	result := internal.ValidateBundle(&bundle)
 	for _, w := range result.Warnings {
-		fmt.Fprintf(os.Stderr, "WARN: %s\n", w)
+		_, _ = fmt.Fprintf(os.Stderr, "WARN: %s\n", w)
 	}
 	if !result.OK() {
 		for _, e := range result.Errors {
-			fmt.Fprintf(os.Stderr, "ERROR: %s\n", e)
+			_, _ = fmt.Fprintf(os.Stderr, "ERROR: %s\n", e)
 		}
 		return fmt.Errorf("validation failed with %d error(s)", len(result.Errors))
 	}
 
-	fmt.Fprintf(os.Stdout, "OK: bundle is valid (%d users, %d oauth, %d passwords, %d mfa, %d sessions)\n",
+	_, _ = fmt.Fprintf(os.Stdout, "OK: bundle is valid (%d users, %d oauth, %d passwords, %d mfa, %d sessions)\n",
 		len(bundle.Users), len(bundle.OAuthAccounts), len(bundle.Passwords),
 		len(bundle.MFAEnrolled), len(bundle.Sessions))
 	return nil

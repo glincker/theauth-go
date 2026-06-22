@@ -39,7 +39,7 @@ func runCognito(args []string) error {
 	if err != nil {
 		return fmt.Errorf("open %q: %w", *input, err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	var bundle internal.Bundle
 	if err := decodeBundle(f, &bundle); err != nil {
@@ -56,9 +56,9 @@ func runCognito(args []string) error {
 		Out:    os.Stdout,
 	})
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "apply errors:\n")
+		_, _ = fmt.Fprintf(os.Stderr, "apply errors:\n")
 		for _, e := range result.Errors {
-			fmt.Fprintf(os.Stderr, "  %s\n", e)
+			_, _ = fmt.Fprintf(os.Stderr, "  %s\n", e)
 		}
 		return err
 	}
@@ -70,7 +70,7 @@ func cognitoExport(exportPath, format, outputPath string) error {
 	if err != nil {
 		return fmt.Errorf("open %q: %w", exportPath, err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	// Auto-detect format from extension when not provided.
 	if format == "" {
@@ -95,7 +95,7 @@ func cognitoExport(exportPath, format, outputPath string) error {
 		return fmt.Errorf("read cognito export: %w", err)
 	}
 
-	fmt.Fprintf(os.Stderr, "cognito: read %d users, %d MFA records\n",
+	_, _ = fmt.Fprintf(os.Stderr, "cognito: read %d users, %d MFA records\n",
 		len(bundle.Users), len(bundle.MFAEnrolled))
 	return writeJSON(outputPath, bundle)
 }
