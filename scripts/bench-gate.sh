@@ -24,6 +24,9 @@
 #                   taskset; silently skipped if taskset is unavailable).
 #   BENCH_TIME      benchtime flag value (default: 2s).
 #   BENCH_COUNT     -count flag value (default: 10).
+#   BENCH_ROOT      Override the repository root directory. Used by CI when
+#                   the script is invoked from /tmp during a base-commit
+#                   checkout. Defaults to the parent of the script's dir.
 #
 # Benchmark names are read from benchgate/curated.txt. Lines beginning with
 # '#' and blank lines are ignored. A line of the form:
@@ -34,8 +37,22 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
-CURATED="${REPO_ROOT}/benchgate/curated.txt"
+
+# BENCH_ROOT overrides where benchgate/curated.txt is found. Used when the
+# script is invoked from /tmp during a base-commit checkout in CI (where
+# scripts/ and benchgate/ do not exist on the base branch). When unset, the
+# curated list is read from the parent of the script's own directory.
+CURATED_ROOT="${BENCH_ROOT:-$(cd "${SCRIPT_DIR}/.." && pwd)}"
+
+# REPO_ROOT is always the actual git repository: the working directory where
+# go test is invoked. It is always the directory containing go.mod, regardless
+# of where the script itself lives.
+REPO_ROOT="$(pwd)"
+# If the script is running from its normal location, REPO_ROOT equals
+# CURATED_ROOT and the working directory is already correct. When invoked
+# from /tmp, the caller is responsible for setting the working directory to the
+# repo checkout (GitHub Actions does this automatically via GITHUB_WORKSPACE).
+CURATED="${CURATED_ROOT}/benchgate/curated.txt"
 THRESHOLD_PCT="${THRESHOLD_PCT:-25}"
 BENCH_TIME="${BENCH_TIME:-2s}"
 BENCH_COUNT="${BENCH_COUNT:-10}"
@@ -139,6 +156,9 @@ if [[ "${BENCH_PIN:-}" == "1" ]]; then
     fi
 fi
 
+# cd to the repo root so relative package paths (./crypto/...) resolve.
+# When invoked from /tmp, the GitHub Actions runner already has its working
+# directory set to GITHUB_WORKSPACE (the repo checkout), so this is a no-op.
 cd "${REPO_ROOT}"
 
 "${pin_prefix[@]+"${pin_prefix[@]}"}" go test \

@@ -52,6 +52,17 @@ jobs:
           path: base-bench.txt
           key: bench-baseline-${{ github.event.pull_request.base.sha || github.event.before }}
 
+      # Save a copy of the gate script and curated list to /tmp before any
+      # git checkout so we can run them on the base commit (which does not
+      # have scripts/ or benchgate/ yet).
+      - name: Stash gate script and curated list for base run
+        if: steps.cache-base.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p /tmp/benchgate
+          cp scripts/bench-gate.sh /tmp/bench-gate.sh
+          cp benchgate/curated.txt /tmp/benchgate/curated.txt
+          chmod +x /tmp/bench-gate.sh
+
       # Run benchmarks on the current (PR) branch first, in parallel with the
       # base run below when the cache is cold.
       - name: Run benchmarks on PR branch
@@ -74,7 +85,13 @@ jobs:
 
       - name: Run benchmarks on base commit
         if: steps.cache-base.outputs.cache-hit != 'true' && env.SKIP_DIFF != 'true'
-        run: ./scripts/bench-gate.sh > base-bench.txt
+        # Use the stashed copy of the script so missing scripts/ on the
+        # base commit is not a problem. BENCH_ROOT points to the curated.txt
+        # on the PR branch (stashed in /tmp alongside the script). Benchmarks
+        # that do not exist on the base commit are silently skipped by go test
+        # (no matching -bench pattern).
+        # BENCH_ROOT=/tmp so the script finds /tmp/benchgate/curated.txt.
+        run: BENCH_ROOT="/tmp" /tmp/bench-gate.sh > base-bench.txt
         env:
           BENCH_TIME: ${{ env.BENCH_TIME }}
           BENCH_COUNT: ${{ env.BENCH_COUNT }}
