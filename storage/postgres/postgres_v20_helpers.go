@@ -33,6 +33,18 @@ func nullableBytes(b []byte) any {
 	return b
 }
 
+// emptyIfNilStrings returns an empty slice when s is nil so pgx encodes an
+// empty text[] rather than SQL NULL. Used at INSERT/UPDATE time for columns
+// declared text[] NOT NULL with a column default of '{}'. A nil Go slice
+// passes through pgx as SQL NULL and violates the NOT NULL constraint even
+// when a column default is present, because explicit NULL overrides defaults.
+func emptyIfNilStrings(s []string) []string {
+	if s == nil {
+		return []string{}
+	}
+	return s
+}
+
 // clientOwnerKindFor derives the owner_kind column value from the owner
 // pointer triplet plus the anonymous flag. Falls back to "anonymous" when
 // no owner is set; bearer-gated DCR clients without an explicit owner land
