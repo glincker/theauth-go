@@ -7,6 +7,12 @@ import (
 	internalas "github.com/glincker/theauth-go/internal/as"
 )
 
+// ErrAuthorizationServerNotConfigured is returned by authorization-server
+// methods when Config.AuthorizationServer was not set at New time.
+// Callers can use errors.Is(err, theauth.ErrAuthorizationServerNotConfigured)
+// to distinguish this condition from other errors.
+var ErrAuthorizationServerNotConfigured = errors.New("theauth: authorization server not configured")
+
 // forwarders_oauth.go consolidates the v2.0 OAuth 2.1 authorization
 // server forwarders (DCR, introspect, revoke, token grants, metadata,
 // authorize) into a single file. PR G (2026-06-21) merged the previous
@@ -31,7 +37,7 @@ type ClientRegistrationRequest = internalas.ClientRegistrationRequest
 // log it. Forwards to as.RegisterClient.
 func (a *TheAuth) RegisterClient(ctx context.Context, req ClientRegistrationRequest, anonymous bool) (RegisteredClient, error) {
 	if a.as == nil {
-		return RegisteredClient{}, errors.New("theauth: authorization server not configured")
+		return RegisteredClient{}, ErrAuthorizationServerNotConfigured
 	}
 	return a.as.RegisterClient(ctx, req, anonymous)
 }
@@ -53,7 +59,7 @@ type IntrospectionResponse = internalas.IntrospectionResponse
 // active=false. Forwards to as.IntrospectToken.
 func (a *TheAuth) IntrospectToken(ctx context.Context, token, clientID, clientSecret, expectedAud string) (IntrospectionResponse, []byte, error) {
 	if a.as == nil {
-		return IntrospectionResponse{}, nil, errors.New("theauth: authorization server not configured")
+		return IntrospectionResponse{}, nil, ErrAuthorizationServerNotConfigured
 	}
 	return a.as.IntrospectToken(ctx, token, clientID, clientSecret, expectedAud)
 }
@@ -66,7 +72,7 @@ func (a *TheAuth) IntrospectToken(ctx context.Context, token, clientID, clientSe
 // bounded by exp. Forwards to as.RevokeToken.
 func (a *TheAuth) RevokeToken(ctx context.Context, token, tokenTypeHint, clientID, clientSecret string) error {
 	if a.as == nil {
-		return errors.New("theauth: authorization server not configured")
+		return ErrAuthorizationServerNotConfigured
 	}
 	return a.as.RevokeToken(ctx, token, tokenTypeHint, clientID, clientSecret)
 }
@@ -140,7 +146,7 @@ type ProtectedResourceMetadata = internalas.ProtectedResourceMetadata
 // as.ASMetadataDoc.
 func (a *TheAuth) ASMetadataDoc() (ASMetadata, error) {
 	if a.as == nil {
-		return ASMetadata{}, errors.New("theauth: authorization server not configured")
+		return ASMetadata{}, ErrAuthorizationServerNotConfigured
 	}
 	return a.as.ASMetadataDoc()
 }
@@ -151,7 +157,7 @@ func (a *TheAuth) ASMetadataDoc() (ASMetadata, error) {
 // as.ProtectedResourceMetadataDoc.
 func (a *TheAuth) ProtectedResourceMetadataDoc(resourceID string) (ProtectedResourceMetadata, error) {
 	if a.as == nil {
-		return ProtectedResourceMetadata{}, errors.New("theauth: authorization server not configured")
+		return ProtectedResourceMetadata{}, ErrAuthorizationServerNotConfigured
 	}
 	return a.as.ProtectedResourceMetadataDoc(resourceID)
 }
@@ -175,7 +181,7 @@ type AuthorizeResult = internalas.AuthorizeResult
 // to as.StartAuthorize.
 func (a *TheAuth) StartAuthorize(ctx context.Context, req AuthorizeRequest, user *User) (AuthorizeResult, error) {
 	if a.as == nil {
-		return AuthorizeResult{}, errors.New("theauth: authorization server not configured")
+		return AuthorizeResult{}, ErrAuthorizationServerNotConfigured
 	}
 	return a.as.StartAuthorize(ctx, req, user)
 }

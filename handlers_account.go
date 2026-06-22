@@ -3,7 +3,7 @@ package theauth
 import (
 	"context"
 
-	accounthandlers "github.com/glincker/theauth-go/internal/account/handlers"
+	accounthandlers "github.com/glincker/theauth-go/internal/account"
 	"github.com/glincker/theauth-go/internal/models"
 	"github.com/go-chi/chi/v5"
 )

@@ -1,12 +1,14 @@
-// Package handlers exposes the /account/* end-user self-service
+// Package account exposes the /account/* end-user self-service
 // endpoints (agents the user owns and delegation grants the user has
 // issued). Extracted from root handlers_account.go in PR F of the
-// 2026-06 architecture reorg.
+// 2026-06 architecture reorg. Collapsed from internal/account/handlers
+// into internal/account in PR H (2026-06-22): the handlers/ subdir
+// was the only child so the extra nesting added no value.
 //
 // Every route is session-gated via the RequireAuth middleware
 // supplied at Mount time; no special permission is required because
 // every action is scoped to the calling user's own records.
-package handlers
+package account
 
 import (
 	"context"
