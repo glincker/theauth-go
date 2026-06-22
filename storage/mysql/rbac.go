@@ -63,7 +63,7 @@ func (s *Store) ListPermissions(ctx context.Context) ([]theauth.Permission, erro
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	var out []theauth.Permission
 	for rows.Next() {
 		var (
@@ -204,7 +204,7 @@ FROM roles WHERE organization_id = ? ORDER BY name ASC`, ulidToBytes(*orgID))
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	var out []theauth.Role
 	for rows.Next() {
 		r, err := scanRole(rows)
@@ -251,7 +251,7 @@ WHERE rp.role_id = ? ORDER BY p.name ASC`, ulidToBytes(roleID))
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	var out []string
 	for rows.Next() {
 		var name string
@@ -315,7 +315,7 @@ WHERE ur.user_id = ? AND r.organization_id = ?`, ulidToBytes(userID), ulidToByte
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	var out []theauth.Role
 	for rows.Next() {
 		r, err := scanRole(rows)
@@ -350,7 +350,7 @@ ORDER BY p.name ASC`, ulidToBytes(userID), ulidToBytes(*orgID))
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	var out []string
 	for rows.Next() {
 		var name string

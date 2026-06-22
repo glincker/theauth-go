@@ -154,7 +154,7 @@ FROM organization_members WHERE organization_id = ? ORDER BY joined_at ASC`,
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	return scanOrgMembers(rows)
 }
 
@@ -169,7 +169,7 @@ WHERE om.user_id = ? ORDER BY o.created_at ASC`,
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	var out []theauth.Organization
 	for rows.Next() {
 		o, err := scanOrg(rows)
