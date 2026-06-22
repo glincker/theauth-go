@@ -116,7 +116,7 @@ func (s *Sink) Stream(ctx context.Context, batch []models.AuditEvent) error {
 	if err != nil {
 		return fmt.Errorf("splunkhec: http: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return fmt.Errorf("splunkhec: unexpected status %d", resp.StatusCode)

@@ -137,7 +137,7 @@ func (s *Sink) send(ctx context.Context, evt models.AuditEvent) error {
 	if err != nil {
 		return fmt.Errorf("webhook: http: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return fmt.Errorf("webhook: unexpected status %d", resp.StatusCode)

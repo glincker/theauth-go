@@ -37,7 +37,7 @@ func TestSplunkHECSinkAuth(t *testing.T) {
 		gotAuth = r.Header.Get("Authorization")
 		gotBody, _ = io.ReadAll(r.Body)
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{"text":"Success","code":0}`))
+		_, _ = w.Write([]byte(`{"text":"Success","code":0}`))
 	}))
 	defer srv.Close()
 
