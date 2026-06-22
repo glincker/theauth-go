@@ -1,0 +1,105 @@
+name: "[Bug] Bug report"
+description: Report a reproducible bug in theauth-go
+title: "[Bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for taking the time to report a bug. Please fill out all required fields so we can triage quickly.
+
+        If you believe you have found a **security vulnerability**, do NOT file a public issue. See [SECURITY.md](https://github.com/glincker/theauth-go/blob/main/SECURITY.md) instead.
+
+  - type: input
+    id: version
+    attributes:
+      label: theauth-go version
+      description: Output of `go list -m github.com/glincker/theauth-go` or the git tag.
+      placeholder: "v2.0.2"
+    validations:
+      required: true
+
+  - type: input
+    id: go_version
+    attributes:
+      label: Go version
+      description: Output of `go version`.
+      placeholder: "go1.25.0 linux/amd64"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: storage
+    attributes:
+      label: Storage backend
+      options:
+        - memory
+        - postgres
+        - mysql
+        - custom
+        - not applicable
+    validations:
+      required: true
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: Reproduction steps
+      description: Numbered steps to reproduce the issue. A minimal Go snippet or `curl` command is ideal.
+      placeholder: |
+        1. Configure theauth.New with ...
+        2. POST /auth/email-password/signin with ...
+        3. See error: ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: What you expected to happen.
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      description: What actually happened. Include error messages, HTTP status codes, or response bodies.
+    validations:
+      required: true
+
+  - type: input
+    id: repro_link
+    attributes:
+      label: Minimal reproduction link
+      description: Link to a public repo, Go Playground snippet, or gist that isolates the issue (optional but strongly encouraged).
+      placeholder: "https://github.com/..."
+    validations:
+      required: false
+
+  - type: textarea
+    id: stack_trace
+    attributes:
+      label: Stack trace or logs
+      description: Paste any relevant stack traces or log output here. Will be rendered as code.
+      render: text
+    validations:
+      required: false
+
+  - type: textarea
+    id: audit_evidence
+    attributes:
+      label: Audit event evidence
+      description: If the bug involves an auth or security flow, paste any relevant audit log entries (redact sensitive fields).
+      render: json
+    validations:
+      required: false
+
+  - type: input
+    id: os
+    attributes:
+      label: OS / platform
+      placeholder: "Ubuntu 22.04 / macOS 15 / linux/arm64"
+    validations:
+      required: false

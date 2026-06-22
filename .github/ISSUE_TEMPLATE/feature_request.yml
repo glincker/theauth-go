@@ -1,0 +1,56 @@
+name: "[Feature] Feature request"
+description: Propose a new capability or improvement for theauth-go
+title: "[Feature] "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for proposing a new feature. Before submitting, please check the [open issues](https://github.com/glincker/theauth-go/issues) and [CHANGELOG.md](https://github.com/glincker/theauth-go/blob/main/CHANGELOG.md) to confirm this has not already been requested or shipped.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem you are solving
+      description: What workflow or use case is blocked or painful today? Be specific.
+      placeholder: "I need to support X because ..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposed_api
+    attributes:
+      label: Proposed API or behavior
+      description: What should the new API look like? A rough Go snippet or HTTP example is ideal.
+      render: go
+      placeholder: |
+        a, _ := theauth.New(theauth.Config{
+            NewFeature: theauth.NewFeatureConfig{...},
+        })
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Other approaches you evaluated and why they did not fit.
+    validations:
+      required: true
+
+  - type: input
+    id: rfc
+    attributes:
+      label: Relevant RFC or spec
+      description: If this feature is based on a standard, link it here (optional).
+      placeholder: "https://www.rfc-editor.org/rfc/rfcXXXX"
+    validations:
+      required: false
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: Links to existing libraries, blog posts, or prior art that implement something similar.
+    validations:
+      required: false
