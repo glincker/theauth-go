@@ -350,7 +350,7 @@ func TestOrgMatch_Mismatch(t *testing.T) {
 	defer srv.Close()
 
 	resp := doAdminJSON(t, http.MethodGet, adminURL(srv, orgID, "/users"), nil)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusForbidden {
 		t.Fatalf("want 403 for org mismatch, got %d", resp.StatusCode)
 	}
@@ -366,7 +366,7 @@ func TestOrgMatch_NoSession(t *testing.T) {
 	defer srv.Close()
 
 	resp := doAdminJSON(t, http.MethodGet, adminURL(srv, orgID, "/users"), nil)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	// No session: middleware returns 401 (CodeUnauthorized) or 403.
 	if resp.StatusCode != http.StatusUnauthorized && resp.StatusCode != http.StatusForbidden {
 		t.Fatalf("want 401 or 403 for no session, got %d", resp.StatusCode)
@@ -388,7 +388,7 @@ func TestOrgMatch_SuperAdminBypass(t *testing.T) {
 
 	// listUsers should succeed for a super_admin even with mismatched active org.
 	resp := doAdminJSON(t, http.MethodGet, adminURL(srv, orgID, "/users"), nil)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("want 200 for super_admin bypass, got %d", resp.StatusCode)
 	}
@@ -411,7 +411,7 @@ func TestGetUser_OK(t *testing.T) {
 	defer srv.Close()
 
 	resp := doAdminJSON(t, http.MethodGet, adminURL(srv, orgID, "/users/"+user.ID.String()), nil)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("want 200, got %d", resp.StatusCode)
 	}
@@ -437,7 +437,7 @@ func TestGetUser_NotInOrg(t *testing.T) {
 	defer srv.Close()
 
 	resp := doAdminJSON(t, http.MethodGet, adminURL(srv, orgID, "/users/"+user.ID.String()), nil)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusNotFound {
 		t.Fatalf("want 404 for user not in org, got %d", resp.StatusCode)
 	}
@@ -453,7 +453,7 @@ func TestGetUser_InvalidUserID(t *testing.T) {
 	defer srv.Close()
 
 	resp := doAdminJSON(t, http.MethodGet, adminURL(srv, orgID, "/users/not-a-ulid"), nil)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusBadRequest {
 		t.Fatalf("want 400 for invalid userID, got %d", resp.StatusCode)
 	}
@@ -472,7 +472,7 @@ func TestGetUser_MissingPermission(t *testing.T) {
 	defer srv.Close()
 
 	resp := doAdminJSON(t, http.MethodGet, adminURL(srv, orgID, "/users/"+user.ID.String()), nil)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusForbidden {
 		t.Fatalf("want 403 for missing permission, got %d", resp.StatusCode)
 	}
@@ -496,7 +496,7 @@ func TestPatchUser_OK(t *testing.T) {
 
 	body, _ := json.Marshal(map[string]interface{}{"status": "active"})
 	resp := doAdminJSON(t, http.MethodPatch, adminURL(srv, orgID, "/users/"+user.ID.String()), body)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("want 200, got %d", resp.StatusCode)
 	}
@@ -517,7 +517,7 @@ func TestPatchUser_NotInOrg(t *testing.T) {
 
 	body, _ := json.Marshal(map[string]interface{}{"status": "active"})
 	resp := doAdminJSON(t, http.MethodPatch, adminURL(srv, orgID, "/users/"+user.ID.String()), body)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusNotFound {
 		t.Fatalf("want 404 for user not in org, got %d", resp.StatusCode)
 	}
@@ -536,7 +536,7 @@ func TestPatchUser_BadJSON(t *testing.T) {
 	defer srv.Close()
 
 	resp := doAdminJSON(t, http.MethodPatch, adminURL(srv, orgID, "/users/"+user.ID.String()), []byte("{bad"))
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusBadRequest {
 		t.Fatalf("want 400 for bad JSON, got %d", resp.StatusCode)
 	}
@@ -556,7 +556,7 @@ func TestPatchUser_MissingPermission(t *testing.T) {
 
 	body, _ := json.Marshal(map[string]interface{}{"status": "active"})
 	resp := doAdminJSON(t, http.MethodPatch, adminURL(srv, orgID, "/users/"+user.ID.String()), body)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusForbidden {
 		t.Fatalf("want 403 for missing permission, got %d", resp.StatusCode)
 	}
@@ -576,7 +576,7 @@ func TestListSessions_OK(t *testing.T) {
 	defer srv.Close()
 
 	resp := doAdminJSON(t, http.MethodGet, adminURL(srv, orgID, "/sessions?user_id="+user.ID.String()), nil)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("want 200, got %d", resp.StatusCode)
 	}
@@ -599,7 +599,7 @@ func TestListSessions_MissingUserID(t *testing.T) {
 	defer srv.Close()
 
 	resp := doAdminJSON(t, http.MethodGet, adminURL(srv, orgID, "/sessions"), nil)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusBadRequest {
 		t.Fatalf("want 400 for missing user_id, got %d", resp.StatusCode)
 	}
@@ -615,7 +615,7 @@ func TestListSessions_InvalidUserID(t *testing.T) {
 	defer srv.Close()
 
 	resp := doAdminJSON(t, http.MethodGet, adminURL(srv, orgID, "/sessions?user_id=not-a-ulid"), nil)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusBadRequest {
 		t.Fatalf("want 400 for invalid user_id, got %d", resp.StatusCode)
 	}
@@ -632,7 +632,7 @@ func TestListSessions_MissingPermission(t *testing.T) {
 	defer srv.Close()
 
 	resp := doAdminJSON(t, http.MethodGet, adminURL(srv, orgID, "/sessions?user_id="+user.ID.String()), nil)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusForbidden {
 		t.Fatalf("want 403 for missing permission, got %d", resp.StatusCode)
 	}
@@ -656,7 +656,7 @@ func TestRevokeSession_OK(t *testing.T) {
 	defer srv.Close()
 
 	resp := doAdminJSON(t, http.MethodDelete, adminURL(srv, orgID, "/sessions/"+sessID.String()), nil)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusNoContent {
 		t.Fatalf("want 204, got %d", resp.StatusCode)
 	}
@@ -674,7 +674,7 @@ func TestRevokeSession_NotFound(t *testing.T) {
 	defer srv.Close()
 
 	resp := doAdminJSON(t, http.MethodDelete, adminURL(srv, orgID, "/sessions/"+ulid.New().String()), nil)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusNotFound {
 		t.Fatalf("want 404 for missing session, got %d", resp.StatusCode)
 	}
@@ -690,7 +690,7 @@ func TestRevokeSession_InvalidSessionID(t *testing.T) {
 	defer srv.Close()
 
 	resp := doAdminJSON(t, http.MethodDelete, adminURL(srv, orgID, "/sessions/not-a-ulid"), nil)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusBadRequest {
 		t.Fatalf("want 400 for invalid sessionID, got %d", resp.StatusCode)
 	}
@@ -714,7 +714,7 @@ func TestListRoles_OK(t *testing.T) {
 	defer srv.Close()
 
 	resp := doAdminJSON(t, http.MethodGet, adminURL(srv, orgID, "/roles"), nil)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("want 200, got %d", resp.StatusCode)
 	}
@@ -737,7 +737,7 @@ func TestListRoles_MissingPermission(t *testing.T) {
 	defer srv.Close()
 
 	resp := doAdminJSON(t, http.MethodGet, adminURL(srv, orgID, "/roles"), nil)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusForbidden {
 		t.Fatalf("want 403, got %d", resp.StatusCode)
 	}
@@ -760,7 +760,7 @@ func TestUpdateRole_OK(t *testing.T) {
 
 	body, _ := json.Marshal(map[string]interface{}{"name": "reviewer"})
 	resp := doAdminJSON(t, http.MethodPatch, adminURL(srv, orgID, "/roles/"+roleID.String()), body)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("want 200, got %d", resp.StatusCode)
 	}
@@ -780,7 +780,7 @@ func TestUpdateRole_NotFound(t *testing.T) {
 
 	body, _ := json.Marshal(map[string]interface{}{"name": "x"})
 	resp := doAdminJSON(t, http.MethodPatch, adminURL(srv, orgID, "/roles/"+roleID.String()), body)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusNotFound {
 		t.Fatalf("want 404 for missing role, got %d", resp.StatusCode)
 	}
@@ -800,7 +800,7 @@ func TestUpdateRole_UnknownPermission(t *testing.T) {
 
 	body, _ := json.Marshal(map[string]interface{}{"permissions": []string{"bogus:perm"}})
 	resp := doAdminJSON(t, http.MethodPatch, adminURL(srv, orgID, "/roles/"+roleID.String()), body)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusBadRequest {
 		t.Fatalf("want 400 for unknown permission, got %d", resp.StatusCode)
 	}
@@ -817,7 +817,7 @@ func TestUpdateRole_BadJSON(t *testing.T) {
 	defer srv.Close()
 
 	resp := doAdminJSON(t, http.MethodPatch, adminURL(srv, orgID, "/roles/"+roleID.String()), []byte("{bad"))
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusBadRequest {
 		t.Fatalf("want 400 for bad JSON, got %d", resp.StatusCode)
 	}
@@ -835,7 +835,7 @@ func TestUpdateRole_InvalidRoleID(t *testing.T) {
 
 	body, _ := json.Marshal(map[string]interface{}{"name": "x"})
 	resp := doAdminJSON(t, http.MethodPatch, adminURL(srv, orgID, "/roles/not-a-ulid"), body)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusBadRequest {
 		t.Fatalf("want 400 for invalid roleID, got %d", resp.StatusCode)
 	}
@@ -853,7 +853,7 @@ func TestUpdateRole_MissingPermission(t *testing.T) {
 
 	body, _ := json.Marshal(map[string]interface{}{"name": "x"})
 	resp := doAdminJSON(t, http.MethodPatch, adminURL(srv, orgID, "/roles/"+roleID.String()), body)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusForbidden {
 		t.Fatalf("want 403 for missing permission, got %d", resp.StatusCode)
 	}
@@ -874,7 +874,7 @@ func TestListOAuthAccounts_OK(t *testing.T) {
 	defer srv.Close()
 
 	resp := doAdminJSON(t, http.MethodGet, adminURL(srv, orgID, "/oauth_accounts"), nil)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("want 200, got %d", resp.StatusCode)
 	}
@@ -898,7 +898,7 @@ func TestListOAuthAccounts_MissingPermission(t *testing.T) {
 	defer srv.Close()
 
 	resp := doAdminJSON(t, http.MethodGet, adminURL(srv, orgID, "/oauth_accounts"), nil)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusForbidden {
 		t.Fatalf("want 403 for missing permission, got %d", resp.StatusCode)
 	}
@@ -919,7 +919,7 @@ func TestInviteUser_OK(t *testing.T) {
 
 	body, _ := json.Marshal(map[string]string{"email": "new@example.com"})
 	resp := doAdminJSON(t, http.MethodPost, adminURL(srv, orgID, "/users"), body)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusCreated {
 		t.Fatalf("want 201, got %d", resp.StatusCode)
 	}
@@ -941,7 +941,7 @@ func TestInviteUser_ExistingUser(t *testing.T) {
 
 	body, _ := json.Marshal(map[string]string{"email": existing.Email})
 	resp := doAdminJSON(t, http.MethodPost, adminURL(srv, orgID, "/users"), body)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusCreated {
 		t.Fatalf("want 201 for existing user invite, got %d", resp.StatusCode)
 	}
@@ -958,7 +958,7 @@ func TestInviteUser_MissingEmail(t *testing.T) {
 
 	body, _ := json.Marshal(map[string]string{})
 	resp := doAdminJSON(t, http.MethodPost, adminURL(srv, orgID, "/users"), body)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusBadRequest {
 		t.Fatalf("want 400 for missing email, got %d", resp.StatusCode)
 	}
@@ -974,7 +974,7 @@ func TestInviteUser_BadJSON(t *testing.T) {
 	defer srv.Close()
 
 	resp := doAdminJSON(t, http.MethodPost, adminURL(srv, orgID, "/users"), []byte("{bad"))
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusBadRequest {
 		t.Fatalf("want 400 for bad JSON, got %d", resp.StatusCode)
 	}
@@ -991,7 +991,7 @@ func TestInviteUser_MissingPermission(t *testing.T) {
 
 	body, _ := json.Marshal(map[string]string{"email": "x@example.com"})
 	resp := doAdminJSON(t, http.MethodPost, adminURL(srv, orgID, "/users"), body)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusForbidden {
 		t.Fatalf("want 403 for missing permission, got %d", resp.StatusCode)
 	}
@@ -1010,7 +1010,7 @@ func TestInviteUser_WithRoleID(t *testing.T) {
 
 	body, _ := json.Marshal(map[string]string{"email": "withRole@example.com", "roleId": roleID.String()})
 	resp := doAdminJSON(t, http.MethodPost, adminURL(srv, orgID, "/users"), body)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusCreated {
 		t.Fatalf("want 201 with roleId, got %d", resp.StatusCode)
 	}
@@ -1028,7 +1028,7 @@ func TestInviteUser_InvalidRoleID(t *testing.T) {
 
 	body, _ := json.Marshal(map[string]string{"email": "x@example.com", "roleId": "not-a-ulid"})
 	resp := doAdminJSON(t, http.MethodPost, adminURL(srv, orgID, "/users"), body)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusBadRequest {
 		t.Fatalf("want 400 for invalid roleId, got %d", resp.StatusCode)
 	}
@@ -1051,7 +1051,7 @@ func TestRemoveUser_OK(t *testing.T) {
 	defer srv.Close()
 
 	resp := doAdminJSON(t, http.MethodDelete, adminURL(srv, orgID, "/users/"+user.ID.String()), nil)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusNoContent {
 		t.Fatalf("want 204, got %d", resp.StatusCode)
 	}
@@ -1069,7 +1069,7 @@ func TestRemoveUser_NotFound(t *testing.T) {
 	defer srv.Close()
 
 	resp := doAdminJSON(t, http.MethodDelete, adminURL(srv, orgID, "/users/"+user.ID.String()), nil)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusNotFound {
 		t.Fatalf("want 404 for non-member, got %d", resp.StatusCode)
 	}
@@ -1086,7 +1086,7 @@ func TestRemoveUser_InvalidUserID(t *testing.T) {
 	defer srv.Close()
 
 	resp := doAdminJSON(t, http.MethodDelete, adminURL(srv, orgID, "/users/not-a-ulid"), nil)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusBadRequest {
 		t.Fatalf("want 400 for invalid userID, got %d", resp.StatusCode)
 	}
@@ -1105,7 +1105,7 @@ func TestRemoveUser_MissingPermission(t *testing.T) {
 	defer srv.Close()
 
 	resp := doAdminJSON(t, http.MethodDelete, adminURL(srv, orgID, "/users/"+user.ID.String()), nil)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusForbidden {
 		t.Fatalf("want 403 for missing permission, got %d", resp.StatusCode)
 	}
@@ -1126,7 +1126,7 @@ func TestCreateRole_OK(t *testing.T) {
 
 	body, _ := json.Marshal(map[string]interface{}{"name": "editor", "permissions": []string{}})
 	resp := doAdminJSON(t, http.MethodPost, adminURL(srv, orgID, "/roles"), body)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusCreated {
 		t.Fatalf("want 201, got %d", resp.StatusCode)
 	}
@@ -1143,7 +1143,7 @@ func TestCreateRole_MissingName(t *testing.T) {
 
 	body, _ := json.Marshal(map[string]interface{}{"description": "no name"})
 	resp := doAdminJSON(t, http.MethodPost, adminURL(srv, orgID, "/roles"), body)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusBadRequest {
 		t.Fatalf("want 400 for missing name, got %d", resp.StatusCode)
 	}
@@ -1162,7 +1162,7 @@ func TestCreateRole_UnknownPermission(t *testing.T) {
 
 	body, _ := json.Marshal(map[string]interface{}{"name": "bad", "permissions": []string{"bogus:perm"}})
 	resp := doAdminJSON(t, http.MethodPost, adminURL(srv, orgID, "/roles"), body)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusBadRequest {
 		t.Fatalf("want 400 for unknown permission, got %d", resp.StatusCode)
 	}
@@ -1178,7 +1178,7 @@ func TestCreateRole_BadJSON(t *testing.T) {
 	defer srv.Close()
 
 	resp := doAdminJSON(t, http.MethodPost, adminURL(srv, orgID, "/roles"), []byte("{bad"))
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusBadRequest {
 		t.Fatalf("want 400 for bad JSON, got %d", resp.StatusCode)
 	}
@@ -1195,7 +1195,7 @@ func TestCreateRole_MissingPermission(t *testing.T) {
 
 	body, _ := json.Marshal(map[string]interface{}{"name": "x"})
 	resp := doAdminJSON(t, http.MethodPost, adminURL(srv, orgID, "/roles"), body)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusForbidden {
 		t.Fatalf("want 403 for missing permission, got %d", resp.StatusCode)
 	}
@@ -1216,7 +1216,7 @@ func TestDeleteRole_OK(t *testing.T) {
 	defer srv.Close()
 
 	resp := doAdminJSON(t, http.MethodDelete, adminURL(srv, orgID, "/roles/"+roleID.String()), nil)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusNoContent {
 		t.Fatalf("want 204, got %d", resp.StatusCode)
 	}
@@ -1235,7 +1235,7 @@ func TestDeleteRole_NotFound(t *testing.T) {
 	defer srv.Close()
 
 	resp := doAdminJSON(t, http.MethodDelete, adminURL(srv, orgID, "/roles/"+roleID.String()), nil)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusNotFound {
 		t.Fatalf("want 404 for missing role, got %d", resp.StatusCode)
 	}
@@ -1254,7 +1254,7 @@ func TestDeleteRole_RoleInUse(t *testing.T) {
 	defer srv.Close()
 
 	resp := doAdminJSON(t, http.MethodDelete, adminURL(srv, orgID, "/roles/"+roleID.String()), nil)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusConflict {
 		t.Fatalf("want 409 for role in use, got %d", resp.StatusCode)
 	}
@@ -1271,7 +1271,7 @@ func TestDeleteRole_InvalidRoleID(t *testing.T) {
 	defer srv.Close()
 
 	resp := doAdminJSON(t, http.MethodDelete, adminURL(srv, orgID, "/roles/not-a-ulid"), nil)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusBadRequest {
 		t.Fatalf("want 400 for invalid roleID, got %d", resp.StatusCode)
 	}
@@ -1288,7 +1288,7 @@ func TestDeleteRole_MissingPermission(t *testing.T) {
 	defer srv.Close()
 
 	resp := doAdminJSON(t, http.MethodDelete, adminURL(srv, orgID, "/roles/"+roleID.String()), nil)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusForbidden {
 		t.Fatalf("want 403 for missing permission, got %d", resp.StatusCode)
 	}
@@ -1309,7 +1309,7 @@ func TestQueryAudit_OK(t *testing.T) {
 	defer srv.Close()
 
 	resp := doAdminJSON(t, http.MethodGet, adminURL(srv, orgID, "/audit"), nil)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("want 200, got %d", resp.StatusCode)
 	}
@@ -1337,7 +1337,7 @@ func TestQueryAudit_WithFilters(t *testing.T) {
 	url := adminURL(srv, orgID, "/audit?action=user.login&actor="+actorID+
 		"&since=2025-01-01T00:00:00Z&until=2025-12-31T23:59:59Z")
 	resp := doAdminJSON(t, http.MethodGet, url, nil)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("want 200, got %d", resp.StatusCode)
 	}
@@ -1353,7 +1353,7 @@ func TestQueryAudit_InvalidActor(t *testing.T) {
 	defer srv.Close()
 
 	resp := doAdminJSON(t, http.MethodGet, adminURL(srv, orgID, "/audit?actor=not-a-ulid"), nil)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusBadRequest {
 		t.Fatalf("want 400 for invalid actor, got %d", resp.StatusCode)
 	}
@@ -1369,7 +1369,7 @@ func TestQueryAudit_InvalidSince(t *testing.T) {
 	defer srv.Close()
 
 	resp := doAdminJSON(t, http.MethodGet, adminURL(srv, orgID, "/audit?since=not-a-time"), nil)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusBadRequest {
 		t.Fatalf("want 400 for invalid since, got %d", resp.StatusCode)
 	}
@@ -1385,7 +1385,7 @@ func TestQueryAudit_InvalidUntil(t *testing.T) {
 	defer srv.Close()
 
 	resp := doAdminJSON(t, http.MethodGet, adminURL(srv, orgID, "/audit?until=not-a-time"), nil)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusBadRequest {
 		t.Fatalf("want 400 for invalid until, got %d", resp.StatusCode)
 	}
@@ -1401,7 +1401,7 @@ func TestQueryAudit_MissingPermission(t *testing.T) {
 	defer srv.Close()
 
 	resp := doAdminJSON(t, http.MethodGet, adminURL(srv, orgID, "/audit"), nil)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusForbidden {
 		t.Fatalf("want 403 for missing permission, got %d", resp.StatusCode)
 	}
@@ -1431,7 +1431,7 @@ func TestPatchUser_WithRoleIDs(t *testing.T) {
 
 	body, _ := json.Marshal(map[string]interface{}{"roleIds": []string{roleID.String()}})
 	resp := doAdminJSON(t, http.MethodPatch, adminURL(srv, orgID, "/users/"+user.ID.String()), body)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("want 200 with roleIds, got %d", resp.StatusCode)
 	}
@@ -1451,7 +1451,7 @@ func TestPatchUser_InvalidRoleID(t *testing.T) {
 
 	body, _ := json.Marshal(map[string]interface{}{"roleIds": []string{"not-a-ulid"}})
 	resp := doAdminJSON(t, http.MethodPatch, adminURL(srv, orgID, "/users/"+user.ID.String()), body)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusBadRequest {
 		t.Fatalf("want 400 for invalid roleId, got %d", resp.StatusCode)
 	}
@@ -1474,7 +1474,7 @@ func TestPatchUser_RoleNotFound(t *testing.T) {
 	unknownRoleID := ulid.New()
 	body, _ := json.Marshal(map[string]interface{}{"roleIds": []string{unknownRoleID.String()}})
 	resp := doAdminJSON(t, http.MethodPatch, adminURL(srv, orgID, "/users/"+user.ID.String()), body)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusNotFound {
 		t.Fatalf("want 404 for missing role, got %d", resp.StatusCode)
 	}
@@ -1500,7 +1500,7 @@ func TestPatchUser_RoleWrongOrg(t *testing.T) {
 
 	body, _ := json.Marshal(map[string]interface{}{"roleIds": []string{roleID.String()}})
 	resp := doAdminJSON(t, http.MethodPatch, adminURL(srv, orgID, "/users/"+user.ID.String()), body)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusNotFound {
 		t.Fatalf("want 404 for role in wrong org, got %d", resp.StatusCode)
 	}

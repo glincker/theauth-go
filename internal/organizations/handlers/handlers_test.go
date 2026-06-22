@@ -182,7 +182,7 @@ func TestCreate_OK(t *testing.T) {
 
 	body, _ := json.Marshal(map[string]string{"name": "Acme Corp", "slug": "acme"})
 	resp := doJSON(t, http.MethodPost, srv.URL+"/orgs", body)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusCreated {
 		t.Fatalf("want 201, got %d", resp.StatusCode)
 	}
@@ -204,7 +204,7 @@ func TestCreate_NoUser(t *testing.T) {
 
 	body, _ := json.Marshal(map[string]string{"name": "X", "slug": "x"})
 	resp := doJSON(t, http.MethodPost, srv.URL+"/orgs", body)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusUnauthorized {
 		t.Fatalf("want 401, got %d", resp.StatusCode)
 	}
@@ -218,7 +218,7 @@ func TestCreate_BadJSON(t *testing.T) {
 	defer srv.Close()
 
 	resp := doJSON(t, http.MethodPost, srv.URL+"/orgs", []byte("{bad json"))
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusBadRequest {
 		t.Fatalf("want 400 for bad JSON, got %d", resp.StatusCode)
 	}
@@ -233,7 +233,7 @@ func TestCreate_SlugTaken(t *testing.T) {
 
 	body, _ := json.Marshal(map[string]string{"name": "Acme", "slug": "taken"})
 	resp := doJSON(t, http.MethodPost, srv.URL+"/orgs", body)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusConflict {
 		t.Fatalf("want 409 for slug conflict, got %d", resp.StatusCode)
 	}
@@ -248,7 +248,7 @@ func TestCreate_ServiceError(t *testing.T) {
 
 	body, _ := json.Marshal(map[string]string{"name": "Acme", "slug": "acme2"})
 	resp := doJSON(t, http.MethodPost, srv.URL+"/orgs", body)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusBadRequest {
 		t.Fatalf("want 400 for service error, got %d", resp.StatusCode)
 	}
@@ -271,7 +271,7 @@ func TestList_OK(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("want 200, got %d", resp.StatusCode)
 	}
@@ -295,7 +295,7 @@ func TestList_NoUser(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusUnauthorized {
 		t.Fatalf("want 401, got %d", resp.StatusCode)
 	}
@@ -313,7 +313,7 @@ func TestList_ServiceError(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusInternalServerError {
 		t.Fatalf("want 500 for storage error, got %d", resp.StatusCode)
 	}
@@ -337,7 +337,7 @@ func TestGet_OK(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("want 200, got %d", resp.StatusCode)
 	}
@@ -356,7 +356,7 @@ func TestGet_NonMember(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusForbidden {
 		t.Fatalf("want 403 for non-member, got %d", resp.StatusCode)
 	}
@@ -375,7 +375,7 @@ func TestGet_NotFound(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusNotFound {
 		t.Fatalf("want 404 for missing org, got %d", resp.StatusCode)
 	}
@@ -393,7 +393,7 @@ func TestGet_InvalidID(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusBadRequest {
 		t.Fatalf("want 400 for invalid ULID, got %d", resp.StatusCode)
 	}
@@ -413,7 +413,7 @@ func TestActivate_OK(t *testing.T) {
 	defer srv.Close()
 
 	resp := doJSON(t, http.MethodPost, srv.URL+"/orgs/"+orgID.String()+"/activate", nil)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusNoContent {
 		t.Fatalf("want 204, got %d", resp.StatusCode)
 	}
@@ -429,7 +429,7 @@ func TestActivate_Forbidden(t *testing.T) {
 	defer srv.Close()
 
 	resp := doJSON(t, http.MethodPost, srv.URL+"/orgs/"+orgID.String()+"/activate", nil)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusForbidden {
 		t.Fatalf("want 403, got %d", resp.StatusCode)
 	}
@@ -445,7 +445,7 @@ func TestActivate_ServiceError(t *testing.T) {
 	defer srv.Close()
 
 	resp := doJSON(t, http.MethodPost, srv.URL+"/orgs/"+orgID.String()+"/activate", nil)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusNotFound {
 		t.Fatalf("want 404 on activate error, got %d", resp.StatusCode)
 	}
@@ -460,7 +460,7 @@ func TestActivate_InvalidID(t *testing.T) {
 	defer srv.Close()
 
 	resp := doJSON(t, http.MethodPost, srv.URL+"/orgs/bad-id/activate", nil)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusBadRequest {
 		t.Fatalf("want 400 for bad ULID, got %d", resp.StatusCode)
 	}
@@ -481,7 +481,7 @@ func TestClearActive_OK(t *testing.T) {
 	defer srv.Close()
 
 	resp := doJSON(t, http.MethodPost, srv.URL+"/orgs/clear-active", nil)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusNoContent {
 		t.Fatalf("want 204, got %d", resp.StatusCode)
 	}
@@ -496,7 +496,7 @@ func TestClearActive_NoSession(t *testing.T) {
 	defer srv.Close()
 
 	resp := doJSON(t, http.MethodPost, srv.URL+"/orgs/clear-active", nil)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusUnauthorized {
 		t.Fatalf("want 401 when session missing, got %d", resp.StatusCode)
 	}
@@ -513,7 +513,7 @@ func TestClearActive_ServiceError(t *testing.T) {
 	defer srv.Close()
 
 	resp := doJSON(t, http.MethodPost, srv.URL+"/orgs/clear-active", nil)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusInternalServerError {
 		t.Fatalf("want 500 on clear-active error, got %d", resp.StatusCode)
 	}
@@ -534,7 +534,7 @@ func TestAddMember_OK(t *testing.T) {
 
 	body, _ := json.Marshal(map[string]string{"userId": memberID.String(), "role": "member"})
 	resp := doJSON(t, http.MethodPost, srv.URL+"/orgs/"+orgID.String()+"/members", body)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusNoContent {
 		t.Fatalf("want 204, got %d", resp.StatusCode)
 	}
@@ -551,7 +551,7 @@ func TestAddMember_Forbidden(t *testing.T) {
 
 	body, _ := json.Marshal(map[string]string{"userId": memberID.String(), "role": "member"})
 	resp := doJSON(t, http.MethodPost, srv.URL+"/orgs/"+orgID.String()+"/members", body)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusForbidden {
 		t.Fatalf("want 403, got %d", resp.StatusCode)
 	}
@@ -567,7 +567,7 @@ func TestAddMember_BadUserID(t *testing.T) {
 
 	body, _ := json.Marshal(map[string]string{"userId": "not-a-ulid", "role": "member"})
 	resp := doJSON(t, http.MethodPost, srv.URL+"/orgs/"+orgID.String()+"/members", body)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusBadRequest {
 		t.Fatalf("want 400 for invalid userId, got %d", resp.StatusCode)
 	}
@@ -585,7 +585,7 @@ func TestAddMember_ServiceError(t *testing.T) {
 
 	body, _ := json.Marshal(map[string]string{"userId": memberID.String(), "role": "invalid"})
 	resp := doJSON(t, http.MethodPost, srv.URL+"/orgs/"+orgID.String()+"/members", body)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusBadRequest {
 		t.Fatalf("want 400 on service error, got %d", resp.StatusCode)
 	}
@@ -609,7 +609,7 @@ func TestRemoveMember_OK(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusNoContent {
 		t.Fatalf("want 204, got %d", resp.StatusCode)
 	}
@@ -629,7 +629,7 @@ func TestRemoveMember_Forbidden(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusForbidden {
 		t.Fatalf("want 403, got %d", resp.StatusCode)
 	}
@@ -649,7 +649,7 @@ func TestRemoveMember_LastOwner(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusConflict {
 		t.Fatalf("want 409 for last owner, got %d", resp.StatusCode)
 	}
@@ -669,7 +669,7 @@ func TestRemoveMember_NotFound(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusNotFound {
 		t.Fatalf("want 404 for missing member, got %d", resp.StatusCode)
 	}
