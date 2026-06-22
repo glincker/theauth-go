@@ -105,7 +105,7 @@ FROM saml_connections WHERE organization_id = ? ORDER BY created_at ASC`, ulidTo
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	var out []theauth.SAMLConnection
 	for rows.Next() {
 		c, err := scanSAMLConnection(rows)

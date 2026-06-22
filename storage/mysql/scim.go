@@ -55,7 +55,7 @@ FROM scim_tokens WHERE organization_id = ? ORDER BY created_at ASC`,
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	var out []theauth.SCIMToken
 	for rows.Next() {
 		t, err := scanSCIMToken(rows)
@@ -213,7 +213,7 @@ func (s *Store) ListGroupsByOrganization(ctx context.Context, orgID theauth.ULID
 	if err != nil {
 		return nil, 0, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	var out []theauth.Group
 	for rows.Next() {
 		g, err := scanGroup(rows)
@@ -279,7 +279,7 @@ func (s *Store) GroupMembers(ctx context.Context, groupID theauth.ULID) ([]theau
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	var out []theauth.ULID
 	for rows.Next() {
 		var b []byte

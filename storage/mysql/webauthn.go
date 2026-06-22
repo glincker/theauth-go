@@ -74,7 +74,7 @@ FROM oauth_accounts WHERE user_id = ?`,
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	var out []theauth.OAuthAccount
 	for rows.Next() {
 		a, err := scanOAuthAccount(rows)
@@ -194,7 +194,7 @@ FROM webauthn_credentials WHERE user_id = ? ORDER BY created_at ASC`,
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	var out []theauth.WebAuthnCredential
 	for rows.Next() {
 		c, err := scanWebAuthnCredential(rows)

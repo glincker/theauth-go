@@ -153,7 +153,7 @@ WHERE user_id = ? AND used_at IS NULL`,
 	if err != nil {
 		return err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	type candidate struct {
 		idB      []byte

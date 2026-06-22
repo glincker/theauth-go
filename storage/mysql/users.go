@@ -201,7 +201,7 @@ func (s *Store) ListUsersByOrganization(ctx context.Context, orgID theauth.ULID,
 	if err != nil {
 		return nil, 0, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	var out []theauth.User
 	for rows.Next() {
 		u, err := scanUser(rows)
