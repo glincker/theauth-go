@@ -16,6 +16,7 @@ import (
 	internalas "github.com/glincker/theauth-go/internal/as"
 	internalaudit "github.com/glincker/theauth-go/internal/audit"
 	"github.com/glincker/theauth-go/internal/delegation"
+	"github.com/glincker/theauth-go/internal/identitylink"
 	"github.com/glincker/theauth-go/internal/magiclink"
 	"github.com/glincker/theauth-go/internal/models"
 	internaloauth "github.com/glincker/theauth-go/internal/oauth"
@@ -351,6 +352,11 @@ func wireServices(a *TheAuth, cfg Config, providers map[string]Provider, sp saml
 			a,
 		)
 	}
+
+	// Wire identity-linking service (v2.3). Always constructed so that the
+	// service methods are available regardless of whether AccountUX is
+	// enabled; mountAccount gates whether the HTTP endpoints are exposed.
+	a.identityLinkSvc = identitylink.New(a.storage, a.encryptionKey, a)
 
 	// Start background loops. Every goroutine has a matching Stop in Close.
 	if a.auditSvc != nil {

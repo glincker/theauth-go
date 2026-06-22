@@ -2,8 +2,11 @@ package theauth
 
 import (
 	"context"
+	"net/http"
+	"time"
 
 	accounthandlers "github.com/glincker/theauth-go/internal/account"
+	"github.com/glincker/theauth-go/internal/identitylink"
 	"github.com/glincker/theauth-go/internal/models"
 	"github.com/go-chi/chi/v5"
 )
@@ -58,12 +61,67 @@ func (s accountDelegationAdapter) RevokeDelegation(ctx context.Context, grantID 
 	return s.a.RevokeDelegation(ctx, grantID, reason)
 }
 
+// accountIdentityLinkAdapter wraps *TheAuth to satisfy the
+// accounthandlers.IdentityLinkService interface without importing root from
+// an internal package.
+type accountIdentityLinkAdapter struct{ a *TheAuth }
+
+func (s accountIdentityLinkAdapter) LinkOAuthToCurrentUser(
+	ctx context.Context,
+	sessionToken, providerName, providerUserID string,
+	accessTokenEnc, refreshTokenEnc []byte,
+	expiresAt *time.Time,
+	scope string,
+) error {
+	return s.a.identityLinkSvc.LinkOAuthToCurrentUser(
+		ctx, sessionToken, providerName, providerUserID,
+		accessTokenEnc, refreshTokenEnc, expiresAt, scope,
+	)
+}
+
+func (s accountIdentityLinkAdapter) LinkPasswordToCurrentUser(ctx context.Context, sessionToken, password string) error {
+	return s.a.identityLinkSvc.LinkPasswordToCurrentUser(ctx, sessionToken, password)
+}
+
+func (s accountIdentityLinkAdapter) MergeAccounts(ctx context.Context, sessionToken string, secondaryID models.ULID, input identitylink.MergeInput) error {
+	return s.a.identityLinkSvc.MergeAccounts(ctx, sessionToken, secondaryID, input)
+}
+
+func (s accountIdentityLinkAdapter) UnlinkOAuthProvider(ctx context.Context, sessionToken, provider string) error {
+	return s.a.identityLinkSvc.UnlinkOAuthProvider(ctx, sessionToken, provider)
+}
+
+// sessionTokenFromRequest extracts the raw session token from the request
+// cookie. Passed to the identity-link handler so it can call the service
+// methods with the caller's session token.
+func (a *TheAuth) sessionTokenFromRequest(r *http.Request) (string, bool) {
+	cookie, err := r.Cookie(a.cookieName)
+	if err != nil || cookie.Value == "" {
+		return "", false
+	}
+	return cookie.Value, true
+}
+
 // mountAccount wires the /account routes via the extracted
 // internal/account/handlers package. Idempotent guard matches the
 // legacy root: only fires when AccountUX, AgentIdentity, and the AS
 // are all configured.
+//
+// Identity-linking routes (/account/identities/*) are also mounted here
+// whenever identityLinkSvc is non-nil (always true after wireServices).
 func (a *TheAuth) mountAccount(r chi.Router) {
 	if !a.accountUX || a.agentCfg == nil || a.as == nil {
+		// Still mount identity-linking routes independently of AccountUX if
+		// the service was constructed (which it always is after New).
+		if a.identityLinkSvc != nil {
+			h := accounthandlers.New(nil, nil, userFromRequest)
+			h.WithIdentityLink(
+				accountIdentityLinkAdapter{a: a},
+				a.sessionTokenFromRequest,
+				nil, // OAuthLinkInitiator wired below when providers are configured
+			)
+			h.Mount(r, a.RequireAuth())
+		}
 		return
 	}
 	h := accounthandlers.New(
@@ -71,5 +129,12 @@ func (a *TheAuth) mountAccount(r chi.Router) {
 		accountDelegationAdapter{a: a},
 		userFromRequest,
 	)
+	if a.identityLinkSvc != nil {
+		h.WithIdentityLink(
+			accountIdentityLinkAdapter{a: a},
+			a.sessionTokenFromRequest,
+			nil, // OAuthLinkInitiator: wired when a separate PR adds OAuth link flow support
+		)
+	}
 	h.Mount(r, a.RequireAuth())
 }

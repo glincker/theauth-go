@@ -3,6 +3,9 @@ package theauth
 import (
 	"context"
 	"time"
+
+	"github.com/glincker/theauth-go/crypto"
+	"github.com/glincker/theauth-go/internal/identitylink"
 )
 
 // ValidateEmailForTest exposes the unexported validateEmail helper for
@@ -108,4 +111,43 @@ func VerifyTOTPForTest(a *TheAuth, ctx context.Context, pendingToken, code strin
 // ConsumeRecoveryCodeForTest exposes ConsumeRecoveryCode for tests.
 func ConsumeRecoveryCodeForTest(a *TheAuth, ctx context.Context, pendingToken, code string) (string, Session, error) {
 	return a.ConsumeRecoveryCode(ctx, pendingToken, code)
+}
+
+// ---------- v2.3 identity-linking test helpers ----------
+
+// LinkOAuthForTest exercises identitylink.Service.LinkOAuthToCurrentUser
+// without the full OAuth exchange flow. accessTokenEnc / refreshTokenEnc are
+// left empty; this is fine for unit tests.
+func LinkOAuthForTest(a *TheAuth, ctx context.Context, sessionToken, provider, providerUserID string) error {
+	return a.identityLinkSvc.LinkOAuthToCurrentUser(
+		ctx, sessionToken, provider, providerUserID,
+		nil, nil, nil, "",
+	)
+}
+
+// LinkPasswordForTest exercises identitylink.Service.LinkPasswordToCurrentUser.
+func LinkPasswordForTest(a *TheAuth, ctx context.Context, sessionToken, password string) error {
+	return a.identityLinkSvc.LinkPasswordToCurrentUser(ctx, sessionToken, password)
+}
+
+// MergeAccountsForTest exercises identitylink.Service.MergeAccounts with no
+// audit reason.
+func MergeAccountsForTest(a *TheAuth, ctx context.Context, sessionToken string, secondaryID ULID) error {
+	return a.identityLinkSvc.MergeAccounts(ctx, sessionToken, secondaryID, identitylink.MergeInput{})
+}
+
+// UnlinkOAuthForTest exercises identitylink.Service.UnlinkOAuthProvider.
+func UnlinkOAuthForTest(a *TheAuth, ctx context.Context, sessionToken, provider string) error {
+	return a.identityLinkSvc.UnlinkOAuthProvider(ctx, sessionToken, provider)
+}
+
+// NewRawTokenForTest generates a new opaque token (same as the internal
+// crypto.NewToken) for use in tests that need to mint raw session cookies.
+func NewRawTokenForTest() (string, error) {
+	return crypto.NewToken()
+}
+
+// HashTokenForTest returns the token hash used by SessionByTokenHash lookups.
+func HashTokenForTest(token string) []byte {
+	return crypto.HashToken(token)
 }
