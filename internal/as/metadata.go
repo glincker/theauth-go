@@ -27,6 +27,10 @@ type ASMetadata struct {
 	ScopesSupported                   []string `json:"scopes_supported,omitempty"`
 	ServiceDocumentation              string   `json:"service_documentation,omitempty"`
 	UILocalesSupported                []string `json:"ui_locales_supported,omitempty"`
+	// DPoPSigningAlgValuesSupported is the RFC 9449 section 5.1 metadata
+	// field advertising the proof-JWT signing algorithms this AS
+	// accepts. Omitted when DPoP is disabled.
+	DPoPSigningAlgValuesSupported []string `json:"dpop_signing_alg_values_supported,omitempty"`
 }
 
 // ASMetadataDoc builds the metadata document. The result is
@@ -44,6 +48,16 @@ func (s *Service) ASMetadataDoc() (ASMetadata, error) {
 	scopeList := make([]string, 0, len(scopes))
 	for sc := range scopes {
 		scopeList = append(scopeList, sc)
+	}
+	var dpopAlgs []string
+	if s.dpopSvc != nil && s.Cfg.DPoP != nil {
+		// Surface the operator-configured allow list verbatim so the
+		// metadata document and the actual verifier never disagree.
+		if len(s.Cfg.DPoP.AllowedSignAlgs) == 0 {
+			dpopAlgs = append([]string(nil), defaultDPoPAdvertisedAlgs...)
+		} else {
+			dpopAlgs = append([]string(nil), s.Cfg.DPoP.AllowedSignAlgs...)
+		}
 	}
 	return ASMetadata{
 		Issuer:                s.Cfg.Issuer,
@@ -64,8 +78,15 @@ func (s *Service) ASMetadataDoc() (ASMetadata, error) {
 		},
 		CodeChallengeMethodsSupported: []string{"S256"},
 		ScopesSupported:               scopeList,
+		DPoPSigningAlgValuesSupported: dpopAlgs,
 	}, nil
 }
+
+// defaultDPoPAdvertisedAlgs mirrors dpop.DefaultAllowedAlgs. Duplicated
+// here so the metadata document does not need to import the dpop
+// package (avoids an import cycle in tests that fixture only this
+// helper).
+var defaultDPoPAdvertisedAlgs = []string{"ES256", "ES384", "RS256", "PS256", "EdDSA"}
 
 // grantTypesAdvertised returns the grant types this AS supports. Phase
 // 1+2 supports authorization_code and refresh_token unconditionally;

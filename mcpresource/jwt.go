@@ -27,6 +27,18 @@ type claims struct {
 
 	Act               *actorClaim `json:"act,omitempty"`
 	DelegationGrantID string      `json:"delegation_grant_id,omitempty"`
+
+	// Cnf is the RFC 7800 confirmation claim. When the AS embedded a
+	// cnf.jkt at token issuance time, the middleware REQUIRES an
+	// inbound DPoP proof whose JWK thumbprint matches.
+	Cnf *confirmationClaim `json:"cnf,omitempty"`
+}
+
+// confirmationClaim is the RFC 7800 cnf claim shape. Only the jkt
+// member is observed today; future confirmation methods (mTLS, kid) can
+// land here additively without breaking older callers.
+type confirmationClaim struct {
+	JKT string `json:"jkt,omitempty"`
 }
 
 type jwtHeader struct {

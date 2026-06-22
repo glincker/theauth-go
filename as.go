@@ -4,6 +4,7 @@ import (
 	"time"
 
 	internalas "github.com/glincker/theauth-go/internal/as"
+	internaldpop "github.com/glincker/theauth-go/internal/dpop"
 )
 
 // as.go: AuthorizationServerConfig declaration plus the thin forwarders
@@ -119,6 +120,85 @@ type AuthorizationServerConfig struct {
 	// Default policy MUST be DenyAll (fail-closed); operators opt in to
 	// AllowAnyHTTPS or AllowHTTPSHosts explicitly.
 	CIMD *CIMDConfig
+
+	// DPoP, when non-nil, enables RFC 9449 sender-constrained access
+	// tokens. The token endpoint inspects each request for a DPoP
+	// header, verifies the proof JWT, and embeds an RFC 7800 cnf.jkt
+	// confirmation claim in the issued access token. Resource servers
+	// (mcpresource) re-verify the same proof on every protected call,
+	// so a stolen access token cannot be replayed without the private
+	// key that signed the proof. Leave nil for pre-PR behavior
+	// (Bearer tokens, no sender constraint).
+	DPoP *DPoPConfig
+}
+
+// DPoPConfig configures the RFC 9449 DPoP verifier wired into both the
+// authorization server and the mcpresource validator. All fields are
+// optional; New populates sensible defaults when the operator does not
+// override them. The wire shape matches the internal dpop.Config 1:1
+// because every field is operator-visible policy.
+type DPoPConfig struct {
+	// RequireDPoPForClients lists OAuth client IDs that MUST present a
+	// DPoP proof on every token request. Clients not on this list may
+	// still opt in by sending DPoP voluntarily; if they do, the issued
+	// token is sender constrained. For clients on this list, the
+	// absence of a proof is a 400 invalid_dpop_proof.
+	RequireDPoPForClients []string
+
+	// AllowedSignAlgs is the whitelist of signing algorithms a proof
+	// JWT may use. Defaults to ES256, ES384, RS256, PS256, EdDSA. HMAC
+	// algorithms (HS*) and "none" are always rejected per RFC 9449
+	// section 4.2.
+	AllowedSignAlgs []string
+
+	// ProofMaxAge bounds how far in the past or future the proof's iat
+	// claim may be. Defaults to 60 seconds; values much above 5 minutes
+	// substantially weaken the protection.
+	ProofMaxAge time.Duration
+
+	// NonceTTL bounds how long an issued DPoP-Nonce remains acceptable.
+	// Defaults to 10 minutes. Increasing this widens the window during
+	// which a captured nonce remains replayable; decreasing it forces
+	// clients to handle the use_dpop_nonce retry path more often.
+	NonceTTL time.Duration
+
+	// RequireNonceForTokens forces the token endpoint to demand a nonce
+	// on every DPoP proof. A first-call proof without a nonce returns
+	// HTTP 400 use_dpop_nonce + a DPoP-Nonce response header for the
+	// retry. Off by default; turn this on when running an AS exposed to
+	// untrusted clients to bound proof replay.
+	RequireNonceForTokens bool
+
+	// NonceSecret is the HMAC-SHA256 secret used to mint + verify
+	// DPoP-Nonce headers. Leave empty to let New generate a fresh
+	// 32-byte secret at startup; supply a stable value here when
+	// running multiple AS instances behind a load balancer so any
+	// instance can verify a nonce issued by any other.
+	NonceSecret []byte
+
+	// JTIReplayWindow caps the in-memory jti LRU size used to reject
+	// replayed proofs within ProofMaxAge. Defaults to 4096; raise for
+	// high-throughput AS deployments and lower for memory-constrained
+	// ones. A value of 0 means default.
+	JTIReplayWindow int
+}
+
+// dpopConfigFromRoot translates the root DPoPConfig into the internal
+// dpop.Config the verifier consumes. Nil-safe; returns nil so the AS
+// service short-circuits DPoP handling.
+func dpopConfigFromRoot(c *DPoPConfig) *internaldpop.Config {
+	if c == nil {
+		return nil
+	}
+	return &internaldpop.Config{
+		RequireDPoPForClients: append([]string(nil), c.RequireDPoPForClients...),
+		AllowedSignAlgs:       append([]string(nil), c.AllowedSignAlgs...),
+		ProofMaxAge:           c.ProofMaxAge,
+		NonceTTL:              c.NonceTTL,
+		RequireNonceForTokens: c.RequireNonceForTokens,
+		NonceSecret:           append([]byte(nil), c.NonceSecret...),
+		JTIReplayWindow:       c.JTIReplayWindow,
+	}
 }
 
 // ProtectedResource is defined in internal/models and re-exported from
@@ -150,6 +230,7 @@ func validateASConfig(cfg *AuthorizationServerConfig, encryptionKey []byte) erro
 		IntrospectionCacheTTL:          cfg.IntrospectionCacheTTL,
 		LoginURL:                       cfg.LoginURL,
 		DisableRotation:                cfg.DisableRotation,
+		DPoP:                           dpopConfigFromRoot(cfg.DPoP),
 	}
 	if err := internalas.Validate(&internal, encryptionKey); err != nil {
 		return err

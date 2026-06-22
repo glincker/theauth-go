@@ -1108,6 +1108,7 @@ func asConfigFromRoot(c *AuthorizationServerConfig) internalas.Config {
 		LoginURL:                       c.LoginURL,
 		DisableRotation:                c.DisableRotation,
 		CIMD:                           c.CIMD,
+		DPoP:                           dpopConfigFromRoot(c.DPoP),
 	}
 }
 

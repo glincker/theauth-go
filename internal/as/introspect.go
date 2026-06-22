@@ -47,6 +47,18 @@ type IntrospectionResponse struct {
 	// original delegation.
 	Act               *models.ActorClaim `json:"act,omitempty"`
 	DelegationGrantID string             `json:"delegation_grant_id,omitempty"`
+	// Cnf is the RFC 7800 confirmation claim. Populated when the token
+	// was minted as DPoP-bound (cnf.jkt = base64url SHA-256 thumbprint
+	// of the proof key). Resource servers compare this against the
+	// thumbprint of the inbound DPoP proof on every protected call.
+	Cnf *ConfirmationClaim `json:"cnf,omitempty"`
+}
+
+// ConfirmationClaim is the JSON shape of the RFC 7800 cnf claim. Only
+// the jkt member is populated today; future confirmation methods (mTLS
+// x5t#S256, kid) can land here additively.
+type ConfirmationClaim struct {
+	JKT string `json:"jkt,omitempty"`
 }
 
 // IntrospectToken validates the supplied token and returns the
@@ -133,6 +145,13 @@ func (s *Service) introspectJWT(ctx context.Context, token, expectedAud string) 
 	if v, ok := claims.Extra["delegation_grant_id"]; ok {
 		if sval, ok := v.(string); ok {
 			resp.DelegationGrantID = sval
+		}
+	}
+	if v, ok := claims.Extra["cnf"]; ok {
+		if m, ok := v.(map[string]any); ok {
+			if jkt, ok := m["jkt"].(string); ok && jkt != "" {
+				resp.Cnf = &ConfirmationClaim{JKT: jkt}
+			}
 		}
 	}
 	// Walk the chain on every fresh introspection: any actor in the

@@ -12,6 +12,7 @@ import (
 	"github.com/glincker/theauth-go/internal/audit"
 	"github.com/glincker/theauth-go/internal/cimd"
 	"github.com/glincker/theauth-go/internal/clientauthcache"
+	"github.com/glincker/theauth-go/internal/dpop"
 	"github.com/glincker/theauth-go/internal/models"
 )
 
@@ -88,6 +89,11 @@ type Service struct {
 	// not configured; in that case ResolveClient falls through to the
 	// legacy OAuthClientByClientID path for every client_id.
 	cimdSvc *cimd.Service
+
+	// dpopSvc is the RFC 9449 proof verifier. nil when Cfg.DPoP is nil
+	// (DPoP disabled); the token endpoint short-circuits dpop handling
+	// in that case and never reads from this field.
+	dpopSvc *dpop.Service
 }
 
 // introspectCacheEntry holds one cached introspection response body plus
@@ -141,6 +147,16 @@ func New(d Deps) *Service {
 	if emitter == nil {
 		emitter = audit.NoopEmitter{}
 	}
+	var dpopSvc *dpop.Service
+	if d.Cfg.DPoP != nil {
+		// Validate already ran in Validate(); if New is called directly
+		// the dpop.New constructor will reapply defaults so we never
+		// land on a zero-valued config.
+		ds, err := dpop.New(*d.Cfg.DPoP)
+		if err == nil {
+			dpopSvc = ds
+		}
+	}
 	s := &Service{
 		Cfg:             d.Cfg,
 		Storage:         d.Storage,
@@ -151,11 +167,22 @@ func New(d Deps) *Service {
 		keyMap:          map[string]models.JWKSKey{},
 		privKeyByKID:    map[string]ed25519.PrivateKey{},
 		clientAuthCache: clientauthcache.New[*models.OAuthClient](clientauthcache.DefaultMaxEntries, clientauthcache.DefaultTTL),
+		dpopSvc:         dpopSvc,
 	}
 	if d.Cfg.CIMD != nil {
 		s.cimdSvc = cimd.NewService(*d.Cfg.CIMD, emitter)
 	}
 	return s
+}
+
+// DPoP returns the underlying DPoP verifier or nil when DPoP is
+// disabled. Exposed so handlers in internal/as/handlers can call
+// IssueNonce / Verify without round-tripping through the Service.
+func (s *Service) DPoP() *dpop.Service {
+	if s == nil {
+		return nil
+	}
+	return s.dpopSvc
 }
 
 // Start bootstraps the JWKS state (loading existing keys or minting fresh
