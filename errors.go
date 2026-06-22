@@ -286,6 +286,36 @@ var (
 	// ErrLastAuthMethod is returned when an unlink operation would leave
 	// the account with zero authentication methods.
 	ErrLastAuthMethod = models.ErrLastAuthMethod
+
+	// CIBA (RFC 9509) sentinels.
+
+	// ErrCIBAAuthorizationPending is returned by PollBackchannelToken when
+	// the user has not yet approved or denied the request.
+	ErrCIBAAuthorizationPending = models.ErrCIBAAuthorizationPending
+
+	// ErrCIBASlowDown is returned when the client polls faster than
+	// CIBAConfig.MinPollInterval.
+	ErrCIBASlowDown = models.ErrCIBASlowDown
+
+	// ErrCIBAAccessDenied is returned when the user denied the request.
+	ErrCIBAAccessDenied = models.ErrCIBAAccessDenied
+
+	// ErrCIBAExpiredToken is returned when the auth_req_id has expired.
+	ErrCIBAExpiredToken = models.ErrCIBAExpiredToken
+
+	// ErrCIBAInvalidRequest is returned when required hint parameters are
+	// missing or mutually exclusive constraints are violated.
+	ErrCIBAInvalidRequest = models.ErrCIBAInvalidRequest
+
+	// ErrCIBADisabled is returned when a CIBA operation is attempted but
+	// CIBA is not enabled (Config.AuthorizationServer.CIBA is nil or the
+	// storage does not implement CIBAStorage).
+	ErrCIBADisabled = models.ErrCIBADisabled
+
+	// ErrCIBAUserMismatch is returned by ApproveBackchannelAuth /
+	// DenyBackchannelAuth when the supplied userID does not match the
+	// resolved subject on the pending request.
+	ErrCIBAUserMismatch = models.ErrCIBAUserMismatch
 )
 
 // OAuth 2.1 standard error codes returned in JSON error bodies.

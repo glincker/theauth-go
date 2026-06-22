@@ -153,8 +153,18 @@ func (s *Service) RegisterClient(ctx context.Context, req ClientRegistrationRequ
 // validateRegistrationRequest screens RFC 7591 metadata and applies
 // defaults matching the OAuth 2.1 + MCP profile.
 func validateRegistrationRequest(req *ClientRegistrationRequest, anonymous bool) error {
-	if len(req.RedirectURIs) == 0 {
-		return wrapInvalidReg("redirect_uris is required")
+	// Determine if authorization_code is in the grant list. When not
+	// explicitly set yet, the default is authorization_code + refresh_token
+	// (applied below), so redirect_uris is required in that case too.
+	requiresRedirectURI := len(req.GrantTypes) == 0
+	for _, gt := range req.GrantTypes {
+		if gt == models.GrantTypeAuthorizationCode {
+			requiresRedirectURI = true
+			break
+		}
+	}
+	if requiresRedirectURI && len(req.RedirectURIs) == 0 {
+		return wrapInvalidReg("redirect_uris is required for authorization_code clients")
 	}
 	if anonymous && len(req.RedirectURIs) > 1 {
 		// Tight cap matches the anonymous registration policy in spec
@@ -171,7 +181,9 @@ func validateRegistrationRequest(req *ClientRegistrationRequest, anonymous bool)
 	}
 	for _, gt := range req.GrantTypes {
 		switch gt {
-		case models.GrantTypeAuthorizationCode, models.GrantTypeRefreshToken:
+		case models.GrantTypeAuthorizationCode, models.GrantTypeRefreshToken,
+			models.GrantTypeClientCredentials, models.GrantTypeTokenExchange,
+			models.GrantTypeCIBA:
 			// supported
 		default:
 			return wrapInvalidReg("unsupported grant_type: " + gt)

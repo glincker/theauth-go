@@ -501,6 +501,7 @@ func asConfigFromRoot(c *AuthorizationServerConfig) internalas.Config {
 		PAR:                            c.PAR,
 		JAR:                            c.JAR,
 		JWTBearer:                      jwtBearerConfigFromRoot(c.JWTBearer),
+		CIBA:                           cibaConfigToInternal(c.CIBA),
 	}
 }
 
