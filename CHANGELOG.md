@@ -6,9 +6,23 @@ adheres to [Semantic Versioning](https://semver.org/) from v1.0 forward.
 
 ## [Unreleased]
 
+## [2.2.0] - 2026-06-22
+
+The "production-grade observability and audit closure" release. Three RFC-level
+features (CIMD, DPoP, observability adapters), four security closures, four perf
+items, +175pp of direct handler coverage on two highest-blast-radius packages,
+and an architectural cleanup that brings `theauth.go` from 1,171 LOC under the
+500 LOC ceiling. Public API stays byte-stable; every addition is additive.
+
 ### Added
 
-- **RFC 9449 DPoP (Demonstrating Proof-of-Possession) support.** The
+- **OAuth Client ID Metadata Documents (CIMD) per MCP spec 2025-11-25 (#42).**
+  Clients identify themselves by HTTPS URL; theauth-go fetches and validates
+  the metadata JSON on first use, caches with TTL, and applies a configurable
+  trust policy. Default policy is `DenyAll` (fail-closed) for fresh deployments.
+  Demotes the RFC 7591 DCR registration flow without removing it.
+
+- **RFC 9449 DPoP (Demonstrating Proof-of-Possession) support (#43).** The
   authorization server can now mint sender-constrained access tokens.
   Enable by setting `Config.AuthorizationServer.DPoP = &DPoPConfig{...}`.
   When a client presents a `DPoP` header on the token request, the AS
@@ -20,18 +34,153 @@ adheres to [Semantic Versioning](https://semver.org/) from v1.0 forward.
   binds the proof to the access token. A stolen token cannot be replayed
   without the holder's private key.
   - New public type: `theauth.DPoPConfig` (additive on
-    `AuthorizationServerConfig`; the field is nil by default so
-    pre-PR deployments retain Bearer-token semantics).
+    `AuthorizationServerConfig`; nil by default).
   - New mcpresource option: `mcpresource.WithDPoPVerification(algs,
     proofMaxAge, jtiReplayWindow)`. The mcpresource module gains no new
     transitive dependencies.
-  - AS metadata now advertises `dpop_signing_alg_values_supported`
-    when DPoP is enabled.
-  - Supported proof signing algorithms: ES256, ES384, RS256, PS256,
-    EdDSA. HS* and `none` are unconditionally rejected.
-  - Deferred: authorization-code binding (RFC 9449 section 10),
-    refresh-token DPoP rotation. Both are forward-compatible additions
-    on top of this PR.
+  - AS metadata now advertises `dpop_signing_alg_values_supported`.
+  - Supported proof algs: ES256, ES384, RS256, PS256, EdDSA. HS* and
+    `none` are unconditionally rejected.
+  - Deferred (forward-compatible): authorization-code binding,
+    refresh-token DPoP rotation.
+
+- **Pluggable observability adapters (OTel + Prometheus) (#44).** New
+  `Tracer` and `Metrics` interfaces on the root package plus a coalesced
+  `Hooks` bundle wired via `Config.Observability`. 10 spans
+  (`theauth.oauth.token`, `theauth.oauth.introspect`, agent + delegation
+  lifecycle, etc.) and 10 metrics
+  (`theauth_oauth_token_latency_seconds{grant_type}`, clientauthcache
+  hits/misses/size, ratelimit blocked, audit queue depth, etc.) ship live.
+  Example bridges to `go.opentelemetry.io/otel` and `prometheus/client_golang`
+  live in `examples/observability-otel/` and `examples/observability-prom/`
+  with their own go.mod; root and `mcpresource` go.mod gain zero new deps.
+
+- **Storage migration helper (#32).** `postgres.Migrate(ctx, pool) error`
+  embeds the migration SQL files, applies pending versions under an
+  advisory lock, and is idempotent on re-run. Downstream consumers can
+  delete their own copies of the migration code.
+
+- **`Config.RequireState` knob (#45).** When true, rejects `/authorize`
+  requests without a non-empty `state` parameter. Default false preserves
+  backwards compatibility. RFC 9700 best-current-practice.
+
+- **`Config.SuppressSecureCookieWarning` knob (#48).** Opt-out for the
+  deprecation warning shipped this release ahead of v3.0 default flip of
+  `SecureCookie` from `false` to `true`.
+
+- **`mcpresource.Validator.Diagnostics()` (#48).** Returns warnings about
+  validator misconfiguration (e.g., neither JWKS URL nor introspect URL
+  set). New public types: `mcpresource.Diagnostic`, severity constants.
+
+- **`AuthorizationServerNotConfigured` sentinel error (#50).** Replaces
+  six ad-hoc `errors.New(...)` calls in `forwarders_oauth.go`. Use
+  `errors.Is(err, theauth.ErrAuthorizationServerNotConfigured)`.
+
+### Changed
+
+- **`theauth.go` LOC: 1,171 -> 383 (#50).** Wiring extracted to `wiring.go`,
+  storage interface to `storage.go`, config sub-structs to `config.go`.
+  OAuth provider state machine moved to `internal/oauth/service.go`.
+  `internal/account/handlers/` and `internal/admin/handlers/` parent
+  packages collapsed (handlers now live directly under `internal/account/`
+  and `internal/admin/`). Zero public-API impact; downstream code compiles
+  unchanged.
+
+- **JWKS rotation is now transactional (#48).** Migration `0015` adds a
+  partial unique index `WHERE state='current'`. `Service.RotateSigningKey`
+  serializes rotations within a process via a `sync.Mutex`; concurrent
+  rotations across processes are guaranteed to leave exactly one current
+  key by the database constraint. New optional storage interface
+  `JWKSAtomicRotator` lets postgres collapse the rotation into a single
+  serializable transaction.
+
+- **Audit redactor uses precomputed lowercase key set (#46).** Replaces
+  per-key `strings.ToLower` allocations with `strings.EqualFold` against a
+  set built once at construction. Allocs/op drop.
+
+- **`keyedLimiter` uses `sync.RWMutex` + atomic `lastUsed` (#46).** Read
+  path no longer needs the write lock; 8-core read-heavy throughput
+  improves 5-10x under contention.
+
+- **Chain-walk cache (5s TTL) (#46).** `chainStillActive` cached per agent;
+  3+ storage calls per 3-deep chain drop to ~0 within the TTL window.
+  Suspend / revoke invalidates the cache via the same plumbing as
+  `clientauthcache`.
+
+- **SCIM auth uses a single storage lookup (#46).** `AuthenticateSCIMToken`
+  returns the token row; middleware reads from it directly.
+  `TouchSCIMTokenLastUsed` runs async via the audit channel-writer pattern.
+
+### Fixed
+
+- **Magic-link endpoint is now rate-limited (#45).** `POST /auth/magic-link`
+  applies the same `ipLimit` and `emailLimit` middleware buckets as the
+  password endpoints. Was previously the only credential-touching route
+  without rate limiting (enumeration vector).
+
+- **PKCE verifier comparison is constant-time (#45).** Replaced `!=` with
+  `crypto/subtle.ConstantTimeCompare` in `internal/as/token.go`.
+
+- **`RevokeToken` walks the refresh family (#45).** A revoke now invalidates
+  the entire token family via the same `RevokeRefreshTokenFamily` helper
+  used by the replay-detection path. RFC 7009 "unknown token returns 200"
+  semantics preserved.
+
+- **`InsertOAuthClient` coerces nil text[] slices to empty arrays (#40).**
+  Fixes `SQLSTATE 23502 violates not-null constraint` when a caller mints
+  an OAuth client with zero-value `RedirectURIs`, `GrantTypes`,
+  `ResponseTypes`, or `Contacts`. Most common hit: `CreateAgent` calling
+  `MintAgentCredential` on a fresh schema. Same fix applied to
+  `UpdateOAuthClient`.
+
+### Tests
+
+- **`internal/saml/handlers` 0% -> 91.4% statement coverage (#47).** 20
+  direct table tests covering happy path, signature failure, expired
+  `NotOnOrAfter`, wrong audience, and replay on `/saml/acs`. Plus 15
+  tests for the 5 CRUD endpoints.
+
+- **`internal/webauthn/handlers` 0% -> 84.5% (#47).** 21 tests covering
+  challenge cookie roundtrip, single-use guarantee, register/login Begin
+  and Finish, and credentials list / delete.
+
+- **`internal/organizations/handlers` 0% -> 94.0% (#49).** 22 tests for
+  the 7 endpoints (create / list / get / activate / clear-active /
+  add-member / remove-member) with happy paths and all documented error
+  codes.
+
+- **`internal/admin/handlers` 0% -> 81.1% (#49).** 52 tests for
+  `requireOrgMatch` middleware plus the 12 admin endpoints.
+
+- **`TestSuspendAgentBustsClientAuthCache` regression guard.** Confirms a
+  suspended agent cannot re-authenticate via a cached Argon2 entry within
+  the 5-minute cache TTL.
+
+- **`TestJWKSRotationConcurrentSafe` (#48).** 8 goroutines rotate the
+  signing key; asserts exactly one `state=current` row at the end.
+
+### Internal
+
+- **PR H1 (#41) test relocation.** 19 root-level `*_test.go` files moved
+  into their proper internal packages, ahead of the architectural
+  cleanup in #50.
+
+- **`/go.work` lists all 8 examples (#44 follow-up).** Adds `chi-app`,
+  `echo-app`, `gin-app`, `mcp-server`, `oauth-multi-provider`,
+  `stdlib-app`, `observability-otel`, `observability-prom`.
+
+### Security
+
+- **N1 (security re-audit).** Cache invalidation gap: revoked / suspended
+  agents could authenticate via a cached Argon2 entry for up to 5 minutes.
+  Closed by an explicit `s.invalidate(cur.ClientID)` call in
+  `changeAgentStatus`. Regression test ships.
+
+- **L1-L3 + L5 (security re-audit).** All re-audit lows closed; see Added
+  / Fixed entries for #45 above.
+
+- **M3-M5 (security re-audit).** SecureCookie deprecation warning, JWKS
+  transactional rotation, mcpresource Diagnostics; see entries for #48.
 
 ## [2.1.0] - 2026-06-21
 
