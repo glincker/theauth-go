@@ -37,7 +37,7 @@ func TestMySQLStoreContract(t *testing.T) {
 	if err != nil {
 		t.Fatalf("sql.Open: %v", err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	if err := db.PingContext(context.Background()); err != nil {
 		t.Fatalf("db.Ping: %v", err)

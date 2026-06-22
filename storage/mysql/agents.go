@@ -97,7 +97,7 @@ FROM agents WHERE organization_id = ? ORDER BY created_at ASC`, ulidToBytes(*own
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	var out []theauth.Agent
 	for rows.Next() {
 		a, err := scanAgent(rows)
@@ -192,7 +192,7 @@ FROM agent_credentials WHERE agent_id = ? ORDER BY created_at ASC`, ulidToBytes(
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	var out []theauth.AgentCredential
 	for rows.Next() {
 		c, err := scanAgentCredential(rows)
@@ -366,7 +366,7 @@ func (s *Store) queryDelegationGrants(ctx context.Context, q string, args ...int
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	var out []theauth.DelegationGrant
 	for rows.Next() {
 		g, err := scanDelegationGrant(rows)
