@@ -1133,6 +1133,7 @@ func asConfigFromRoot(c *AuthorizationServerConfig) internalas.Config {
 		DisableRotation:                c.DisableRotation,
 		CIMD:                           c.CIMD,
 		DPoP:                           dpopConfigFromRoot(c.DPoP),
+		RequireState:                   c.RequireState,
 	}
 }
 
