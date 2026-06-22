@@ -30,6 +30,9 @@ type Store struct {
 	v10 *v10State
 	// v2.0 phase 1 + 2: OAuth 2.1 AS + DCR + JWKS. See memory_v20.go.
 	v20 *v20State
+	// PAR (RFC 9126): pushed authorization requests. See memory_par.go.
+	parInitMu sync.Mutex
+	par       *parState
 }
 
 func New() *Store {

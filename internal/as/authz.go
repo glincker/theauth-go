@@ -34,6 +34,15 @@ type AuthorizeRequest struct {
 	CodeChallengeMethod string
 	Resource            string
 	Nonce               string
+
+	// RequestURI, when non-empty, identifies a pushed authorization
+	// request (RFC 9126). The handler resolves it before calling
+	// StartAuthorize; this field is informational at service level.
+	RequestURI string
+
+	// RequestObject, when non-empty, is the raw JAR JWT (RFC 9101).
+	// The handler resolves it before calling StartAuthorize.
+	RequestObject string
 }
 
 // AuthorizeResult is the outcome of a successful authorize call: the

@@ -70,6 +70,13 @@ func (h *Handler) Mount(r chi.Router, authn func(http.Handler) http.Handler, reg
 	} else {
 		r.Post("/oauth/register", h.handleRegister)
 	}
+	// PAR (RFC 9126): POST /oauth/par is registered only when PAR is enabled
+	// and the backend supports it. Doing the check here instead of in the
+	// handler keeps the router clean: unknown routes get a 405 rather than a
+	// runtime error body.
+	if h.svc.IsPAREnabled() {
+		r.Post("/oauth/par", h.handlePAR)
+	}
 }
 
 // ---------- discovery ----------
@@ -128,17 +135,85 @@ func (h *Handler) handleJWKS(w http.ResponseWriter, _ *http.Request) {
 
 func (h *Handler) handleAuthorize(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
-	req := internalas.AuthorizeRequest{
-		ClientID:            q.Get("client_id"),
-		RedirectURI:         q.Get("redirect_uri"),
-		ResponseType:        q.Get("response_type"),
-		Scope:               scopeSplit(q.Get("scope")),
-		State:               q.Get("state"),
-		CodeChallenge:       q.Get("code_challenge"),
-		CodeChallengeMethod: q.Get("code_challenge_method"),
-		Resource:            q.Get("resource"),
-		Nonce:               q.Get("nonce"),
+	clientID := q.Get("client_id")
+	requestURI := q.Get("request_uri")
+	requestObject := q.Get("request")
+
+	// RFC 9101: request and request_uri cannot coexist.
+	if requestURI != "" && requestObject != "" {
+		writeOAuthError(w, http.StatusBadRequest, oauthErrInvalidRequest, "request and request_uri are mutually exclusive")
+		return
 	}
+
+	var req internalas.AuthorizeRequest
+
+	switch {
+	case requestURI != "":
+		// PAR path: consume the pushed request.
+		// RFC 9126 section 3: when request_uri is present, inline params
+		// (other than client_id) MUST be absent.
+		if hasInlineAuthorizeParams(q, clientID) {
+			writeOAuthError(w, http.StatusBadRequest, oauthErrInvalidRequest, "inline params must not accompany request_uri")
+			return
+		}
+		// RequirePAR check happens implicitly: if PAR is required and the
+		// client sent inline params, the hasInlineAuthorizeParams guard
+		// above catches it. A request_uri path always passes.
+		var err error
+		req, err = h.svc.ConsumePushedRequest(r.Context(), requestURI)
+		if err != nil {
+			writeOAuthError(w, http.StatusBadRequest, oauthErrInvalidRequest, "invalid or expired request_uri")
+			return
+		}
+		// Bind client_id from query (MUST match inner client_id).
+		if clientID != "" && req.ClientID != clientID {
+			writeOAuthError(w, http.StatusBadRequest, oauthErrInvalidRequest, "client_id mismatch with request_uri")
+			return
+		}
+
+	case requestObject != "":
+		// JAR path: parse and verify the request JWT.
+		// RFC 9101 section 5: outer params (except client_id) are ignored.
+		client, err := h.svc.ResolveClient(r.Context(), clientID)
+		if err != nil {
+			writeOAuthError(w, http.StatusUnauthorized, oauthErrInvalidClient, "unknown client")
+			return
+		}
+		req, err = h.svc.ParseRequestObject(r.Context(), requestObject, clientID, h.svc.Cfg.Issuer, client)
+		if err != nil {
+			writeOAuthError(w, http.StatusBadRequest, oauthErrInvalidRequest, err.Error())
+			return
+		}
+		// Outer client_id is authoritative when the inner JWT omits it.
+		if req.ClientID == "" {
+			req.ClientID = clientID
+		}
+
+	default:
+		// Classic inline-param path.
+		// If RequirePAR is on, reject.
+		if h.svc.Cfg.PAR != nil && h.svc.Cfg.PAR.RequirePAR {
+			writeOAuthError(w, http.StatusBadRequest, oauthErrInvalidRequest, "pushed_authorization_request_required")
+			return
+		}
+		// If RequireJAR is on, reject.
+		if h.svc.Cfg.JAR != nil && h.svc.Cfg.JAR.RequireJAR {
+			writeOAuthError(w, http.StatusBadRequest, oauthErrInvalidRequest, "request_object_required")
+			return
+		}
+		req = internalas.AuthorizeRequest{
+			ClientID:            clientID,
+			RedirectURI:         q.Get("redirect_uri"),
+			ResponseType:        q.Get("response_type"),
+			Scope:               scopeSplit(q.Get("scope")),
+			State:               q.Get("state"),
+			CodeChallenge:       q.Get("code_challenge"),
+			CodeChallengeMethod: q.Get("code_challenge_method"),
+			Resource:            q.Get("resource"),
+			Nonce:               q.Get("nonce"),
+		}
+	}
+
 	user, _ := h.userFromCtx(r)
 	res, err := h.svc.StartAuthorize(r.Context(), req, user)
 	if err != nil {
@@ -151,6 +226,79 @@ func (h *Handler) handleAuthorize(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	http.Redirect(w, r, res.RedirectURL, http.StatusFound)
+}
+
+// hasInlineAuthorizeParams returns true when the query string contains any
+// authorization parameter other than client_id and request_uri. Used to
+// enforce RFC 9126 section 3's prohibition on mixing request_uri with inline
+// params.
+func hasInlineAuthorizeParams(q url.Values, clientID string) bool {
+	check := []string{
+		"response_type", "redirect_uri", "scope", "state",
+		"code_challenge", "code_challenge_method", "resource", "nonce",
+	}
+	for _, k := range check {
+		if q.Get(k) != "" {
+			return true
+		}
+	}
+	return false
+}
+
+// ---------- PAR ----------
+
+func (h *Handler) handlePAR(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		writeOAuthError(w, http.StatusBadRequest, oauthErrInvalidRequest, "malformed form")
+		return
+	}
+	clientID, _ := parseClientCredentials(r)
+
+	// JAR support inside PAR: if a "request" param is present, extract
+	// the authorization request from the JWT (RFC 9101 inside RFC 9126).
+	var req internalas.AuthorizeRequest
+	if ro := r.PostFormValue("request"); ro != "" {
+		client, err := h.svc.ResolveClient(r.Context(), clientID)
+		if err != nil {
+			writeOAuthError(w, http.StatusUnauthorized, oauthErrInvalidClient, "unknown client")
+			return
+		}
+		req, err = h.svc.ParseRequestObject(r.Context(), ro, clientID, h.svc.Cfg.Issuer, client)
+		if err != nil {
+			writeOAuthError(w, http.StatusBadRequest, oauthErrInvalidRequest, err.Error())
+			return
+		}
+		if req.ClientID == "" {
+			req.ClientID = clientID
+		}
+	} else {
+		req = internalas.AuthorizeRequest{
+			ClientID:            clientID,
+			RedirectURI:         r.PostFormValue("redirect_uri"),
+			ResponseType:        r.PostFormValue("response_type"),
+			Scope:               scopeSplit(r.PostFormValue("scope")),
+			State:               r.PostFormValue("state"),
+			CodeChallenge:       r.PostFormValue("code_challenge"),
+			CodeChallengeMethod: r.PostFormValue("code_challenge_method"),
+			Resource:            r.PostFormValue("resource"),
+			Nonce:               r.PostFormValue("nonce"),
+		}
+	}
+
+	resp, err := h.svc.PushAuthorize(r.Context(), req)
+	if err != nil {
+		code := mapOAuthErrorCode(err)
+		status := http.StatusBadRequest
+		if code == oauthErrInvalidClient {
+			status = http.StatusUnauthorized
+		}
+		writeOAuthError(w, status, code, err.Error())
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", "no-store")
+	w.WriteHeader(http.StatusCreated)
+	_ = json.NewEncoder(w).Encode(resp)
 }
 
 func writeAuthorizeError(w http.ResponseWriter, r *http.Request, req internalas.AuthorizeRequest, err error) {

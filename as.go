@@ -138,7 +138,26 @@ type AuthorizationServerConfig struct {
 	// should set this to true to enforce CSRF protection for every
 	// authorization request (security re-audit L5, 2026-06-22).
 	RequireState bool
+
+	// PAR wires RFC 9126 Pushed Authorization Requests. When non-nil and
+	// the Storage backend implements PARStorage, POST /oauth/par is
+	// registered and GET /oauth/authorize accepts request_uri. Nil (the
+	// default) disables PAR; existing deployments see no behavior change.
+	PAR *PARConfig
+
+	// JAR wires RFC 9101 JWT-Secured Authorization Requests. When
+	// non-nil, /oauth/authorize and /oauth/par accept a "request"
+	// parameter containing a signed JWT. Nil (the default) disables JAR.
+	JAR *JARConfig
 }
+
+// PARConfig is the root-package alias for as.PARConfig. Consumers set
+// Config.AuthorizationServer.PAR to enable RFC 9126 support.
+type PARConfig = internalas.PARConfig
+
+// JARConfig is the root-package alias for as.JARConfig. Consumers set
+// Config.AuthorizationServer.JAR to enable RFC 9101 support.
+type JARConfig = internalas.JARConfig
 
 // DPoPConfig configures the RFC 9449 DPoP verifier wired into both the
 // authorization server and the mcpresource validator. All fields are
@@ -240,6 +259,8 @@ func validateASConfig(cfg *AuthorizationServerConfig, encryptionKey []byte) erro
 		DisableRotation:                cfg.DisableRotation,
 		DPoP:                           dpopConfigFromRoot(cfg.DPoP),
 		RequireState:                   cfg.RequireState,
+		PAR:                            cfg.PAR,
+		JAR:                            cfg.JAR,
 	}
 	if err := internalas.Validate(&internal, encryptionKey); err != nil {
 		return err

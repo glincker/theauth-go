@@ -31,6 +31,14 @@ type ASMetadata struct {
 	// field advertising the proof-JWT signing algorithms this AS
 	// accepts. Omitted when DPoP is disabled.
 	DPoPSigningAlgValuesSupported []string `json:"dpop_signing_alg_values_supported,omitempty"`
+
+	// PAR (RFC 9126) fields. Both are omitted when PAR is disabled.
+	PushedAuthorizationRequestEndpoint string `json:"pushed_authorization_request_endpoint,omitempty"`
+	RequirePushedAuthorizationRequests bool   `json:"require_pushed_authorization_requests,omitempty"`
+
+	// JAR (RFC 9101) fields. Omitted when JAR is disabled.
+	RequestParameterSupported              bool     `json:"request_parameter_supported,omitempty"`
+	RequestObjectSigningAlgValuesSupported []string `json:"request_object_signing_alg_values_supported,omitempty"`
 }
 
 // ASMetadataDoc builds the metadata document. The result is
@@ -59,6 +67,22 @@ func (s *Service) ASMetadataDoc() (ASMetadata, error) {
 			dpopAlgs = append([]string(nil), s.Cfg.DPoP.AllowedSignAlgs...)
 		}
 	}
+	// Build PAR fields.
+	var parEndpoint string
+	var requirePAR bool
+	if s.IsPAREnabled() {
+		parEndpoint = s.Cfg.Issuer + "/oauth/par"
+		requirePAR = s.Cfg.PAR.RequirePAR
+	}
+
+	// Build JAR fields.
+	var requestParamSupported bool
+	var jarAlgs []string
+	if s.IsJAREnabled() {
+		requestParamSupported = true
+		jarAlgs = s.jarAlgorithmsAdvertised()
+	}
+
 	return ASMetadata{
 		Issuer:                s.Cfg.Issuer,
 		AuthorizationEndpoint: s.Cfg.Issuer + "/oauth/authorize",
@@ -76,9 +100,13 @@ func (s *Service) ASMetadataDoc() (ASMetadata, error) {
 			models.ClientAuthSecretPost,
 			models.ClientAuthNone,
 		},
-		CodeChallengeMethodsSupported: []string{"S256"},
-		ScopesSupported:               scopeList,
-		DPoPSigningAlgValuesSupported: dpopAlgs,
+		CodeChallengeMethodsSupported:          []string{"S256"},
+		ScopesSupported:                        scopeList,
+		DPoPSigningAlgValuesSupported:          dpopAlgs,
+		PushedAuthorizationRequestEndpoint:     parEndpoint,
+		RequirePushedAuthorizationRequests:     requirePAR,
+		RequestParameterSupported:              requestParamSupported,
+		RequestObjectSigningAlgValuesSupported: jarAlgs,
 	}, nil
 }
 
