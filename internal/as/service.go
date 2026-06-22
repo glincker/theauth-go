@@ -73,6 +73,13 @@ type Service struct {
 	keyMap       map[string]models.JWKSKey
 	privKeyByKID map[string]ed25519.PrivateKey
 
+	// rotationMu serialises RotateSigningKey calls so that concurrent
+	// operators cannot observe a split-brain state where two storage rows
+	// both carry state = current. The underlying storage transaction (when
+	// the backend implements JWKSAtomicRotator) provides the DB-level
+	// guarantee; this mutex provides the in-process coordination.
+	rotationMu sync.Mutex
+
 	rotationStop chan struct{}
 	rotationDone chan struct{}
 

@@ -66,3 +66,22 @@ type Storage interface {
 	DelegationGrantByID(ctx context.Context, id models.ULID) (*models.DelegationGrant, error)
 	DelegationGrantByUserAgentResource(ctx context.Context, userID, agentID models.ULID, resource string) (*models.DelegationGrant, error)
 }
+
+// JWKSAtomicRotator is an optional interface that storage backends may
+// implement to wrap JWKS rotation in a single database transaction. When the
+// Storage passed to as.New also satisfies JWKSAtomicRotator, RotateSigningKey
+// calls AtomicRotateJWKS instead of issuing the individual UpdateJWKSKeyState
+// and InsertJWKSKey calls separately. This prevents racing rotations from
+// leaving two rows with state = current (M4 security audit 2026-06-21).
+//
+// Implementations MUST:
+//   - Retire every kid in retireKIDs (set state = retired, retired_at = now).
+//   - Set demoteKID to state = previous.
+//   - Set promoteKID to state = current, promoted_at = now.
+//   - Insert freshKey (state = next).
+//
+// All four steps must succeed or all must be rolled back; the caller passes
+// pre-validated KIDs so NOT-FOUND on any of them is an implementation error.
+type JWKSAtomicRotator interface {
+	AtomicRotateJWKS(ctx context.Context, retireKIDs []string, demoteKID, promoteKID string, freshKey models.JWKSKey, now time.Time) error
+}
