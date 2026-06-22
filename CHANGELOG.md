@@ -6,6 +6,85 @@ adheres to [Semantic Versioning](https://semver.org/) from v1.0 forward.
 
 ## [Unreleased]
 
+## [2.3.0] - 2026-06-22
+
+The "MCP wedge deepening and enterprise feature parity" release. Three major
+features land here that close the gap with Auth0, Clerk, and Better-Auth:
+account linking with mandatory step-up, eight new built-in OAuth providers
+(12 total), and pluggable SIEM streaming sinks for enterprise audit log
+shipping. Public API stays additive; downstream code compiles unchanged.
+
+### Added
+
+- **Account linking and identity merge (#55).** Users can now bind a new
+  authentication method to an existing account, or merge two accounts into
+  one, behind mandatory step-up auth.
+  - `LinkOAuthToCurrentUser(ctx, sessionID, provider, payload) error` --
+    bind a new OAuth provider to the signed-in user.
+  - `LinkPasswordToCurrentUser(ctx, sessionID, password) error` -- add a
+    backup password to an OAuth-only account.
+  - `MergeAccounts(ctx, primaryID, secondaryID, mergeInput) error` --
+    destructive merge; moves OAuth accounts, passwords, WebAuthn
+    credentials, TOTP secrets from secondary to primary; revokes
+    secondary's sessions; cross-references via `merged_into` in the audit
+    log.
+  - HTTP endpoints under `/account/identities`: POST `/oauth`, GET
+    `/oauth/callback`, POST `/password`, POST `/merge`, DELETE
+    `/{provider}`.
+  - New errors: `ErrIdentityConflict`, `ErrStepUpRequired`,
+    `ErrLastAuthMethod` (cannot unlink the last auth method).
+  - New audit event types: `identity.linked`, `identity.unlinked`,
+    `account.merged`.
+  - All methods require a fully-authenticated session (no `pending_2fa`);
+    callers receive `ErrStepUpRequired` otherwise.
+
+- **Eight new built-in OAuth providers (#54). Total provider count: 4 to 12.**
+  - `provider/apple` -- Sign in with Apple. ES256 JWT client authentication
+    minted from a .p8 private key per token exchange. Parse the .p8 file
+    with `x509.ParsePKCS8PrivateKey` after `pem.Decode`, not
+    `x509.ParseECPrivateKey` (the file is downloadable only once from
+    Apple's developer console).
+  - `provider/facebook` -- Meta OAuth 2.0 with PKCE; `email_verified`
+    conservatively false (Graph API does not attest it).
+  - `provider/slack` -- Sign in with Slack via the OpenID Connect
+    endpoint.
+  - `provider/gitlab` -- GitLab OIDC; `BaseURL` option supports
+    self-hosted instances.
+  - `provider/bitbucket` -- Bitbucket Cloud OAuth 2.0 with HTTP Basic
+    auth on the token exchange per Atlassian spec.
+  - `provider/twitch` -- Twitch OIDC; adds the `claims` parameter to
+    surface email on the userinfo response.
+  - `provider/linkedin` -- Sign In with LinkedIn using OpenID Connect
+    (post-2023 `/v2/userinfo` endpoint).
+  - `provider/x` -- X (formerly Twitter) OAuth 2.0 with mandatory PKCE;
+    `ExchangeCode` returns an error if `codeVerifier` is empty.
+  - Each provider ships with its own `examples/oauth-<provider>/`
+    minimal demo.
+
+- **SIEM audit streaming sinks (#53).** New `AuditSink` interface on the
+  root package lets operators fan out audit events to external systems
+  without a polling job. Failed sinks never block the canonical storage
+  write; failures increment `Stats.AuditSinkFailed`.
+  - `AuditSink` interface: `Stream(ctx, batch []AuditEvent) error` +
+    `Name() string`.
+  - `AuditConfig.Sinks []AuditSink` -- register zero or more sinks; root
+    package wires them through `wiring.go`.
+  - Built-in `audit/sinks/otlp` -- OTLP/HTTP logs exporter; deps in its
+    own go.mod (root gains zero new transitive deps).
+  - Built-in `audit/sinks/splunkhec` -- Splunk HEC envelope, token auth,
+    no new deps.
+  - Built-in `audit/sinks/webhook` -- generic CloudEvents 1.0 POST with
+    `X-CloudEvents-Signature` HMAC-SHA256 header.
+  - All three sinks support a `WithRedactor(func(AuditEvent) AuditEvent)`
+    option for per-sink PII stripping (stricter than the default).
+  - New stats field: `Stats.AuditSinkFailed uint64`.
+
+### Changed
+
+- **Stats counters expanded.** `Stats.AuditSinkFailed` added; existing
+  counters unchanged. Per the additive-fields contract, downstream code
+  consuming Stats does not need to change.
+
 ## [2.2.0] - 2026-06-22
 
 The "production-grade observability and audit closure" release. Three RFC-level
