@@ -163,6 +163,96 @@ type AuthorizationServerConfig struct {
     // IntrospectionCacheTTL is how long introspection results are cached
     // in the mcpresource validator (default 60s).
     IntrospectionCacheTTL time.Duration
+
+    // RequireState rejects /authorize requests that omit a non-empty state
+    // parameter (RFC 9700 best-current-practice). Default: false.
+    RequireState bool
+
+    // PAR configures Pushed Authorization Requests (RFC 9126, v2.4).
+    // Nil disables PAR.
+    PAR *PARConfig
+
+    // JAR configures JWT-Secured Authorization Requests (RFC 9101, v2.4).
+    // Nil disables JAR.
+    JAR *JARConfig
+
+    // JWTBearer configures JWT-Bearer client auth and grant (RFC 7523, v2.4).
+    // Nil disables JWT-Bearer.
+    JWTBearer *JWTBearerConfig
+
+    // CIBA configures Client-Initiated Backchannel Authentication (RFC 9509, v2.4).
+    // Nil disables CIBA.
+    CIBA *CIBAConfig
+}
+
+// PARConfig controls Pushed Authorization Request behaviour (v2.4).
+type PARConfig struct {
+    // Required rejects plain /authorize requests that do not use request_uri.
+    // Set true for FAPI 2.0 profiles.
+    Required bool
+    // TTL is the lifetime of the request_uri handle (default: 60s).
+    TTL time.Duration
+}
+
+// JARConfig controls JWT-Secured Authorization Request behaviour (v2.4).
+type JARConfig struct {
+    // Required rejects /authorize requests that do not carry a signed
+    // request JWT. Set true for FAPI 2.0 profiles.
+    Required bool
+    // AllowedAlgorithms limits accepted signing algorithms.
+    // Default: ES256, RS256.
+    AllowedAlgorithms []string
+}
+
+// JWTBearerConfig controls JWT-Bearer client auth and grants (v2.4, RFC 7523).
+type JWTBearerConfig struct {
+    // TrustedIssuers lists external OIDC/JWT issuers trusted for jwt-bearer
+    // grant assertions.
+    TrustedIssuers []TrustedJWTIssuer
+}
+
+// TrustedJWTIssuer represents one external JWT issuer for jwt-bearer grants.
+type TrustedJWTIssuer struct {
+    // Issuer is the expected "iss" claim value.
+    Issuer string
+    // JWKSU is the JWKS endpoint URL for this issuer.
+    JWKSU string
+    // SubjectMapper maps the JWT claims to a theauth client_id.
+    // Return ("", nil) to deny silently.
+    SubjectMapper func(ctx context.Context, claims map[string]any) (string, error)
+}
+
+// CIBAConfig controls Client-Initiated Backchannel Authentication (v2.4, RFC 9509).
+type CIBAConfig struct {
+    // AuthenticationDevice delivers the out-of-band auth request to the user.
+    // Required.
+    AuthenticationDevice AuthenticationDevice
+    // ExpiresIn is the auth_req_id lifetime (default: 120s).
+    ExpiresIn time.Duration
+    // PollingInterval is the minimum client poll interval in seconds (default: 5).
+    PollingInterval int
+}
+```
+
+## Password policy (v2.4)
+
+| Field | Type | Description |
+|---|---|---|
+| `PasswordPolicy` | `*PasswordPolicyConfig` | Additional password handling options. Nil uses defaults. |
+
+```go
+type PasswordPolicyConfig struct {
+    // AllowLegacyBcrypt accepts bcrypt-hashed passwords during the migration
+    // window when migrating from Auth0 or similar systems. On a successful
+    // bcrypt login, theauth-go re-hashes with Argon2id.
+    // Disable this flag once the migration window closes.
+    // Default: false.
+    AllowLegacyBcrypt bool
+
+    // OnLegacyHashAccepted is called after a successful bcrypt verify with the
+    // new Argon2id hash. Use this to persist the updated hash to storage.
+    // Called in a background goroutine; the login response is not delayed.
+    OnLegacyHashAccepted func(userID string, newArgon2idHash string)
 }
 ```
 

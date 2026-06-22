@@ -1,6 +1,15 @@
 # Threat Model
 
-This page summarizes the security design decisions in theauth-go and the threats it is built to resist. It also documents what is explicitly out of scope.
+This page summarizes the security design decisions in theauth-go and the threats
+it is built to resist. It also documents what is explicitly out of scope.
+
+!!! note "Full STRIDE analysis"
+    A detailed STRIDE (Spoofing, Tampering, Repudiation, Information Disclosure,
+    Denial of Service, Elevation of Privilege) threat catalog is maintained in
+    [`docs/THREAT-MODEL.md`](https://github.com/glincker/theauth-go/blob/main/docs/THREAT-MODEL.md)
+    in the repository. The page you are reading is the operational quick-reference
+    summary. Refer to the full document for per-subsystem threat tables and
+    mitigating control details.
 
 ## Trust boundaries
 

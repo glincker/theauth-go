@@ -72,12 +72,17 @@ nav:
       - MCP Authorization: concepts/mcp-authorization.md
       - Authorization Server: concepts/authorization-server.md
       - Resource Server (mcpresource): concepts/resource-server.md
+      - PAR + JAR (FAPI 2.0): concepts/par-jar.md
+      - JWT-Bearer Client Auth: concepts/jwt-bearer.md
+      - CIBA Backchannel Auth: concepts/ciba.md
   - Guides:
       - Add an OAuth Provider: guides/add-oauth-provider.md
       - Enable WebAuthn Passkeys: guides/webauthn-passkeys.md
       - Wire OpenTelemetry Tracing: guides/opentelemetry-tracing.md
       - Stream Audit Logs to Splunk: guides/audit-log-splunk.md
       - Write a Custom Storage Backend: guides/custom-storage-backend.md
+      - Migrate from Cognito: guides/migrate-from-cognito.md
+      - Migrate from Auth0: guides/migrate-from-auth0.md
   - Reference:
       - Configuration: reference/configuration.md
       - Storage Interface: reference/storage.md
@@ -89,7 +94,10 @@ nav:
       - Threat Model: security/threat-model.md
       - Releases and Verification: security/releases.md
       - Benchmarks: security/benchmarks.md
+      - SOC 2 Mapping: security/compliance-soc2.md
+      - GDPR Reference: security/compliance-gdpr.md
   - Migrations:
+      - v2.3 to v2.4: migrations/v2.3-to-v2.4.md
       - v2.0 to v2.1: migrations/v2.0-to-v2.1.md
       - v1.0 to v2.0: migrations/v1.0-to-v2.0.md
       - v0.7 to v1.0: migrations/v0.7-to-v1.0.md
