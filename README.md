@@ -30,6 +30,7 @@ The site covers getting started, concepts, guides, configuration reference, erro
 - [Documentation](#documentation)
 - [Examples](#examples)
 - [Architecture](#architecture)
+- [Trust](#trust)
 - [Security](#security)
 - [Versioning and stability](#versioning-and-stability)
 - [Verifying releases](#verifying-releases)
@@ -331,6 +332,19 @@ will see the OAuth AS sub-tests automatically skipped with `t.Skip`.
 
 The `storagetest` package has no external dependencies beyond the standard
 library and `theauth` itself.
+
+---
+
+## Trust
+
+Procurement teams at regulated companies ask three questions before adopting an auth library. The documents below answer them directly.
+
+| Document | Question it answers |
+|---|---|
+| [docs/THREAT-MODEL.md](docs/THREAT-MODEL.md) | What is your threat model? STRIDE analysis per component, with file:line citations to mitigations and explicit residual risk for operator action. |
+| [docs/COMPLIANCE-SOC2.md](docs/COMPLIANCE-SOC2.md) | How do you map to SOC 2 Type II controls? CC1-CC9, A1, C1, PI1, and P-series criteria mapped to library capabilities and operator gaps. |
+| [docs/COMPLIANCE-GDPR.md](docs/COMPLIANCE-GDPR.md) | How does a customer deploy you under GDPR? Personal data inventory, data subject rights APIs, retention defaults, data residency posture, and an operator checklist. |
+| [SECURITY.md](SECURITY.md) | How do I report a vulnerability? Vulnerability disclosure policy and contact. |
 
 ---
 
