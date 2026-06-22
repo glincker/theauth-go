@@ -11,6 +11,7 @@ import (
 	"github.com/glincker/theauth-go"
 	"github.com/glincker/theauth-go/internal/ulid"
 	"github.com/glincker/theauth-go/storage"
+	"github.com/glincker/theauth-go/storagetest"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -292,4 +293,31 @@ func TestPostgresMagicLinkConsume(t *testing.T) {
 	if _, err := s.ConsumeMagicLink(ctx, tokenHash[:]); !errors.Is(err, storage.ErrNotFound) {
 		t.Fatalf("second consume should fail; got %v", err)
 	}
+}
+
+// TestPostgresStoreContract runs the full storagetest contract suite against
+// the Postgres backend. Requires THEAUTH_TEST_PG_DSN (or POSTGRES_TEST_URL)
+// to be set; skipped otherwise.
+func TestPostgresStoreContract(t *testing.T) {
+	url := os.Getenv("THEAUTH_TEST_PG_DSN")
+	if url == "" {
+		url = os.Getenv("POSTGRES_TEST_URL")
+	}
+	if url == "" {
+		t.Skip("THEAUTH_TEST_PG_DSN not set; skipping Postgres contract test")
+	}
+
+	pool, err := pgxpool.New(context.Background(), url)
+	if err != nil {
+		t.Fatalf("pgxpool.New: %v", err)
+	}
+	defer pool.Close()
+
+	// Apply all migrations so the schema is up to date.
+	// testPool already handles this for other tests; replicate the setup for
+	// the contract store so it runs against a freshly migrated schema.
+	_ = testPool(t) // drives migration; the shared test DB is already initialised.
+
+	store := New(pool)
+	storagetest.Run(t, store)
 }
