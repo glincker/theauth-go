@@ -45,6 +45,17 @@ type TokenRequest struct {
 	// supply them directly.
 	HTTPMethod string
 	HTTPURL    string
+
+	// ClientAssertionType and ClientAssertion carry the RFC 7523 section 2.2
+	// parameters. When ClientAssertionType ==
+	// models.ClientAssertionTypeJWTBearer, AuthenticateClient delegates to
+	// AuthenticateClientJWT rather than checking a client_secret.
+	ClientAssertionType string
+	ClientAssertion     string
+
+	// Assertion is the external JWT for the
+	// urn:ietf:params:oauth:grant-type:jwt-bearer grant (RFC 7523 section 2.1).
+	Assertion string
 }
 
 // TokenResponse is the JSON body emitted by /oauth/token on success.
@@ -69,7 +80,7 @@ func (s *Service) ExchangeAuthorizationCode(ctx context.Context, req TokenReques
 	ctx, span, timer := s.startTokenSpan(ctx, "authorization_code")
 	defer func() { s.finishTokenSpan(span, timer, "authorization_code", err) }()
 	var client *models.OAuthClient
-	client, err = s.AuthenticateClient(ctx, req.ClientID, req.ClientSecret)
+	client, err = s.AuthenticateClientFromRequest(ctx, req, s.tokenEndpointURL())
 	if err != nil {
 		return TokenResponse{}, err
 	}
@@ -130,7 +141,7 @@ func (s *Service) RefreshAccessToken(ctx context.Context, req TokenRequest) (res
 	ctx, span, timer := s.startTokenSpan(ctx, "refresh_token")
 	defer func() { s.finishTokenSpan(span, timer, "refresh_token", err) }()
 	var client *models.OAuthClient
-	client, err = s.AuthenticateClient(ctx, req.ClientID, req.ClientSecret)
+	client, err = s.AuthenticateClientFromRequest(ctx, req, s.tokenEndpointURL())
 	if err != nil {
 		return TokenResponse{}, err
 	}
@@ -341,7 +352,27 @@ func (s *Service) AuthenticateClient(ctx context.Context, clientID, clientSecret
 		s.clientAuthCache.Put(clientID, clientSecret, client)
 		s.updateCacheSizeGauge()
 		return client, nil
+	case models.ClientAuthPrivateKeyJWT, models.ClientAuthClientSecretJWT:
+		// JWT client authentication is handled by AuthenticateClientJWT;
+		// callers that reach this switch branch via the legacy
+		// AuthenticateClient(ctx, id, secret) API do not carry an assertion
+		// and therefore fail. The handler layer calls AuthenticateClientJWT
+		// directly when client_assertion_type is present.
+		return nil, models.ErrOAuthInvalidClient
 	default:
 		return nil, models.ErrOAuthInvalidClient
 	}
+}
+
+// AuthenticateClientFromRequest authenticates a client from a TokenRequest.
+// When the request carries a client_assertion_type, this delegates to
+// AuthenticateClientJWT. Otherwise it calls AuthenticateClient.
+//
+// tokenEndpointURL is the full canonical URL of the token endpoint (used as
+// the expected aud in client assertions).
+func (s *Service) AuthenticateClientFromRequest(ctx context.Context, req TokenRequest, tokenEndpointURL string) (*models.OAuthClient, error) {
+	if req.ClientAssertionType == models.ClientAssertionTypeJWTBearer && req.ClientAssertion != "" {
+		return s.AuthenticateClientJWT(ctx, req.ClientID, req.ClientAssertion, tokenEndpointURL)
+	}
+	return s.AuthenticateClient(ctx, req.ClientID, req.ClientSecret)
 }

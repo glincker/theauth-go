@@ -33,6 +33,8 @@ type Store struct {
 	// PAR (RFC 9126): pushed authorization requests. See memory_par.go.
 	parInitMu sync.Mutex
 	par       *parState
+	// jti: RFC 7523 JTI replay cache. See memory_jwtbearer.go.
+	jti *jtiState
 }
 
 func New() *Store {

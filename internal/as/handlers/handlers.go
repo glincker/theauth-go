@@ -328,6 +328,14 @@ func (h *Handler) handleToken(w http.ResponseWriter, r *http.Request) {
 	}
 	clientID, clientSecret := parseClientCredentials(r)
 	grantType := r.PostFormValue("grant_type")
+	// RFC 7523 section 2.2 client_assertion fields.
+	clientAssertionType := r.PostFormValue("client_assertion_type")
+	clientAssertion := r.PostFormValue("client_assertion")
+	// When client_id is absent but client_assertion is present, extract the
+	// client_id from the assertion iss claim (RFC 7523 requires iss = client_id).
+	if clientID == "" && clientAssertion != "" {
+		clientID = jwtPeekIss(clientAssertion)
+	}
 	// DPoP proof comes in via the DPoP header (RFC 9449 section 4). The
 	// HTTPMethod / HTTPURL are passed through to the verifier so it can
 	// match against the htm / htu claims; the verifier strips fragment +
@@ -337,15 +345,17 @@ func (h *Handler) handleToken(w http.ResponseWriter, r *http.Request) {
 	switch grantType {
 	case models.GrantTypeAuthorizationCode:
 		req := internalas.TokenRequest{
-			GrantType:    grantType,
-			ClientID:     clientID,
-			ClientSecret: clientSecret,
-			Code:         r.PostFormValue("code"),
-			CodeVerifier: r.PostFormValue("code_verifier"),
-			RedirectURI:  r.PostFormValue("redirect_uri"),
-			DPoPProof:    dpopHeader,
-			HTTPMethod:   r.Method,
-			HTTPURL:      httpURL,
+			GrantType:           grantType,
+			ClientID:            clientID,
+			ClientSecret:        clientSecret,
+			Code:                r.PostFormValue("code"),
+			CodeVerifier:        r.PostFormValue("code_verifier"),
+			RedirectURI:         r.PostFormValue("redirect_uri"),
+			DPoPProof:           dpopHeader,
+			HTTPMethod:          r.Method,
+			HTTPURL:             httpURL,
+			ClientAssertionType: clientAssertionType,
+			ClientAssertion:     clientAssertion,
 		}
 		resp, err := h.svc.ExchangeAuthorizationCode(r.Context(), req)
 		if err != nil {
@@ -355,15 +365,17 @@ func (h *Handler) handleToken(w http.ResponseWriter, r *http.Request) {
 		writeTokenJSON(w, resp)
 	case models.GrantTypeRefreshToken:
 		req := internalas.TokenRequest{
-			GrantType:    grantType,
-			ClientID:     clientID,
-			ClientSecret: clientSecret,
-			RefreshToken: r.PostFormValue("refresh_token"),
-			Resource:     r.PostFormValue("resource"),
-			Scope:        scopeSplit(r.PostFormValue("scope")),
-			DPoPProof:    dpopHeader,
-			HTTPMethod:   r.Method,
-			HTTPURL:      httpURL,
+			GrantType:           grantType,
+			ClientID:            clientID,
+			ClientSecret:        clientSecret,
+			RefreshToken:        r.PostFormValue("refresh_token"),
+			Resource:            r.PostFormValue("resource"),
+			Scope:               scopeSplit(r.PostFormValue("scope")),
+			DPoPProof:           dpopHeader,
+			HTTPMethod:          r.Method,
+			HTTPURL:             httpURL,
+			ClientAssertionType: clientAssertionType,
+			ClientAssertion:     clientAssertion,
 		}
 		resp, err := h.svc.RefreshAccessToken(r.Context(), req)
 		if err != nil {
@@ -373,11 +385,13 @@ func (h *Handler) handleToken(w http.ResponseWriter, r *http.Request) {
 		writeTokenJSON(w, resp)
 	case models.GrantTypeClientCredentials:
 		req := internalas.TokenRequest{
-			GrantType:    grantType,
-			ClientID:     clientID,
-			ClientSecret: clientSecret,
-			Resource:     r.PostFormValue("resource"),
-			Scope:        scopeSplit(r.PostFormValue("scope")),
+			GrantType:           grantType,
+			ClientID:            clientID,
+			ClientSecret:        clientSecret,
+			Resource:            r.PostFormValue("resource"),
+			Scope:               scopeSplit(r.PostFormValue("scope")),
+			ClientAssertionType: clientAssertionType,
+			ClientAssertion:     clientAssertion,
 		}
 		resp, err := h.svc.ClientCredentialsToken(r.Context(), req)
 		if err != nil {
@@ -404,9 +418,49 @@ func (h *Handler) handleToken(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		writeTokenJSON(w, resp)
+	case models.GrantTypeJWTBearer:
+		assertion := r.PostFormValue("assertion")
+		req := internalas.TokenRequest{
+			GrantType:           grantType,
+			ClientID:            clientID,
+			ClientSecret:        clientSecret,
+			Resource:            r.PostFormValue("resource"),
+			Scope:               scopeSplit(r.PostFormValue("scope")),
+			Assertion:           assertion,
+			ClientAssertionType: clientAssertionType,
+			ClientAssertion:     clientAssertion,
+		}
+		resp, err := h.svc.JWTBearerGrant(r.Context(), req, assertion)
+		if err != nil {
+			writeTokenError(w, err)
+			return
+		}
+		writeTokenJSON(w, resp)
 	default:
 		writeOAuthError(w, http.StatusBadRequest, oauthErrUnsupportedGrantType, "grant_type not supported")
 	}
+}
+
+// jwtPeekIss extracts the iss claim from a compact JWT without verifying
+// the signature. Used to extract client_id from client_assertion when the
+// caller does not include it as a separate form field (RFC 7523 permits
+// this; the AS must extract it from the assertion).
+func jwtPeekIss(token string) string {
+	parts := strings.Split(token, ".")
+	if len(parts) != 3 {
+		return ""
+	}
+	payload, err := base64.RawURLEncoding.DecodeString(parts[1])
+	if err != nil {
+		return ""
+	}
+	var c struct {
+		Iss string `json:"iss"`
+	}
+	if err := json.Unmarshal(payload, &c); err != nil {
+		return ""
+	}
+	return c.Iss
 }
 
 func writeTokenJSON(w http.ResponseWriter, resp internalas.TokenResponse) {

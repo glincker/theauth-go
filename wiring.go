@@ -283,13 +283,18 @@ func wireServices(a *TheAuth, cfg Config, providers map[string]Provider, sp saml
 				DefaultDelegatedTokenTTL: cfg.AgentIdentity.DefaultDelegatedTokenTTL,
 			}
 		}
+		var jwtBearerStore internalas.JWTBearerStorageAdapter
+		if jbs, ok := cfg.Storage.(JWTBearerStorage); ok {
+			jwtBearerStore = jwtBearerStorageAdapter{jbs}
+		}
 		a.as = internalas.New(internalas.Deps{
-			Cfg:           asConfigFromRoot(cfg.AuthorizationServer),
-			Storage:       oss,
-			EncryptionKey: cfg.EncryptionKey,
-			AgentPolicy:   policy,
-			Audit:         a,
-			Hooks:         a.hooks,
+			Cfg:              asConfigFromRoot(cfg.AuthorizationServer),
+			Storage:          oss,
+			EncryptionKey:    cfg.EncryptionKey,
+			AgentPolicy:      policy,
+			Audit:            a,
+			Hooks:            a.hooks,
+			JWTBearerStorage: jwtBearerStore,
 		})
 		var agentPolicy *agent.Config
 		if cfg.AgentIdentity != nil {
@@ -495,7 +500,19 @@ func asConfigFromRoot(c *AuthorizationServerConfig) internalas.Config {
 		RequireState:                   c.RequireState,
 		PAR:                            c.PAR,
 		JAR:                            c.JAR,
+		JWTBearer:                      jwtBearerConfigFromRoot(c.JWTBearer),
 	}
+}
+
+// jwtBearerStorageAdapter bridges the root JWTBearerStorage to the
+// internal/as.JWTBearerStorageAdapter interface. A thin wrapper is needed
+// because the root and internal interfaces live in different packages.
+type jwtBearerStorageAdapter struct {
+	s JWTBearerStorage
+}
+
+func (a jwtBearerStorageAdapter) InsertJTI(ctx context.Context, jti string, expiresAt time.Time) error {
+	return a.s.InsertJTI(ctx, jti, expiresAt)
 }
 
 // rbacConfigFromValidated produces the internal/rbac Config from the
