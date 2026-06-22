@@ -39,14 +39,15 @@ func (a *TheAuth) scimAuth() func(http.Handler) http.Handler {
 				return
 			}
 			token := strings.TrimSpace(strings.TrimPrefix(authz, "Bearer "))
-			orgID, err := a.AuthenticateSCIMToken(r.Context(), token)
+			// AuthenticateSCIMToken now returns orgID + tokenID in one
+			// storage round-trip (perf re-audit 2026-06-21, item 1).
+			result, err := a.AuthenticateSCIMToken(r.Context(), token)
 			if err != nil {
 				writeSCIMMiddlewareError(w, http.StatusUnauthorized, "invalid bearer token")
 				return
 			}
-			tokID := a.scimTokenIDByPresented(r.Context(), token)
-			ctx := context.WithValue(r.Context(), scimOrgIDKey, orgID)
-			ctx = context.WithValue(ctx, scimTokenIDKey, tokID)
+			ctx := context.WithValue(r.Context(), scimOrgIDKey, result.OrgID)
+			ctx = context.WithValue(ctx, scimTokenIDKey, result.TokenID)
 			ctx = context.WithValue(ctx, scimTokenRawKey, token)
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})

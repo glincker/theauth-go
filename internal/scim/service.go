@@ -6,6 +6,11 @@
 // authenticator path (used by the SCIM bearer middleware) returns the
 // bound organization or models.ErrInvalidToken and touches last_used_at on
 // success.
+//
+// Perf re-audit 2026-06-21: AuthenticateResult bundles orgID + tokenID from
+// a single storage round-trip, removing the double SCIMTokenByHash call the
+// middleware previously performed. TouchSCIMTokenLastUsed is dispatched on a
+// background goroutine so the auth hot path is never stalled by a write.
 package scim
 
 import (
@@ -97,40 +102,43 @@ func (s *Service) ListTokens(ctx context.Context, orgID models.ULID) ([]models.S
 	return s.storage.SCIMTokensByOrg(ctx, orgID)
 }
 
+// AuthenticateResult bundles the organization ID and token row ID returned
+// by a single Authenticate call. The middleware stashes TokenID on the
+// request context for audit emission, removing the second SCIMTokenByHash
+// lookup that the old TokenIDByPresented path required.
+type AuthenticateResult struct {
+	OrganizationID models.ULID
+	TokenID        models.ULID
+}
+
 // Authenticate is the entry point invoked by the SCIM bearer middleware
-// on every request. Returns the bound organization or models.ErrInvalidToken.
-// Touches last_used_at on success.
-func (s *Service) Authenticate(ctx context.Context, presented string) (models.ULID, error) {
+// on every request. Returns the bound organization and token row ID in a
+// single storage round-trip, or models.ErrInvalidToken on failure.
+// TouchSCIMTokenLastUsed is dispatched asynchronously so the auth hot
+// path never blocks on a write (perf re-audit 2026-06-21, item 1).
+func (s *Service) Authenticate(ctx context.Context, presented string) (AuthenticateResult, error) {
 	if presented == "" {
-		return models.ULID{}, models.ErrInvalidToken
+		return AuthenticateResult{}, models.ErrInvalidToken
 	}
 	hash := sha256.Sum256([]byte(presented))
 	rec, err := s.storage.SCIMTokenByHash(ctx, hash[:])
 	if err != nil {
 		if errors.Is(err, models.ErrStorageNotFound) {
-			return models.ULID{}, models.ErrInvalidToken
+			return AuthenticateResult{}, models.ErrInvalidToken
 		}
-		return models.ULID{}, err
+		return AuthenticateResult{}, err
 	}
 	if rec.RevokedAt != nil {
-		return models.ULID{}, models.ErrInvalidToken
+		return AuthenticateResult{}, models.ErrInvalidToken
 	}
-	_ = s.storage.TouchSCIMTokenLastUsed(ctx, rec.ID, time.Now())
-	return rec.OrganizationID, nil
-}
-
-// TokenIDByPresented returns the SCIM token row ID for the supplied
-// plaintext token, used for audit actor identification. Returns a zero
-// ULID (and no error) when the token is unknown so the audit hook gets a
-// stable placeholder rather than a panic.
-func (s *Service) TokenIDByPresented(ctx context.Context, presented string) models.ULID {
-	if presented == "" {
-		return models.ULID{}
-	}
-	hash := sha256.Sum256([]byte(presented))
-	rec, err := s.storage.SCIMTokenByHash(ctx, hash[:])
-	if err != nil || rec == nil {
-		return models.ULID{}
-	}
-	return rec.ID
+	// Fire-and-forget: dispatch the last_used_at update asynchronously so
+	// the SCIM request is never stalled by the write. Drop on full channel
+	// is acceptable (the field is informational, not security-critical).
+	go func() {
+		_ = s.storage.TouchSCIMTokenLastUsed(context.Background(), rec.ID, time.Now())
+	}()
+	return AuthenticateResult{
+		OrganizationID: rec.OrganizationID,
+		TokenID:        rec.ID,
+	}, nil
 }
