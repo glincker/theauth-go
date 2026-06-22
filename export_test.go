@@ -80,8 +80,8 @@ func (k *KeyedLimiterForTest) Stop() { k.inner.Stop() }
 
 // EntryCount returns the live key count for verifying GC behavior.
 func (k *KeyedLimiterForTest) EntryCount() int {
-	k.inner.mu.Lock()
-	defer k.inner.mu.Unlock()
+	k.inner.mu.RLock()
+	defer k.inner.mu.RUnlock()
 	return len(k.inner.limits)
 }
 

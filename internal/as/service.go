@@ -80,6 +80,12 @@ type Service struct {
 	// token hash. Honors IntrospectionCacheTTL.
 	introspectCache sync.Map // map[string]*introspectCacheEntry
 
+	// chainCache memoizes the result of chainStillActive keyed by the
+	// outermost agent ID string. Bounded staleness: entries older than 5s
+	// are re-walked. Invalidated by InvalidateChainCache on suspend/revoke
+	// (perf re-audit 2026-06-21, item 3).
+	chainCache sync.Map // map[string]*chainCacheEntry
+
 	// clientAuthCache memoizes the result of an Argon2id verify on
 	// client_secret_hash. Keyed by client_id; cached entries bind the
 	// verified *OAuthClient snapshot to the sha256 of the presented secret.
@@ -117,6 +123,22 @@ type introspectCacheEntry struct {
 	expiresAt time.Time
 	body      []byte
 }
+
+// chainCacheEntry holds the result of one chainStillActive walk keyed by
+// the outermost agent ID. Entries are considered stale after 5 seconds
+// (matching the spirit of IntrospectionCacheTTL but kept short enough to
+// make revocation observable quickly). Invalidated explicitly on
+// suspend/revoke via InvalidateChainCache (perf re-audit 2026-06-21,
+// item 3).
+type chainCacheEntry struct {
+	active    bool
+	checkedAt time.Time
+}
+
+// chainCacheTTL is the maximum age for a chain-cache entry. Kept at 5s
+// so revocation propagation lags the operator decision by at most one
+// re-audit window rather than the full IntrospectionCacheTTL.
+const chainCacheTTL = 5 * time.Second
 
 // AgentLookup resolves an "agent:<id>" sub or act.sub claim into the
 // underlying Agent row. Implementations live outside the as package
@@ -274,6 +296,18 @@ func (s *Service) InvalidateClientAuthCache(clientID string) {
 	}
 	s.clientAuthCache.Invalidate(clientID)
 	s.updateCacheSizeGauge()
+}
+
+// InvalidateChainCache drops the cached chainStillActive result for the
+// supplied agent ID string. Must be called whenever an agent's status
+// changes to suspended or revoked so the next introspection re-walks the
+// chain and does not serve a stale "active" answer (perf re-audit
+// 2026-06-21, item 3).
+func (s *Service) InvalidateChainCache(agentID string) {
+	if s == nil || agentID == "" {
+		return
+	}
+	s.chainCache.Delete(agentID)
 }
 
 // ResolveClient looks up an OAuth client by client_id, routing through

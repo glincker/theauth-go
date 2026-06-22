@@ -56,6 +56,13 @@ type Storage interface {
 // Function-typed so the agent package never imports internal/as.
 type CacheInvalidator func(clientID string)
 
+// ChainCacheInvalidator drops the per-agent introspection chain-walk cache
+// entry for the supplied agent ID string. Called from changeAgentStatus on
+// suspend/revoke so the next introspection re-walks the chain instead of
+// serving a stale "active" result (perf re-audit 2026-06-21, item 3).
+// Function-typed so the agent package never imports internal/as.
+type ChainCacheInvalidator func(agentID string)
+
 // Config bundles the validated agent-identity policy fields this package
 // needs at lifecycle time. Mirrors the subset of root AgentConfig the
 // agent service actually consults.
@@ -70,18 +77,20 @@ type Config struct {
 // Constructed once by root *theauth.TheAuth.New and reached via thin
 // forwarders so the v2.0 public API surface keeps its exact signatures.
 type Service struct {
-	storage    Storage
-	cfg        *Config
-	auditEm    audit.Emitter
-	invalidate CacheInvalidator
-	hooks      *obs.Hooks
+	storage         Storage
+	cfg             *Config
+	auditEm         audit.Emitter
+	invalidate      CacheInvalidator
+	invalidateChain ChainCacheInvalidator
+	hooks           *obs.Hooks
 }
 
 // New constructs an agent Service. cfg may be nil; in that case every
 // public method returns the same "agent identity not configured" sentinel
 // the legacy root code returned. em may be nil; the constructor swaps in
 // audit.NoopEmitter. invalidate may be nil; the constructor swaps in a
-// no-op so callers do not need to branch.
+// no-op so callers do not need to branch. invalidateChain may be nil;
+// the constructor swaps in a no-op.
 func New(storage Storage, cfg *Config, em audit.Emitter, invalidate CacheInvalidator) *Service {
 	if em == nil {
 		em = audit.NoopEmitter{}
@@ -89,7 +98,25 @@ func New(storage Storage, cfg *Config, em audit.Emitter, invalidate CacheInvalid
 	if invalidate == nil {
 		invalidate = func(string) {}
 	}
-	return &Service{storage: storage, cfg: cfg, auditEm: em, invalidate: invalidate, hooks: &obs.Hooks{}}
+	return &Service{
+		storage:         storage,
+		cfg:             cfg,
+		auditEm:         em,
+		invalidate:      invalidate,
+		invalidateChain: func(string) {},
+		hooks:           &obs.Hooks{},
+	}
+}
+
+// SetChainCacheInvalidator wires the chain-walk cache invalidator. Must
+// be called before any SuspendAgent / RevokeAgent call to ensure the AS
+// chain cache does not serve stale results after a status change
+// (perf re-audit 2026-06-21, item 3). Safe to call multiple times.
+func (s *Service) SetChainCacheInvalidator(fn ChainCacheInvalidator) {
+	if s == nil || fn == nil {
+		return
+	}
+	s.invalidateChain = fn
 }
 
 // SetHooks installs the consumer-supplied observability bundle. Idempotent;
@@ -412,12 +439,15 @@ func (s *Service) changeAgentStatus(ctx context.Context, agentID models.ULID, st
 	if err := s.storage.UpdateAgentStatus(ctx, agentID, status, now); err != nil {
 		return fmt.Errorf("update agent status: %w", err)
 	}
-	// Cache invalidation contract (clientauthcache): a suspended or revoked
-	// agent must not authenticate via a cached Argon2-verified snapshot from
-	// the last 5 minutes. Drop the entry so the next /oauth/token call sees
-	// the fresh status (or any future re-activation, in the suspend case).
+	// Cache invalidation contract (clientauthcache + chain cache): a
+	// suspended or revoked agent must not authenticate via a cached
+	// Argon2-verified snapshot, and must not appear "active" in any cached
+	// chain-walk result. Drop both entries so the next /oauth/token and
+	// the next introspection see the fresh status (perf re-audit
+	// 2026-06-21, item 3).
 	if status != models.AgentStatusActive {
 		s.invalidate(cur.ClientID)
+		s.invalidateChain(cur.ID.String())
 	}
 	meta := map[string]any{
 		"agent_id": agentID.String(),

@@ -9,6 +9,7 @@ import (
 	"net/netip"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"golang.org/x/time/rate"
@@ -21,8 +22,14 @@ import (
 // A background goroutine evicts limiters not used in the last evictAfter
 // duration to keep memory bounded under attack. The whole struct is
 // goroutine-safe.
+//
+// Perf re-audit 2026-06-21 (item 2): mu is now a sync.RWMutex so
+// concurrent Allow calls on already-existing keys take a shared read lock
+// for the map lookup and only upgrade to a write lock for new-key
+// insertion. lastUsed is stored as atomic.Int64 (unix nanos) so the Allow
+// hot path can update it without holding the write lock.
 type keyedLimiter struct {
-	mu          sync.Mutex
+	mu          sync.RWMutex
 	limits      map[string]*limiterEntry
 	perMinute   int
 	evictAfter  time.Duration
@@ -33,7 +40,7 @@ type keyedLimiter struct {
 
 type limiterEntry struct {
 	lim      *rate.Limiter
-	lastUsed time.Time
+	lastUsed atomic.Int64 // unix nanos; updated without holding mu
 }
 
 // newKeyedLimiter starts the GC goroutine. Callers should defer .Stop() in
@@ -60,17 +67,28 @@ func (k *keyedLimiter) Allow(key string) bool {
 		// Empty key = no limiter applied. Caller decided to skip this dimension.
 		return true
 	}
-	k.mu.Lock()
+	// Fast path: entry already exists, take a shared read lock.
+	k.mu.RLock()
 	entry, ok := k.limits[key]
+	k.mu.RUnlock()
+	if ok {
+		// Update lastUsed atomically without holding the write lock.
+		entry.lastUsed.Store(time.Now().UnixNano())
+		return entry.lim.Allow()
+	}
+	// Slow path: first request for this key; take the write lock.
+	k.mu.Lock()
+	// Re-check under write lock (another goroutine may have inserted it).
+	entry, ok = k.limits[key]
 	if !ok {
 		// rate.Every(perMinute per minute) = 1 token every (60/perMinute) seconds.
 		// Burst of perMinute lets a fresh client burn the full budget instantly,
 		// after which it refills smoothly, matches what users intuit as "N/min".
 		r := rate.Every(time.Minute / time.Duration(k.perMinute))
 		entry = &limiterEntry{lim: rate.NewLimiter(r, k.perMinute)}
+		entry.lastUsed.Store(time.Now().UnixNano())
 		k.limits[key] = entry
 	}
-	entry.lastUsed = time.Now()
 	k.mu.Unlock()
 	return entry.lim.Allow()
 }
@@ -83,10 +101,10 @@ func (k *keyedLimiter) gcLoop() {
 		case <-k.stop:
 			return
 		case <-t.C:
-			cutoff := time.Now().Add(-k.evictAfter)
+			cutoffNanos := time.Now().Add(-k.evictAfter).UnixNano()
 			k.mu.Lock()
 			for key, e := range k.limits {
-				if e.lastUsed.Before(cutoff) {
+				if e.lastUsed.Load() < cutoffNanos {
 					delete(k.limits, key)
 				}
 			}

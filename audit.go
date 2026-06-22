@@ -42,18 +42,34 @@ func SeededSecretKeys() []string {
 //
 // Applied once at emit time. A custom Config.Audit.Redactor receives the
 // raw metadata and may strip/rename additional fields.
+//
+// Perf re-audit 2026-06-21 (item 4): key matching now uses
+// strings.EqualFold instead of strings.ToLower(k) per call, avoiding a
+// heap allocation per metadata key on the hot emit path.
 func DefaultRedactor(metadata map[string]any) map[string]any {
 	if metadata == nil {
 		return nil
 	}
 	for k, v := range metadata {
-		if _, hit := seededSecretKeys[strings.ToLower(k)]; hit {
+		if isSecretKey(k) {
 			metadata[k] = redactedMarker
 			continue
 		}
 		metadata[k] = redactValue(v)
 	}
 	return metadata
+}
+
+// isSecretKey reports whether k matches any entry in seededSecretKeys
+// using a case-insensitive comparison. EqualFold avoids the per-call
+// ToLower allocation of the previous implementation.
+func isSecretKey(k string) bool {
+	for candidate := range seededSecretKeys {
+		if strings.EqualFold(k, candidate) {
+			return true
+		}
+	}
+	return false
 }
 
 // redactValue recurses into nested maps and slices, applying the same key
