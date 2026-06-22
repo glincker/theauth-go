@@ -35,6 +35,8 @@ type Store struct {
 	par       *parState
 	// jti: RFC 7523 JTI replay cache. See memory_jwtbearer.go.
 	jti *jtiState
+	// CIBA: backchannel authentication requests. See memory_ciba.go.
+	ciba *cibaState
 }
 
 func New() *Store {

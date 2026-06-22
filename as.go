@@ -166,6 +166,12 @@ type AuthorizationServerConfig struct {
 	// When nil both features are disabled and the AS behaves as before
 	// (client_secret_basic / client_secret_post only).
 	JWTBearer *JWTBearerConfig
+
+	// CIBA enables Client-Initiated Backchannel Authentication (RFC 9509)
+	// when non-nil. The storage backend must also implement CIBAStorage;
+	// if it does not, CIBA endpoints are not mounted regardless of this
+	// setting. Default nil disables CIBA.
+	CIBA *CIBAConfig
 }
 
 // JWTBearerConfig controls RFC 7523 JWT client authentication and the
@@ -419,6 +425,7 @@ func validateASConfig(cfg *AuthorizationServerConfig, encryptionKey []byte) erro
 		PAR:                            cfg.PAR,
 		JAR:                            cfg.JAR,
 		JWTBearer:                      jwtBearerConfigFromRoot(cfg.JWTBearer),
+		CIBA:                           cibaConfigToInternal(cfg.CIBA),
 	}
 	if err := internalas.Validate(&internal, encryptionKey); err != nil {
 		return err
@@ -438,6 +445,13 @@ func validateASConfig(cfg *AuthorizationServerConfig, encryptionKey []byte) erro
 	cfg.RegistrationRateLimitPerMinute = internal.RegistrationRateLimitPerMinute
 	cfg.IntrospectionCacheTTL = internal.IntrospectionCacheTTL
 	cfg.LoginURL = internal.LoginURL
+	// Mirror CIBA defaults back.
+	if cfg.CIBA != nil && internal.CIBA != nil {
+		cfg.CIBA.DefaultExpiry = internal.CIBA.DefaultExpiry
+		cfg.CIBA.DefaultInterval = internal.CIBA.DefaultInterval
+		cfg.CIBA.MaxRequestedExpiry = internal.CIBA.MaxRequestedExpiry
+		cfg.CIBA.MinPollInterval = internal.CIBA.MinPollInterval
+	}
 	return nil
 }
 

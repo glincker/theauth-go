@@ -43,6 +43,11 @@ type ASMetadata struct {
 	// JAR (RFC 9101) fields. Omitted when JAR is disabled.
 	RequestParameterSupported              bool     `json:"request_parameter_supported,omitempty"`
 	RequestObjectSigningAlgValuesSupported []string `json:"request_object_signing_alg_values_supported,omitempty"`
+
+	// CIBA fields (RFC 9509). Omitted when CIBA is disabled.
+	BackchannelAuthenticationEndpoint      string   `json:"backchannel_authentication_endpoint,omitempty"`
+	BackchannelTokenDeliveryModesSupported []string `json:"backchannel_token_delivery_modes_supported,omitempty"`
+	BackchannelUserCodeParameterSupported  bool     `json:"backchannel_user_code_parameter_supported,omitempty"`
 }
 
 // ASMetadataDoc builds the metadata document. The result is
@@ -97,7 +102,7 @@ func (s *Service) ASMetadataDoc() (ASMetadata, error) {
 		authMethods = append(authMethods, models.ClientAuthPrivateKeyJWT, models.ClientAuthClientSecretJWT)
 		jwtAuthAlgs = []string{"ES256", "ES384", "RS256", "PS256", "EdDSA"}
 	}
-	return ASMetadata{
+	meta := ASMetadata{
 		Issuer:                s.Cfg.Issuer,
 		AuthorizationEndpoint: s.Cfg.Issuer + "/oauth/authorize",
 		TokenEndpoint:         s.Cfg.Issuer + "/oauth/token",
@@ -118,7 +123,22 @@ func (s *Service) ASMetadataDoc() (ASMetadata, error) {
 		RequirePushedAuthorizationRequests:         requirePAR,
 		RequestParameterSupported:                  requestParamSupported,
 		RequestObjectSigningAlgValuesSupported:     jarAlgs,
-	}, nil
+	}
+
+	// Advertise CIBA when enabled and the storage supports it.
+	if s.Cfg.CIBA != nil {
+		if _, ok := s.Storage.(CIBAStorage); ok {
+			meta.BackchannelAuthenticationEndpoint = s.Cfg.Issuer + "/oauth/bc-authorize"
+			meta.BackchannelTokenDeliveryModesSupported = []string{
+				models.CIBADeliveryModePoll,
+				models.CIBADeliveryModePing,
+			}
+			// user_code is not supported in this implementation.
+			meta.BackchannelUserCodeParameterSupported = false
+		}
+	}
+
+	return meta, nil
 }
 
 // defaultDPoPAdvertisedAlgs mirrors dpop.DefaultAllowedAlgs. Duplicated
@@ -131,7 +151,7 @@ var defaultDPoPAdvertisedAlgs = []string{"ES256", "ES384", "RS256", "PS256", "Ed
 // 1+2 supports authorization_code and refresh_token unconditionally;
 // phase 3+4 adds client_credentials and the RFC 8693 token-exchange URN
 // when the AgentPolicy is configured; RFC 7523 adds the jwt-bearer URN
-// when JWTBearer is configured.
+// when JWTBearer is configured. CIBA adds its own URN when enabled.
 func (s *Service) grantTypesAdvertised() []string {
 	out := []string{models.GrantTypeAuthorizationCode, models.GrantTypeRefreshToken}
 	if s.AgentPolicy != nil {
@@ -139,6 +159,11 @@ func (s *Service) grantTypesAdvertised() []string {
 	}
 	if s.Cfg.JWTBearer != nil {
 		out = append(out, models.GrantTypeJWTBearer)
+	}
+	if s.Cfg.CIBA != nil {
+		if _, ok := s.Storage.(CIBAStorage); ok {
+			out = append(out, models.GrantTypeCIBA)
+		}
 	}
 	return out
 }

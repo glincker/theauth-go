@@ -77,6 +77,10 @@ func (h *Handler) Mount(r chi.Router, authn func(http.Handler) http.Handler, reg
 	if h.svc.IsPAREnabled() {
 		r.Post("/oauth/par", h.handlePAR)
 	}
+	// CIBA: only mount when CIBA is configured and storage supports it.
+	if h.svc.IsCIBAEnabled() {
+		r.Post("/oauth/bc-authorize", h.handleBCAuthorize)
+	}
 }
 
 // ---------- discovery ----------
@@ -433,6 +437,18 @@ func (h *Handler) handleToken(w http.ResponseWriter, r *http.Request) {
 		resp, err := h.svc.JWTBearerGrant(r.Context(), req, assertion)
 		if err != nil {
 			writeTokenError(w, err)
+			return
+		}
+		writeTokenJSON(w, resp)
+	case models.GrantTypeCIBA:
+		req := internalas.CIBATokenRequest{
+			ClientID:     clientID,
+			ClientSecret: clientSecret,
+			AuthReqID:    r.PostFormValue("auth_req_id"),
+		}
+		resp, err := h.svc.PollBackchannelToken(r.Context(), req)
+		if err != nil {
+			writeCIBATokenError(w, err)
 			return
 		}
 		writeTokenJSON(w, resp)

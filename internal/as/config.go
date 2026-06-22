@@ -1,6 +1,7 @@
 package as
 
 import (
+	"errors"
 	"strings"
 	"time"
 
@@ -120,6 +121,13 @@ type Config struct {
 	// JWTBearer, when non-nil, enables RFC 7523 client authentication and
 	// the jwt-bearer grant. Mirrored from root JWTBearerConfig.
 	JWTBearer *JWTBearerConfig
+
+	// CIBA (RFC 9509) enables the backchannel authentication endpoints when
+	// non-nil. When nil (default) the /oauth/bc-authorize endpoint is not
+	// mounted and the AS metadata does not advertise CIBA fields.
+	// Requires the Storage to also implement CIBAStorage; otherwise CIBA
+	// is silently disabled even if this field is non-nil.
+	CIBA *CIBAConfig
 }
 
 // JWTBearerConfig is the internal mirror of the root JWTBearerConfig.
@@ -223,6 +231,13 @@ func Validate(cfg *Config, encryptionKey []byte) error {
 				cfg.JWTBearer.TrustedJWTIssuers[i].AllowedAlgorithms = []string{"ES256", "RS256", "EdDSA"}
 			}
 		}
+	}
+	// CIBA defaults.
+	if cfg.CIBA != nil {
+		if cfg.CIBA.AuthenticationDevice == nil {
+			return errors.New("theauth: CIBAConfig.AuthenticationDevice is required when CIBA is enabled")
+		}
+		applyCIBADefaults(cfg.CIBA)
 	}
 	return nil
 }
