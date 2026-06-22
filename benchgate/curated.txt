@@ -1,0 +1,60 @@
+# benchgate/curated.txt
+#
+# One benchmark name per line (matched as a fixed string against benchstat
+# output). Lines starting with '#' and blank lines are ignored.
+#
+# To skip a noisy benchmark without removing it, add a comment line:
+#   # gate:skip BenchmarkFoo -- reason
+# and the bench-gate.sh script will exclude that name from the threshold
+# check (it will still appear in benchstat output for reference).
+#
+# To update this list run:
+#   grep -rn "^func Benchmark" --include="*.go" . \
+#     | grep -v "_test.go:.*// gate:skip" \
+#     | awk -F: '{print $3}' | sed 's/func //' | sed 's/(b \*testing.B).*//'
+
+# Hot path: the 1254x regression source. Measures /oauth/token refresh grant
+# with the client-secret Argon2 cache warm. A regression here is the
+# canonical signal that the cache was bypassed or the endpoint grew
+# unexpected blocking work.
+BenchmarkOAuthTokenEndpointRefreshHit
+
+# SCIM bearer authentication: sha256 hash + one storage lookup. Catches
+# regressions to the old two-round-trip path (perf re-audit 2026-06-21 item 1).
+BenchmarkSCIMTokenAuth
+
+# Rate limiter under parallel read-heavy load: shared RLock path. Catches
+# accidental downgrade from shared RLock to exclusive Lock on the hot path.
+BenchmarkRateLimitReadHeavy
+
+# JWKS endpoint: snapshot read + JSON marshal. Smoke-tests the signing-key
+# cache layered below the /oauth/token handler.
+BenchmarkJWKSEndpoint
+
+# Audit redactor: EqualFold key matching at any nesting depth. Catches
+# regression to the per-key ToLower allocation (perf re-audit item 4).
+BenchmarkAuditRedactor
+
+# Argon2id hash and verify: production work-factor smoke test. A regression
+# here means the work factor was accidentally raised (login DoS risk) or
+# the code path grew avoidable allocations.
+BenchmarkArgon2Hash
+BenchmarkArgon2Verify
+
+# Ed25519 JWT sign and verify: catches accidental algorithm changes or
+# extra allocations in the JWT path shared by every token mint.
+BenchmarkJWTSign
+BenchmarkJWTVerify
+
+# Session lookup: cookie parse + token hash + in-memory map read. The floor
+# for authn middleware cost on every authenticated request.
+BenchmarkSessionLookup
+
+# OAuth authorization code flow end-to-end: PKCE S256 verify + code consume
+# + JWT mint + refresh token insert. Covers the first-login path a browser
+# user exercises after the consent redirect.
+BenchmarkOAuthCodeFlow
+
+# OAuth callback: AES-GCM encrypt + in-memory upsert. Covers the
+# find-or-create path exercised by every social provider login.
+BenchmarkOAuthCallback
