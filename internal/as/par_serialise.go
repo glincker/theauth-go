@@ -51,4 +51,3 @@ func deserializeAuthorizeRequest(payload []byte) (AuthorizeRequest, error) {
 		Nonce:               s.Nonce,
 	}, nil
 }
-
