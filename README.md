@@ -289,6 +289,43 @@ The `mcpresource` module is a separately versioned zero-dependency module. A con
 
 ---
 
+## Writing a custom storage backend
+
+Implement [`theauth.Storage`](storage.go) (core auth methods) and optionally
+[`theauth.OAuthServerStorage`](storage_v20.go) (OAuth 2.1 AS methods). Pass
+the instance to `theauth.New(cfg)` via `Config.Storage`.
+
+To prove your backend is conformant, import [`storagetest`](storagetest/doc.go)
+in a test file and call `storagetest.Run`:
+
+```go
+import (
+    "testing"
+
+    "github.com/glincker/theauth-go/storagetest"
+)
+
+func TestMyBackendContract(t *testing.T) {
+    store := mybackend.New(/* your config */)
+    storagetest.Run(t, store)
+}
+```
+
+`storagetest.Run` exercises 14 domain sub-tests covering users, sessions,
+magic links, passwords, WebAuthn, TOTP, audit events, RBAC roles, OAuth
+clients, authorization codes, refresh tokens, JWKS keys, agents, and
+delegation grants. Passing all sub-tests means your backend satisfies the
+same semantics as the built-in `storage/memory` and `storage/postgres`
+adapters.
+
+Backends that only implement `theauth.Storage` (not `OAuthServerStorage`)
+will see the OAuth AS sub-tests automatically skipped with `t.Skip`.
+
+The `storagetest` package has no external dependencies beyond the standard
+library and `theauth` itself.
+
+---
+
 ## Security
 
 See [SECURITY.md](SECURITY.md) for the vulnerability disclosure policy. Report security issues to `security@glincker.com`.
