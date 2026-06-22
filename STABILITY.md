@@ -143,6 +143,20 @@ actions will keep their name and target shape through every minor release.
 - Each exposes a `Config` struct and a `New(Config) theauth.Provider`
   constructor.
 
+### Subpackages added in v2.2: `provider/facebook`, `provider/slack`, `provider/gitlab`, `provider/bitbucket`, `provider/twitch`, `provider/linkedin`, `provider/x`, `provider/apple`
+
+- Each exposes a `Config` struct and a `New(Config) theauth.Provider`
+  constructor, following the same contract as the v1.0 provider subpackages.
+- `provider/gitlab` additionally accepts a `BaseURL` field for self-hosted
+  GitLab instances; defaults to https://gitlab.com.
+- `provider/apple` accepts `TeamID`, `KeyID`, `PrivateKey`, and `BundleID`
+  fields. The `PrivateKey` field is the ECDSA P-256 key from an Apple .p8 file.
+  `ExchangeCode` mints a short-lived ES256 JWT client secret on each call.
+- `provider/x` requires PKCE (code_challenge_method=S256) for all flows, per
+  the X OAuth 2.0 vendor requirement. `ExchangeCode` returns an error if
+  `codeVerifier` is empty.
+- All eight new providers default to PKCE enabled.
+
 ### What is NOT public
 
 - Anything under `internal/`. The Go toolchain enforces this; listed here

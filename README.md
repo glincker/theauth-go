@@ -203,7 +203,22 @@ Full runnable example: [`examples/mcp-server/`](./examples/mcp-server).
 | `GET /auth/me` | Current user (requires auth) |
 | `DELETE /auth/sessions/current` | Sign out |
 
-**OAuth providers** (`GET /auth/providers/{name}/start` and `/callback`): github, google, microsoft, discord.
+**OAuth providers** (`GET /auth/providers/{name}/start` and `/callback`): github, google, microsoft, discord, facebook, slack, gitlab, bitbucket, twitch, linkedin, x, apple.
+
+| Provider | Package | Protocol | Notes |
+| --- | --- | --- | --- |
+| GitHub | `provider/github` | OAuth 2.0 + PKCE | [docs](https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/authorizing-oauth-apps) |
+| Google | `provider/google` | OIDC | [docs](https://developers.google.com/identity/protocols/oauth2) |
+| Microsoft | `provider/microsoft` | OIDC (Entra ID) | [docs](https://learn.microsoft.com/en-us/entra/identity-platform/) |
+| Discord | `provider/discord` | OAuth 2.0 + PKCE | [docs](https://discord.com/developers/docs/topics/oauth2) |
+| Facebook | `provider/facebook` | OAuth 2.0 + PKCE | [docs](https://developers.facebook.com/docs/facebook-login/) |
+| Slack | `provider/slack` | OIDC (Sign in with Slack) | [docs](https://api.slack.com/authentication/sign-in-with-slack) |
+| GitLab | `provider/gitlab` | OIDC; configurable BaseURL for self-hosted | [docs](https://docs.gitlab.com/ee/integration/openid_connect_provider.html) |
+| Bitbucket | `provider/bitbucket` | OAuth 2.0 + PKCE | [docs](https://support.atlassian.com/bitbucket-cloud/docs/use-oauth-on-bitbucket-cloud/) |
+| Twitch | `provider/twitch` | OIDC | [docs](https://dev.twitch.tv/docs/authentication/getting-tokens-oidc/) |
+| LinkedIn | `provider/linkedin` | OIDC (/v2/userinfo) | [docs](https://learn.microsoft.com/en-us/linkedin/consumer/integrations/self-serve/sign-in-with-linkedin-v2) |
+| X (Twitter) | `provider/x` | OAuth 2.0; PKCE mandatory | [docs](https://developer.x.com/en/docs/authentication/oauth-2-0/authorization-code) |
+| Apple | `provider/apple` | OIDC; JWT client secret (ES256) | [docs](https://developer.apple.com/documentation/sign_in_with_apple) |
 
 **WebAuthn**: `/auth/webauthn/register/{begin,finish}`, `/auth/webauthn/login/{begin,finish}`, `/auth/webauthn/credentials`.
 
@@ -226,6 +241,14 @@ Full runnable example: [`examples/mcp-server/`](./examples/mcp-server).
 | [`examples/echo-app/`](./examples/echo-app) | Drop-in with Echo |
 | [`examples/stdlib-app/`](./examples/stdlib-app) | Pure `net/http`, no framework |
 | [`examples/oauth-multi-provider/`](./examples/oauth-multi-provider) | GitHub + Google + Microsoft + Discord in one app |
+| [`examples/oauth-facebook/`](./examples/oauth-facebook) | Sign in with Facebook (Meta) |
+| [`examples/oauth-slack/`](./examples/oauth-slack) | Sign in with Slack (OpenID Connect) |
+| [`examples/oauth-gitlab/`](./examples/oauth-gitlab) | Sign in with GitLab (self-hosted or gitlab.com) |
+| [`examples/oauth-bitbucket/`](./examples/oauth-bitbucket) | Sign in with Bitbucket Cloud |
+| [`examples/oauth-twitch/`](./examples/oauth-twitch) | Sign in with Twitch (OIDC) |
+| [`examples/oauth-linkedin/`](./examples/oauth-linkedin) | Sign in with LinkedIn (OIDC /v2/userinfo) |
+| [`examples/oauth-x/`](./examples/oauth-x) | Sign in with X/Twitter (PKCE mandatory) |
+| [`examples/oauth-apple/`](./examples/oauth-apple) | Sign in with Apple (JWT client secret) |
 | [`examples/webauthn-passkey/`](./examples/webauthn-passkey) | Passkey register and discoverable login |
 | [`examples/totp-stepup/`](./examples/totp-stepup) | Password + TOTP step-up flow |
 | [`examples/mcp-server/`](./examples/mcp-server) | MCP resource server using `mcpresource` middleware |
