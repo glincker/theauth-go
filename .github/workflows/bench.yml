@@ -1,12 +1,18 @@
 name: bench
 
+# Manual + weekly only. Per-PR runs were burning ~15 min of CI per PR; rare
+# regressions caught did not justify the spend. Run on-demand before a
+# release, or rely on the Monday 06:00 UTC drift check.
 on:
-  push:
-    branches: [main]
-  pull_request:
+  workflow_dispatch:
+    inputs:
+      base_sha:
+        description: "Base SHA to diff against (defaults to previous commit on main)"
+        required: false
+        type: string
+  schedule:
+    - cron: "0 6 * * 1"
 
-# Cancel in-progress runs for the same ref so a fast-follow push does not
-# queue up two benchmark jobs that race on the cache key.
 concurrency:
   group: bench-${{ github.ref }}
   cancel-in-progress: true
