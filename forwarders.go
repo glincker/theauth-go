@@ -16,6 +16,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"log/slog"
 
 	internalas "github.com/glincker/theauth-go/internal/as"
 	"github.com/glincker/theauth-go/internal/audit"
@@ -23,6 +24,70 @@ import (
 	"github.com/glincker/theauth-go/internal/totp"
 	"github.com/go-webauthn/webauthn/protocol"
 )
+
+// ---------- v2.5 Lifecycle hook plumbing ----------
+
+// coalesceLifecycleHooks returns the consumer-supplied LifecycleHooks or
+// the zero-value pointer when nil so dispatch sites can call the fireOn*
+// helpers without nil-checking the bundle. Individual fields inside the
+// bundle MAY still be nil; the fireOn* helpers handle that.
+func coalesceLifecycleHooks(h *LifecycleHooks) *LifecycleHooks {
+	if h == nil {
+		return &LifecycleHooks{}
+	}
+	return h
+}
+
+// runLifecycleHook is the panic-and-error-safe runner shared by every
+// fireOn* helper. Errors are logged at Warn level; panics are recovered
+// and logged at Error level. The triggering operation is never failed by
+// a hook (semantic: hooks are fire-and-observe; for request-failing side
+// effects, wrap at the HTTP boundary).
+func runLifecycleHook(ctx context.Context, name string, fn func() error) {
+	if fn == nil {
+		return
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			slog.ErrorContext(ctx, "theauth: lifecycle hook panicked", "hook", name, "panic", r)
+		}
+	}()
+	if err := fn(); err != nil {
+		slog.WarnContext(ctx, "theauth: lifecycle hook returned error", "hook", name, "err", err.Error())
+	}
+}
+
+// fireOnSignup dispatches LifecycleHooks.OnSignup. Silent no-op when the
+// hook is unset.
+func (a *TheAuth) fireOnSignup(ctx context.Context, user *User, method SignupMethod) {
+	if a.lifecycle.OnSignup == nil || user == nil {
+		return
+	}
+	runLifecycleHook(ctx, "OnSignup", func() error {
+		return a.lifecycle.OnSignup(ctx, user, method)
+	})
+}
+
+// fireOnSignin dispatches LifecycleHooks.OnSignin. Silent no-op when the
+// hook is unset.
+func (a *TheAuth) fireOnSignin(ctx context.Context, user *User, sess *Session) {
+	if a.lifecycle.OnSignin == nil || user == nil || sess == nil {
+		return
+	}
+	runLifecycleHook(ctx, "OnSignin", func() error {
+		return a.lifecycle.OnSignin(ctx, user, sess)
+	})
+}
+
+// ---------- v2.5 Public lookup helpers ----------
+
+// UserByID looks up a user by ID. Returns (nil, ErrNotFound) when the row
+// does not exist. Added in v2.5 to unblock consumer code that previously
+// had no public accessor and had to reach into storage directly (consumer
+// feedback 2026-06-22).
+func (a *TheAuth) UserByID(ctx context.Context, id ULID) (*User, error) {
+	return a.storage.UserByID(ctx, id)
+}
 
 // ErrAuthorizationServerNotConfigured is returned by authorization-server
 // methods when Config.AuthorizationServer was not set at New time.
@@ -128,15 +193,48 @@ func validateEmail(raw string) (string, error) {
 }
 
 // signupWithPassword creates a new user with email + password credentials
-// and issues a session. Forwards to passwordSvc.Signup.
+// and issues a session. Forwards to passwordSvc.Signup, then dispatches
+// the LifecycleHooks.OnSignup hook (no-op when unset). Hook errors and
+// panics are logged but do NOT fail the request; the user has already been
+// created.
 func (a *TheAuth) signupWithPassword(ctx context.Context, emailAddr, pw string) (*User, string, error) {
-	return a.passwordSvc.Signup(ctx, emailAddr, pw)
+	user, sess, err := a.passwordSvc.Signup(ctx, emailAddr, pw)
+	if err != nil {
+		return user, sess, err
+	}
+	a.fireOnSignup(ctx, user, SignupMethodPassword)
+	return user, sess, nil
 }
 
 // signinWithPassword verifies credentials and issues a session. Forwards
-// to passwordSvc.Signin.
+// to passwordSvc.Signin, then dispatches the LifecycleHooks.OnSignin hook
+// when the returned SigninStep indicates a full sign-in (not a step-up
+// intermediate). pending_2fa intermediates do NOT fire OnSignin; the hook
+// fires on the subsequent TOTP/WebAuthn verify that completes the session.
 func (a *TheAuth) signinWithPassword(ctx context.Context, emailAddr, pw, userAgent, ip string) (string, *User, SigninStep, error) {
-	return a.passwordSvc.Signin(ctx, emailAddr, pw, userAgent, ip)
+	token, user, step, err := a.passwordSvc.Signin(ctx, emailAddr, pw, userAgent, ip)
+	if err != nil || step != SigninStepFull || user == nil {
+		return token, user, step, err
+	}
+	if sess := a.sessionFromToken(ctx, token); sess != nil {
+		a.fireOnSignin(ctx, user, sess)
+	}
+	return token, user, step, nil
+}
+
+// sessionFromToken resolves a freshly-issued session token to its Session
+// row for hook dispatch. Returns nil on lookup failure rather than failing
+// the surrounding flow; missing a hook fire is preferable to failing a
+// signin that already succeeded.
+func (a *TheAuth) sessionFromToken(ctx context.Context, token string) *Session {
+	if token == "" {
+		return nil
+	}
+	sess, _, err := a.validateSession(ctx, token)
+	if err != nil {
+		return nil
+	}
+	return sess
 }
 
 // requestPasswordResetForTest is the testable variant; returns the raw

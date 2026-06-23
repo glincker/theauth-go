@@ -160,6 +160,13 @@ type Config struct {
 	// PasswordPolicy controls optional extensions to the password-verification
 	// path. The zero value is safe (all extensions disabled).
 	PasswordPolicy PasswordPolicyConfig
+
+	// LifecycleHooks (v2.5) lets consumers react to authentication-lifecycle
+	// events (signup, signin, password change, MFA enable, token issuance,
+	// org switch) without forking handlers or wrapping every endpoint at the
+	// HTTP boundary. Optional; nil is a silent no-op. See the LifecycleHooks
+	// type doc for semantics, error handling, and current wiring status.
+	LifecycleHooks *LifecycleHooks
 }
 
 // PasswordPolicyConfig holds optional password-verification extensions.
@@ -257,6 +264,12 @@ type TheAuth struct {
 	// /account/delegations are mounted. Requires agentCfg to be non-nil.
 	accountUX bool
 
+	// v2.5 lifecycle hooks. Never nil after New: substituted with
+	// &LifecycleHooks{} when Config.LifecycleHooks is nil so forwarders can
+	// dispatch without nil-checking the pointer. Individual function fields
+	// MAY still be nil; the runHook helper handles that.
+	lifecycle *LifecycleHooks
+
 	// hooks is the consumer-supplied observability bundle. Never nil: the
 	// constructor substitutes &Hooks{} when Config.Observability is nil so
 	// internal services can call hooks.StartSpan / hooks.Counter without
@@ -349,6 +362,7 @@ func New(cfg Config) (*TheAuth, error) {
 		agentCfg:                   cfg.AgentIdentity,
 		accountUX:                  cfg.AccountUX,
 		hooks:                      coalesceHooks(cfg.Observability),
+		lifecycle:                  coalesceLifecycleHooks(cfg.LifecycleHooks),
 	}
 
 	if err := wireServices(a, cfg, providers, sp); err != nil {

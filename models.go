@@ -217,3 +217,28 @@ const (
 
 // GrantTypeCIBA is the CIBA grant type URN per RFC 9509.
 const GrantTypeCIBA = models.GrantTypeCIBA
+
+// ---------- Lifecycle hook enums (v2.5) ----------
+
+// SignupMethod identifies which credential path created a user. Passed to
+// LifecycleHooks.OnSignup so consumers can branch tenant-provisioning,
+// welcome-email, or analytics by the path the user came in on.
+type SignupMethod string
+
+const (
+	SignupMethodPassword  SignupMethod = "password"
+	SignupMethodMagicLink SignupMethod = "magic_link"
+	SignupMethodOAuth     SignupMethod = "oauth"
+	SignupMethodPasskey   SignupMethod = "passkey"
+	SignupMethodSAML      SignupMethod = "saml"
+)
+
+// MFAKind identifies which second factor a user just enabled. Passed to
+// LifecycleHooks.OnMFAEnabled.
+type MFAKind string
+
+const (
+	MFAKindTOTP          MFAKind = "totp"
+	MFAKindWebAuthn      MFAKind = "webauthn"
+	MFAKindRecoveryCodes MFAKind = "recovery_codes"
+)
