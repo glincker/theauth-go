@@ -24,6 +24,7 @@ import (
 	"github.com/glincker/theauth-go/internal/audit"
 	"github.com/glincker/theauth-go/internal/chain"
 	"github.com/glincker/theauth-go/internal/models"
+	obs "github.com/glincker/theauth-go/internal/observability"
 	"github.com/glincker/theauth-go/internal/ulid"
 )
 
@@ -66,6 +67,7 @@ type Service struct {
 	cfg      *Config
 	resource ResourceLookup
 	auditEm  audit.Emitter
+	hooks    *obs.Hooks
 }
 
 // New constructs a delegation Service. cfg may be nil; in that case every
@@ -76,7 +78,20 @@ func New(storage Storage, cfg *Config, resource ResourceLookup, em audit.Emitter
 	if em == nil {
 		em = audit.NoopEmitter{}
 	}
-	return &Service{storage: storage, cfg: cfg, resource: resource, auditEm: em}
+	return &Service{storage: storage, cfg: cfg, resource: resource, auditEm: em, hooks: &obs.Hooks{}}
+}
+
+// SetHooks installs the consumer-supplied observability bundle. Idempotent.
+// Root *theauth.TheAuth wires this in New so every internal service shares
+// the same Tracer + Metrics adapters.
+func (s *Service) SetHooks(h *obs.Hooks) {
+	if s == nil {
+		return
+	}
+	if h == nil {
+		h = &obs.Hooks{}
+	}
+	s.hooks = h
 }
 
 // errNotConfigured matches the legacy "theauth: agent identity not
@@ -92,10 +107,20 @@ var errNotConfigured = errors.New("theauth: agent identity not configured")
 // models.ErrOAuthInvalidResource for the corresponding validation failures.
 //
 // Audit emission: delegation.granted with redacted metadata.
-func (s *Service) GrantDelegation(ctx context.Context, in models.GrantDelegationInput) (models.DelegationGrant, error) {
+func (s *Service) GrantDelegation(ctx context.Context, in models.GrantDelegationInput) (grant models.DelegationGrant, err error) {
 	if s == nil || s.cfg == nil {
 		return models.DelegationGrant{}, errNotConfigured
 	}
+	ctx, span := s.hooks.StartSpan(ctx, obs.SpanDelegationGrant)
+	defer func() {
+		status := obs.StatusSuccess
+		if err != nil {
+			status = obs.StatusError
+			span.RecordError(err)
+		}
+		span.SetAttributes(obs.StringAttr(obs.AttrStatus, string(status)))
+		span.End()
+	}()
 	if in.Resource == "" {
 		return models.DelegationGrant{}, models.ErrOAuthInvalidResource
 	}
@@ -173,13 +198,24 @@ func (s *Service) ListDelegationsForAgent(ctx context.Context, agentID models.UL
 // introspection refresh (worst case IntrospectionCacheTTL, default 60s).
 //
 // Audit emission: delegation.revoked.
-func (s *Service) RevokeDelegation(ctx context.Context, grantID models.ULID, reason string) error {
+func (s *Service) RevokeDelegation(ctx context.Context, grantID models.ULID, reason string) (err error) {
 	if s == nil || s.cfg == nil {
 		return errNotConfigured
 	}
-	cur, err := s.storage.DelegationGrantByID(ctx, grantID)
-	if err != nil {
-		return models.ErrDelegationNotFound
+	ctx, span := s.hooks.StartSpan(ctx, obs.SpanDelegationRevoke)
+	defer func() {
+		status := obs.StatusSuccess
+		if err != nil {
+			status = obs.StatusError
+			span.RecordError(err)
+		}
+		span.SetAttributes(obs.StringAttr(obs.AttrStatus, string(status)))
+		span.End()
+	}()
+	cur, lerr := s.storage.DelegationGrantByID(ctx, grantID)
+	if lerr != nil {
+		err = models.ErrDelegationNotFound
+		return err
 	}
 	if cur.RevokedAt != nil {
 		// Idempotent: a second revoke is a no-op.

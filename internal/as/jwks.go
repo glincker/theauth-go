@@ -287,18 +287,30 @@ func (s *Service) jwksRotationLoop() {
 
 // RotateSigningKey advances the JWKS state machine one step: previous
 // (if any) is retired, current becomes previous, next becomes current,
-// and a fresh next is minted. Idempotent under concurrent callers (each
-// call mints one fresh next). Operators can invoke this on emergency
-// without waiting for the scheduled tick.
+// and a fresh next is minted. Concurrent callers are serialized via
+// rotationMu so that two goroutines cannot both read the same snapshot
+// and independently issue conflicting state updates, which could leave two
+// rows with state = current.
+//
+// When the underlying Storage also implements JWKSAtomicRotator the entire
+// state transition is issued as a single database transaction, providing
+// an additional DB-level guard against concurrent callers on separate
+// process instances.
 func (s *Service) RotateSigningKey(ctx context.Context) error {
 	if s == nil {
 		return errors.New("theauth: authorization server not configured")
 	}
+	// Serialise concurrent callers at the process level so that two goroutines
+	// cannot both observe the same snapshot and produce two current rows.
+	s.rotationMu.Lock()
+	defer s.rotationMu.Unlock()
+
 	s.mu.Lock()
 	snapshot := append([]models.JWKSKey(nil), s.keys...)
 	s.mu.Unlock()
 	now := time.Now().UTC()
 	var current, next models.JWKSKey
+	var retireKIDs []string
 	for _, k := range snapshot {
 		switch k.State {
 		case models.JWKSStateCurrent:
@@ -306,28 +318,39 @@ func (s *Service) RotateSigningKey(ctx context.Context) error {
 		case models.JWKSStateNext:
 			next = k
 		case models.JWKSStatePrevious:
-			// Retire any previous (only the most recent prior key is
-			// kept).
-			if err := s.Storage.UpdateJWKSKeyState(ctx, k.KID, models.JWKSStateRetired, now); err != nil {
-				return fmt.Errorf("retire previous: %w", err)
-			}
+			retireKIDs = append(retireKIDs, k.KID)
 		}
 	}
 	if current.KID == "" || next.KID == "" {
 		return errors.New("theauth: cannot rotate without current + next keys")
 	}
-	if err := s.Storage.UpdateJWKSKeyState(ctx, current.KID, models.JWKSStatePrevious, now); err != nil {
-		return fmt.Errorf("demote current: %w", err)
-	}
-	if err := s.Storage.UpdateJWKSKeyState(ctx, next.KID, models.JWKSStateCurrent, now); err != nil {
-		return fmt.Errorf("promote next: %w", err)
-	}
 	fresh, _, err := s.generateEd25519Keypair(models.JWKSStateNext)
 	if err != nil {
 		return err
 	}
-	if err := s.Storage.InsertJWKSKey(ctx, fresh); err != nil {
-		return fmt.Errorf("insert fresh next: %w", err)
+	if ar, ok := s.Storage.(JWKSAtomicRotator); ok {
+		// Fast path: issue all state changes in a single transaction so no
+		// concurrent rotation can interleave and produce two current rows.
+		if err := ar.AtomicRotateJWKS(ctx, retireKIDs, current.KID, next.KID, fresh, now); err != nil {
+			return fmt.Errorf("atomic jwks rotate: %w", err)
+		}
+	} else {
+		// Fallback path for storage backends that do not implement
+		// JWKSAtomicRotator (e.g. in-memory store for unit tests).
+		for _, kid := range retireKIDs {
+			if err := s.Storage.UpdateJWKSKeyState(ctx, kid, models.JWKSStateRetired, now); err != nil {
+				return fmt.Errorf("retire previous: %w", err)
+			}
+		}
+		if err := s.Storage.UpdateJWKSKeyState(ctx, current.KID, models.JWKSStatePrevious, now); err != nil {
+			return fmt.Errorf("demote current: %w", err)
+		}
+		if err := s.Storage.UpdateJWKSKeyState(ctx, next.KID, models.JWKSStateCurrent, now); err != nil {
+			return fmt.Errorf("promote next: %w", err)
+		}
+		if err := s.Storage.InsertJWKSKey(ctx, fresh); err != nil {
+			return fmt.Errorf("insert fresh next: %w", err)
+		}
 	}
 	updated, err := s.Storage.JWKSKeysAll(ctx)
 	if err != nil {

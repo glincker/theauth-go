@@ -14,6 +14,14 @@ It is the first Go auth library where oauth 2.1 mcp authorization, agent identit
 
 ---
 
+## Documentation
+
+Full documentation is available at **https://glincker.github.io/theauth-go/**
+
+The site covers getting started, concepts, guides, configuration reference, error catalog, metrics and spans, audit events, migration guides, and security.
+
+---
+
 ## Contents
 
 - [Features](#features)
@@ -22,8 +30,10 @@ It is the first Go auth library where oauth 2.1 mcp authorization, agent identit
 - [Documentation](#documentation)
 - [Examples](#examples)
 - [Architecture](#architecture)
+- [Trust](#trust)
 - [Security](#security)
 - [Versioning and stability](#versioning-and-stability)
+- [Verifying releases](#verifying-releases)
 - [Contributing](#contributing)
 - [License](#license)
 - [Acknowledgements](#acknowledgements)
@@ -203,7 +213,22 @@ Full runnable example: [`examples/mcp-server/`](./examples/mcp-server).
 | `GET /auth/me` | Current user (requires auth) |
 | `DELETE /auth/sessions/current` | Sign out |
 
-**OAuth providers** (`GET /auth/providers/{name}/start` and `/callback`): github, google, microsoft, discord.
+**OAuth providers** (`GET /auth/providers/{name}/start` and `/callback`): github, google, microsoft, discord, facebook, slack, gitlab, bitbucket, twitch, linkedin, x, apple.
+
+| Provider | Package | Protocol | Notes |
+| --- | --- | --- | --- |
+| GitHub | `provider/github` | OAuth 2.0 + PKCE | [docs](https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/authorizing-oauth-apps) |
+| Google | `provider/google` | OIDC | [docs](https://developers.google.com/identity/protocols/oauth2) |
+| Microsoft | `provider/microsoft` | OIDC (Entra ID) | [docs](https://learn.microsoft.com/en-us/entra/identity-platform/) |
+| Discord | `provider/discord` | OAuth 2.0 + PKCE | [docs](https://discord.com/developers/docs/topics/oauth2) |
+| Facebook | `provider/facebook` | OAuth 2.0 + PKCE | [docs](https://developers.facebook.com/docs/facebook-login/) |
+| Slack | `provider/slack` | OIDC (Sign in with Slack) | [docs](https://api.slack.com/authentication/sign-in-with-slack) |
+| GitLab | `provider/gitlab` | OIDC; configurable BaseURL for self-hosted | [docs](https://docs.gitlab.com/ee/integration/openid_connect_provider.html) |
+| Bitbucket | `provider/bitbucket` | OAuth 2.0 + PKCE | [docs](https://support.atlassian.com/bitbucket-cloud/docs/use-oauth-on-bitbucket-cloud/) |
+| Twitch | `provider/twitch` | OIDC | [docs](https://dev.twitch.tv/docs/authentication/getting-tokens-oidc/) |
+| LinkedIn | `provider/linkedin` | OIDC (/v2/userinfo) | [docs](https://learn.microsoft.com/en-us/linkedin/consumer/integrations/self-serve/sign-in-with-linkedin-v2) |
+| X (Twitter) | `provider/x` | OAuth 2.0; PKCE mandatory | [docs](https://developer.x.com/en/docs/authentication/oauth-2-0/authorization-code) |
+| Apple | `provider/apple` | OIDC; JWT client secret (ES256) | [docs](https://developer.apple.com/documentation/sign_in_with_apple) |
 
 **WebAuthn**: `/auth/webauthn/register/{begin,finish}`, `/auth/webauthn/login/{begin,finish}`, `/auth/webauthn/credentials`.
 
@@ -226,6 +251,14 @@ Full runnable example: [`examples/mcp-server/`](./examples/mcp-server).
 | [`examples/echo-app/`](./examples/echo-app) | Drop-in with Echo |
 | [`examples/stdlib-app/`](./examples/stdlib-app) | Pure `net/http`, no framework |
 | [`examples/oauth-multi-provider/`](./examples/oauth-multi-provider) | GitHub + Google + Microsoft + Discord in one app |
+| [`examples/oauth-facebook/`](./examples/oauth-facebook) | Sign in with Facebook (Meta) |
+| [`examples/oauth-slack/`](./examples/oauth-slack) | Sign in with Slack (OpenID Connect) |
+| [`examples/oauth-gitlab/`](./examples/oauth-gitlab) | Sign in with GitLab (self-hosted or gitlab.com) |
+| [`examples/oauth-bitbucket/`](./examples/oauth-bitbucket) | Sign in with Bitbucket Cloud |
+| [`examples/oauth-twitch/`](./examples/oauth-twitch) | Sign in with Twitch (OIDC) |
+| [`examples/oauth-linkedin/`](./examples/oauth-linkedin) | Sign in with LinkedIn (OIDC /v2/userinfo) |
+| [`examples/oauth-x/`](./examples/oauth-x) | Sign in with X/Twitter (PKCE mandatory) |
+| [`examples/oauth-apple/`](./examples/oauth-apple) | Sign in with Apple (JWT client secret) |
 | [`examples/webauthn-passkey/`](./examples/webauthn-passkey) | Passkey register and discoverable login |
 | [`examples/totp-stepup/`](./examples/totp-stepup) | Password + TOTP step-up flow |
 | [`examples/mcp-server/`](./examples/mcp-server) | MCP resource server using `mcpresource` middleware |
@@ -265,6 +298,56 @@ The `mcpresource` module is a separately versioned zero-dependency module. A con
 
 ---
 
+## Writing a custom storage backend
+
+Implement [`theauth.Storage`](storage.go) (core auth methods) and optionally
+[`theauth.OAuthServerStorage`](storage_v20.go) (OAuth 2.1 AS methods). Pass
+the instance to `theauth.New(cfg)` via `Config.Storage`.
+
+To prove your backend is conformant, import [`storagetest`](storagetest/doc.go)
+in a test file and call `storagetest.Run`:
+
+```go
+import (
+    "testing"
+
+    "github.com/glincker/theauth-go/storagetest"
+)
+
+func TestMyBackendContract(t *testing.T) {
+    store := mybackend.New(/* your config */)
+    storagetest.Run(t, store)
+}
+```
+
+`storagetest.Run` exercises 14 domain sub-tests covering users, sessions,
+magic links, passwords, WebAuthn, TOTP, audit events, RBAC roles, OAuth
+clients, authorization codes, refresh tokens, JWKS keys, agents, and
+delegation grants. Passing all sub-tests means your backend satisfies the
+same semantics as the built-in `storage/memory` and `storage/postgres`
+adapters.
+
+Backends that only implement `theauth.Storage` (not `OAuthServerStorage`)
+will see the OAuth AS sub-tests automatically skipped with `t.Skip`.
+
+The `storagetest` package has no external dependencies beyond the standard
+library and `theauth` itself.
+
+---
+
+## Trust
+
+Procurement teams at regulated companies ask three questions before adopting an auth library. The documents below answer them directly.
+
+| Document | Question it answers |
+|---|---|
+| [docs/THREAT-MODEL.md](docs/THREAT-MODEL.md) | What is your threat model? STRIDE analysis per component, with file:line citations to mitigations and explicit residual risk for operator action. |
+| [docs/COMPLIANCE-SOC2.md](docs/COMPLIANCE-SOC2.md) | How do you map to SOC 2 Type II controls? CC1-CC9, A1, C1, PI1, and P-series criteria mapped to library capabilities and operator gaps. |
+| [docs/COMPLIANCE-GDPR.md](docs/COMPLIANCE-GDPR.md) | How does a customer deploy you under GDPR? Personal data inventory, data subject rights APIs, retention defaults, data residency posture, and an operator checklist. |
+| [SECURITY.md](SECURITY.md) | How do I report a vulnerability? Vulnerability disclosure policy and contact. |
+
+---
+
 ## Security
 
 See [SECURITY.md](SECURITY.md) for the vulnerability disclosure policy. Report security issues to `security@glincker.com`.
@@ -284,6 +367,55 @@ Recent security work (2026-06-20 audit):
 The project follows [Semantic Versioning](https://semver.org/) from v1.0 forward. v2.0.0 is the current production release. The v1.0 public API surface is frozen. Every v2.0 feature (OAuth 2.1 AS, agent identities, delegation, `mcpresource`) is opt-in via additional `Config` fields; callers who upgrade from v1.0 without setting those fields see no behavior change.
 
 See [STABILITY.md](STABILITY.md) for the complete list of stable symbols, the Storage interface special rule, and the migration append-only guarantee.
+
+---
+
+## Verifying releases
+
+Every release is signed with [Sigstore](https://www.sigstore.dev/) keyless
+cosign and includes a CycloneDX SBOM. The full release process is documented
+in [docs/RELEASING.md](docs/RELEASING.md).
+
+### Install this library
+
+```bash
+go get github.com/glincker/theauth-go@vX.Y.Z
+```
+
+(`go install` is for CLI tools; this is a library, so `go get` is correct.)
+
+### Verify the SBOM signature
+
+Download the `.sbom.json`, `.sbom.json.sig`, and `.sbom.json.cert` files from
+the [GitHub release](https://github.com/glincker/theauth-go/releases), then:
+
+```bash
+cosign verify-blob \
+  --certificate-identity "https://github.com/glincker/theauth-go/.github/workflows/release.yml@refs/tags/vX.Y.Z" \
+  --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
+  --signature theauth-go-vX.Y.Z.tar.gz.sbom.json.sig \
+  --certificate theauth-go-vX.Y.Z.tar.gz.sbom.json.cert \
+  theauth-go-vX.Y.Z.tar.gz.sbom.json
+```
+
+A `Verified OK` response confirms the SBOM was produced by the official release
+workflow from the tagged commit with no tampering.
+
+### Read the SBOM
+
+The SBOM lists every Go module dependency, its version, and its license. Feed
+it to any CycloneDX-compatible scanner (e.g. `grype`, `trivy`, Dependency-Track)
+to run license compliance or vulnerability checks against the exact dependency
+set shipped in a given release.
+
+### Verify SLSA provenance
+
+The release workflow also generates a SLSA provenance attestation stored in
+GitHub's artifact store. Verify it with the `gh` CLI:
+
+```bash
+gh attestation verify theauth-go-vX.Y.Z.tar.gz --repo glincker/theauth-go
+```
 
 ---
 

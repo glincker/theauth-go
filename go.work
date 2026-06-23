@@ -2,11 +2,14 @@ go 1.25.0
 
 use (
 	.
+	./audit/sinks/otlp
 	./examples/chi-app
 	./examples/echo-app
 	./examples/gin-app
 	./examples/mcp-server
 	./examples/oauth-multi-provider
+	./examples/observability-otel
+	./examples/observability-prom
 	./examples/stdlib-app
 	./mcpresource
 )

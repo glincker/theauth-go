@@ -56,6 +56,13 @@ type Principal struct {
 	// authorised the innermost actor. Audit pipelines correlate every
 	// failure or sensitive call back to this row.
 	DelegationGrantID string
+
+	// CnfJKT, when non-empty, is the RFC 7800 jkt confirmation
+	// thumbprint that bound the access token to a DPoP key. The
+	// middleware only attaches a Principal after confirming the
+	// inbound DPoP proof's JWK thumbprint equals this value, so
+	// handlers can trust the binding without re-verifying.
+	CnfJKT string
 }
 
 // ctxKey is the unexported context key type used for principal storage.

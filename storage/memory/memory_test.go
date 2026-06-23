@@ -11,6 +11,7 @@ import (
 	"github.com/glincker/theauth-go"
 	"github.com/glincker/theauth-go/internal/ulid"
 	"github.com/glincker/theauth-go/storage"
+	"github.com/glincker/theauth-go/storagetest"
 )
 
 func TestCreateUserAndFetchByEmail(t *testing.T) {
@@ -198,4 +199,10 @@ func TestMemoryExpiredMagicLinkNotConsumed(t *testing.T) {
 	if stored.UsedAt != nil {
 		t.Fatalf("expired link UsedAt should remain nil; got %v", stored.UsedAt)
 	}
+}
+
+// TestMemoryStoreContract runs the full storagetest contract suite against the
+// in-memory backend to verify it satisfies all documented Storage semantics.
+func TestMemoryStoreContract(t *testing.T) {
+	storagetest.Run(t, New())
 }

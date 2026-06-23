@@ -2,6 +2,7 @@ package as
 
 import (
 	"context"
+	"crypto/subtle"
 	"errors"
 	"fmt"
 	"time"
@@ -31,6 +32,30 @@ type TokenRequest struct {
 	RefreshToken string
 	Resource     string
 	Scope        []string
+
+	// DPoPProof, when non-empty, is the raw value of the request's DPoP
+	// header. When populated and the AS has DPoP enabled, the token
+	// endpoint verifies the proof and binds the issued access token to
+	// the proof key via cnf.jkt (RFC 7800 + RFC 9449).
+	DPoPProof string
+
+	// HTTPMethod + HTTPURL are the request method + canonical URL
+	// passed through to the DPoP verifier so it can check htm / htu.
+	// The handler populates these from the incoming http.Request; tests
+	// supply them directly.
+	HTTPMethod string
+	HTTPURL    string
+
+	// ClientAssertionType and ClientAssertion carry the RFC 7523 section 2.2
+	// parameters. When ClientAssertionType ==
+	// models.ClientAssertionTypeJWTBearer, AuthenticateClient delegates to
+	// AuthenticateClientJWT rather than checking a client_secret.
+	ClientAssertionType string
+	ClientAssertion     string
+
+	// Assertion is the external JWT for the
+	// urn:ietf:params:oauth:grant-type:jwt-bearer grant (RFC 7523 section 2.1).
+	Assertion string
 }
 
 // TokenResponse is the JSON body emitted by /oauth/token on success.
@@ -48,11 +73,14 @@ type TokenResponse struct {
 // ExchangeAuthorizationCode redeems a one-time authorization code for an
 // access token + refresh token pair. Enforces PKCE S256, redirect_uri
 // equality, audience binding (RFC 8707), and client authentication.
-func (s *Service) ExchangeAuthorizationCode(ctx context.Context, req TokenRequest) (TokenResponse, error) {
+func (s *Service) ExchangeAuthorizationCode(ctx context.Context, req TokenRequest) (resp TokenResponse, err error) {
 	if s == nil {
 		return TokenResponse{}, errors.New("theauth: authorization server not configured")
 	}
-	client, err := s.AuthenticateClient(ctx, req.ClientID, req.ClientSecret)
+	ctx, span, timer := s.startTokenSpan(ctx, "authorization_code")
+	defer func() { s.finishTokenSpan(span, timer, "authorization_code", err) }()
+	var client *models.OAuthClient
+	client, err = s.AuthenticateClientFromRequest(ctx, req, s.tokenEndpointURL())
 	if err != nil {
 		return TokenResponse{}, err
 	}
@@ -79,18 +107,26 @@ func (s *Service) ExchangeAuthorizationCode(ctx context.Context, req TokenReques
 	if codeRow.CodeChallengeMethod != "S256" {
 		return TokenResponse{}, models.ErrOAuthInvalidGrant
 	}
-	if crypto.CodeChallenge(req.CodeVerifier) != codeRow.CodeChallenge {
+	// security re-audit L2 (2026-06-22): use constant-time compare to
+	// prevent timing oracle on the code_challenge comparison.
+	computed := crypto.CodeChallenge(req.CodeVerifier)
+	if subtle.ConstantTimeCompare([]byte(computed), []byte(codeRow.CodeChallenge)) != 1 {
 		return TokenResponse{}, models.ErrOAuthPKCEMismatch
 	}
 	if _, ok := s.ResourceByIdentifier(codeRow.Resource); !ok {
 		return TokenResponse{}, models.ErrOAuthInvalidResource
 	}
 	scope := codeRow.Scope
+	jkt, err := s.dpopThumbprintForRequest(req)
+	if err != nil {
+		return TokenResponse{}, err
+	}
 	return s.mintAccessAndRefresh(ctx, mintInput{
 		ClientID: client.ClientID,
 		UserID:   &codeRow.UserID,
 		Scope:    scope,
 		Resource: codeRow.Resource,
+		DPoPJKT:  jkt,
 	})
 }
 
@@ -98,11 +134,14 @@ func (s *Service) ExchangeAuthorizationCode(ctx context.Context, req TokenReques
 // token + refresh token pair. The old refresh token is revoked;
 // presenting it again triggers family-wide revocation per RFC 9700
 // section 4.14.
-func (s *Service) RefreshAccessToken(ctx context.Context, req TokenRequest) (TokenResponse, error) {
+func (s *Service) RefreshAccessToken(ctx context.Context, req TokenRequest) (resp TokenResponse, err error) {
 	if s == nil {
 		return TokenResponse{}, errors.New("theauth: authorization server not configured")
 	}
-	client, err := s.AuthenticateClient(ctx, req.ClientID, req.ClientSecret)
+	ctx, span, timer := s.startTokenSpan(ctx, "refresh_token")
+	defer func() { s.finishTokenSpan(span, timer, "refresh_token", err) }()
+	var client *models.OAuthClient
+	client, err = s.AuthenticateClientFromRequest(ctx, req, s.tokenEndpointURL())
 	if err != nil {
 		return TokenResponse{}, err
 	}
@@ -148,12 +187,17 @@ func (s *Service) RefreshAccessToken(ctx context.Context, req TokenRequest) (Tok
 	if err := s.Storage.RevokeRefreshToken(ctx, hash, "rotated"); err != nil {
 		return TokenResponse{}, fmt.Errorf("revoke prior refresh: %w", err)
 	}
+	jkt, err := s.dpopThumbprintForRequest(req)
+	if err != nil {
+		return TokenResponse{}, err
+	}
 	return s.mintAccessAndRefresh(ctx, mintInput{
 		ClientID: client.ClientID,
 		UserID:   rt.UserID,
 		Scope:    scope,
 		Resource: resource,
 		FamilyID: &rt.FamilyID,
+		DPoPJKT:  jkt,
 	})
 }
 
@@ -165,6 +209,11 @@ type mintInput struct {
 	Scope    []string
 	Resource string
 	FamilyID *models.ULID // non-nil when continuing a rotation family
+	// DPoPJKT, when non-empty, embeds an RFC 7800 cnf.jkt confirmation
+	// claim in the access token, binding the token to the DPoP proof
+	// key. Resource servers MUST then require an inbound DPoP proof
+	// signed by the matching key on every protected call.
+	DPoPJKT string
 }
 
 // mintAccessAndRefresh signs a fresh access token JWT and stores a fresh
@@ -191,6 +240,20 @@ func (s *Service) mintAccessAndRefresh(ctx context.Context, in mintInput) (Token
 		ClientID: in.ClientID,
 		Scope:    scopeJoin(in.Scope),
 		Typ:      jwt.TypeAccessToken,
+	}
+	tokenType := "Bearer"
+	if in.DPoPJKT != "" {
+		// RFC 7800 confirmation claim: resource servers compare the
+		// thumbprint of the inbound DPoP proof key against this value
+		// before authorizing the call.
+		if claims.Extra == nil {
+			claims.Extra = map[string]any{}
+		}
+		claims.Extra["cnf"] = map[string]string{"jkt": in.DPoPJKT}
+		// RFC 9449 section 5: the token_type emitted alongside a
+		// DPoP-bound access token MUST be "DPoP", not "Bearer". The
+		// resource server keys its dispatching logic off of this.
+		tokenType = "DPoP"
 	}
 	access, err := jwt.Sign(claims, signingKey.KID, priv)
 	if err != nil {
@@ -222,7 +285,7 @@ func (s *Service) mintAccessAndRefresh(ctx context.Context, in mintInput) (Token
 	}
 	return TokenResponse{
 		AccessToken:  access,
-		TokenType:    "Bearer",
+		TokenType:    tokenType,
 		ExpiresIn:    int(s.Cfg.AccessTokenTTL.Seconds()),
 		RefreshToken: refreshToken,
 		Scope:        scopeJoin(in.Scope),
@@ -258,10 +321,12 @@ func (s *Service) AuthenticateClient(ctx context.Context, clientID, clientSecret
 	// the digest we stored at insert.
 	if clientSecret != "" {
 		if cached, ok := s.clientAuthCache.Get(clientID, clientSecret); ok && cached != nil {
+			s.observeCacheHit("oauth_client")
 			return cached, nil
 		}
+		s.observeCacheMiss("oauth_client")
 	}
-	client, err := s.Storage.OAuthClientByClientID(ctx, clientID)
+	client, err := s.ResolveClient(ctx, clientID)
 	if err != nil {
 		return nil, models.ErrOAuthInvalidClient
 	}
@@ -285,8 +350,29 @@ func (s *Service) AuthenticateClient(ctx context.Context, clientID, clientSecret
 			return nil, models.ErrOAuthInvalidClient
 		}
 		s.clientAuthCache.Put(clientID, clientSecret, client)
+		s.updateCacheSizeGauge()
 		return client, nil
+	case models.ClientAuthPrivateKeyJWT, models.ClientAuthClientSecretJWT:
+		// JWT client authentication is handled by AuthenticateClientJWT;
+		// callers that reach this switch branch via the legacy
+		// AuthenticateClient(ctx, id, secret) API do not carry an assertion
+		// and therefore fail. The handler layer calls AuthenticateClientJWT
+		// directly when client_assertion_type is present.
+		return nil, models.ErrOAuthInvalidClient
 	default:
 		return nil, models.ErrOAuthInvalidClient
 	}
+}
+
+// AuthenticateClientFromRequest authenticates a client from a TokenRequest.
+// When the request carries a client_assertion_type, this delegates to
+// AuthenticateClientJWT. Otherwise it calls AuthenticateClient.
+//
+// tokenEndpointURL is the full canonical URL of the token endpoint (used as
+// the expected aud in client assertions).
+func (s *Service) AuthenticateClientFromRequest(ctx context.Context, req TokenRequest, tokenEndpointURL string) (*models.OAuthClient, error) {
+	if req.ClientAssertionType == models.ClientAssertionTypeJWTBearer && req.ClientAssertion != "" {
+		return s.AuthenticateClientJWT(ctx, req.ClientID, req.ClientAssertion, tokenEndpointURL)
+	}
+	return s.AuthenticateClient(ctx, req.ClientID, req.ClientSecret)
 }
