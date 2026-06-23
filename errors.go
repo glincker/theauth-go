@@ -128,6 +128,11 @@ const (
 	CodeInvalidTOTP     = models.CodeInvalidTOTP
 	CodeAlreadyEnrolled = models.CodeAlreadyEnrolled
 	CodeWebAuthn        = models.CodeWebAuthn
+
+	// v2.3 identity-linking codes.
+	CodeIdentityConflict = models.CodeIdentityConflict
+	CodeStepUpRequired   = models.CodeStepUpRequired
+	CodeLastAuthMethod   = models.CodeLastAuthMethod
 )
 
 // TheAuthError is the structured error type returned by v0.2+ service
@@ -140,6 +145,12 @@ const (
 // cycle on the root package. The type alias below preserves the v0.2+
 // public name and method set; existing callers compile unchanged.
 type TheAuthError = models.TheAuthError
+
+// IdentityConflictError is returned (wrapped inside ErrIdentityConflict) by
+// LinkOAuthToCurrentUser when the OAuth account is already bound to a
+// different user. errors.As to this type to read ConflictingUserID and
+// surface a merge-confirmation flow in the consumer UI.
+type IdentityConflictError = models.IdentityConflictError
 
 // NewError constructs a TheAuthError with the supplied code, message, and
 // optional wrapped cause. Re-exported from internal/models for the same
@@ -260,6 +271,51 @@ var (
 	// true but Config.AgentIdentity is nil. The account routes have no
 	// service surface to back them otherwise.
 	ErrAccountUXRequiresAgents = models.ErrAccountUXRequiresAgents
+
+	// v2.3 identity-linking sentinels.
+
+	// ErrIdentityConflict is returned by LinkOAuthToCurrentUser when the
+	// OAuth account being linked is already bound to a different user.
+	// errors.As it to *models.IdentityConflictError to read ConflictingUserID.
+	ErrIdentityConflict = models.ErrIdentityConflict
+
+	// ErrStepUpRequired is returned by any identity-linking or merge method
+	// when the session's AuthLevel is not AuthLevelFull.
+	ErrStepUpRequired = models.ErrStepUpRequired
+
+	// ErrLastAuthMethod is returned when an unlink operation would leave
+	// the account with zero authentication methods.
+	ErrLastAuthMethod = models.ErrLastAuthMethod
+
+	// CIBA (RFC 9509) sentinels.
+
+	// ErrCIBAAuthorizationPending is returned by PollBackchannelToken when
+	// the user has not yet approved or denied the request.
+	ErrCIBAAuthorizationPending = models.ErrCIBAAuthorizationPending
+
+	// ErrCIBASlowDown is returned when the client polls faster than
+	// CIBAConfig.MinPollInterval.
+	ErrCIBASlowDown = models.ErrCIBASlowDown
+
+	// ErrCIBAAccessDenied is returned when the user denied the request.
+	ErrCIBAAccessDenied = models.ErrCIBAAccessDenied
+
+	// ErrCIBAExpiredToken is returned when the auth_req_id has expired.
+	ErrCIBAExpiredToken = models.ErrCIBAExpiredToken
+
+	// ErrCIBAInvalidRequest is returned when required hint parameters are
+	// missing or mutually exclusive constraints are violated.
+	ErrCIBAInvalidRequest = models.ErrCIBAInvalidRequest
+
+	// ErrCIBADisabled is returned when a CIBA operation is attempted but
+	// CIBA is not enabled (Config.AuthorizationServer.CIBA is nil or the
+	// storage does not implement CIBAStorage).
+	ErrCIBADisabled = models.ErrCIBADisabled
+
+	// ErrCIBAUserMismatch is returned by ApproveBackchannelAuth /
+	// DenyBackchannelAuth when the supplied userID does not match the
+	// resolved subject on the pending request.
+	ErrCIBAUserMismatch = models.ErrCIBAUserMismatch
 )
 
 // OAuth 2.1 standard error codes returned in JSON error bodies.

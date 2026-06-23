@@ -1,0 +1,90 @@
+# Audit Events Reference
+
+theauth-go emits audit events via `EmitAudit`. Every event is stored in `audit_events` with an `action` string, a `target` ref, actor metadata (user, agent, org, IP, user-agent), and a redacted `metadata` map.
+
+The spelling of every action listed here is part of the v1.0 stability commitment. Existing actions keep their name and target shape through every minor release. New actions may be added in minor releases; callers must not switch exhaustively on action strings.
+
+## Identity and session events
+
+| Action | Target type | Notable metadata keys |
+|---|---|---|
+| `user.login` | `user` | `method` (magic_link, password, oauth, passkey, saml) |
+| `user.invited` | `user` | `email`, `org_id` |
+| `magic_link.requested` | `user` | `email` |
+| `magic_link.verified` | `user` | |
+| `password.reset.requested` | `user` | `email` |
+| `password.reset.completed` | `user` | |
+| `password.changed` | `user` | |
+| `session.revoked` | `session` | |
+| `passkey.registered` | `webauthn_credential` | `aaguid`, `name` |
+| `passkey.deleted` | `webauthn_credential` | |
+| `totp.enrolled` | `user` | |
+| `totp.disabled` | `user` | |
+| `saml.login_success` | `user` | `connection_id`, `name_id` |
+
+## Organization events
+
+| Action | Target type | Notable metadata keys |
+|---|---|---|
+| `organization.member.removed` | `user` | `org_id`, `removed_by` |
+
+## RBAC events
+
+| Action | Target type | Notable metadata keys |
+|---|---|---|
+| `role.granted` | `user` | `role_id`, `role_name`, `org_id` |
+| `role.revoked` | `user` | `role_id`, `role_name`, `org_id` |
+| `role.created` | `role` | `role_name`, `org_id` |
+| `role.updated` | `role` | `role_name`, `org_id` |
+| `role.deleted` | `role` | `org_id` |
+
+## Agent and delegation events (v2.0)
+
+| Action | Target type | Notable metadata keys |
+|---|---|---|
+| `agent.created` | `agent` | `agent_name`, `owner_type`, `owner_id` |
+| `agent.suspended` | `agent` | |
+| `agent.resumed` | `agent` | |
+| `agent.revoked` | `agent` | |
+| `agent.token_minted` | `agent` | `resource`, `scope` |
+| `agent_credential.minted` | `agent` | `credential_kind` |
+| `agent_credential.revoked` | `agent` | `credential_kind` |
+| `agent_credential.revoke_failed` | `agent` | `credential_kind`, `error` |
+| `delegation.granted` | `delegation_grant` | `user_id`, `agent_id`, `resource`, `scope` |
+| `delegation.revoked` | `delegation_grant` | `user_id`, `agent_id`, `resource` |
+| `token.exchanged` | `delegation_grant` | `subject`, `actor`, `resource`, `scope` |
+
+## Admin surface events
+
+| Action | Target type | Notable metadata keys |
+|---|---|---|
+| `audit.queried` | `audit` | `filter_action`, `filter_target` |
+
+## Redaction
+
+`DefaultRedactor` masks values at any nesting depth whose key (case-insensitive) matches: `password`, `secret`, `token`, `code`, `refresh_token`, `access_token`. The redacted value is replaced with `"[REDACTED]"`.
+
+Override the redactor by setting `AuditConfig.Redactor`.
+
+## Querying audit events
+
+```go
+events, meta, err := a.QueryAudit(ctx, theauth.AuditQuery{
+    Action:  "delegation.granted",
+    OrgID:   &orgID,
+    Limit:   50,
+    After:   cursor, // keyset pagination
+})
+// meta.NextCursor is empty when there are no more pages
+```
+
+## Stats counters
+
+Monitor audit pipeline health via `a.Stats()`:
+
+| Counter | Meaning |
+|---|---|
+| `AuditEmitted` | Total events passed to `EmitAudit`. |
+| `AuditWritten` | Total events successfully written to storage. |
+| `AuditDropped` | Events discarded because the channel buffer was full. |
+| `AuditFailed` | Events that failed the storage write (not retried). |

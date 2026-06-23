@@ -165,7 +165,44 @@ var (
 	// not satisfy the OAuthServerStorage extension. Catches in-memory
 	// adapters that pre-date the v2.0 storage surface.
 	ErrStorageMissingOAuthMethods = errors.New("theauth: Storage does not implement OAuthServerStorage")
+
+	// v2.3 identity-linking sentinels.
+
+	// ErrIdentityConflict is returned by LinkOAuthToCurrentUser when the
+	// OAuth account being linked is already bound to a different user. The
+	// conflicting user ID is surfaced via ConflictingUserID on the wrapped
+	// IdentityConflictError so consumer UIs can present a merge confirmation.
+	ErrIdentityConflict = errors.New("theauth: oauth account already linked to another user")
+
+	// ErrStepUpRequired is returned when a link or merge operation is
+	// called with a session that is not fully authenticated (AuthLevel is
+	// pending_2fa or the session is otherwise incomplete). Consumer
+	// middleware should map this to the pending_2fa response shape.
+	ErrStepUpRequired = errors.New("theauth: step-up authentication required")
+
+	// ErrLastAuthMethod is returned when an unlink or DELETE would remove
+	// the only remaining authentication method from the account, which
+	// would lock the user out permanently.
+	ErrLastAuthMethod = errors.New("theauth: cannot remove the last authentication method")
 )
+
+// IdentityConflictError is returned (wrapped in ErrIdentityConflict) by
+// LinkOAuthToCurrentUser when the OAuth account is already owned by a
+// different user. ConflictingUserID carries that user's ID so consumer UIs
+// can present a merge-confirmation flow.
+type IdentityConflictError struct {
+	ConflictingUserID ULID
+}
+
+// Error implements the error interface.
+func (e *IdentityConflictError) Error() string {
+	return "theauth: oauth account already linked to user " + e.ConflictingUserID.String()
+}
+
+// Unwrap lets errors.Is(err, ErrIdentityConflict) traverse through.
+func (e *IdentityConflictError) Unwrap() error {
+	return ErrIdentityConflict
+}
 
 // Stable error codes that callers can switch on. New endpoints return
 // TheAuthError; old endpoints keep returning the sentinels above. Lifted
@@ -187,6 +224,14 @@ const (
 	CodeInvalidTOTP     = "invalid_totp"
 	CodeAlreadyEnrolled = "already_enrolled"
 	CodeWebAuthn        = "webauthn_error"
+
+	// v2.3 identity-linking codes.
+	CodeIdentityConflict = "identity.conflict"
+	CodeStepUpRequired   = "identity.step_up_required"
+	CodeLastAuthMethod   = "identity.last_auth_method"
+	CodeIdentityLinked   = "identity.linked"
+	CodeIdentityUnlinked = "identity.unlinked"
+	CodeAccountMerged    = "account.merged"
 )
 
 // TheAuthError is the structured error type returned by v0.2+ service

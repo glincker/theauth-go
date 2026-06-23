@@ -34,7 +34,10 @@ func (a *TheAuth) Mount(r chi.Router) {
 	emailLimit := a.RateLimitByEmail(a.rateLimitPerEmail)
 
 	r.Route("/auth", func(r chi.Router) {
-		r.Post("/magic-link", a.handleMagicLinkRequest)
+		// security re-audit L1 (2026-06-22): /auth/magic-link was unrate-limited,
+		// allowing enumeration of registered email addresses. Apply the same
+		// per-IP and per-email caps used by the password endpoints.
+		r.With(ipLimit, emailLimit).Post("/magic-link", a.handleMagicLinkRequest)
 		r.Get("/magic-link/verify", a.handleMagicLinkVerify)
 
 		r.Route("/email-password", func(r chi.Router) {

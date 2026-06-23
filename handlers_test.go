@@ -365,3 +365,43 @@ func TestEndToEndMagicLinkFlow(t *testing.T) {
 		t.Fatalf("got email %q", me.Email)
 	}
 }
+
+// TestMagicLinkRateLimited verifies that /auth/magic-link is subject to the
+// per-IP rate limit (security re-audit L1, 2026-06-22). The route was
+// previously unrate-limited, allowing enumeration of registered addresses.
+func TestMagicLinkRateLimited(t *testing.T) {
+	store := memory.New()
+	a, err := theauth.New(theauth.Config{
+		Storage:           store,
+		BaseURL:           "http://localhost",
+		SessionTTL:        time.Hour,
+		MagicLinkTTL:      15 * time.Minute,
+		RateLimitPerIP:    3,
+		RateLimitPerEmail: 100,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := chi.NewRouter()
+	a.Mount(r)
+	srv := httptest.NewServer(r)
+	t.Cleanup(srv.Close)
+
+	// First 3 requests must pass through the IP limiter (they succeed or
+	// return 200 regardless of whether the email is registered).
+	for i := 0; i < 3; i++ {
+		resp, _ := postJSON(t, srv, "/auth/magic-link", map[string]string{
+			"email": fmt.Sprintf("user%d@example.com", i),
+		}, nil)
+		if resp.StatusCode == http.StatusTooManyRequests {
+			t.Fatalf("attempt %d: unexpected 429 before limit reached", i+1)
+		}
+	}
+	// 4th request from the same IP must be rejected with 429.
+	resp, body := postJSON(t, srv, "/auth/magic-link", map[string]string{
+		"email": "overflow@example.com",
+	}, nil)
+	if resp.StatusCode != http.StatusTooManyRequests {
+		t.Fatalf("4th magic-link request expected 429; got %d body=%s", resp.StatusCode, body)
+	}
+}

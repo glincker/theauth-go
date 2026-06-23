@@ -29,6 +29,16 @@ type Validator struct {
 	jwks       *jwksCache
 	introspect *introspectCache
 
+	// dpop, when non-nil, enables RFC 9449 sender-constrained access
+	// token validation. A token carrying cnf.jkt requires an inbound
+	// DPoP header matching the claim; absence of cnf.jkt falls back to
+	// Bearer-token semantics.
+	dpop          *dpopVerifier
+	dpopEnabled   bool
+	dpopAllowAlgs []string
+	dpopMaxAge    time.Duration
+	dpopJTIWindow int
+
 	startOnce sync.Once
 }
 
@@ -87,6 +97,25 @@ func WithClockSkew(d time.Duration) Option {
 	}
 }
 
+// WithDPoPVerification enables RFC 9449 sender-constrained access token
+// validation. When set, the middleware extracts the inbound DPoP header
+// and, for every access token carrying an RFC 7800 cnf.jkt claim,
+// REQUIRES the proof key thumbprint to equal cnf.jkt. Tokens without
+// cnf.jkt continue to be accepted as plain Bearer tokens; the AS
+// chooses per-token whether to constrain.
+//
+// allowedSignAlgs defaults to ES256, ES384, RS256, PS256, EdDSA. Set
+// proofMaxAge to bound clock skew on the proof iat claim (default 60s).
+// jtiReplayWindow caps the in-memory replay LRU (default 4096).
+func WithDPoPVerification(allowedSignAlgs []string, proofMaxAge time.Duration, jtiReplayWindow int) Option {
+	return func(v *Validator) {
+		v.dpopEnabled = true
+		v.dpopAllowAlgs = append([]string(nil), allowedSignAlgs...)
+		v.dpopMaxAge = proofMaxAge
+		v.dpopJTIWindow = jtiReplayWindow
+	}
+}
+
 // New constructs a Validator. The resourceURI MUST match the aud claim of
 // every accepted token; it is also the URL the AS advertises in its
 // /.well-known/oauth-protected-resource document. The configuration is
@@ -105,6 +134,9 @@ func New(resourceURI string, opts ...Option) *Validator {
 	}
 	v.jwks = newJWKSCache(v.jwksURI, v.httpClient, v.cacheTTL)
 	v.introspect = newIntrospectCache(v.introspectURI, v.introspectClient, v.introspectSecret, v.httpClient, v.cacheTTL)
+	if v.dpopEnabled {
+		v.dpop = newDPoPVerifier(v.dpopAllowAlgs, v.dpopMaxAge, v.clockSkew, v.dpopJTIWindow)
+	}
 	return v
 }
 
@@ -136,4 +168,50 @@ func (v *Validator) validateConfig() error {
 		return errInvalidConfig
 	}
 	return nil
+}
+
+// Diagnostic describes a potential misconfiguration or notable condition
+// detected in the Validator at startup. It is informational only; the
+// Validator does not change runtime behavior based on diagnostics.
+type Diagnostic struct {
+	// Severity is either "warn" or "info".
+	Severity string
+	// Code is a short machine-readable identifier for the condition.
+	Code string
+	// Message is a human-readable description of the condition.
+	Message string
+}
+
+// Diagnostics returns a slice of Diagnostic values describing potential
+// misconfigurations in the Validator. Callers should log these at startup so
+// operators can spot configuration issues before tokens start being rejected.
+//
+// Current rules:
+//   - "warn" / "no-verification-source": neither JWKS URI nor introspection
+//     URI is configured; every token will be rejected as inactive, which
+//     looks identical to a bad-token bug and is almost certainly a
+//     misconfiguration.
+//   - "info" / "dual-verification": both JWKS URI and introspection URI are
+//     set; the validator uses JWKS for JWT validation and introspection for
+//     opaque tokens. This is a valid configuration but worth surfacing so
+//     operators know both paths are active.
+func (v *Validator) Diagnostics() []Diagnostic {
+	var out []Diagnostic
+	hasJWKS := v.jwksURI != ""
+	hasIntrospect := v.introspectURI != ""
+	if !hasJWKS && !hasIntrospect {
+		out = append(out, Diagnostic{
+			Severity: "warn",
+			Code:     "no-verification-source",
+			Message:  "mcpresource: neither JWKS URI nor introspection URI is configured; every token will be rejected as inactive",
+		})
+	}
+	if hasJWKS && hasIntrospect {
+		out = append(out, Diagnostic{
+			Severity: "info",
+			Code:     "dual-verification",
+			Message:  "mcpresource: both JWKS URI and introspection URI are configured; JWTs use JWKS, opaque tokens use introspection",
+		})
+	}
+	return out
 }

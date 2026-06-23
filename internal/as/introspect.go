@@ -47,6 +47,18 @@ type IntrospectionResponse struct {
 	// original delegation.
 	Act               *models.ActorClaim `json:"act,omitempty"`
 	DelegationGrantID string             `json:"delegation_grant_id,omitempty"`
+	// Cnf is the RFC 7800 confirmation claim. Populated when the token
+	// was minted as DPoP-bound (cnf.jkt = base64url SHA-256 thumbprint
+	// of the proof key). Resource servers compare this against the
+	// thumbprint of the inbound DPoP proof on every protected call.
+	Cnf *ConfirmationClaim `json:"cnf,omitempty"`
+}
+
+// ConfirmationClaim is the JSON shape of the RFC 7800 cnf claim. Only
+// the jkt member is populated today; future confirmation methods (mTLS
+// x5t#S256, kid) can land here additively.
+type ConfirmationClaim struct {
+	JKT string `json:"jkt,omitempty"`
 }
 
 // IntrospectToken validates the supplied token and returns the
@@ -58,11 +70,14 @@ type IntrospectionResponse struct {
 // passes its own identifier), tokens with a mismatching aud return
 // active=false. Tokens missing an aud claim are rejected; phase 1 + 2
 // mints them with a resource-derived aud unconditionally.
-func (s *Service) IntrospectToken(ctx context.Context, token, clientID, clientSecret, expectedAud string) (IntrospectionResponse, []byte, error) {
+func (s *Service) IntrospectToken(ctx context.Context, token, clientID, clientSecret, expectedAud string) (introResp IntrospectionResponse, body []byte, err error) {
 	if s == nil {
 		return IntrospectionResponse{}, nil, errors.New("theauth: authorization server not configured")
 	}
-	if _, err := s.AuthenticateClient(ctx, clientID, clientSecret); err != nil {
+	ctx, span, timer := s.startIntrospectSpan(ctx)
+	defer func() { s.finishIntrospectSpan(span, timer, err) }()
+	if _, aerr := s.AuthenticateClient(ctx, clientID, clientSecret); aerr != nil {
+		err = aerr
 		return IntrospectionResponse{}, nil, err
 	}
 	if token == "" {
@@ -91,12 +106,12 @@ func (s *Service) IntrospectToken(ctx context.Context, token, clientID, clientSe
 	// are base64url single segments.
 	if strings.Count(token, ".") == 2 {
 		resp := s.introspectJWT(ctx, token, expectedAud)
-		body, _ := json.Marshal(resp)
+		body, _ = json.Marshal(resp)
 		s.introspectCacheSet(token, expectedAud, body)
 		return resp, body, nil
 	}
 	resp := s.introspectRefreshToken(ctx, token)
-	body, _ := json.Marshal(resp)
+	body, _ = json.Marshal(resp)
 	s.introspectCacheSet(token, expectedAud, body)
 	return resp, body, nil
 }
@@ -135,6 +150,13 @@ func (s *Service) introspectJWT(ctx context.Context, token, expectedAud string) 
 			resp.DelegationGrantID = sval
 		}
 	}
+	if v, ok := claims.Extra["cnf"]; ok {
+		if m, ok := v.(map[string]any); ok {
+			if jkt, ok := m["jkt"].(string); ok && jkt != "" {
+				resp.Cnf = &ConfirmationClaim{JKT: jkt}
+			}
+		}
+	}
 	// Walk the chain on every fresh introspection: any actor in the
 	// chain being suspended/revoked, or the delegation grant being
 	// revoked, flips active=false immediately. Cache hits perform the
@@ -162,14 +184,24 @@ func (s *Service) introspectJWT(ctx context.Context, token, expectedAud string) 
 // chainStillActive walks the full actor chain (innermost-first) and
 // verifies every agent referenced is currently active, plus the
 // delegation grant (when present) is not revoked. Returns false if
-// anything is off; caller flips active=false. Background context
-// shielding is unnecessary because the introspection call itself is
-// request-scoped.
+// anything is off; caller flips active=false.
+//
+// Perf re-audit 2026-06-21 (item 3): when a token has an act chain but
+// NO delegation grant, the agent-walk result is cached in chainCache
+// keyed by the outermost agent ID for up to chainCacheTTL (5s). Callers
+// that suspend or revoke an agent MUST call InvalidateChainCache so the
+// next walk sees the fresh status without waiting for the TTL to expire.
+//
+// Tokens with a DelegationGrantID skip the cache because grant revocations
+// do not flow through the agent service; they are therefore always
+// re-checked against storage.
 func (s *Service) chainStillActive(ctx context.Context, resp *IntrospectionResponse) bool {
 	if s == nil {
 		return true
 	}
 	now := time.Now()
+
+	// Grant check is never cached: revocations must propagate immediately.
 	if resp.DelegationGrantID != "" {
 		var id models.ULID
 		if err := id.UnmarshalText([]byte(resp.DelegationGrantID)); err == nil {
@@ -182,16 +214,48 @@ func (s *Service) chainStillActive(ctx context.Context, resp *IntrospectionRespo
 			}
 		}
 	}
+
+	// Agent-chain walk: cache only when there is no delegation grant, so
+	// the cache key (outermost act.sub) uniquely identifies the chain
+	// state without needing to track grant invalidations. When a grant ID
+	// is present the grant check above already ran; fall through to the
+	// agent walk without caching.
+	cacheKey := ""
+	if resp.Act != nil && resp.DelegationGrantID == "" {
+		cacheKey = resp.Act.Sub
+	}
+	if cacheKey != "" {
+		if v, ok := s.chainCache.Load(cacheKey); ok {
+			if entry, ok := v.(*chainCacheEntry); ok {
+				if time.Since(entry.checkedAt) < chainCacheTTL {
+					return entry.active
+				}
+				// Stale: fall through to re-walk.
+				s.chainCache.Delete(cacheKey)
+			}
+		}
+	}
+
+	active := true
 	for cur := resp.Act; cur != nil; cur = cur.Act {
 		ag, err := s.lookupAgent(ctx, cur.Sub)
 		if err != nil || ag == nil {
-			return false
+			active = false
+			break
 		}
 		if ag.Status != models.AgentStatusActive {
-			return false
+			active = false
+			break
 		}
 	}
-	return true
+
+	if cacheKey != "" {
+		s.chainCache.Store(cacheKey, &chainCacheEntry{
+			active:    active,
+			checkedAt: time.Now(),
+		})
+	}
+	return active
 }
 
 // lookupAgent resolves an "agent:<id>" subject claim through the

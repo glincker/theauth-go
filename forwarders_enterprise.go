@@ -45,21 +45,25 @@ func (a *TheAuth) ListSCIMTokens(ctx context.Context, orgID ULID) ([]SCIMToken, 
 	return a.scimSvc.ListTokens(ctx, orgID)
 }
 
-// AuthenticateSCIMToken is the entry point invoked by the SCIM bearer
-// middleware on every request. Returns the bound organization or an
-// error. Touches last_used_at on success. Forwards to
-// scimSvc.Authenticate.
-func (a *TheAuth) AuthenticateSCIMToken(ctx context.Context, presented string) (ULID, error) {
-	return a.scimSvc.Authenticate(ctx, presented)
+// SCIMAuthResult is the value returned by AuthenticateSCIMToken. Bundling
+// OrgID and TokenID avoids the second SCIMTokenByHash storage call the
+// middleware previously performed after a successful authentication
+// (perf re-audit 2026-06-21, item 1).
+type SCIMAuthResult struct {
+	OrgID   ULID
+	TokenID ULID
 }
 
-// scimTokenIDByPresented returns the SCIM token row ID for the supplied
-// plaintext token, used for audit actor identification. Returns a zero
-// ULID (and no error) when the token is unknown so the audit hook gets a
-// stable placeholder rather than a panic. Forwards to
-// scimSvc.TokenIDByPresented.
-func (a *TheAuth) scimTokenIDByPresented(ctx context.Context, presented string) ULID {
-	return a.scimSvc.TokenIDByPresented(ctx, presented)
+// AuthenticateSCIMToken is the entry point invoked by the SCIM bearer
+// middleware on every request. Returns OrgID + TokenID in a single
+// storage round-trip, or an error on failure. Touches last_used_at
+// asynchronously on success. Forwards to scimSvc.Authenticate.
+func (a *TheAuth) AuthenticateSCIMToken(ctx context.Context, presented string) (SCIMAuthResult, error) {
+	res, err := a.scimSvc.Authenticate(ctx, presented)
+	if err != nil {
+		return SCIMAuthResult{}, err
+	}
+	return SCIMAuthResult{OrgID: res.OrganizationID, TokenID: res.TokenID}, nil
 }
 
 // ---------- Organizations + membership ----------

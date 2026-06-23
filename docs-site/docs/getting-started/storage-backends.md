@@ -1,0 +1,132 @@
+# Storage Backends
+
+theauth-go ships two built-in storage adapters. Both implement the same `Storage` interface, so you can switch between them by changing a single constructor argument.
+
+## In-memory (`storage/memory`)
+
+```go
+import "github.com/glincker/theauth-go/storage/memory"
+
+store := memory.New()
+```
+
+- **Zero external dependencies.** No database process needed.
+- **Not persistent.** All data is lost when the process restarts.
+- **Use for:** local development, integration tests, quick demos.
+
+## Postgres (`storage/postgres`)
+
+```go
+import (
+    "github.com/jackc/pgx/v5/pgxpool"
+    "github.com/glincker/theauth-go/storage/postgres"
+)
+
+pool, err := pgxpool.New(ctx, os.Getenv("DATABASE_URL"))
+if err != nil {
+    log.Fatal(err)
+}
+store := postgres.New(pool)
+```
+
+- **Production-ready.** Persistent, concurrent, supports all theauth features.
+- **Dependencies:** `pgx/v5`. Generated SQL from `sqlc`.
+- **Migrations:** Embedded under `storage/postgres/migrations/`. They are append-only: columns and tables are added, never renamed destructively.
+
+### Running migrations
+
+The store does not auto-migrate. Run migrations yourself at startup or via a CI step:
+
+```go
+// If the postgres.Store exposes a Migrate method, call it:
+if err := store.Migrate(ctx); err != nil {
+    log.Fatal(err)
+}
+```
+
+Or apply the SQL files directly:
+
+```bash
+psql "$DATABASE_URL" -f storage/postgres/migrations/0001_users.up.sql
+# ... repeat for each migration in order
+```
+
+## The `Storage` interface
+
+Both adapters satisfy `theauth.Storage`. The interface is the only surface a custom backend needs to implement. See [Storage Interface Reference](../reference/storage.md) for the full contract.
+
+## Special rules
+
+- Adding a method to `Storage` is a breaking change. New persistence operations land behind optional interfaces (e.g., `OAuthServerStorage`) detected at runtime via type assertion.
+- The Postgres adapter's migrations directory is append-only. A renamed column ships as a new migration that adds the new column and removes the old one in a later release. This protects rolling-restart deployments.
+
+## MySQL 8.x (`storage/mysql`) (v2.4)
+
+```go
+import (
+    "database/sql"
+    _ "github.com/go-sql-driver/mysql"
+    "github.com/glincker/theauth-go/storage/mysql"
+)
+
+db, err := sql.Open("mysql", os.Getenv("MYSQL_DSN"))
+if err != nil {
+    log.Fatal(err)
+}
+store := mysql.New(db)
+```
+
+- **Full parity with the postgres adapter.** Satisfies both `theauth.Storage` and
+  `OAuthServerStorage`. All dialect differences (e.g., `UUID()` instead of
+  `gen_random_uuid()`, `GET_LOCK` instead of advisory locks) are handled
+  internally.
+- **Dependencies:** `go-sql-driver/mysql` v1.x. Generated SQL from `sqlc` targeting
+  MySQL 8.x dialect.
+- **Use for:** deployments on PlanetScale, AWS RDS MySQL, or any MySQL 8.x host.
+
+### Running migrations
+
+Apply the SQL files under `storage/mysql/migrations/` in order:
+
+```bash
+mysql -u root "$MYSQL_DATABASE" < storage/mysql/migrations/0001_users.up.sql
+# ... repeat for each migration in order
+```
+
+There is no embedded `Migrate` helper yet (planned for v2.5). Use your existing
+migration runner (Flyway, Liquibase, Atlas, or a shell script).
+
+### Contract testing
+
+The `storagetest` suite can verify your MySQL instance satisfies the full
+theauth-go contract. To run the contract tests against a live MySQL server, set
+the environment variable before running tests:
+
+```bash
+THEAUTH_MYSQL_CONTRACT=1 \
+  MYSQL_DSN="root:password@tcp(localhost:3306)/theauth_test?parseTime=true" \
+  go test ./storage/mysql/...
+```
+
+Without `THEAUTH_MYSQL_CONTRACT=1`, the tests are skipped, so the suite is safe
+to include in a standard `go test ./...` run that does not have a MySQL instance
+available.
+
+### Current parity caveats
+
+- No embedded `Migrate` helper. Apply migrations manually (see above).
+- Advisory lock serialization (`GET_LOCK`) is weaker than Postgres serializable
+  transactions. Avoid running concurrent schema migrations.
+- MySQL does not support partial unique indexes. The `state='current'` JWKS
+  constraint is enforced by application logic rather than a database constraint;
+  the `clientauthcache` path is safe, but do not run multiple instances writing
+  JWKS keys simultaneously without external coordination.
+
+## Choosing a backend
+
+| Situation | Backend |
+|---|---|
+| Local dev, CI | `memory` |
+| Production (single node or replicated Postgres) | `postgres` |
+| Production (MySQL 8.x, PlanetScale, RDS MySQL) | `mysql` |
+| Custom database (SQLite, CockroachDB, etc.) | Implement `Storage`; see [Write a Custom Storage Backend](../guides/custom-storage-backend.md) |

@@ -2,6 +2,7 @@ package as
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/url"
@@ -10,6 +11,7 @@ import (
 
 	"github.com/glincker/theauth-go/crypto"
 	"github.com/glincker/theauth-go/internal/models"
+	obs "github.com/glincker/theauth-go/internal/observability"
 	"github.com/glincker/theauth-go/internal/ulid"
 )
 
@@ -47,8 +49,11 @@ type ClientRegistrationRequest struct {
 	PolicyURI               string   `json:"policy_uri,omitempty"`
 	TosURI                  string   `json:"tos_uri,omitempty"`
 	JwksURI                 string   `json:"jwks_uri,omitempty"`
-	SoftwareID              string   `json:"software_id,omitempty"`
-	SoftwareVersion         string   `json:"software_version,omitempty"`
+	// Jwks is the RFC 7517 JSON Web Key Set document (inline). Used by JAR
+	// (RFC 9101) to verify request object signatures when jwks_uri is not set.
+	Jwks            json.RawMessage `json:"jwks,omitempty"`
+	SoftwareID      string          `json:"software_id,omitempty"`
+	SoftwareVersion string          `json:"software_version,omitempty"`
 }
 
 // RegisterClient validates the request, mints a client_id (and a secret
@@ -56,10 +61,21 @@ type ClientRegistrationRequest struct {
 // the RFC 7591 response body. The plaintext secret is in the return
 // value; callers must surface it to the caller exactly once and never
 // log it.
-func (s *Service) RegisterClient(ctx context.Context, req ClientRegistrationRequest, anonymous bool) (models.RegisteredClient, error) {
+func (s *Service) RegisterClient(ctx context.Context, req ClientRegistrationRequest, anonymous bool) (registered models.RegisteredClient, err error) {
 	if s == nil {
 		return models.RegisteredClient{}, errors.New("theauth: authorization server not configured")
 	}
+	ctx, span := s.Hooks.StartSpan(ctx, obs.SpanOAuthDCRRegister, obs.BoolAttr("anonymous", anonymous))
+	defer func() {
+		status := obs.StatusSuccess
+		if err != nil {
+			status = obs.StatusError
+			span.RecordError(err)
+			span.SetAttributes(obs.StringAttr(obs.AttrErrorCode, errorCode(err)))
+		}
+		span.SetAttributes(obs.StringAttr(obs.AttrStatus, string(status)))
+		span.End()
+	}()
 	if anonymous && !s.Cfg.AllowAnonymousRegistration {
 		return models.RegisteredClient{}, models.ErrOAuthRegistrationDenied
 	}
@@ -83,6 +99,7 @@ func (s *Service) RegisterClient(ctx context.Context, req ClientRegistrationRequ
 		PolicyURI:               req.PolicyURI,
 		TosURI:                  req.TosURI,
 		JwksURI:                 req.JwksURI,
+		Jwks:                    []byte(req.Jwks),
 		SoftwareID:              req.SoftwareID,
 		SoftwareVersion:         req.SoftwareVersion,
 		AnonymousRegistered:     anonymous,
@@ -136,8 +153,18 @@ func (s *Service) RegisterClient(ctx context.Context, req ClientRegistrationRequ
 // validateRegistrationRequest screens RFC 7591 metadata and applies
 // defaults matching the OAuth 2.1 + MCP profile.
 func validateRegistrationRequest(req *ClientRegistrationRequest, anonymous bool) error {
-	if len(req.RedirectURIs) == 0 {
-		return wrapInvalidReg("redirect_uris is required")
+	// Determine if authorization_code is in the grant list. When not
+	// explicitly set yet, the default is authorization_code + refresh_token
+	// (applied below), so redirect_uris is required in that case too.
+	requiresRedirectURI := len(req.GrantTypes) == 0
+	for _, gt := range req.GrantTypes {
+		if gt == models.GrantTypeAuthorizationCode {
+			requiresRedirectURI = true
+			break
+		}
+	}
+	if requiresRedirectURI && len(req.RedirectURIs) == 0 {
+		return wrapInvalidReg("redirect_uris is required for authorization_code clients")
 	}
 	if anonymous && len(req.RedirectURIs) > 1 {
 		// Tight cap matches the anonymous registration policy in spec
@@ -154,7 +181,9 @@ func validateRegistrationRequest(req *ClientRegistrationRequest, anonymous bool)
 	}
 	for _, gt := range req.GrantTypes {
 		switch gt {
-		case models.GrantTypeAuthorizationCode, models.GrantTypeRefreshToken:
+		case models.GrantTypeAuthorizationCode, models.GrantTypeRefreshToken,
+			models.GrantTypeClientCredentials, models.GrantTypeTokenExchange,
+			models.GrantTypeCIBA:
 			// supported
 		default:
 			return wrapInvalidReg("unsupported grant_type: " + gt)

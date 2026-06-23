@@ -8,6 +8,7 @@ import (
 
 	"github.com/glincker/theauth-go/crypto"
 	"github.com/glincker/theauth-go/internal/models"
+	obs "github.com/glincker/theauth-go/internal/observability"
 )
 
 // authz.go: GET /oauth/authorize state machine.
@@ -33,6 +34,15 @@ type AuthorizeRequest struct {
 	CodeChallengeMethod string
 	Resource            string
 	Nonce               string
+
+	// RequestURI, when non-empty, identifies a pushed authorization
+	// request (RFC 9126). The handler resolves it before calling
+	// StartAuthorize; this field is informational at service level.
+	RequestURI string
+
+	// RequestObject, when non-empty, is the raw JAR JWT (RFC 9101).
+	// The handler resolves it before calling StartAuthorize.
+	RequestObject string
 }
 
 // AuthorizeResult is the outcome of a successful authorize call: the
@@ -45,10 +55,21 @@ type AuthorizeResult struct {
 // non-nil, immediately mints an authorization code bound to the request
 // and returns a redirect URL with code + state. When user is nil the
 // caller should redirect to LoginURL so the user can sign in.
-func (s *Service) StartAuthorize(ctx context.Context, req AuthorizeRequest, user *models.User) (AuthorizeResult, error) {
+func (s *Service) StartAuthorize(ctx context.Context, req AuthorizeRequest, user *models.User) (result AuthorizeResult, err error) {
 	if s == nil {
 		return AuthorizeResult{}, errors.New("theauth: authorization server not configured")
 	}
+	ctx, span := s.Hooks.StartSpan(ctx, obs.SpanOAuthAuthorize)
+	defer func() {
+		status := obs.StatusSuccess
+		if err != nil && !errors.Is(err, errAuthorizeLoginRequired) {
+			status = obs.StatusError
+			span.RecordError(err)
+			span.SetAttributes(obs.StringAttr(obs.AttrErrorCode, errorCode(err)))
+		}
+		span.SetAttributes(obs.StringAttr(obs.AttrStatus, string(status)))
+		span.End()
+	}()
 	if req.ResponseType != models.ResponseTypeCode {
 		return AuthorizeResult{}, models.ErrOAuthUnsupportedResponseType
 	}
@@ -58,6 +79,12 @@ func (s *Service) StartAuthorize(ctx context.Context, req AuthorizeRequest, user
 	if req.CodeChallenge == "" || req.CodeChallengeMethod != "S256" {
 		return AuthorizeResult{}, models.ErrOAuthInvalidRequest
 	}
+	// security re-audit L5 (2026-06-22): when RequireState is enabled,
+	// reject requests that omit a non-empty state parameter. An absent
+	// state param removes the CSRF protection layer that state provides.
+	if s.Cfg.RequireState && req.State == "" {
+		return AuthorizeResult{}, models.ErrOAuthInvalidRequest
+	}
 	if req.Resource == "" {
 		return AuthorizeResult{}, models.ErrOAuthInvalidResource
 	}
@@ -65,7 +92,7 @@ func (s *Service) StartAuthorize(ctx context.Context, req AuthorizeRequest, user
 	if !ok {
 		return AuthorizeResult{}, models.ErrOAuthInvalidResource
 	}
-	client, err := s.Storage.OAuthClientByClientID(ctx, req.ClientID)
+	client, err := s.ResolveClient(ctx, req.ClientID)
 	if err != nil {
 		return AuthorizeResult{}, models.ErrOAuthInvalidClient
 	}

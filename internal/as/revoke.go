@@ -5,6 +5,7 @@ import (
 	"errors"
 
 	"github.com/glincker/theauth-go/crypto"
+	obs "github.com/glincker/theauth-go/internal/observability"
 )
 
 // revoke.go: RFC 7009 token revocation.
@@ -20,11 +21,23 @@ import (
 // access tokens are out of scope for this entry: codes are single-use
 // anyway, and access tokens are stateless JWTs whose lifetime is bounded
 // by exp.
-func (s *Service) RevokeToken(ctx context.Context, token, tokenTypeHint, clientID, clientSecret string) error {
+func (s *Service) RevokeToken(ctx context.Context, token, tokenTypeHint, clientID, clientSecret string) (err error) {
 	if s == nil {
 		return errors.New("theauth: authorization server not configured")
 	}
-	if _, err := s.AuthenticateClient(ctx, clientID, clientSecret); err != nil {
+	ctx, span := s.Hooks.StartSpan(ctx, obs.SpanOAuthRevoke)
+	defer func() {
+		status := obs.StatusSuccess
+		if err != nil {
+			status = obs.StatusError
+			span.RecordError(err)
+			span.SetAttributes(obs.StringAttr(obs.AttrErrorCode, errorCode(err)))
+		}
+		span.SetAttributes(obs.StringAttr(obs.AttrStatus, string(status)))
+		span.End()
+	}()
+	if _, aerr := s.AuthenticateClient(ctx, clientID, clientSecret); aerr != nil {
+		err = aerr
 		return err
 	}
 	if token == "" {
@@ -42,11 +55,18 @@ func (s *Service) RevokeToken(ctx context.Context, token, tokenTypeHint, clientI
 		return nil
 	}
 	hash := crypto.HashToken(token)
-	if err := s.Storage.RevokeRefreshToken(ctx, hash, "explicit revoke"); err != nil {
-		// Per RFC 7009 the AS MUST respond with 200 even when the token
-		// is unknown; we swallow ErrStorageNotFound rather than surface
-		// it.
-		return nil //nolint:nilerr // explicit RFC requirement
+	// security re-audit L3 (2026-06-22): explicit revoke should walk the
+	// entire rotation family (parent + all children) so that rotating a
+	// compromised token before calling revoke does not leave the fresh
+	// child alive. Mirror the reuse-detection family walk in
+	// RefreshAccessToken.
+	rt, err := s.Storage.RefreshTokenByHash(ctx, hash)
+	if err == nil {
+		// Token found: revoke the whole family then the token itself.
+		_ = s.Storage.RevokeRefreshTokenFamily(ctx, rt.FamilyID, "explicit revoke")
+		return nil
 	}
+	// Token not found (already expired, already revoked, or never issued).
+	// Per RFC 7009 the AS MUST respond with 200 on unknown tokens.
 	return nil
 }

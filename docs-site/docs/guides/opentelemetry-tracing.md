@@ -1,0 +1,90 @@
+# Wire OpenTelemetry Tracing
+
+theauth-go ships a pluggable `Tracer` adapter. The library has zero hard dependency on OpenTelemetry or any other tracing vendor. You wire your own adapter at startup.
+
+## How the adapter works
+
+The library calls `hooks.Tracer.StartSpan(ctx, spanName, attrs...)` at the entry point of every instrumented operation and records the outcome via `span.End(status, attrs...)`. The `Tracer` and `Span` interfaces are defined in `theauth.Tracer` and `theauth.Span` (re-exported from `internal/observability`).
+
+## Write an OpenTelemetry adapter
+
+```go
+package otelbridge
+
+import (
+    "context"
+
+    "github.com/glincker/theauth-go"
+    "go.opentelemetry.io/otel/attribute"
+    "go.opentelemetry.io/otel/codes"
+    oteltrace "go.opentelemetry.io/otel/trace"
+)
+
+type otelTracer struct{ t oteltrace.Tracer }
+
+func New(t oteltrace.Tracer) theauth.Tracer { return &otelTracer{t: t} }
+
+func (o *otelTracer) StartSpan(ctx context.Context, name string, attrs ...theauth.Attr) (context.Context, theauth.Span) {
+    otelAttrs := make([]attribute.KeyValue, len(attrs))
+    for i, a := range attrs {
+        otelAttrs[i] = attribute.String(a.Key, fmt.Sprint(a.Value))
+    }
+    ctx, span := o.t.Start(ctx, name, oteltrace.WithAttributes(otelAttrs...))
+    return ctx, &otelSpan{span: span}
+}
+
+type otelSpan struct{ span oteltrace.Span }
+
+func (s *otelSpan) End(status theauth.Status, attrs ...theauth.Attr) {
+    for _, a := range attrs {
+        s.span.SetAttributes(attribute.String(a.Key, fmt.Sprint(a.Value)))
+    }
+    if status == theauth.StatusError {
+        s.span.SetStatus(codes.Error, "")
+    } else {
+        s.span.SetStatus(codes.Ok, "")
+    }
+    s.span.End()
+}
+```
+
+## Wire the adapter
+
+```go
+import (
+    "go.opentelemetry.io/otel"
+    "github.com/glincker/theauth-go"
+    otelbridge "myapp/internal/otelbridge"
+)
+
+hooks := &theauth.Hooks{
+    Tracer: otelbridge.New(otel.Tracer("theauth-go")),
+}
+
+a, _ := theauth.New(theauth.Config{
+    Storage:       store,
+    BaseURL:       "https://myapp.com",
+    Observability: hooks,
+})
+```
+
+## Span catalog
+
+See [Spans Reference](../reference/spans.md) for the full list of span names and their attributes. Span names are also exported as constants (`theauth.SpanOAuthToken`, etc.) so dashboards can reference them by symbol.
+
+## Example adapter
+
+A reference OpenTelemetry adapter ships in the repository at `examples/observability-otel/`. It is not a published package; copy it into your codebase and adjust as needed.
+
+## Adding metrics alongside tracing
+
+To add Prometheus metrics alongside OpenTelemetry traces, also wire a `Metrics` adapter. See the `Hooks` struct:
+
+```go
+hooks := &theauth.Hooks{
+    Tracer:  otelbridge.New(otel.Tracer("theauth-go")),
+    Metrics: prombridge.New(prometheus.DefaultRegisterer),
+}
+```
+
+See [Metrics Reference](../reference/metrics.md) for the full metric catalog.

@@ -1,10 +1,13 @@
 package as
 
 import (
+	"errors"
 	"strings"
 	"time"
 
 	"github.com/glincker/theauth-go/crypto"
+	"github.com/glincker/theauth-go/internal/cimd"
+	"github.com/glincker/theauth-go/internal/dpop"
 	"github.com/glincker/theauth-go/internal/models"
 )
 
@@ -78,6 +81,74 @@ type Config struct {
 	// use this to assert key state from a known fixture; production must
 	// leave it false.
 	DisableRotation bool
+
+	// CIMD wires the Client ID Metadata Documents resolver, per MCP
+	// authorization spec 2025-11-25. When non-nil, an incoming
+	// /oauth/authorize or /oauth/token request whose client_id parses as
+	// an https URL is resolved by fetching that URL and parsing the JSON
+	// metadata document, instead of consulting OAuthServerStorage. Nil
+	// disables CIMD entirely and the AS falls back to RFC 7591 DCR for
+	// every client_id.
+	CIMD *cimd.Config
+
+	// DPoP, when non-nil, enables RFC 9449 sender-constrained access
+	// tokens. When DPoP is set the token endpoint inspects every request
+	// for a DPoP header, verifies the proof JWT, and embeds the RFC 7800
+	// cnf.jkt confirmation claim in the issued access token. Resource
+	// servers re-verify the same proof on every protected call. Leave
+	// nil to disable DPoP entirely (pre-PR behavior; bearer tokens are
+	// not sender constrained).
+	DPoP *dpop.Config
+
+	// RequireState, when true, causes StartAuthorize to reject any
+	// /oauth/authorize request that omits a non-empty state parameter,
+	// returning invalid_request. Default false preserves existing
+	// behavior. Operators deploying browser-based clients should enable
+	// this to enforce CSRF protection (security re-audit L5, 2026-06-22).
+	RequireState bool
+
+	// PAR wires RFC 9126 Pushed Authorization Requests. When non-nil and
+	// the Storage backend implements PARStorage, POST /oauth/par is
+	// enabled and GET /oauth/authorize accepts request_uri. Nil (default)
+	// disables PAR entirely; existing deployments see no behavior change.
+	PAR *PARConfig
+
+	// JAR wires RFC 9101 JWT-Secured Authorization Requests. When
+	// non-nil, /oauth/authorize and /oauth/par accept a "request"
+	// parameter containing a signed JWT. Nil (default) disables JAR.
+	JAR *JARConfig
+
+	// JWTBearer, when non-nil, enables RFC 7523 client authentication and
+	// the jwt-bearer grant. Mirrored from root JWTBearerConfig.
+	JWTBearer *JWTBearerConfig
+
+	// CIBA (RFC 9509) enables the backchannel authentication endpoints when
+	// non-nil. When nil (default) the /oauth/bc-authorize endpoint is not
+	// mounted and the AS metadata does not advertise CIBA fields.
+	// Requires the Storage to also implement CIBAStorage; otherwise CIBA
+	// is silently disabled even if this field is non-nil.
+	CIBA *CIBAConfig
+}
+
+// JWTBearerConfig is the internal mirror of the root JWTBearerConfig.
+// Populated once at New time; read-only afterwards.
+type JWTBearerConfig struct {
+	TrustedJWTIssuers     []TrustedJWTIssuer
+	ClientAssertionMaxAge time.Duration
+	AssertionMaxAge       time.Duration
+	ReplayCacheTTL        time.Duration
+	MaxActorChainDepth    int
+}
+
+// TrustedJWTIssuer is the internal mirror of the root TrustedJWTIssuer.
+type TrustedJWTIssuer struct {
+	Issuer            string
+	JWKSURL           string
+	AllowedAlgorithms []string
+	// SubjectMapper resolves the "sub" (or other) claim to a local user ULID.
+	// The internal package holds it as a plain func to avoid a dependency on
+	// root interfaces.
+	SubjectMapper func(claims map[string]any) (models.ULID, error)
 }
 
 // Validate applies defaults and screens required fields. Mirror of the
@@ -135,6 +206,38 @@ func Validate(cfg *Config, encryptionKey []byte) error {
 		} else {
 			cfg.RegistrationRateLimitPerMinute = 5
 		}
+	}
+	if cfg.PAR != nil {
+		applyPARDefaults(cfg.PAR)
+	}
+	if cfg.JAR != nil {
+		applyJARDefaults(cfg.JAR)
+	}
+	if cfg.JWTBearer != nil {
+		if cfg.JWTBearer.ClientAssertionMaxAge <= 0 {
+			cfg.JWTBearer.ClientAssertionMaxAge = 60 * time.Second
+		}
+		if cfg.JWTBearer.AssertionMaxAge <= 0 {
+			cfg.JWTBearer.AssertionMaxAge = 300 * time.Second
+		}
+		if cfg.JWTBearer.ReplayCacheTTL <= 0 {
+			cfg.JWTBearer.ReplayCacheTTL = 600 * time.Second
+		}
+		if cfg.JWTBearer.MaxActorChainDepth <= 0 {
+			cfg.JWTBearer.MaxActorChainDepth = 5
+		}
+		for i, iss := range cfg.JWTBearer.TrustedJWTIssuers {
+			if len(iss.AllowedAlgorithms) == 0 {
+				cfg.JWTBearer.TrustedJWTIssuers[i].AllowedAlgorithms = []string{"ES256", "RS256", "EdDSA"}
+			}
+		}
+	}
+	// CIBA defaults.
+	if cfg.CIBA != nil {
+		if cfg.CIBA.AuthenticationDevice == nil {
+			return errors.New("theauth: CIBAConfig.AuthenticationDevice is required when CIBA is enabled")
+		}
+		applyCIBADefaults(cfg.CIBA)
 	}
 	return nil
 }

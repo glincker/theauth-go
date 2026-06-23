@@ -23,10 +23,31 @@ type ASMetadata struct {
 	ResponseTypesSupported            []string `json:"response_types_supported"`
 	GrantTypesSupported               []string `json:"grant_types_supported"`
 	TokenEndpointAuthMethodsSupported []string `json:"token_endpoint_auth_methods_supported"`
-	CodeChallengeMethodsSupported     []string `json:"code_challenge_methods_supported"`
-	ScopesSupported                   []string `json:"scopes_supported,omitempty"`
-	ServiceDocumentation              string   `json:"service_documentation,omitempty"`
-	UILocalesSupported                []string `json:"ui_locales_supported,omitempty"`
+	// TokenEndpointAuthSigningAlgValuesSupported lists the JWS signing
+	// algorithms supported for private_key_jwt and client_secret_jwt
+	// client authentication. Omitted when JWT client auth is disabled.
+	TokenEndpointAuthSigningAlgValuesSupported []string `json:"token_endpoint_auth_signing_alg_values_supported,omitempty"`
+	CodeChallengeMethodsSupported              []string `json:"code_challenge_methods_supported"`
+	ScopesSupported                            []string `json:"scopes_supported,omitempty"`
+	ServiceDocumentation                       string   `json:"service_documentation,omitempty"`
+	UILocalesSupported                         []string `json:"ui_locales_supported,omitempty"`
+	// DPoPSigningAlgValuesSupported is the RFC 9449 section 5.1 metadata
+	// field advertising the proof-JWT signing algorithms this AS
+	// accepts. Omitted when DPoP is disabled.
+	DPoPSigningAlgValuesSupported []string `json:"dpop_signing_alg_values_supported,omitempty"`
+
+	// PAR (RFC 9126) fields. Both are omitted when PAR is disabled.
+	PushedAuthorizationRequestEndpoint string `json:"pushed_authorization_request_endpoint,omitempty"`
+	RequirePushedAuthorizationRequests bool   `json:"require_pushed_authorization_requests,omitempty"`
+
+	// JAR (RFC 9101) fields. Omitted when JAR is disabled.
+	RequestParameterSupported              bool     `json:"request_parameter_supported,omitempty"`
+	RequestObjectSigningAlgValuesSupported []string `json:"request_object_signing_alg_values_supported,omitempty"`
+
+	// CIBA fields (RFC 9509). Omitted when CIBA is disabled.
+	BackchannelAuthenticationEndpoint      string   `json:"backchannel_authentication_endpoint,omitempty"`
+	BackchannelTokenDeliveryModesSupported []string `json:"backchannel_token_delivery_modes_supported,omitempty"`
+	BackchannelUserCodeParameterSupported  bool     `json:"backchannel_user_code_parameter_supported,omitempty"`
 }
 
 // ASMetadataDoc builds the metadata document. The result is
@@ -45,7 +66,43 @@ func (s *Service) ASMetadataDoc() (ASMetadata, error) {
 	for sc := range scopes {
 		scopeList = append(scopeList, sc)
 	}
-	return ASMetadata{
+	var dpopAlgs []string
+	if s.dpopSvc != nil && s.Cfg.DPoP != nil {
+		// Surface the operator-configured allow list verbatim so the
+		// metadata document and the actual verifier never disagree.
+		if len(s.Cfg.DPoP.AllowedSignAlgs) == 0 {
+			dpopAlgs = append([]string(nil), defaultDPoPAdvertisedAlgs...)
+		} else {
+			dpopAlgs = append([]string(nil), s.Cfg.DPoP.AllowedSignAlgs...)
+		}
+	}
+	// Build PAR fields.
+	var parEndpoint string
+	var requirePAR bool
+	if s.IsPAREnabled() {
+		parEndpoint = s.Cfg.Issuer + "/oauth/par"
+		requirePAR = s.Cfg.PAR.RequirePAR
+	}
+
+	// Build JAR fields.
+	var requestParamSupported bool
+	var jarAlgs []string
+	if s.IsJAREnabled() {
+		requestParamSupported = true
+		jarAlgs = s.jarAlgorithmsAdvertised()
+	}
+
+	authMethods := []string{
+		models.ClientAuthSecretBasic,
+		models.ClientAuthSecretPost,
+		models.ClientAuthNone,
+	}
+	var jwtAuthAlgs []string
+	if s.Cfg.JWTBearer != nil {
+		authMethods = append(authMethods, models.ClientAuthPrivateKeyJWT, models.ClientAuthClientSecretJWT)
+		jwtAuthAlgs = []string{"ES256", "ES384", "RS256", "PS256", "EdDSA"}
+	}
+	meta := ASMetadata{
 		Issuer:                s.Cfg.Issuer,
 		AuthorizationEndpoint: s.Cfg.Issuer + "/oauth/authorize",
 		TokenEndpoint:         s.Cfg.Issuer + "/oauth/token",
@@ -56,25 +113,57 @@ func (s *Service) ASMetadataDoc() (ASMetadata, error) {
 		ResponseTypesSupported: []string{
 			models.ResponseTypeCode,
 		},
-		GrantTypesSupported: s.grantTypesAdvertised(),
-		TokenEndpointAuthMethodsSupported: []string{
-			models.ClientAuthSecretBasic,
-			models.ClientAuthSecretPost,
-			models.ClientAuthNone,
-		},
-		CodeChallengeMethodsSupported: []string{"S256"},
-		ScopesSupported:               scopeList,
-	}, nil
+		GrantTypesSupported:                        s.grantTypesAdvertised(),
+		TokenEndpointAuthMethodsSupported:          authMethods,
+		TokenEndpointAuthSigningAlgValuesSupported: jwtAuthAlgs,
+		CodeChallengeMethodsSupported:              []string{"S256"},
+		ScopesSupported:                            scopeList,
+		DPoPSigningAlgValuesSupported:              dpopAlgs,
+		PushedAuthorizationRequestEndpoint:         parEndpoint,
+		RequirePushedAuthorizationRequests:         requirePAR,
+		RequestParameterSupported:                  requestParamSupported,
+		RequestObjectSigningAlgValuesSupported:     jarAlgs,
+	}
+
+	// Advertise CIBA when enabled and the storage supports it.
+	if s.Cfg.CIBA != nil {
+		if _, ok := s.Storage.(CIBAStorage); ok {
+			meta.BackchannelAuthenticationEndpoint = s.Cfg.Issuer + "/oauth/bc-authorize"
+			meta.BackchannelTokenDeliveryModesSupported = []string{
+				models.CIBADeliveryModePoll,
+				models.CIBADeliveryModePing,
+			}
+			// user_code is not supported in this implementation.
+			meta.BackchannelUserCodeParameterSupported = false
+		}
+	}
+
+	return meta, nil
 }
+
+// defaultDPoPAdvertisedAlgs mirrors dpop.DefaultAllowedAlgs. Duplicated
+// here so the metadata document does not need to import the dpop
+// package (avoids an import cycle in tests that fixture only this
+// helper).
+var defaultDPoPAdvertisedAlgs = []string{"ES256", "ES384", "RS256", "PS256", "EdDSA"}
 
 // grantTypesAdvertised returns the grant types this AS supports. Phase
 // 1+2 supports authorization_code and refresh_token unconditionally;
 // phase 3+4 adds client_credentials and the RFC 8693 token-exchange URN
-// when the AgentPolicy is configured.
+// when the AgentPolicy is configured; RFC 7523 adds the jwt-bearer URN
+// when JWTBearer is configured. CIBA adds its own URN when enabled.
 func (s *Service) grantTypesAdvertised() []string {
 	out := []string{models.GrantTypeAuthorizationCode, models.GrantTypeRefreshToken}
 	if s.AgentPolicy != nil {
 		out = append(out, models.GrantTypeClientCredentials, models.GrantTypeTokenExchange)
+	}
+	if s.Cfg.JWTBearer != nil {
+		out = append(out, models.GrantTypeJWTBearer)
+	}
+	if s.Cfg.CIBA != nil {
+		if _, ok := s.Storage.(CIBAStorage); ok {
+			out = append(out, models.GrantTypeCIBA)
+		}
 	}
 	return out
 }

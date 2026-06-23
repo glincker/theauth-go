@@ -121,17 +121,36 @@ const (
 	ClientAuthSecretBasic = "client_secret_basic"
 	ClientAuthSecretPost  = "client_secret_post"
 	ClientAuthNone        = "none"
+	// ClientAuthPrivateKeyJWT is the RFC 7523 section 2.2 method where the
+	// client authenticates by presenting a signed JWT (client_assertion)
+	// rather than a shared secret. The signing key is registered via
+	// jwks_uri or inline jwks on the OAuthClient row.
+	ClientAuthPrivateKeyJWT = "private_key_jwt"
+	// ClientAuthClientSecretJWT is the legacy HMAC variant where the
+	// client_secret is used as the signing key (HS256). Weaker than
+	// private_key_jwt; kept for backward compatibility with RFC 7523
+	// compliant stacks that do not have asymmetric keys available.
+	ClientAuthClientSecretJWT = "client_secret_jwt"
 )
 
 // Grant type constants. Phase 1 + 2 ships authorization_code and
 // refresh_token; phase 3 adds client_credentials, phase 4 adds the
-// RFC 8693 token-exchange grant URN.
+// RFC 8693 token-exchange grant URN, and RFC 7523 adds the jwt-bearer grant.
 const (
 	GrantTypeAuthorizationCode = "authorization_code"
 	GrantTypeRefreshToken      = "refresh_token"
 	GrantTypeClientCredentials = "client_credentials"
 	GrantTypeTokenExchange     = "urn:ietf:params:oauth:grant-type:token-exchange"
+	// GrantTypeJWTBearer is the RFC 7523 section 2.1 grant type: an
+	// externally-issued JWT is presented directly in exchange for an AS-
+	// issued access token. Used for workload identity flows (GCP SA tokens,
+	// k8s ServiceAccount tokens, AWS IAM Roles Anywhere).
+	GrantTypeJWTBearer = "urn:ietf:params:oauth:grant-type:jwt-bearer"
 )
+
+// ClientAssertionTypeJWTBearer is the client_assertion_type value for RFC
+// 7523 section 2.2 client authentication via signed JWT.
+const ClientAssertionTypeJWTBearer = "urn:ietf:params:oauth:client-assertion-type:jwt-bearer"
 
 // Token type URNs used by the RFC 8693 token-exchange grant.
 const (

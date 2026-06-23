@@ -1,6 +1,7 @@
 package theauth
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"strings"
@@ -42,18 +43,34 @@ func SeededSecretKeys() []string {
 //
 // Applied once at emit time. A custom Config.Audit.Redactor receives the
 // raw metadata and may strip/rename additional fields.
+//
+// Perf re-audit 2026-06-21 (item 4): key matching now uses
+// strings.EqualFold instead of strings.ToLower(k) per call, avoiding a
+// heap allocation per metadata key on the hot emit path.
 func DefaultRedactor(metadata map[string]any) map[string]any {
 	if metadata == nil {
 		return nil
 	}
 	for k, v := range metadata {
-		if _, hit := seededSecretKeys[strings.ToLower(k)]; hit {
+		if isSecretKey(k) {
 			metadata[k] = redactedMarker
 			continue
 		}
 		metadata[k] = redactValue(v)
 	}
 	return metadata
+}
+
+// isSecretKey reports whether k matches any entry in seededSecretKeys
+// using a case-insensitive comparison. EqualFold avoids the per-call
+// ToLower allocation of the previous implementation.
+func isSecretKey(k string) bool {
+	for candidate := range seededSecretKeys {
+		if strings.EqualFold(k, candidate) {
+			return true
+		}
+	}
+	return false
 }
 
 // redactValue recurses into nested maps and slices, applying the same key
@@ -83,4 +100,25 @@ func redactValue(v any) any {
 func HashEmailForAudit(email string) string {
 	sum := sha256.Sum256([]byte(strings.ToLower(strings.TrimSpace(email))))
 	return hex.EncodeToString(sum[:])
+}
+
+// AuditSink streams audit events to an external SIEM or observability
+// system. Implementations must be best-effort: a failed Stream call must
+// never block writes to the canonical storage layer. Failures increment
+// Stats.AuditSinkFailed.
+//
+// Built-in implementations live under audit/sinks/:
+//
+//   - audit/sinks/otlp: OTLP/HTTP logs exporter
+//   - audit/sinks/splunkhec: Splunk HTTP Event Collector
+//   - audit/sinks/webhook: generic CloudEvents 1.0 POST
+type AuditSink interface {
+	// Stream sends a batch of audit events to the external system.
+	// Implementations should apply a reasonable timeout internally.
+	// A non-nil error is logged and counted in Stats.AuditSinkFailed;
+	// it does not affect storage writes.
+	Stream(ctx context.Context, batch []AuditEvent) error
+
+	// Name identifies the sink for logging and metrics labels.
+	Name() string
 }

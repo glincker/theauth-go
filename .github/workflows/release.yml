@@ -1,0 +1,65 @@
+name: release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: write      # create GitHub Release and upload assets
+  id-token: write      # Sigstore OIDC token for keyless cosign signing
+  attestations: write  # SLSA provenance attestations
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout (full history for goreleaser changelog)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+          cache: true
+
+      - name: Install syft (SBOM generator)
+        run: |
+          curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh \
+            | sh -s -- -b /usr/local/bin
+
+      - name: Install cosign (Sigstore keyless signing)
+        uses: sigstore/cosign-installer@v3
+
+      - name: Run goreleaser
+        uses: goreleaser/goreleaser-action@v6
+        with:
+          distribution: goreleaser
+          version: "~> v2"
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # SLSA provenance covers the source archive and SBOM so downstream
+      # supply-chain tools can verify the release was produced by this
+      # workflow on this exact commit.
+      - name: Attest SLSA provenance for release artifacts
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: |
+            dist/theauth-go-*.tar.gz
+            dist/theauth-go-*.sbom.json
+
+      # Optional Slack notification. The step is skipped automatically when
+      # the SLACK_WEBHOOK_URL secret is not set.
+      - name: Notify Slack
+        if: ${{ env.SLACK_WEBHOOK_URL != '' }}
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          curl -sSf -X POST "${SLACK_WEBHOOK_URL}" \
+            -H "Content-Type: application/json" \
+            -d "{\"text\": \"theauth-go ${TAG} released: https://github.com/glincker/theauth-go/releases/tag/${TAG}\"}"

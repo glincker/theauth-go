@@ -4,6 +4,7 @@ import (
 	"time"
 
 	internalas "github.com/glincker/theauth-go/internal/as"
+	internaldpop "github.com/glincker/theauth-go/internal/dpop"
 )
 
 // as.go: AuthorizationServerConfig declaration plus the thin forwarders
@@ -107,6 +108,287 @@ type AuthorizationServerConfig struct {
 	// Tests use this to assert key state from a known fixture;
 	// production must leave it false.
 	DisableRotation bool
+
+	// CIMD wires the Client ID Metadata Documents resolver per the MCP
+	// authorization spec 2025-11-25. When non-nil, incoming
+	// /oauth/authorize and /oauth/token requests whose client_id parses
+	// as an https URL are resolved by fetching that URL and parsing the
+	// JSON metadata document, instead of consulting OAuthServerStorage.
+	// Nil disables CIMD and the AS falls back to RFC 7591 DCR for every
+	// client_id (the pre-CIMD behavior).
+	//
+	// Default policy MUST be DenyAll (fail-closed); operators opt in to
+	// AllowAnyHTTPS or AllowHTTPSHosts explicitly.
+	CIMD *CIMDConfig
+
+	// DPoP, when non-nil, enables RFC 9449 sender-constrained access
+	// tokens. The token endpoint inspects each request for a DPoP
+	// header, verifies the proof JWT, and embeds an RFC 7800 cnf.jkt
+	// confirmation claim in the issued access token. Resource servers
+	// (mcpresource) re-verify the same proof on every protected call,
+	// so a stolen access token cannot be replayed without the private
+	// key that signed the proof. Leave nil for pre-PR behavior
+	// (Bearer tokens, no sender constraint).
+	DPoP *DPoPConfig
+
+	// RequireState, when true, causes the /oauth/authorize endpoint to
+	// reject any request that omits a non-empty state parameter, returning
+	// invalid_request. Default false preserves existing behavior for
+	// backwards compatibility. Operators deploying browser-based clients
+	// should set this to true to enforce CSRF protection for every
+	// authorization request (security re-audit L5, 2026-06-22).
+	RequireState bool
+
+	// PAR wires RFC 9126 Pushed Authorization Requests. When non-nil and
+	// the Storage backend implements PARStorage, POST /oauth/par is
+	// registered and GET /oauth/authorize accepts request_uri. Nil (the
+	// default) disables PAR; existing deployments see no behavior change.
+	PAR *PARConfig
+
+	// JAR wires RFC 9101 JWT-Secured Authorization Requests. When
+	// non-nil, /oauth/authorize and /oauth/par accept a "request"
+	// parameter containing a signed JWT. Nil (the default) disables JAR.
+	JAR *JARConfig
+
+	// JWTBearer, when non-nil, enables two RFC 7523 features:
+	//
+	// (1) private_key_jwt / client_secret_jwt client authentication on the
+	//     token endpoint (RFC 7523 section 2.2). Clients registered with
+	//     token_endpoint_auth_method = "private_key_jwt" or
+	//     "client_secret_jwt" authenticate by presenting a signed JWT as
+	//     client_assertion instead of a client_secret.
+	//
+	// (2) The urn:ietf:params:oauth:grant-type:jwt-bearer grant type (RFC
+	//     7523 section 2.1). A JWT issued by a configured trusted external
+	//     issuer (e.g. Google, k8s OIDC, AWS IAM Roles Anywhere) is
+	//     exchanged for an AS-issued access token.
+	//
+	// When nil both features are disabled and the AS behaves as before
+	// (client_secret_basic / client_secret_post only).
+	JWTBearer *JWTBearerConfig
+
+	// CIBA enables Client-Initiated Backchannel Authentication (RFC 9509)
+	// when non-nil. The storage backend must also implement CIBAStorage;
+	// if it does not, CIBA endpoints are not mounted regardless of this
+	// setting. Default nil disables CIBA.
+	CIBA *CIBAConfig
+}
+
+// JWTBearerConfig controls RFC 7523 JWT client authentication and the
+// JWT Bearer grant type. All fields have safe defaults.
+type JWTBearerConfig struct {
+	// TrustedJWTIssuers is the list of external issuers whose JWTs may be
+	// exchanged for AS-issued access tokens via the jwt-bearer grant (RFC
+	// 7523 section 2.1). Each entry must specify Issuer and JWKSURL;
+	// AllowedAlgorithms defaults to ["ES256","RS256","EdDSA"].
+	TrustedJWTIssuers []TrustedJWTIssuer
+
+	// ClientAssertionMaxAge bounds how far in the past the client assertion
+	// JWT's iat claim may be. Defaults to 60 seconds (RFC 7523 recommends
+	// short-lived assertions). Operators may tighten but rarely need to
+	// widen this.
+	ClientAssertionMaxAge time.Duration
+
+	// AssertionMaxAge bounds how far in the past the bearer grant assertion
+	// JWT's iat claim may be. Defaults to 300 seconds.
+	AssertionMaxAge time.Duration
+
+	// ReplayCacheTTL is the duration JTIs remain in the replay cache.
+	// Defaults to 600 seconds (covers the maximum assertion lifetime with
+	// comfortable margin). Backed by JWTBearerStorage.InsertJTI; backends
+	// that do not implement JWTBearerStorage fall back to an in-process
+	// sync.Map and lose replay protection across restarts.
+	ReplayCacheTTL time.Duration
+
+	// MaxActorChainDepth caps on-behalf-of actor chains in the RFC 8693
+	// token-exchange grant. Defaults to 5. Values above 10 are not
+	// recommended: each additional link adds a storage round-trip at
+	// token-exchange time.
+	MaxActorChainDepth int
+}
+
+// TrustedJWTIssuer is one entry in JWTBearerConfig.TrustedJWTIssuers.
+type TrustedJWTIssuer struct {
+	// Issuer is the value the trusted issuer places in the iss claim of
+	// its JWTs. Must be an exact string match.
+	Issuer string
+
+	// JWKSURL is the URL of the issuer's JSON Web Key Set document.
+	// Fetched and cached by the AS; rotated on 401 or periodic refresh.
+	JWKSURL string
+
+	// AllowedAlgorithms is the set of JWS algorithms the AS will accept
+	// for this issuer. Defaults to ES256, RS256, EdDSA.
+	AllowedAlgorithms []string
+
+	// SubjectMapper resolves the "sub" claim (and any other claims) of
+	// the external JWT to a local user ULID. When nil the built-in
+	// SubMapper is used: the sub claim is parsed directly as a ULID.
+	// Use EmailMapper to resolve the email claim to a local user.Email
+	// row instead.
+	SubjectMapper SubjectMapper
+}
+
+// SubjectMapper resolves claims from a trusted external JWT to a local
+// user ULID. Two built-in implementations are provided:
+//
+//   - SubMapper: treats the "sub" claim as a ULID directly.
+//   - EmailMapper: looks up the user by the "email" claim value.
+//
+// Custom implementations may consult any claim in the map; the AS passes
+// the full decoded payload.
+type SubjectMapper interface {
+	// Resolve returns the local user ULID for the supplied claim map, or
+	// ErrStorageNotFound when no mapping exists. Any other error is
+	// treated as a transient failure and returned as server_error.
+	Resolve(claims map[string]any) (ULID, error)
+}
+
+// SubMapper is the built-in SubjectMapper that parses the "sub" claim
+// directly as a ULID. Use when the external issuer's subject is the
+// theauth user ID (e.g. for internal workload tokens).
+type SubMapper struct{}
+
+// Resolve implements SubjectMapper by parsing claims["sub"] as a ULID.
+func (SubMapper) Resolve(claims map[string]any) (ULID, error) {
+	sub, _ := claims["sub"].(string)
+	if sub == "" {
+		return ULID{}, ErrStorageNotFound
+	}
+	var id ULID
+	if err := id.UnmarshalText([]byte(sub)); err != nil {
+		return ULID{}, ErrStorageNotFound
+	}
+	return id, nil
+}
+
+// EmailMapper is the built-in SubjectMapper that looks up the user by
+// email. The Lookup function must be provided (the AS wires in
+// Storage.UserByEmail). Returns ErrStorageNotFound when no user with
+// that email exists.
+type EmailMapper struct {
+	// Lookup finds a user by their email address. Wire in
+	// Storage.UserByEmail at startup.
+	Lookup func(email string) (ULID, error)
+}
+
+// Resolve implements SubjectMapper by resolving claims["email"] to a user ID.
+func (m EmailMapper) Resolve(claims map[string]any) (ULID, error) {
+	email, _ := claims["email"].(string)
+	if email == "" {
+		return ULID{}, ErrStorageNotFound
+	}
+	if m.Lookup == nil {
+		return ULID{}, ErrStorageNotFound
+	}
+	return m.Lookup(email)
+}
+
+// PARConfig is the root-package alias for as.PARConfig. Consumers set
+// Config.AuthorizationServer.PAR to enable RFC 9126 support.
+type PARConfig = internalas.PARConfig
+
+// JARConfig is the root-package alias for as.JARConfig. Consumers set
+// Config.AuthorizationServer.JAR to enable RFC 9101 support.
+type JARConfig = internalas.JARConfig
+
+// DPoPConfig configures the RFC 9449 DPoP verifier wired into both the
+// authorization server and the mcpresource validator. All fields are
+// optional; New populates sensible defaults when the operator does not
+// override them. The wire shape matches the internal dpop.Config 1:1
+// because every field is operator-visible policy.
+type DPoPConfig struct {
+	// RequireDPoPForClients lists OAuth client IDs that MUST present a
+	// DPoP proof on every token request. Clients not on this list may
+	// still opt in by sending DPoP voluntarily; if they do, the issued
+	// token is sender constrained. For clients on this list, the
+	// absence of a proof is a 400 invalid_dpop_proof.
+	RequireDPoPForClients []string
+
+	// AllowedSignAlgs is the whitelist of signing algorithms a proof
+	// JWT may use. Defaults to ES256, ES384, RS256, PS256, EdDSA. HMAC
+	// algorithms (HS*) and "none" are always rejected per RFC 9449
+	// section 4.2.
+	AllowedSignAlgs []string
+
+	// ProofMaxAge bounds how far in the past or future the proof's iat
+	// claim may be. Defaults to 60 seconds; values much above 5 minutes
+	// substantially weaken the protection.
+	ProofMaxAge time.Duration
+
+	// NonceTTL bounds how long an issued DPoP-Nonce remains acceptable.
+	// Defaults to 10 minutes. Increasing this widens the window during
+	// which a captured nonce remains replayable; decreasing it forces
+	// clients to handle the use_dpop_nonce retry path more often.
+	NonceTTL time.Duration
+
+	// RequireNonceForTokens forces the token endpoint to demand a nonce
+	// on every DPoP proof. A first-call proof without a nonce returns
+	// HTTP 400 use_dpop_nonce + a DPoP-Nonce response header for the
+	// retry. Off by default; turn this on when running an AS exposed to
+	// untrusted clients to bound proof replay.
+	RequireNonceForTokens bool
+
+	// NonceSecret is the HMAC-SHA256 secret used to mint + verify
+	// DPoP-Nonce headers. Leave empty to let New generate a fresh
+	// 32-byte secret at startup; supply a stable value here when
+	// running multiple AS instances behind a load balancer so any
+	// instance can verify a nonce issued by any other.
+	NonceSecret []byte
+
+	// JTIReplayWindow caps the in-memory jti LRU size used to reject
+	// replayed proofs within ProofMaxAge. Defaults to 4096; raise for
+	// high-throughput AS deployments and lower for memory-constrained
+	// ones. A value of 0 means default.
+	JTIReplayWindow int
+}
+
+// dpopConfigFromRoot translates the root DPoPConfig into the internal
+// dpop.Config the verifier consumes. Nil-safe; returns nil so the AS
+// service short-circuits DPoP handling.
+func dpopConfigFromRoot(c *DPoPConfig) *internaldpop.Config {
+	if c == nil {
+		return nil
+	}
+	return &internaldpop.Config{
+		RequireDPoPForClients: append([]string(nil), c.RequireDPoPForClients...),
+		AllowedSignAlgs:       append([]string(nil), c.AllowedSignAlgs...),
+		ProofMaxAge:           c.ProofMaxAge,
+		NonceTTL:              c.NonceTTL,
+		RequireNonceForTokens: c.RequireNonceForTokens,
+		NonceSecret:           append([]byte(nil), c.NonceSecret...),
+		JTIReplayWindow:       c.JTIReplayWindow,
+	}
+}
+
+// jwtBearerConfigFromRoot translates the root JWTBearerConfig into the
+// internal/as JWTBearerConfig. Nil-safe; returns nil to disable JWT bearer.
+func jwtBearerConfigFromRoot(c *JWTBearerConfig) *internalas.JWTBearerConfig {
+	if c == nil {
+		return nil
+	}
+	issuers := make([]internalas.TrustedJWTIssuer, len(c.TrustedJWTIssuers))
+	for i, t := range c.TrustedJWTIssuers {
+		algs := append([]string(nil), t.AllowedAlgorithms...)
+		var mapper func(map[string]any) (ULID, error)
+		if t.SubjectMapper != nil {
+			sm := t.SubjectMapper
+			mapper = sm.Resolve
+		}
+		issuers[i] = internalas.TrustedJWTIssuer{
+			Issuer:            t.Issuer,
+			JWKSURL:           t.JWKSURL,
+			AllowedAlgorithms: algs,
+			SubjectMapper:     mapper,
+		}
+	}
+	return &internalas.JWTBearerConfig{
+		TrustedJWTIssuers:     issuers,
+		ClientAssertionMaxAge: c.ClientAssertionMaxAge,
+		AssertionMaxAge:       c.AssertionMaxAge,
+		ReplayCacheTTL:        c.ReplayCacheTTL,
+		MaxActorChainDepth:    c.MaxActorChainDepth,
+	}
 }
 
 // ProtectedResource is defined in internal/models and re-exported from
@@ -138,6 +420,12 @@ func validateASConfig(cfg *AuthorizationServerConfig, encryptionKey []byte) erro
 		IntrospectionCacheTTL:          cfg.IntrospectionCacheTTL,
 		LoginURL:                       cfg.LoginURL,
 		DisableRotation:                cfg.DisableRotation,
+		DPoP:                           dpopConfigFromRoot(cfg.DPoP),
+		RequireState:                   cfg.RequireState,
+		PAR:                            cfg.PAR,
+		JAR:                            cfg.JAR,
+		JWTBearer:                      jwtBearerConfigFromRoot(cfg.JWTBearer),
+		CIBA:                           cibaConfigToInternal(cfg.CIBA),
 	}
 	if err := internalas.Validate(&internal, encryptionKey); err != nil {
 		return err
@@ -157,6 +445,13 @@ func validateASConfig(cfg *AuthorizationServerConfig, encryptionKey []byte) erro
 	cfg.RegistrationRateLimitPerMinute = internal.RegistrationRateLimitPerMinute
 	cfg.IntrospectionCacheTTL = internal.IntrospectionCacheTTL
 	cfg.LoginURL = internal.LoginURL
+	// Mirror CIBA defaults back.
+	if cfg.CIBA != nil && internal.CIBA != nil {
+		cfg.CIBA.DefaultExpiry = internal.CIBA.DefaultExpiry
+		cfg.CIBA.DefaultInterval = internal.CIBA.DefaultInterval
+		cfg.CIBA.MaxRequestedExpiry = internal.CIBA.MaxRequestedExpiry
+		cfg.CIBA.MinPollInterval = internal.CIBA.MinPollInterval
+	}
 	return nil
 }
 

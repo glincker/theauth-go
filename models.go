@@ -202,3 +202,18 @@ type ProtectedResource = models.ProtectedResource
 // RegisteredClient is the JSON body returned on a successful registration
 // (RFC 7591 section 3.2.1).
 type RegisteredClient = models.RegisteredClient
+
+// ---------- CIBA (RFC 9509) types ----------
+
+// BackchannelRequest is the persistent record for one CIBA flow.
+type BackchannelRequest = models.BackchannelRequest
+
+// CIBA status constants.
+const (
+	BackchannelStatusPending  = models.BackchannelStatusPending
+	BackchannelStatusApproved = models.BackchannelStatusApproved
+	BackchannelStatusDenied   = models.BackchannelStatusDenied
+)
+
+// GrantTypeCIBA is the CIBA grant type URN per RFC 9509.
+const GrantTypeCIBA = models.GrantTypeCIBA

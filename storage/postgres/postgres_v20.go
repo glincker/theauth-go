@@ -389,5 +389,67 @@ func (s *Store) UpdateJWKSKeyState(ctx context.Context, kid, state string, at ti
 	return err
 }
 
+// AtomicRotateJWKS implements as.JWKSAtomicRotator. It wraps the entire JWKS
+// rotation state transition in a single serializable transaction so that
+// concurrent callers cannot produce two rows with state = current.
+//
+// The theauth_jwks_one_current partial unique index (migration 0015) enforces
+// this invariant at the database level as a belt-and-suspenders guard.
+func (s *Store) AtomicRotateJWKS(ctx context.Context, retireKIDs []string, demoteKID, promoteKID string, freshKey theauth.JWKSKey, now time.Time) error {
+	tx, err := s.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.Serializable})
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	nowTs := timeToTs(now)
+
+	for _, kid := range retireKIDs {
+		_, err := tx.Exec(ctx,
+			`UPDATE jwks_keys SET state = 'retired', retired_at = $2 WHERE kid = $1`,
+			kid, nowTs)
+		if err != nil {
+			return err
+		}
+	}
+
+	_, err = tx.Exec(ctx,
+		`UPDATE jwks_keys SET state = 'previous' WHERE kid = $1`,
+		demoteKID)
+	if err != nil {
+		return err
+	}
+
+	_, err = tx.Exec(ctx,
+		`UPDATE jwks_keys SET state = 'current', promoted_at = $2 WHERE kid = $1`,
+		promoteKID, nowTs)
+	if err != nil {
+		return err
+	}
+
+	created := freshKey.CreatedAt
+	if created.IsZero() {
+		created = now
+	}
+	_, err = tx.Exec(ctx,
+		`INSERT INTO jwks_keys (kid, alg, use_, public_jwk, private_enc, state, created_at, promoted_at, retired_at)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+		freshKey.KID,
+		freshKey.Alg,
+		nilToDefault(freshKey.Use, "sig"),
+		freshKey.PublicJWK,
+		freshKey.PrivateEnc,
+		freshKey.State,
+		timeToTs(created),
+		timePtrToTs(freshKey.PromotedAt),
+		timePtrToTs(freshKey.RetiredAt),
+	)
+	if err != nil {
+		return err
+	}
+
+	return tx.Commit(ctx)
+}
+
 // scan helpers + small mapping utilities live in postgres_v20_helpers.go to
 // keep this file under the 500 LOC budget.

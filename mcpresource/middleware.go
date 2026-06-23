@@ -1,6 +1,8 @@
 package mcpresource
 
 import (
+	"errors"
+	"fmt"
 	"net/http"
 	"net/url"
 	"strings"
@@ -21,13 +23,22 @@ func (v *Validator) Middleware(next http.Handler) http.Handler {
 			v.deny(w, r, "invalid_token", err.Error())
 			return
 		}
-		token := extractBearer(r)
+		token, scheme := extractToken(r)
 		if token == "" {
-			v.deny(w, r, "invalid_token", "missing bearer token")
+			v.deny(w, r, "invalid_token", "missing access token")
 			return
 		}
-		principal, err := v.authenticate(r, token)
+		principal, err := v.authenticate(r, token, scheme)
 		if err != nil {
+			// Per RFC 9449 section 7, a DPoP-bound token presented
+			// without (or with an invalid) DPoP header should surface
+			// the dpop wire error so the client can recover. The
+			// fallback path still returns invalid_token for ordinary
+			// failures.
+			if isDPoPProofError(err) {
+				v.denyDPoP(w, r, err.Error())
+				return
+			}
 			v.deny(w, r, "invalid_token", err.Error())
 			return
 		}
@@ -41,17 +52,49 @@ func (v *Validator) Middleware(next http.Handler) http.Handler {
 //  1. Verify the JWT signature + structural claims against the JWKS cache.
 //  2. Reject any aud mismatch up front (defence in depth: verifyJWT also
 //     enforces this).
-//  3. If the token carries an act chain or delegation_grant_id, walk the
+//  3. When the token carries an RFC 7800 cnf.jkt claim, REQUIRE an
+//     inbound DPoP header and verify the proof against the request method
+//     + URL + access-token hash, then check the proof JWK thumbprint
+//     equals cnf.jkt. Tokens without cnf.jkt skip this step (Bearer
+//     semantics).
+//  4. If the token carries an act chain or delegation_grant_id, walk the
 //     chain against the AS introspection endpoint. Cached results live up to
 //     cacheTTL; an AS-reported inactive flips the cache invalid immediately.
-//  4. Build the Principal and return.
-func (v *Validator) authenticate(r *http.Request, token string) (*Principal, error) {
+//  5. Build the Principal and return.
+func (v *Validator) authenticate(r *http.Request, token, scheme string) (*Principal, error) {
 	now := time.Now()
 	claims, err := verifyJWT(token, v.resourceURI, v.jwks.PublicKey, now, v.clockSkew)
 	if err != nil {
 		return nil, err
 	}
 	principal := principalFromClaims(claims)
+	// DPoP binding: when the access token carries cnf.jkt the request
+	// MUST also carry a DPoP header signed by the matching key. The
+	// AS chose at issuance time whether to constrain; the resource
+	// server enforces unconditionally.
+	if claims.Cnf != nil && claims.Cnf.JKT != "" {
+		if v.dpop == nil {
+			return nil, fmt.Errorf("%w: resource server has no DPoP verifier configured", errDPoPMissingHeader)
+		}
+		if !strings.EqualFold(scheme, "dpop") {
+			return nil, errDPoPMissingHeader
+		}
+		proof := r.Header.Get("DPoP")
+		if proof == "" {
+			return nil, errDPoPMissingHeader
+		}
+		jkt, err := v.dpop.verifyAndBind(proof, dpopVerifyParams{
+			method:      r.Method,
+			url:         requestURL(r),
+			accessToken: token,
+			requiredJKT: claims.Cnf.JKT,
+			now:         now,
+		})
+		if err != nil {
+			return nil, err
+		}
+		principal.CnfJKT = jkt
+	}
 	if claims.Act != nil || claims.DelegationGrantID != "" {
 		res, err := v.introspect.Lookup(token, v.resourceURI)
 		if err != nil {
@@ -63,6 +106,63 @@ func (v *Validator) authenticate(r *http.Request, token string) (*Principal, err
 		}
 	}
 	return principal, nil
+}
+
+// requestURL rebuilds the absolute URL the validator passes to the DPoP
+// verifier. Honors X-Forwarded-Proto + X-Forwarded-Host so deployments
+// behind a TLS-terminating proxy still produce the URL the client used.
+func requestURL(r *http.Request) string {
+	scheme := "http"
+	if r.TLS != nil {
+		scheme = "https"
+	}
+	if xfp := r.Header.Get("X-Forwarded-Proto"); xfp != "" {
+		scheme = xfp
+	}
+	host := r.Host
+	if xfh := r.Header.Get("X-Forwarded-Host"); xfh != "" {
+		host = xfh
+	}
+	return scheme + "://" + host + r.URL.Path
+}
+
+// isDPoPProofError reports whether err is any of the DPoP sentinel
+// errors. Used by the middleware to surface the right wire error.
+func isDPoPProofError(err error) bool {
+	switch {
+	case errors.Is(err, errDPoPMalformed),
+		errors.Is(err, errDPoPSignature),
+		errors.Is(err, errDPoPMethodMismatch),
+		errors.Is(err, errDPoPURIMismatch),
+		errors.Is(err, errDPoPATHRequired),
+		errors.Is(err, errDPoPATHMismatch),
+		errors.Is(err, errDPoPProofExpired),
+		errors.Is(err, errDPoPReplay),
+		errors.Is(err, errDPoPJKTMismatch),
+		errors.Is(err, errDPoPMissingHeader):
+		return true
+	}
+	return false
+}
+
+// denyDPoP writes a 401 response with WWW-Authenticate using the DPoP
+// scheme + invalid_dpop_proof / invalid_token error per RFC 9449 section
+// 7.1. Distinct from deny() so clients can branch on the scheme to know
+// whether to issue a fresh proof vs. a fresh token.
+func (v *Validator) denyDPoP(w http.ResponseWriter, r *http.Request, description string) {
+	metadataURL := protectedResourceMetadataURL(r, v.resourceURI)
+	value := `DPoP error="invalid_token"`
+	if description != "" {
+		value += `, error_description="` + escapeQuoted(description) + `"`
+	}
+	if metadataURL != "" {
+		value += `, resource_metadata="` + metadataURL + `"`
+	}
+	w.Header().Set("WWW-Authenticate", value)
+	w.Header().Set("Cache-Control", "no-store")
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusUnauthorized)
+	_, _ = w.Write([]byte(`{"error":"invalid_token","scheme":"DPoP"}`))
 }
 
 // errInactiveChain is the canonical error for an AS-reported revoked chain.
@@ -133,14 +233,27 @@ func unix(t int64) time.Time {
 // extractBearer pulls the bearer token from the Authorization header. Returns
 // "" when missing or not a Bearer scheme.
 func extractBearer(r *http.Request) string {
+	tok, _ := extractToken(r)
+	return tok
+}
+
+// extractToken returns the access token and the scheme used to present
+// it. Per RFC 9449 section 7.1 a DPoP-bound access token is presented
+// via "Authorization: DPoP <token>"; vanilla bearer tokens continue
+// using "Authorization: Bearer <token>". Other schemes are rejected.
+func extractToken(r *http.Request) (string, string) {
 	h := r.Header.Get("Authorization")
 	if h == "" {
-		return ""
+		return "", ""
 	}
-	if !strings.HasPrefix(strings.ToLower(h), "bearer ") {
-		return ""
+	lower := strings.ToLower(h)
+	switch {
+	case strings.HasPrefix(lower, "bearer "):
+		return strings.TrimSpace(h[len("Bearer "):]), "Bearer"
+	case strings.HasPrefix(lower, "dpop "):
+		return strings.TrimSpace(h[len("DPoP "):]), "DPoP"
 	}
-	return strings.TrimSpace(h[len("Bearer "):])
+	return "", ""
 }
 
 // deny writes a 401 response with WWW-Authenticate + RFC 9728 metadata URL.
