@@ -1,6 +1,6 @@
 site_name: theauth-go
 site_description: Go auth library covering OAuth 2.1, MCP authorization, agent identities, WebAuthn, SAML, SCIM, and more.
-site_url: https://glincker.github.io/theauth-go/
+site_url: https://theauth.dev/go/
 repo_url: https://github.com/glincker/theauth-go
 repo_name: glincker/theauth-go
 edit_uri: edit/main/docs-site/docs/

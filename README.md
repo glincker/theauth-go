@@ -241,12 +241,12 @@ Full runnable example: [`examples/mcp-server/`](./examples/mcp-server)
 
 | | |
 |---|---|
-| **[Getting Started](https://glincker.github.io/theauth-go/getting-started/)** | Installation, quick start, choosing a storage backend |
-| **[Concepts](https://glincker.github.io/theauth-go/concepts/)** | OAuth 2.1, MCP, PAR/JAR, JWT-Bearer, CIBA, DPoP |
-| **[Guides](https://glincker.github.io/theauth-go/guides/)** | Add an OAuth provider, enable passkeys, OTel tracing, SIEM audit streaming |
-| **[Reference](https://glincker.github.io/theauth-go/reference/)** | Config, Storage, Errors, Metrics, Spans |
-| **[Security](https://glincker.github.io/theauth-go/security/)** | Threat model, SOC 2 mapping, GDPR data handling |
-| **[Migrations](https://glincker.github.io/theauth-go/migrations/)** | Version upgrade guides |
+| **[Getting Started](https://theauth.dev/go/getting-started/)** | Installation, quick start, choosing a storage backend |
+| **[Concepts](https://theauth.dev/go/concepts/)** | OAuth 2.1, MCP, PAR/JAR, JWT-Bearer, CIBA, DPoP |
+| **[Guides](https://theauth.dev/go/guides/)** | Add an OAuth provider, enable passkeys, OTel tracing, SIEM audit streaming |
+| **[Reference](https://theauth.dev/go/reference/)** | Config, Storage, Errors, Metrics, Spans |
+| **[Security](https://theauth.dev/go/security/)** | Threat model, SOC 2 mapping, GDPR data handling |
+| **[Migrations](https://theauth.dev/go/migrations/)** | Version upgrade guides |
 | **[Releases and verification](https://github.com/glincker/theauth-go/releases)** | `cosign verify-blob` command for SBOM and signed artifacts |
 
 In-repo references:

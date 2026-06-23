@@ -160,7 +160,7 @@ unchanged.
   a CycloneDX SBOM, signs the SBOM and source archive with `cosign` keyless
   signing (GitHub Actions OIDC identity), and attaches an SLSA level-3
   provenance attestation. Consumers can verify releases with `cosign verify-blob`
-  and `gh attestation verify`. See [Releases and Verification](https://glincker.github.io/theauth-go/security/releases/).
+  and `gh attestation verify`. See [Releases and Verification](https://theauth.dev/go/security/releases/).
 
 - **MkDocs Material docs site with `mike` versioning (#60).** `docs-site/` now
   builds a versioned docs site deployed to GitHub Pages. The `mike` plugin
@@ -174,7 +174,7 @@ unchanged.
   GitHub Actions OIDC identity. SLSA level-3 provenance is attached. Consumers
   can cryptographically verify that a release was built by the official GitHub
   Actions workflow and has not been tampered with post-build. See
-  [Releases and Verification](https://glincker.github.io/theauth-go/security/releases/) for the
+  [Releases and Verification](https://theauth.dev/go/security/releases/) for the
   verification commands.
 
 - **Trust documentation (#61).** `docs/THREAT-MODEL.md` (STRIDE analysis across
