@@ -14,12 +14,13 @@ adheres to [Semantic Versioning](https://semver.org/) from v1.0 forward.
   (`OnSignup`, `OnSignin`, `OnPasswordChange`, `OnMFAEnabled`, `OnTokenIssued`,
   `OnOrgSwitch`), plus `SignupMethod` and `MFAKind` enums. Errors and panics
   are recovered and logged; the triggering request never fails. This release
-  wires `OnSignup` and `OnSignin` at the password and magic-link paths.
-  The remaining hook points (OAuth, passkey, SAML signup; password change;
-  MFA enable; token issuance; org switch) ship incrementally in v2.5.x
-  without API change. Magic-link consume distinguishes new vs returning
-  users via an internal flag so OnSignup only fires when the user row was
-  actually created. See `LifecycleHooks` doc comment for semantics.
+  wires `OnSignup` and `OnSignin` at the password, magic-link, and OAuth
+  provider callback paths. The remaining hook points (passkey, SAML
+  signup; password change; MFA enable; token issuance; org switch) ship
+  incrementally in v2.5.x without API change. Magic-link consume and OAuth
+  callback both distinguish new vs returning users via an internal flag so
+  OnSignup only fires when the user row was actually created. See
+  `LifecycleHooks` doc comment for semantics.
 - **`Auth.UserByID` (#77, partial).** Public lookup that previously forced
   consumers to reach into storage directly. Forwards to `Storage.UserByID`.
 

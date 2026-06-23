@@ -132,9 +132,22 @@ func (a *TheAuth) startOAuth(ctx context.Context, providerName string) (authURL,
 }
 
 // callbackOAuth delegates the /auth/providers/{name}/callback flow to
-// the extracted internal/oauth.Service.
+// the extracted internal/oauth.Service. Dispatches OnSignup when the user
+// row was created during this call (third branch of find-or-create) and
+// OnSignin for the session that was just issued. Hook errors and panics
+// are logged but do NOT fail the request.
 func (a *TheAuth) callbackOAuth(ctx context.Context, providerName, code, state, userAgent, ip string) (sessionToken string, user *User, err error) {
-	return a.oauthSvc.Callback(ctx, providerName, code, state, userAgent, ip)
+	sessionToken, user, created, err := a.oauthSvc.Callback(ctx, providerName, code, state, userAgent, ip)
+	if err != nil {
+		return sessionToken, user, err
+	}
+	if created {
+		a.fireOnSignup(ctx, user, SignupMethodOAuth)
+	}
+	if sess := a.sessionFromToken(ctx, sessionToken); sess != nil {
+		a.fireOnSignin(ctx, user, sess)
+	}
+	return sessionToken, user, nil
 }
 
 // ---------- SAML connections + SP-flow forwarders ----------

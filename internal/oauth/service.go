@@ -193,53 +193,56 @@ func (s *Service) Start(_ context.Context, providerName string) (authURL, state 
 // Callback completes the OAuth flow: looks up the state stored at /start,
 // exchanges the code, fetches user info, finds-or-creates the local user,
 // upserts the OAuthAccount with encrypted tokens, and issues a session.
-// Returns the raw session token and the resolved user.
-func (s *Service) Callback(ctx context.Context, providerName, code, state, userAgent, ip string) (sessionToken string, user *models.User, err error) {
+// Returns the raw session token, the resolved user, and a created flag
+// reporting whether the user row was newly created during this call
+// (v2.5: lets the root forwarder distinguish OnSignup from OnSignin
+// dispatch).
+func (s *Service) Callback(ctx context.Context, providerName, code, state, userAgent, ip string) (sessionToken string, user *models.User, created bool, err error) {
 	p, ok := s.providers[providerName]
 	if !ok {
-		return "", nil, fmt.Errorf("theauth: unknown provider %q", providerName)
+		return "", nil, false, fmt.Errorf("theauth: unknown provider %q", providerName)
 	}
 	raw, ok := s.states.LoadAndDelete(state)
 	if !ok {
-		return "", nil, errors.New("theauth: oauth state unknown or expired")
+		return "", nil, false, errors.New("theauth: oauth state unknown or expired")
 	}
 	st, ok := raw.(*oauthState)
 	if !ok {
-		return "", nil, errors.New("theauth: oauth state corrupted")
+		return "", nil, false, errors.New("theauth: oauth state corrupted")
 	}
 	if st.provider != providerName {
-		return "", nil, errors.New("theauth: oauth state provider mismatch")
+		return "", nil, false, errors.New("theauth: oauth state provider mismatch")
 	}
 	if time.Since(st.createdAt) > oauthStateTTL {
-		return "", nil, errors.New("theauth: oauth state expired")
+		return "", nil, false, errors.New("theauth: oauth state expired")
 	}
 
 	tok, err := p.ExchangeCode(ctx, code, st.codeVerifier, st.redirectURI)
 	if err != nil {
-		return "", nil, fmt.Errorf("theauth: ExchangeCode: %w", err)
+		return "", nil, false, fmt.Errorf("theauth: ExchangeCode: %w", err)
 	}
 	pu, err := p.UserInfo(ctx, tok)
 	if err != nil {
-		return "", nil, fmt.Errorf("theauth: UserInfo: %w", err)
+		return "", nil, false, fmt.Errorf("theauth: UserInfo: %w", err)
 	}
 	if pu == nil || pu.ID == "" {
-		return "", nil, errors.New("theauth: provider returned empty user id")
+		return "", nil, false, errors.New("theauth: provider returned empty user id")
 	}
 
-	resolved, err := s.findOrCreateUser(ctx, providerName, pu)
+	resolved, userCreated, err := s.findOrCreateUser(ctx, providerName, pu)
 	if err != nil {
-		return "", nil, err
+		return "", nil, false, err
 	}
 
 	accessEnc, err := crypto.Encrypt(s.encKey, []byte(tok.AccessToken))
 	if err != nil {
-		return "", nil, fmt.Errorf("theauth: encrypt access token: %w", err)
+		return "", nil, false, fmt.Errorf("theauth: encrypt access token: %w", err)
 	}
 	var refreshEnc []byte
 	if tok.RefreshToken != "" {
 		refreshEnc, err = crypto.Encrypt(s.encKey, []byte(tok.RefreshToken))
 		if err != nil {
-			return "", nil, fmt.Errorf("theauth: encrypt refresh token: %w", err)
+			return "", nil, false, fmt.Errorf("theauth: encrypt refresh token: %w", err)
 		}
 	}
 	var expiresAt *time.Time
@@ -261,12 +264,12 @@ func (s *Service) Callback(ctx context.Context, providerName, code, state, userA
 		CreatedAt:       now,
 		UpdatedAt:       now,
 	}); err != nil {
-		return "", nil, fmt.Errorf("theauth: upsert oauth account: %w", err)
+		return "", nil, false, fmt.Errorf("theauth: upsert oauth account: %w", err)
 	}
 
 	sessToken, _, err := s.sessions.Issue(ctx, *resolved, userAgent, ip)
 	if err != nil {
-		return "", nil, err
+		return "", nil, false, err
 	}
 	s.auditEm.EmitAudit(ctx, "oauth_account.linked", models.TargetRef{Type: "oauth_account", ID: oauthRowID.String()}, map[string]any{
 		"provider": providerName,
@@ -275,31 +278,31 @@ func (s *Service) Callback(ctx context.Context, providerName, code, state, userA
 		"auth_method": "oauth:" + providerName,
 	})
 	slog.Info("theauth: oauth signin", "provider", providerName, "user_id", resolved.ID.String())
-	return sessToken, resolved, nil
+	return sessToken, resolved, userCreated, nil
 }
 
 // findOrCreateUser implements the three-branch resolution: (1) existing
 // oauth_accounts row -> load that user, (2) email match -> reuse that user,
-// (3) brand new user.
-func (s *Service) findOrCreateUser(ctx context.Context, providerName string, pu *ProviderUser) (*models.User, error) {
+// (3) brand new user. The created return is true only in branch (3).
+func (s *Service) findOrCreateUser(ctx context.Context, providerName string, pu *ProviderUser) (*models.User, bool, error) {
 	acct, err := s.storage.OAuthAccountByProviderUserID(ctx, providerName, pu.ID)
 	if err == nil && acct != nil {
 		u, err := s.storage.UserByID(ctx, acct.UserID)
 		if err != nil {
-			return nil, fmt.Errorf("theauth: load linked user: %w", err)
+			return nil, false, fmt.Errorf("theauth: load linked user: %w", err)
 		}
-		return u, nil
+		return u, false, nil
 	} else if err != nil && !errors.Is(err, models.ErrStorageNotFound) {
-		return nil, fmt.Errorf("theauth: lookup oauth account: %w", err)
+		return nil, false, fmt.Errorf("theauth: lookup oauth account: %w", err)
 	}
 
 	if pu.Email != "" {
 		u, err := s.storage.UserByEmail(ctx, pu.Email)
 		if err == nil && u != nil {
-			return u, nil
+			return u, false, nil
 		}
 		if err != nil && !errors.Is(err, models.ErrStorageNotFound) {
-			return nil, fmt.Errorf("theauth: lookup user by email: %w", err)
+			return nil, false, fmt.Errorf("theauth: lookup user by email: %w", err)
 		}
 	}
 
@@ -317,9 +320,9 @@ func (s *Service) findOrCreateUser(ctx context.Context, providerName string, pu 
 	}
 	created, err := s.storage.CreateUser(ctx, newUser)
 	if err != nil {
-		return nil, fmt.Errorf("theauth: create oauth user: %w", err)
+		return nil, false, fmt.Errorf("theauth: create oauth user: %w", err)
 	}
-	return &created, nil
+	return &created, true, nil
 }
 
 // gcLoop sweeps expired entries from s.states.
