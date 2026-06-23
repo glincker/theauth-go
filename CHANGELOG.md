@@ -6,6 +6,32 @@ adheres to [Semantic Versioning](https://semver.org/) from v1.0 forward.
 
 ## [Unreleased]
 
+### Fixed
+
+- **`RequireAuth` now emits RFC 7807 problem+json on 401 (#78).** Previously
+  `RequireAuth` and `RequirePendingOrFull` wrote plain-text bodies (`"unauthorized"`)
+  while `RequirePermission` already emitted RFC 7807, forcing frontends to
+  special-case the 401 path. All three middlewares now share a single envelope:
+
+  ```
+  HTTP/1.1 401 Unauthorized
+  Content-Type: application/problem+json
+  WWW-Authenticate: Session realm="theauth", error="auth.unauthenticated"
+
+  {"type":"https://theauth.dev/problems/auth.unauthenticated",
+   "title":"Unauthorized","status":401,
+   "detail":"Missing or invalid session","code":"auth.unauthenticated"}
+  ```
+
+  Two distinct codes are surfaced so frontends can distinguish "log in" from
+  "complete second factor":
+
+  - `auth.unauthenticated` for no session cookie or failed validation.
+  - `auth.step_up_required` for pending_2fa sessions that still need TOTP or WebAuthn verify.
+
+  `RequirePermission` 500 paths also moved off plain text (`rbac.disabled`,
+  `rbac.internal_error`) for the same reason. Tracked in milestone v2.5.0.
+
 ## [2.4.0] - 2026-06-22
 
 The "enterprise security profile, supply chain hardening, and storage portability"

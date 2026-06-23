@@ -358,7 +358,10 @@ func TestStepUpFlow(t *testing.T) {
 	}
 	pending := resp.Cookies()
 
-	// 6. /auth/me must be 401 with a pending session.
+	// 6. /auth/me must be 401 with a pending session, emitted as RFC 7807
+	// problem+json with a step_up_required code so frontends can distinguish
+	// "need to log in" from "need to complete second factor" without
+	// special-casing string bodies (v2.5 contract).
 	meReq, _ := http.NewRequest("GET", srv.URL+"/auth/me", nil)
 	for _, c := range pending {
 		meReq.AddCookie(c)
@@ -367,7 +370,17 @@ func TestStepUpFlow(t *testing.T) {
 	if meResp.StatusCode != http.StatusUnauthorized {
 		t.Fatalf("/auth/me with pending session should be 401; got %d", meResp.StatusCode)
 	}
+	if ct := meResp.Header.Get("Content-Type"); ct != "application/problem+json" {
+		t.Fatalf("/auth/me 401 must be problem+json; got Content-Type=%q", ct)
+	}
+	if wa := meResp.Header.Get("WWW-Authenticate"); !strings.Contains(wa, "auth.step_up_required") {
+		t.Fatalf(`/auth/me 401 WWW-Authenticate must include "auth.step_up_required"; got %q`, wa)
+	}
+	meBody, _ := io.ReadAll(meResp.Body)
 	_ = meResp.Body.Close()
+	if !strings.Contains(string(meBody), `"code":"auth.step_up_required"`) {
+		t.Fatalf(`/auth/me 401 body must include "auth.step_up_required" code; got %s`, meBody)
+	}
 
 	// 7. Verify TOTP. Use a fresh current code (skew tolerance covers any
 	// few-second drift between the enroll and the verify call).
