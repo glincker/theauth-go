@@ -1,0 +1,50 @@
+name: "[Security] Security advisory"
+description: STOP -- do not report security vulnerabilities here. Read this first.
+title: "[Security] "
+labels: ["invalid"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        # Do NOT report security vulnerabilities in a public issue
+
+        Public GitHub issues are visible to everyone, including potential attackers. Disclosing a vulnerability here before a fix is available puts all users at risk.
+
+        ## How to report a vulnerability
+
+        **Option 1 (preferred): GitHub Security Advisories**
+
+        Use [GitHub's private vulnerability reporting](https://github.com/glincker/theauth-go/security/advisories/new). This keeps the report confidential until a fix is published.
+
+        **Option 2: Email**
+
+        Send a report to **security@glincker.com**. Include:
+
+        - A description of the issue and potential impact
+        - Steps to reproduce or a proof-of-concept
+        - The version(s) affected
+        - Any suggested mitigation you have already identified
+
+        ## Response SLA
+
+        - Acknowledgement: within 48 hours
+        - High-severity triage and fix: within 14 days
+        - Moderate-severity triage and fix: within 30 days
+
+        ## Disclosure policy
+
+        We follow responsible disclosure. Once a fix is available we will publish a patched release, a GitHub Security Advisory, and credit the reporter (unless you prefer anonymity).
+
+        For full details see [SECURITY.md](https://github.com/glincker/theauth-go/blob/main/SECURITY.md).
+
+        ---
+
+        If you arrived here by accident and do not have a security report, please close this issue and open a [bug report](https://github.com/glincker/theauth-go/issues/new?template=bug_report.yml) or [feature request](https://github.com/glincker/theauth-go/issues/new?template=feature_request.yml) instead.
+
+  - type: checkboxes
+    id: confirm
+    attributes:
+      label: Confirmation
+      options:
+        - label: I understand I should NOT provide vulnerability details in this public form. I will use the email or GitHub Security Advisories link above.
+          required: true
