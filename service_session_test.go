@@ -365,6 +365,81 @@ func TestLifecycleHooks_PanicRecovery(t *testing.T) {
 	}
 }
 
+// TestLifecycleHooks_MagicLinkConsumeFiresHooks proves OnSignup fires once
+// on the first magic-link consume (user just created) and only OnSignin
+// fires on subsequent consumes for the same user. Covers issue #76 magic-
+// link wiring.
+func TestLifecycleHooks_MagicLinkConsumeFiresHooks(t *testing.T) {
+	store := memory.New()
+	var (
+		mu          sync.Mutex
+		signupCount int
+		signinCount int
+		lastMethod  theauth.SignupMethod
+	)
+	a, err := theauth.New(theauth.Config{
+		Storage:           store,
+		BaseURL:           "http://localhost",
+		SessionTTL:        time.Hour,
+		MagicLinkTTL:      15 * time.Minute,
+		RateLimitPerIP:    100,
+		RateLimitPerEmail: 100,
+		LifecycleHooks: &theauth.LifecycleHooks{
+			OnSignup: func(ctx context.Context, u *theauth.User, m theauth.SignupMethod) error {
+				mu.Lock()
+				signupCount++
+				lastMethod = m
+				mu.Unlock()
+				return nil
+			},
+			OnSignin: func(ctx context.Context, u *theauth.User, s *theauth.Session) error {
+				mu.Lock()
+				signinCount++
+				mu.Unlock()
+				return nil
+			},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+
+	// First consume: brand-new user. Expect OnSignup + OnSignin.
+	tok1, err := theauth.RequestMagicLinkForTest(a, ctx, "ml@y.com")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := theauth.ConsumeMagicLinkForTest(a, ctx, tok1); err != nil {
+		t.Fatal(err)
+	}
+	mu.Lock()
+	if signupCount != 1 || signinCount != 1 {
+		t.Fatalf("first consume: want signup=1 signin=1; got signup=%d signin=%d", signupCount, signinCount)
+	}
+	if lastMethod != theauth.SignupMethodMagicLink {
+		t.Fatalf("OnSignup method on magic-link consume: want %q; got %q", theauth.SignupMethodMagicLink, lastMethod)
+	}
+	mu.Unlock()
+
+	// Second consume: existing user. Expect only OnSignin.
+	tok2, err := theauth.RequestMagicLinkForTest(a, ctx, "ml@y.com")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := theauth.ConsumeMagicLinkForTest(a, ctx, tok2); err != nil {
+		t.Fatal(err)
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if signupCount != 1 {
+		t.Fatalf("returning-user consume must NOT fire OnSignup; got signupCount=%d", signupCount)
+	}
+	if signinCount != 2 {
+		t.Fatalf("returning-user consume must fire OnSignin; got signinCount=%d", signinCount)
+	}
+}
+
 // TestUserByID covers the v2.5 public lookup that previously forced
 // consumers to reach into storage directly.
 func TestUserByID(t *testing.T) {
