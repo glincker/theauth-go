@@ -1,6 +1,6 @@
 # Storage Interface
 
-The `theauth.Storage` interface is the single surface a custom backend must implement. Both built-in adapters (`storage/memory` and `storage/postgres`) satisfy it.
+The `theauth.Storage` interface is the single surface a custom backend must implement. Three built-in adapters are provided: `storage/memory`, `storage/postgres`, and (since v2.4) `storage/mysql`.
 
 ## Stability guarantee
 
@@ -12,8 +12,10 @@ The base `Storage` interface is frozen at v1.0. Adding a method to it is a v2.0 
 |---|---|
 | `github.com/glincker/theauth-go/storage/memory` | Local dev, testing |
 | `github.com/glincker/theauth-go/storage/postgres` | Production (`pgx/v5` + `sqlc`) |
+| `github.com/glincker/theauth-go/storage/mysql` | Production, MySQL 8.x (v2.4+) |
 
-Both expose `New(...)` constructors that return a `*Store` satisfying `theauth.Storage`.
+All adapters expose `New(...)` constructors that return a `*Store` satisfying
+`theauth.Storage`.
 
 ## Extension interface: `OAuthServerStorage`
 
@@ -21,15 +23,50 @@ When `Config.AuthorizationServer` is set, the storage adapter must also satisfy 
 
 Both in-tree adapters satisfy `OAuthServerStorage` when the OAuth 2.1 AS migrations have been applied.
 
-## Conformance suite
+## Conformance suite (`storagetest`)
 
-Use `github.com/glincker/theauth-go/storagetest` to verify a custom adapter:
+Since v2.4, theauth-go ships a public contract test suite in the `storagetest`
+package. Any custom adapter (or a new in-tree adapter) can be verified by calling
+`storagetest.Run`:
 
 ```go
+import "github.com/glincker/theauth-go/storagetest"
+
 func TestConformance(t *testing.T) {
     storagetest.Run(t, func() theauth.Storage {
         return mystorage.New()
     })
+}
+```
+
+The suite covers 12 functional areas:
+
+- Sessions (create, lookup, revoke)
+- Password hashes (set, verify, re-hash)
+- OAuth clients (CRUD, DCR)
+- Authorization codes (issue, consume, replay prevention)
+- Refresh tokens (issue, rotate, family revocation)
+- JWKS keys (rotation, exactly-one-current constraint)
+- Agents and agent credentials
+- Delegation grants (grant, revoke, chain lookup)
+- CIBA requests (create, approve, deny, poll, ping)
+- Storagetest idempotency (re-running inserts is safe)
+- Error sentinel conformance (`ErrStorageNotFound` on misses)
+- Concurrent writes (race detector clean)
+
+Both in-tree adapters (`postgres` and `mysql`) run this suite in CI. Run it
+against your own adapter to verify parity.
+
+To gate a live-database contract test behind an environment variable (so it
+is skipped in offline CI):
+
+```go
+func TestConformance(t *testing.T) {
+    if os.Getenv("MYDB_CONTRACT") == "" {
+        t.Skip("set MYDB_CONTRACT=1 to run live storage contract tests")
+    }
+    db := openTestDB(t)
+    storagetest.Run(t, func() theauth.Storage { return mystore.New(db) })
 }
 ```
 

@@ -1,6 +1,15 @@
 # Releases and Verification
 
-Every theauth-go release artifact is signed with `cosign` keyless signing via Sigstore OIDC (GitHub Actions identity). The release workflow also generates a CycloneDX SBOM and a SLSA provenance attestation.
+Every theauth-go release artifact is signed with `cosign` keyless signing via
+Sigstore OIDC (GitHub Actions identity). The release workflow also generates a
+CycloneDX SBOM and a SLSA provenance attestation.
+
+!!! success "Operational since v2.4.0"
+    Goreleaser, SBOM generation, cosign keyless signing, and SLSA provenance
+    attestation are all fully operational as of the v2.4.0 release (#57). The
+    workflow that drives this is
+    [`.github/workflows/release.yml`](https://github.com/glincker/theauth-go/blob/main/.github/workflows/release.yml).
+    Every tag push since v2.4.0 produces a signed, attested release.
 
 ## Release process
 

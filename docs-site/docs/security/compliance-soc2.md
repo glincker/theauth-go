@@ -1,0 +1,1 @@
+--8<-- "docs/COMPLIANCE-SOC2.md"

@@ -6,6 +6,183 @@ adheres to [Semantic Versioning](https://semver.org/) from v1.0 forward.
 
 ## [Unreleased]
 
+## [2.4.0] - 2026-06-22
+
+The "enterprise security profile, supply chain hardening, and storage portability"
+release. v2.4 closes the FAPI 2.0 baseline by combining PAR (RFC 9126), JAR
+(RFC 9101), and JWT-Bearer client authentication (RFC 7523) in a single release.
+A new MySQL 8.x backend, a public `storagetest` contract suite, CIBA backchannel
+authentication (RFC 9509), and a CLI migration tool for Cognito and Auth0 round
+out the release. All additions are fully additive: downstream code compiles
+unchanged.
+
+### Added
+
+- **MySQL 8.x storage backend (#62).** `storage/mysql` implements `theauth.Storage`
+  and `OAuthServerStorage` with full parity with the existing postgres backend.
+  The adapter uses `sqlc`-generated queries targeting MySQL 8.x dialect. All
+  dialect translations (e.g., `ILIKE` to `LIKE BINARY`, `gen_random_uuid()` to
+  `UUID()`, advisory locks to `GET_LOCK`) are handled internally. Enable the
+  contract test gate by setting `THEAUTH_MYSQL_CONTRACT=1` when running
+  `go test ./storage/mysql/...` against a live MySQL instance. The contract suite
+  (`storagetest.Run`) is the same set used by the postgres adapter, so parity
+  is enforced mechanically.
+  - Current parity caveats: `postgres.Migrate` pattern not yet mirrored; operators
+    apply the `storage/mysql/migrations/` SQL files manually or via their
+    migration runner. Advisory lock serialization is weaker than Postgres
+    serializable transactions; avoid concurrent migrations.
+
+- **Cognito + Auth0 migration CLI (#63).** New `cmd/theauth-migrate/` binary
+  with sub-commands `cognito` and `auth0` exports users from AWS Cognito (CSV
+  or JSON input) and Auth0 (Management API or bulk export) into an intermediate
+  JSON bundle, then applies the bundle to any theauth-go storage backend.
+  - Two-stage design: `export` then `apply` lets operators diff and validate
+    the bundle with `theauth-migrate validate` before touching production storage.
+  - Auth0 path preserves bcrypt password hashes and triggers transparent
+    re-hashing with Argon2id on next successful login. Enable with the new
+    `PasswordPolicy.AllowLegacyBcrypt = true` config flag during the migration
+    window; disable once active users have been re-hashed.
+  - Build: `go build ./cmd/theauth-migrate`.
+
+- **PAR (RFC 9126) + JAR (RFC 9101) for FAPI-adjacent profile (#64).**
+  Pushed Authorization Requests and JWT-Secured Authorization Requests are now
+  supported by the OAuth 2.1 AS.
+  - PAR: `POST /oauth/par` accepts the full authorization request body, stores
+    it under a `urn:ietf:params:oauth:request_uri` handle (9-character random
+    suffix), and returns the handle with a 60-second TTL. The authorize endpoint
+    accepts the `request_uri` parameter and rejects raw parameters when PAR is
+    required (`PARConfig.Required = true`).
+  - JAR: the authorize endpoint verifies `request` JWTs signed by the client's
+    registered public key (`JARConfig.AllowedAlgorithms`, default ES256/RS256).
+    The `request` JWT must contain `iss`, `aud`, `exp`, `iat`, `nbf`, and the
+    standard authorization parameters.
+  - PAR + JAR together reach the FAPI 2.0 Security Profile baseline when
+    combined with the JWT-Bearer client authentication added in #65. See
+    the PAR + JAR concept page in the docs site for the flow narrative.
+  - New config: `AuthorizationServerConfig.PAR *PARConfig`,
+    `AuthorizationServerConfig.JAR *JARConfig`.
+  - Passes the zero-dependency mcpresource contract: mcpresource gains no new
+    transitive deps from this change.
+
+- **JWT-Bearer client auth + grant + token exchange polish (#65, RFC 7523).**
+  The AS now accepts JWT client assertions (`client_assertion_type=
+  urn:ietf:params:oauth:client-assertion-type:jwt-bearer`) as a client
+  authentication method alongside `client_secret_post` and `client_secret_basic`.
+  - Issuers are registered via the new `TrustedJWTIssuer` config type; a
+    `SubjectMapper` callback maps the JWT subject to a theauth client ID.
+  - JWT-Bearer grant (`grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer`):
+    exchange an external JWT (e.g., a Kubernetes ServiceAccount token) for a
+    theauth access token without a prior interactive auth step.
+  - Token exchange polish: `requested_token_type` parameter is now respected
+    per RFC 8693; the response `issued_token_type` is set explicitly.
+  - Primary use case: Kubernetes workload identity. A Pod authenticates with
+    its projected ServiceAccount token; the AS verifies the OIDC issuer and
+    mints a scoped access token for the target resource. See the JWT-Bearer
+    concept page in the docs site.
+  - New config: `AuthorizationServerConfig.JWTBearer *JWTBearerConfig`.
+  - Passes the zero-dependency mcpresource contract: no new transitive deps.
+
+- **CIBA -- backchannel authentication, RFC 9509 (#66, Poll + Ping modes).**
+  The CIBA profile lets a consumption device (e.g., a call center agent or voice
+  assistant) authenticate a user via a separate authentication device (e.g., a
+  phone push notification) without a browser redirect.
+  - `AuthenticationDevice` interface: implement `Notify(ctx, req CIBARequest)
+    error` to deliver push notifications, voice prompts, or any out-of-band
+    channel.
+  - Poll mode: the client calls `POST /ciba/token` periodically using the
+    `auth_req_id` returned by `POST /ciba/bc-authorize`. Returns
+    `authorization_pending` until the user approves (or `access_denied` on
+    denial).
+  - Ping mode: client registers a `client_notification_endpoint`; theauth-go
+    POSTs the token to that endpoint when the user approves. No polling required.
+  - When to use: IoT device pairing, voice-channel step-up, call center
+    agent-assisted authentication, TV/speaker without a keyboard.
+  - New config: `AuthorizationServerConfig.CIBA *CIBAConfig`.
+
+- **`storagetest` public contract suite (#58).** Any custom storage adapter can
+  now be verified against the canonical theauth-go contract by calling
+  `storagetest.Run(t, factory)` from its test file:
+  ```go
+  func TestConformance(t *testing.T) {
+      storagetest.Run(t, func() theauth.Storage { return mystorage.New() })
+  }
+  ```
+  The suite covers 12 functional areas (sessions, passwords, oauth clients,
+  refresh tokens, JWKS rotation, agents, delegations, CIBA, storagetest
+  idempotency, error sentinel conformance, concurrent writes, and audit
+  append-only). Both in-tree adapters run this suite in CI.
+
+- **`Config.RequireState bool` (#64, RFC 9700 BCP).** When true, the AS rejects
+  `/authorize` requests without a non-empty `state` parameter. Default false
+  preserves backwards compatibility.
+
+- **`PasswordPolicy.AllowLegacyBcrypt bool` (#63).** Opt-in to accept bcrypt
+  password hashes imported from Auth0 (and similar systems). When a user
+  authenticates, theauth-go detects the bcrypt PHC prefix, verifies with bcrypt,
+  and re-hashes with Argon2id on success. Disable this flag once the migration
+  window closes.
+
+### Changed
+
+- **`AuthorizationServerConfig` extended with new optional sub-configs (additive).**
+  `PAR *PARConfig`, `JAR *JARConfig`, `JWTBearer *JWTBearerConfig`,
+  `CIBA *CIBAConfig`. All nil by default; nil means the feature is disabled.
+  Existing config structs compile and run unchanged.
+
+- **Token exchange response now sets `issued_token_type` explicitly (#65).**
+  Previously the field was omitted. It is now set to
+  `urn:ietf:params:oauth:token-type:access_token` per RFC 8693 section 2.2.1.
+  The field was not part of any guarantee in previous releases, so this is
+  classified as a bug fix rather than a breaking change.
+
+### Fixed
+
+- **`gofmt` fixup on `jwtbearer.go` and `par_serialise.go` (#68).** Two files
+  landed in #64 and #65 with minor formatting inconsistencies. No logic change.
+
+### Tests
+
+- **Root test file count: 35 to 27 (#67).** Extracted
+  `internal/theauthtest/` helper package (test fixtures, JWT minting helpers,
+  request builders) consumed by the remaining root tests. Reduces root noise
+  and makes per-package test helpers importable without init-time side effects.
+
+- **Performance regression CI gate (#59, 12 benchmarks).** `benchgate` now runs
+  on every PR. Compares benchmark results with `benchstat`; any benchmark
+  regressing beyond the 25% default threshold fails the CI check. The diff is
+  posted as a PR comment. Baseline is pinned to the `main` branch. Override
+  threshold: `BENCHGATE_THRESHOLD=0.30`.
+
+### Internal
+
+- **Goreleaser + SBOM + Sigstore keyless + SLSA provenance (#57).** Tag pushes
+  now trigger `.github/workflows/release.yml`, which runs goreleaser, generates
+  a CycloneDX SBOM, signs the SBOM and source archive with `cosign` keyless
+  signing (GitHub Actions OIDC identity), and attaches an SLSA level-3
+  provenance attestation. Consumers can verify releases with `cosign verify-blob`
+  and `gh attestation verify`. See [Releases and Verification](https://glincker.github.io/theauth-go/security/releases/).
+
+- **MkDocs Material docs site with `mike` versioning (#60).** `docs-site/` now
+  builds a versioned docs site deployed to GitHub Pages. The `mike` plugin
+  manages version aliases (`latest`, `stable`). The GH Pages workflow deploys
+  on every push to `main`. Build locally: `cd docs-site && mkdocs build --strict`.
+
+### Security
+
+- **Supply chain: goreleaser + cosign + SLSA (#57).** Every release artifact
+  (source archive, SBOM) is now signed with Sigstore keyless signing via the
+  GitHub Actions OIDC identity. SLSA level-3 provenance is attached. Consumers
+  can cryptographically verify that a release was built by the official GitHub
+  Actions workflow and has not been tampered with post-build. See
+  [Releases and Verification](https://glincker.github.io/theauth-go/security/releases/) for the
+  verification commands.
+
+- **Trust documentation (#61).** `docs/THREAT-MODEL.md` (STRIDE analysis across
+  all subsystems), `docs/COMPLIANCE-SOC2.md` (AICPA TSC 2017 criteria mapping),
+  and `docs/COMPLIANCE-GDPR.md` (GDPR data handling reference and
+  operator/controller role clarification) are now in the repository. These
+  documents inform operator security assessments and SOC 2 evidence packs.
+
 ## [2.3.0] - 2026-06-22
 
 The "MCP wedge deepening and enterprise feature parity" release. Three major
