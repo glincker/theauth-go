@@ -24,5 +24,5 @@ CREATE INDEX idx_audit_actor_created_at      ON audit_events (actor_user_id, cre
 CREATE INDEX idx_audit_action_created_at     ON audit_events (action, created_at DESC);
 
 -- Defense in depth: revoke UPDATE / DELETE at the role level if the consumer
--- creates a dedicated app role. Documented in STABILITY.md; not enforced in
+-- creates a dedicated app role. Documented in docs/STABILITY.md; not enforced in
 -- migration because consumers manage roles themselves.

@@ -3,10 +3,13 @@ package theauth_test
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/netip"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -265,4 +268,150 @@ func TestKeyedLimiterGC(t *testing.T) {
 	if got := k.EntryCount(); got != 0 {
 		t.Fatalf("expected GC to evict idle keys; got %d", got)
 	}
+}
+
+// ---------- race tests (originally middleware_ratelimit_race_test.go) ----------
+
+// TestRateLimiterConcurrentSameIP spawns N goroutines that all hit the
+// same key against a limiter configured for 5 per minute. The 5 token
+// burst budget must be honored: exactly 5 must pass, the rest must be
+// rejected, with no lost increments under contention.
+func TestRateLimiterConcurrentSameIP(t *testing.T) {
+	t.Parallel()
+	const total = 1000
+	const limit = 5
+
+	lim := theauth.NewKeyedLimiterForTest(limit, time.Hour, time.Hour)
+	t.Cleanup(lim.Stop)
+
+	var passes int64
+	var wg sync.WaitGroup
+	wg.Add(total)
+	for i := 0; i < total; i++ {
+		go func() {
+			defer wg.Done()
+			if lim.Allow("198.51.100.1") {
+				atomic.AddInt64(&passes, 1)
+			}
+		}()
+	}
+	wg.Wait()
+
+	got := atomic.LoadInt64(&passes)
+	if got != limit {
+		t.Fatalf("passes = %d, want %d under same-IP contention", got, limit)
+	}
+}
+
+// TestRateLimiterConcurrentDifferentIPs spawns goroutines across 50
+// distinct keys with a 5 per minute limit. Each key must accumulate
+// exactly 5 passes, independently of any other key.
+func TestRateLimiterConcurrentDifferentIPs(t *testing.T) {
+	t.Parallel()
+	const ipCount = 50
+	const perIP = 100
+	const limit = 5
+
+	lim := theauth.NewKeyedLimiterForTest(limit, time.Hour, time.Hour)
+	t.Cleanup(lim.Stop)
+
+	var (
+		mu     sync.Mutex
+		passes = make(map[string]int, ipCount)
+	)
+	var wg sync.WaitGroup
+	wg.Add(ipCount * perIP)
+	for i := 0; i < ipCount; i++ {
+		ip := fmt.Sprintf("203.0.113.%d", i)
+		for j := 0; j < perIP; j++ {
+			go func(ip string) {
+				defer wg.Done()
+				if lim.Allow(ip) {
+					mu.Lock()
+					passes[ip]++
+					mu.Unlock()
+				}
+			}(ip)
+		}
+	}
+	wg.Wait()
+
+	for i := 0; i < ipCount; i++ {
+		ip := fmt.Sprintf("203.0.113.%d", i)
+		if got := passes[ip]; got != limit {
+			t.Fatalf("ip %s: passes = %d, want %d (independent buckets)", ip, got, limit)
+		}
+	}
+}
+
+// ---------- benchmarks (originally middleware_ratelimit_perf_test.go) ----------
+
+// BenchmarkRateLimitReadHeavy measures the Allow hot path under read-heavy
+// conditions: all keys already exist so every call takes the shared RLock
+// path (perf re-audit 2026-06-21, item 2). The benchmark is informational;
+// CI does not gate on benchmark numbers.
+func BenchmarkRateLimitReadHeavy(b *testing.B) {
+	const numKeys = 100
+	const perMinute = 10000 // high limit so Allow always returns true
+
+	lim := theauth.NewKeyedLimiterForTest(perMinute, time.Hour, time.Hour)
+	b.Cleanup(lim.Stop)
+
+	// Pre-populate the map so every b.N iteration hits the fast RLock path.
+	keys := make([]string, numKeys)
+	for i := 0; i < numKeys; i++ {
+		keys[i] = fmt.Sprintf("192.0.2.%d", i)
+		lim.Allow(keys[i])
+	}
+
+	b.ResetTimer()
+	b.RunParallel(func(pb *testing.PB) {
+		i := 0
+		for pb.Next() {
+			lim.Allow(keys[i%numKeys])
+			i++
+		}
+	})
+}
+
+// TestRateLimitConcurrentReaders ensures the race detector finds no data
+// races when many goroutines concurrently call Allow on pre-existing keys
+// (exercising the shared RLock path) alongside occasional inserts of new
+// keys (exercising the write-lock path) (perf re-audit 2026-06-21, item 2).
+func TestRateLimitConcurrentReaders(t *testing.T) {
+	t.Parallel()
+	const existing = 20
+	const newKeys = 10
+	const readers = 50
+	const perMinute = 10000
+
+	lim := theauth.NewKeyedLimiterForTest(perMinute, time.Hour, time.Hour)
+	t.Cleanup(lim.Stop)
+
+	// Seed existing keys.
+	for i := 0; i < existing; i++ {
+		lim.Allow(fmt.Sprintf("10.0.0.%d", i))
+	}
+
+	var wg sync.WaitGroup
+	// Concurrent readers on existing keys.
+	for i := 0; i < readers; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			key := fmt.Sprintf("10.0.0.%d", i%existing)
+			for j := 0; j < 100; j++ {
+				lim.Allow(key)
+			}
+		}(i)
+	}
+	// Concurrent writers inserting new keys.
+	for i := 0; i < newKeys; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			lim.Allow(fmt.Sprintf("172.16.%d.1", i))
+		}(i)
+	}
+	wg.Wait()
 }

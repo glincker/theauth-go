@@ -2,11 +2,19 @@ package theauth_test
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/glincker/theauth-go"
+	"github.com/glincker/theauth-go/storage/memory"
+	"github.com/go-chi/chi/v5"
 )
 
 const validPassword = "correct-horse-battery-staple" // > 12 chars
@@ -227,4 +235,150 @@ func TestSignupEmailMustParseAsAddress(t *testing.T) {
 	if !strings.Contains(err.Error(), "invalid_credentials") {
 		t.Fatalf("got %v", err)
 	}
+}
+
+// ---------- fuzz tests (originally service_password_fuzz_test.go) ----------
+
+// FuzzEmailValidation drives arbitrary input strings through the email
+// validator. The invariant is "never panic" across RFC 5322 edge cases
+// such as quoted local parts, IDN punycode, very long local parts,
+// embedded NULs, leading or trailing whitespace, and the literal "<>".
+func FuzzEmailValidation(f *testing.F) {
+	f.Add([]byte(""))
+	f.Add([]byte("user@example.com"))
+	f.Add([]byte("\"quoted local\"@example.com"))
+	f.Add([]byte("not-an-email"))
+	f.Add([]byte("<>"))
+	f.Add([]byte("user@xn--bcher-kva.example"))
+	f.Add([]byte("a@b"))
+	f.Add([]byte("user\x00@example.com"))
+
+	f.Fuzz(func(t *testing.T, input []byte) {
+		if len(input) > 4096 {
+			input = input[:4096]
+		}
+		_, _ = theauth.ValidateEmailForTest(string(input))
+		// No assertion beyond "did not panic". Returning an error for
+		// malformed input is the documented behavior and is fine.
+	})
+}
+
+// ---------- OAuth race tests (originally service_oauth_race_test.go) ----------
+
+// TestOAuthStateConcurrentReadWrite spawns interleaving writers (driving
+// /auth/providers/stub/start which stores state) and readers (driving the
+// callback path which reads + deletes state). The test asserts no panic
+// and no data race under -race.
+func TestOAuthStateConcurrentReadWrite(t *testing.T) {
+	t.Parallel()
+	key := make([]byte, 32)
+	if _, err := rand.Read(key); err != nil {
+		t.Fatal(err)
+	}
+	a, err := theauth.New(theauth.Config{
+		Storage:           memory.New(),
+		BaseURL:           "http://localhost",
+		EncryptionKey:     key,
+		PostLoginRedirect: "/",
+		Providers:         []theauth.Provider{&stubProvider{name: "stub"}},
+		// Bump the per-IP limit well above the writer count so the test
+		// exercises the state map under load rather than the rate limiter.
+		RateLimitPerIP: 10_000,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(a.Close)
+
+	r := chi.NewRouter()
+	a.Mount(r)
+
+	const writers = 500
+	const readers = 500
+	var wg sync.WaitGroup
+	wg.Add(writers + readers)
+
+	// Writers exercise the start endpoint, which writes to the shared
+	// oauthStates sync.Map.
+	for i := 0; i < writers; i++ {
+		go func() {
+			defer wg.Done()
+			req := httptest.NewRequest(http.MethodGet, "/auth/providers/stub/start", nil)
+			rec := httptest.NewRecorder()
+			r.ServeHTTP(rec, req)
+		}()
+	}
+
+	// Readers exercise the callback endpoint with arbitrary state values.
+	// Most will miss (state never stored), the rest hit the LoadAndDelete
+	// path under the same map. The point is to interleave reads and writes.
+	for i := 0; i < readers; i++ {
+		go func(i int) {
+			defer wg.Done()
+			rb := make([]byte, 16)
+			_, _ = rand.Read(rb)
+			state := hex.EncodeToString(rb)
+			// State cookie matches the query so the handler reaches the
+			// service layer's LoadAndDelete branch.
+			req := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/auth/providers/stub/callback?state=%s&code=x", state), nil)
+			req.AddCookie(&http.Cookie{Name: "theauth_oauth_state", Value: state})
+			rec := httptest.NewRecorder()
+			r.ServeHTTP(rec, req)
+		}(i)
+	}
+	wg.Wait()
+
+	// Sanity: trigger one more start + callback round trip and ensure
+	// the map still behaves.
+	req := httptest.NewRequest(http.MethodGet, "/auth/providers/stub/start", nil)
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+	if rec.Code != http.StatusFound {
+		t.Fatalf("post-race start returned %d, want 302", rec.Code)
+	}
+	_ = context.Background()
+}
+
+// ---------- shared fuzz helpers (originally fuzz_helpers_test.go) ----------
+
+// stubProvider is a no-network OAuth provider used by fuzz targets that
+// need a registered {name} route without actually exchanging codes.
+type stubProvider struct{ name string }
+
+func (s *stubProvider) Name() string { return s.name }
+
+func (s *stubProvider) AuthURL(state, codeChallenge, redirectURI string, scopes []string) string {
+	return "https://example.invalid/authorize?state=" + state
+}
+
+func (s *stubProvider) ExchangeCode(ctx context.Context, code, codeVerifier, redirectURI string) (*theauth.ProviderToken, error) {
+	return &theauth.ProviderToken{AccessToken: "stub"}, nil
+}
+
+func (s *stubProvider) UserInfo(ctx context.Context, token *theauth.ProviderToken) (*theauth.ProviderUser, error) {
+	return &theauth.ProviderUser{ID: "stub-id", Email: "stub@example.invalid"}, nil
+}
+
+// newOAuthFuzzAuth returns a TheAuth with one stub provider registered
+// plus a chi router that has the standard /auth routes mounted on it.
+func newOAuthFuzzAuth(t testing.TB) (*theauth.TheAuth, http.Handler) {
+	t.Helper()
+	key := make([]byte, 32)
+	if _, err := rand.Read(key); err != nil {
+		t.Fatalf("read key: %v", err)
+	}
+	a, err := theauth.New(theauth.Config{
+		Storage:           memory.New(),
+		BaseURL:           "http://localhost",
+		EncryptionKey:     key,
+		PostLoginRedirect: "/",
+		Providers:         []theauth.Provider{&stubProvider{name: "stub"}},
+	})
+	if err != nil {
+		t.Fatalf("new theauth: %v", err)
+	}
+	t.Cleanup(a.Close)
+	r := chi.NewRouter()
+	a.Mount(r)
+	return a, r
 }
