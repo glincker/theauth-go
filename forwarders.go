@@ -179,9 +179,22 @@ func (a *TheAuth) requestMagicLinkForTest(ctx context.Context, emailAddr string)
 
 // consumeMagicLink validates the supplied token (single-use,
 // time-bounded), finds-or-creates the user, marks the email verified, and
-// issues a session. Forwards to magicSvc.Consume.
+// issues a session. Forwards to magicSvc.Consume. Dispatches OnSignup
+// when the user row was created during this call, then OnSignin for the
+// session that was just issued. Hook errors and panics are logged but do
+// NOT fail the request.
 func (a *TheAuth) consumeMagicLink(ctx context.Context, token string) (sessionToken string, user *User, err error) {
-	return a.magicSvc.Consume(ctx, token)
+	sessionToken, user, created, err := a.magicSvc.Consume(ctx, token)
+	if err != nil {
+		return sessionToken, user, err
+	}
+	if created {
+		a.fireOnSignup(ctx, user, SignupMethodMagicLink)
+	}
+	if sess := a.sessionFromToken(ctx, sessionToken); sess != nil {
+		a.fireOnSignin(ctx, user, sess)
+	}
+	return sessionToken, user, nil
 }
 
 // ---------- Password forwarders ----------

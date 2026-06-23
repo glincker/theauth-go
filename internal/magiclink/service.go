@@ -113,17 +113,20 @@ func (s *Service) RequestForTest(ctx context.Context, emailAddr string) (string,
 // Consume atomically marks a magic-link as used, finds-or-creates the
 // corresponding user, marks their email verified, and issues a fresh
 // session. Returns models.ErrInvalidToken for unknown tokens and
-// models.ErrMagicLinkExpired when the link's TTL has elapsed.
-func (s *Service) Consume(ctx context.Context, token string) (sessionToken string, user *models.User, err error) {
+// models.ErrMagicLinkExpired when the link's TTL has elapsed. The
+// created return reports whether the user row was newly created during
+// this call (v2.5: lets the root forwarder distinguish OnSignup from
+// OnSignin dispatch).
+func (s *Service) Consume(ctx context.Context, token string) (sessionToken string, user *models.User, created bool, err error) {
 	ml, err := s.storage.ConsumeMagicLink(ctx, crypto.HashToken(token))
 	if errors.Is(err, models.ErrStorageNotFound) {
-		return "", nil, models.ErrInvalidToken
+		return "", nil, false, models.ErrInvalidToken
 	}
 	if err != nil {
-		return "", nil, err
+		return "", nil, false, err
 	}
 	if ml.ExpiresAt.Before(time.Now()) {
-		return "", nil, models.ErrMagicLinkExpired
+		return "", nil, false, models.ErrMagicLinkExpired
 	}
 	// Find-or-create user
 	u, err := s.storage.UserByEmail(ctx, ml.Email)
@@ -137,11 +140,12 @@ func (s *Service) Consume(ctx context.Context, token string) (sessionToken strin
 			UpdatedAt:       now,
 		})
 		if cerr != nil {
-			return "", nil, cerr
+			return "", nil, false, cerr
 		}
 		u = &newUser
+		created = true
 	} else if err != nil {
-		return "", nil, err
+		return "", nil, false, err
 	} else if u.EmailVerifiedAt == nil {
 		// Existing user, mark verified now
 		if err := s.storage.MarkEmailVerified(ctx, u.ID); err != nil {
@@ -150,14 +154,14 @@ func (s *Service) Consume(ctx context.Context, token string) (sessionToken strin
 	}
 	sessToken, _, err := s.sessions.Issue(ctx, *u, "", "")
 	if err != nil {
-		return "", nil, err
+		return "", nil, false, err
 	}
 	s.auditEm.EmitAudit(ctx, "magic_link.verified", models.TargetRef{Type: "user", ID: u.ID.String()}, nil)
 	s.auditEm.EmitAudit(ctx, "user.login", models.TargetRef{Type: "user", ID: u.ID.String()}, map[string]any{
 		"auth_method": "magic_link",
 	})
 	slog.Info("theauth: magic link consumed", "user_id", u.ID.String(), "email", u.Email)
-	return sessToken, u, nil
+	return sessToken, u, created, nil
 }
 
 // hashEmailForAudit returns sha256(lowercase(email)) hex-encoded. Inlined
