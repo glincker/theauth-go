@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security disclosure (private)
+    url: https://github.com/glincker/theauth-go/security/advisories/new
+    about: Report a vulnerability privately via GitHub Security Advisories.
+  - name: Q&A and ideas
+    url: https://github.com/glincker/theauth-go/discussions
+    about: Ask questions, share patterns, propose roadmap items.
+  - name: Documentation
+    url: https://theauth.dev
+    about: Getting started, concepts, guides, configuration, error catalog.
