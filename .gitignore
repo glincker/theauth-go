@@ -24,7 +24,16 @@ docs-site/site/
 
 # OS
 .DS_Store
+Thumbs.db
 
 # coverage
 coverage.out
 coverage.html
+
+# logs (MCP servers, tooling, scratch)
+*.log
+
+# scratch / internal cleanup notes (never commit)
+*-CLEANUP-MAP.md
+scratch/
+tmp/

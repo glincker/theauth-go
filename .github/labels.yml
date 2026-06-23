@@ -1,0 +1,111 @@
+# Label taxonomy synced by .github/workflows/labels.yml
+# Format consumed by EndBug/label-sync.
+
+# ---- type ----------------------------------------------------------------
+- name: "type/bug"
+  color: "d73a4a"
+  description: Something is broken or behaves unexpectedly
+- name: "type/feature"
+  color: "0e8a16"
+  description: New capability or ergonomic improvement
+- name: "type/docs"
+  color: "0075ca"
+  description: Documentation only
+- name: "type/refactor"
+  color: "c2e0c6"
+  description: Internal change with no behavior delta
+- name: "type/perf"
+  color: "fbca04"
+  description: Performance work
+- name: "type/test"
+  color: "bfd4f2"
+  description: Tests and fixtures
+- name: "type/security"
+  color: "5319e7"
+  description: Security-related (non-vulnerability)
+- name: "type/chore"
+  color: "cccccc"
+  description: Tooling, CI, release plumbing
+
+# ---- area (auth surfaces) ------------------------------------------------
+- name: "area/magic-link"
+  color: "1d76db"
+- name: "area/password"
+  color: "1d76db"
+- name: "area/oauth-provider"
+  color: "1d76db"
+- name: "area/oauth-as"
+  color: "1d76db"
+  description: OAuth 2.1 authorization server
+- name: "area/mcp"
+  color: "1d76db"
+  description: MCP authorization / mcpresource module
+- name: "area/agents"
+  color: "1d76db"
+  description: Agent identities and delegation
+- name: "area/webauthn"
+  color: "1d76db"
+- name: "area/totp"
+  color: "1d76db"
+- name: "area/saml"
+  color: "1d76db"
+- name: "area/scim"
+  color: "1d76db"
+- name: "area/rbac"
+  color: "1d76db"
+- name: "area/middleware"
+  color: "1d76db"
+- name: "area/storage"
+  color: "1d76db"
+- name: "area/observability"
+  color: "1d76db"
+- name: "area/admin-api"
+  color: "1d76db"
+- name: "area/examples"
+  color: "1d76db"
+- name: "area/ci"
+  color: "1d76db"
+
+# ---- status --------------------------------------------------------------
+- name: "needs-triage"
+  color: "ededed"
+- name: "needs-repro"
+  color: "ededed"
+- name: "needs-design"
+  color: "ededed"
+- name: "blocked"
+  color: "b60205"
+- name: "wontfix"
+  color: "ffffff"
+- name: "duplicate"
+  color: "cfd3d7"
+- name: "stale"
+  color: "cccccc"
+
+# ---- priority ------------------------------------------------------------
+- name: "priority/critical"
+  color: "b60205"
+- name: "priority/high"
+  color: "d93f0b"
+- name: "priority/medium"
+  color: "fbca04"
+- name: "priority/low"
+  color: "c5def5"
+
+# ---- semver impact -------------------------------------------------------
+- name: "semver/breaking"
+  color: "b60205"
+  description: Public surface change requiring a major bump
+- name: "semver/feature"
+  color: "0e8a16"
+- name: "semver/patch"
+  color: "0075ca"
+
+# ---- community -----------------------------------------------------------
+- name: "good first issue"
+  color: "7057ff"
+  description: Good for newcomers
+- name: "help wanted"
+  color: "008672"
+- name: "discussion"
+  color: "d4c5f9"
