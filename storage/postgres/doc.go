@@ -4,6 +4,6 @@
 //
 // Migrations live under migrations/ and are append-only: a renamed
 // column ships as a new migration. Use the in-package New constructor
-// with a pgxpool.Pool. See STABILITY.md for the rules that govern future
+// with a pgxpool.Pool. See docs/STABILITY.md for the rules that govern future
 // schema and query changes.
 package postgres
