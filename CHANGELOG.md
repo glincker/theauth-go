@@ -6,6 +6,21 @@ adheres to [Semantic Versioning](https://semver.org/) from v1.0 forward.
 
 ## [Unreleased]
 
+### Added
+
+- **`Config.LifecycleHooks` surface (#76, partial).** New optional hook bundle
+  lets consumers react to authentication-lifecycle events without forking
+  handlers or wrapping endpoints at the HTTP boundary. Six hook fields land
+  (`OnSignup`, `OnSignin`, `OnPasswordChange`, `OnMFAEnabled`, `OnTokenIssued`,
+  `OnOrgSwitch`), plus `SignupMethod` and `MFAKind` enums. Errors and panics
+  are recovered and logged; the triggering request never fails. This release
+  wires `OnSignup` and `OnSignin` at the password path; the remaining hook
+  points (magic-link, OAuth, passkey, SAML signup; password change; MFA
+  enable; token issuance; org switch) ship incrementally in v2.5.x without
+  API change. See `LifecycleHooks` doc comment for semantics.
+- **`Auth.UserByID` (#77, partial).** Public lookup that previously forced
+  consumers to reach into storage directly. Forwards to `Storage.UserByID`.
+
 ### Fixed
 
 - **`RequireAuth` now emits RFC 7807 problem+json on 401 (#78).** Previously

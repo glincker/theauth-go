@@ -259,3 +259,128 @@ func TestConsumeMagicLinkTwiceFails(t *testing.T) {
 		t.Fatal("expected error on second consume")
 	}
 }
+
+// TestLifecycleHooks_PasswordSignupAndSignin proves the v2.5 LifecycleHooks
+// surface fires OnSignup once at password signup and OnSignin once at the
+// subsequent signin. Covers issue #76. Uses the HTTP surface end-to-end so
+// the assertion exercises the wiring at the same boundary consumers do.
+func TestLifecycleHooks_PasswordSignupAndSignin(t *testing.T) {
+	store := memory.New()
+	var (
+		mu             sync.Mutex
+		signupCount    int
+		signinCount    int
+		signupMethod   theauth.SignupMethod
+		signupUserID   theauth.ULID
+		signinUserID   theauth.ULID
+		seenSessionID  theauth.ULID
+	)
+
+	a, err := theauth.New(theauth.Config{
+		Storage:           store,
+		BaseURL:           "http://localhost",
+		SessionTTL:        time.Hour,
+		MagicLinkTTL:      15 * time.Minute,
+		RateLimitPerIP:    100,
+		RateLimitPerEmail: 100,
+		LifecycleHooks: &theauth.LifecycleHooks{
+			OnSignup: func(ctx context.Context, user *theauth.User, method theauth.SignupMethod) error {
+				mu.Lock()
+				signupCount++
+				signupMethod = method
+				signupUserID = user.ID
+				mu.Unlock()
+				return nil
+			},
+			OnSignin: func(ctx context.Context, user *theauth.User, sess *theauth.Session) error {
+				mu.Lock()
+				signinCount++
+				signinUserID = user.ID
+				seenSessionID = sess.ID
+				mu.Unlock()
+				return nil
+			},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+
+	user, _, err := theauth.SignupWithPasswordForTest(a, ctx, "hooks@y.com", "correct-horse-battery-staple")
+	if err != nil {
+		t.Fatalf("signup: %v", err)
+	}
+	mu.Lock()
+	if signupCount != 1 || signinCount != 0 {
+		t.Fatalf("after signup: want signup=1 signin=0; got signup=%d signin=%d", signupCount, signinCount)
+	}
+	if signupMethod != theauth.SignupMethodPassword {
+		t.Fatalf("OnSignup method: want %q; got %q", theauth.SignupMethodPassword, signupMethod)
+	}
+	if signupUserID != user.ID {
+		t.Fatalf("OnSignup user id mismatch: want %v; got %v", user.ID, signupUserID)
+	}
+	mu.Unlock()
+
+	if _, _, err := theauth.SigninWithPasswordForTest(a, ctx, "hooks@y.com", "correct-horse-battery-staple", "ua", ""); err != nil {
+		t.Fatalf("signin: %v", err)
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if signinCount != 1 {
+		t.Fatalf("after signin: want signin=1; got %d", signinCount)
+	}
+	if signinUserID != user.ID {
+		t.Fatalf("OnSignin user id mismatch: want %v; got %v", user.ID, signinUserID)
+	}
+	if seenSessionID == (theauth.ULID{}) {
+		t.Fatal("OnSignin session was zero ULID")
+	}
+}
+
+// TestLifecycleHooks_PanicRecovery proves a panicking hook does not bring
+// down the request that triggered it. Validates the runLifecycleHook
+// recovery semantic documented on LifecycleHooks.
+func TestLifecycleHooks_PanicRecovery(t *testing.T) {
+	store := memory.New()
+	a, err := theauth.New(theauth.Config{
+		Storage:           store,
+		BaseURL:           "http://localhost",
+		SessionTTL:        time.Hour,
+		MagicLinkTTL:      15 * time.Minute,
+		RateLimitPerIP:    100,
+		RateLimitPerEmail: 100,
+		LifecycleHooks: &theauth.LifecycleHooks{
+			OnSignup: func(ctx context.Context, user *theauth.User, method theauth.SignupMethod) error {
+				panic("intentional test panic")
+			},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := theauth.SignupWithPasswordForTest(a, context.Background(), "panic@y.com", "correct-horse-battery-staple"); err != nil {
+		t.Fatalf("signup must succeed despite hook panic; got %v", err)
+	}
+}
+
+// TestUserByID covers the v2.5 public lookup that previously forced
+// consumers to reach into storage directly.
+func TestUserByID(t *testing.T) {
+	a, store := newTestAuth(t)
+	ctx := context.Background()
+	created, _ := store.CreateUser(ctx, theauth.User{
+		ID:        ulid.New(),
+		Email:     "lookup@y.com",
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+	})
+	got, err := a.UserByID(ctx, created.ID)
+	if err != nil {
+		t.Fatalf("UserByID: %v", err)
+	}
+	if got == nil || got.Email != "lookup@y.com" {
+		t.Fatalf("UserByID returned %+v", got)
+	}
+}

@@ -1,6 +1,9 @@
 package theauth
 
-import "time"
+import (
+	"context"
+	"time"
+)
 
 // config.go holds the concrete sub-config types that hang off Config.
 // Moved from theauth.go into config.go in PR H (2026-06-22) to bring
@@ -154,6 +157,40 @@ type WebAuthnConfig struct {
 	// ChallengeTTL caps how long the in-memory challenge session is valid.
 	// Defaults to 5 minutes; challenges are single-use regardless.
 	ChallengeTTL time.Duration
+}
+
+// LifecycleHooks lets consumers react to authentication-lifecycle events
+// without forking handlers or wrapping every endpoint at the HTTP boundary.
+// All fields are optional; nil hooks are silent no-ops. Hooks run
+// synchronously on the request goroutine after the underlying operation
+// succeeds and before the HTTP response is written.
+//
+// A non-nil error returned from a hook is logged at Warn level via slog and
+// does NOT fail the request: the request that triggered the hook has already
+// succeeded, and rolling back is not possible without coordinated storage
+// transactions. Use hooks for fire-and-observe behavior (provisioning,
+// analytics, notifications). For request-failing side effects, wrap at the
+// handler boundary.
+//
+// Panics in hooks are recovered and logged via slog; the request continues
+// as if the hook had returned nil.
+//
+// OnTokenIssued is the only hook permitted to mutate state: it receives the
+// claims map about to be signed into a JWT access token and returns the
+// updated map. Returning a non-nil error from OnTokenIssued does fail token
+// issuance because the token has not yet been minted.
+//
+// Wiring status (v2.5):
+//   - OnSignup, OnSignin: wired at email + password.
+//   - OnPasswordChange, OnMFAEnabled, OnTokenIssued, OnOrgSwitch: reserved.
+//     Wiring lands incrementally in v2.5.x without API change.
+type LifecycleHooks struct {
+	OnSignup         func(ctx context.Context, user *User, method SignupMethod) error
+	OnSignin         func(ctx context.Context, user *User, sess *Session) error
+	OnPasswordChange func(ctx context.Context, user *User) error
+	OnMFAEnabled     func(ctx context.Context, user *User, kind MFAKind) error
+	OnTokenIssued    func(ctx context.Context, claims map[string]any) (map[string]any, error)
+	OnOrgSwitch      func(ctx context.Context, user *User, orgID string) error
 }
 
 // TOTPConfig wires the second-factor TOTP behavior. Algorithm is fixed at
