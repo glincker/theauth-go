@@ -440,6 +440,109 @@ func TestLifecycleHooks_MagicLinkConsumeFiresHooks(t *testing.T) {
 	}
 }
 
+// TestTenancy_AutoCreatePersonalOrg proves the v2.5 TenancyConfig auto-
+// provisions a personal organization on signup, adds the user as owner,
+// and sets the session's active organization. Covers issue #77 auto-org.
+func TestTenancy_AutoCreatePersonalOrg(t *testing.T) {
+	store := memory.New()
+	a, err := theauth.New(theauth.Config{
+		Storage:           store,
+		BaseURL:           "http://localhost",
+		SessionTTL:        time.Hour,
+		MagicLinkTTL:      15 * time.Minute,
+		RateLimitPerIP:    100,
+		RateLimitPerEmail: 100,
+		Organizations:     &theauth.OrganizationsConfig{},
+		Tenancy: &theauth.TenancyConfig{
+			AutoCreatePersonalOrg: true,
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+
+	user, _, err := theauth.SignupWithPasswordForTest(a, ctx, "tenant@y.com", "correct-horse-battery-staple")
+	if err != nil {
+		t.Fatalf("signup: %v", err)
+	}
+
+	orgs, err := a.ListUserOrganizations(ctx, user.ID)
+	if err != nil {
+		t.Fatalf("ListUserOrganizations: %v", err)
+	}
+	if len(orgs) != 1 {
+		t.Fatalf("want 1 auto-provisioned org; got %d", len(orgs))
+	}
+	if orgs[0].Name != "tenant@y.com" {
+		t.Fatalf("want default org name = email; got %q", orgs[0].Name)
+	}
+	members, err := a.ListOrganizationMembers(ctx, orgs[0].ID)
+	if err != nil {
+		t.Fatalf("ListOrganizationMembers: %v", err)
+	}
+	if len(members) != 1 || members[0].UserID != user.ID || members[0].Role != "owner" {
+		t.Fatalf("want single owner member; got %+v", members)
+	}
+}
+
+// TestTenancy_CustomNamerAndSlugger proves the Fn customization knobs are
+// respected.
+func TestTenancy_CustomNamerAndSlugger(t *testing.T) {
+	store := memory.New()
+	a, err := theauth.New(theauth.Config{
+		Storage:           store,
+		BaseURL:           "http://localhost",
+		SessionTTL:        time.Hour,
+		MagicLinkTTL:      15 * time.Minute,
+		RateLimitPerIP:    100,
+		RateLimitPerEmail: 100,
+		Organizations:     &theauth.OrganizationsConfig{},
+		Tenancy: &theauth.TenancyConfig{
+			AutoCreatePersonalOrg: true,
+			PersonalOrgNameFn: func(u *theauth.User) string {
+				return "Workspace for " + u.Email
+			},
+			PersonalOrgSlugFn: func(u *theauth.User) string {
+				return "ws-" + u.ID.String()[:8]
+			},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	user, _, err := theauth.SignupWithPasswordForTest(a, ctx, "custom@y.com", "correct-horse-battery-staple")
+	if err != nil {
+		t.Fatal(err)
+	}
+	orgs, _ := a.ListUserOrganizations(ctx, user.ID)
+	if len(orgs) != 1 {
+		t.Fatalf("want 1 org; got %d", len(orgs))
+	}
+	if orgs[0].Name != "Workspace for custom@y.com" {
+		t.Fatalf("custom name: %q", orgs[0].Name)
+	}
+}
+
+// TestTenancy_DisabledByDefault proves the library does NOT auto-create
+// any organization when Tenancy is nil (back-compat guarantee).
+func TestTenancy_DisabledByDefault(t *testing.T) {
+	a, _ := newTestAuth(t)
+	ctx := context.Background()
+	user, _, err := theauth.SignupWithPasswordForTest(a, ctx, "noauto@y.com", "correct-horse-battery-staple")
+	if err != nil {
+		t.Fatal(err)
+	}
+	orgs, err := a.ListUserOrganizations(ctx, user.ID)
+	if err != nil {
+		t.Fatalf("ListUserOrganizations: %v", err)
+	}
+	if len(orgs) != 0 {
+		t.Fatalf("Tenancy off: want 0 orgs; got %d", len(orgs))
+	}
+}
+
 // TestUserByID covers the v2.5 public lookup that previously forced
 // consumers to reach into storage directly.
 func TestUserByID(t *testing.T) {

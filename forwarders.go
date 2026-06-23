@@ -189,6 +189,7 @@ func (a *TheAuth) consumeMagicLink(ctx context.Context, token string) (sessionTo
 		return sessionToken, user, err
 	}
 	if created {
+		a.autoProvisionPersonalOrg(ctx, user, sessionToken)
 		a.fireOnSignup(ctx, user, SignupMethodMagicLink)
 	}
 	if sess := a.sessionFromToken(ctx, sessionToken); sess != nil {
@@ -211,12 +212,13 @@ func validateEmail(raw string) (string, error) {
 // panics are logged but do NOT fail the request; the user has already been
 // created.
 func (a *TheAuth) signupWithPassword(ctx context.Context, emailAddr, pw string) (*User, string, error) {
-	user, sess, err := a.passwordSvc.Signup(ctx, emailAddr, pw)
+	user, token, err := a.passwordSvc.Signup(ctx, emailAddr, pw)
 	if err != nil {
-		return user, sess, err
+		return user, token, err
 	}
+	a.autoProvisionPersonalOrg(ctx, user, token)
 	a.fireOnSignup(ctx, user, SignupMethodPassword)
-	return user, sess, nil
+	return user, token, nil
 }
 
 // signinWithPassword verifies credentials and issues a session. Forwards

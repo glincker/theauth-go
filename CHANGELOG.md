@@ -21,8 +21,17 @@ adheres to [Semantic Versioning](https://semver.org/) from v1.0 forward.
   callback both distinguish new vs returning users via an internal flag so
   OnSignup only fires when the user row was actually created. See
   `LifecycleHooks` doc comment for semantics.
-- **`Auth.UserByID` (#77, partial).** Public lookup that previously forced
+- **`Auth.UserByID` (#77).** Public lookup that previously forced
   consumers to reach into storage directly. Forwards to `Storage.UserByID`.
+- **`Config.Tenancy` auto-provisioning (#77).** New `TenancyConfig` lets
+  consumers opt into automatic personal-organization creation on signup.
+  When `Tenancy.AutoCreatePersonalOrg = true` and `Organizations` is
+  enabled, every signup automatically creates a personal organization,
+  adds the user as its owner, and sets the session's active organization
+  to it. Closes the SQL-seeding friction the consumer feedback flagged.
+  `PersonalOrgNameFn` and `PersonalOrgSlugFn` knobs override the defaults
+  (`user.Email` and `"personal-" + lowercased ULID`). Wired at the same
+  three signup paths as the hook surface (password, magic-link, OAuth).
 
 ### Fixed
 
