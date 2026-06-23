@@ -13,7 +13,9 @@ package theauth
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"sort"
+	"strings"
 	"sync"
 
 	"github.com/glincker/theauth-go/internal/models"
@@ -142,6 +144,47 @@ func (a *TheAuth) ListUserOrganizations(ctx context.Context, userID ULID) ([]Org
 // to orgsSvc.SetActive.
 func (a *TheAuth) SetActiveOrganization(ctx context.Context, sessionID ULID, orgID *ULID) error {
 	return a.orgsSvc.SetActive(ctx, sessionID, orgID)
+}
+
+// autoProvisionPersonalOrg is the v2.5 tenancy auto-provisioner. Called by
+// the signup forwarders when the user row is freshly created. Creates a
+// personal organization, adds the user as owner (CreateOrganization
+// already does that internally), and sets it as the session's active org.
+// Silent no-op when Tenancy is nil, Tenancy.AutoCreatePersonalOrg is
+// false, Organizations is not enabled, or any required service is nil.
+// Errors are logged but do NOT fail the surrounding signup; the user has
+// already been created and a missing personal org is recoverable.
+func (a *TheAuth) autoProvisionPersonalOrg(ctx context.Context, user *User, sessionToken string) {
+	if a.tenancyCfg == nil || !a.tenancyCfg.AutoCreatePersonalOrg || a.orgsSvc == nil || user == nil {
+		return
+	}
+	name := user.Email
+	if a.tenancyCfg.PersonalOrgNameFn != nil {
+		name = a.tenancyCfg.PersonalOrgNameFn(user)
+	}
+	if name == "" {
+		name = "Personal"
+	}
+	slug := "personal-" + strings.ToLower(user.ID.String())
+	if a.tenancyCfg.PersonalOrgSlugFn != nil {
+		slug = a.tenancyCfg.PersonalOrgSlugFn(user)
+	}
+	org, err := a.orgsSvc.Create(ctx, name, slug, user.ID)
+	if err != nil {
+		slog.WarnContext(ctx, "theauth: auto-create personal org failed", "user_id", user.ID.String(), "err", err.Error())
+		return
+	}
+	if sessionToken == "" {
+		return
+	}
+	sess := a.sessionFromToken(ctx, sessionToken)
+	if sess == nil {
+		return
+	}
+	orgID := org.ID
+	if err := a.orgsSvc.SetActive(ctx, sess.ID, &orgID); err != nil {
+		slog.WarnContext(ctx, "theauth: set active personal org failed", "user_id", user.ID.String(), "org_id", org.ID.String(), "err", err.Error())
+	}
 }
 
 // ---------- RBAC ----------

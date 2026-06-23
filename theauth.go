@@ -167,6 +167,14 @@ type Config struct {
 	// HTTP boundary. Optional; nil is a silent no-op. See the LifecycleHooks
 	// type doc for semantics, error handling, and current wiring status.
 	LifecycleHooks *LifecycleHooks
+
+	// Tenancy (v2.5) wires opt-in tenant-provisioning behavior. When
+	// Tenancy.AutoCreatePersonalOrg is true and Config.Organizations is
+	// also non-nil, every signup automatically creates a personal
+	// organization, adds the user as its owner, and sets the session's
+	// active organization to it. Removes the SQL-seeding friction
+	// consumers previously hit on first signup. Nil = no auto-provisioning.
+	Tenancy *TenancyConfig
 }
 
 // PasswordPolicyConfig holds optional password-verification extensions.
@@ -270,6 +278,10 @@ type TheAuth struct {
 	// MAY still be nil; the runHook helper handles that.
 	lifecycle *LifecycleHooks
 
+	// v2.5 tenancy auto-provisioning policy. Nil-safe: forwarders gate on
+	// nil before calling autoProvisionPersonalOrg.
+	tenancyCfg *TenancyConfig
+
 	// hooks is the consumer-supplied observability bundle. Never nil: the
 	// constructor substitutes &Hooks{} when Config.Observability is nil so
 	// internal services can call hooks.StartSpan / hooks.Counter without
@@ -363,6 +375,7 @@ func New(cfg Config) (*TheAuth, error) {
 		accountUX:                  cfg.AccountUX,
 		hooks:                      coalesceHooks(cfg.Observability),
 		lifecycle:                  coalesceLifecycleHooks(cfg.LifecycleHooks),
+		tenancyCfg:                 cfg.Tenancy,
 	}
 
 	if err := wireServices(a, cfg, providers, sp); err != nil {

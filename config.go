@@ -193,6 +193,30 @@ type LifecycleHooks struct {
 	OnOrgSwitch      func(ctx context.Context, user *User, orgID string) error
 }
 
+// TenancyConfig (v2.5) wires opt-in tenant-provisioning behavior so
+// consumers do not need to seed organization_members + roles + active-org
+// SQL on every fresh signup. Only takes effect when Config.Organizations
+// is also non-nil; otherwise auto-provisioning silently no-ops.
+type TenancyConfig struct {
+	// AutoCreatePersonalOrg controls whether a personal organization is
+	// created automatically on every signup that goes through the wired
+	// hook paths (password, magic-link, OAuth callback). The user is
+	// added as the organization owner and the session's active
+	// organization is set to it. When false (default) the library does
+	// not touch organizations at signup; consumers wire their own
+	// provisioning logic via LifecycleHooks.OnSignup.
+	AutoCreatePersonalOrg bool
+
+	// PersonalOrgNameFn produces the human-readable organization name.
+	// Default: the user's email address.
+	PersonalOrgNameFn func(*User) string
+
+	// PersonalOrgSlugFn produces the URL-safe slug. Default: the lowercased
+	// ULID of the user prefixed with "personal-" (e.g. "personal-01h...");
+	// guarantees uniqueness without requiring a slug-conflict retry loop.
+	PersonalOrgSlugFn func(*User) string
+}
+
 // TOTPConfig wires the second-factor TOTP behavior. Algorithm is fixed at
 // SHA-1 / 30s / 6 digits for compatibility with Google Authenticator, Authy,
 // 1Password, and every other mainstream authenticator app. Skew is fixed at

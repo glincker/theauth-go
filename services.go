@@ -142,6 +142,7 @@ func (a *TheAuth) callbackOAuth(ctx context.Context, providerName, code, state, 
 		return sessionToken, user, err
 	}
 	if created {
+		a.autoProvisionPersonalOrg(ctx, user, sessionToken)
 		a.fireOnSignup(ctx, user, SignupMethodOAuth)
 	}
 	if sess := a.sessionFromToken(ctx, sessionToken); sess != nil {
