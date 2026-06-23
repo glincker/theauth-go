@@ -41,18 +41,29 @@ func (a *TheAuth) Authn() func(http.Handler) http.Handler {
 // RequireAuth runs Authn, then rejects requests that don't have a FULL
 // session. Pending_2fa sessions are treated as unauthorized here. The two
 // TOTP verify routes opt in to RequirePendingOrFull instead.
+//
+// Errors are emitted as RFC 7807 problem+json with a WWW-Authenticate header
+// per RFC 7235. Two failure codes are surfaced:
+//
+//   - auth.unauthenticated when no session cookie was presented or it failed
+//     validation (cookie missing, expired, revoked, or storage rejected).
+//   - auth.step_up_required when a pending_2fa session is present and the
+//     caller must complete the second factor before proceeding.
+//
+// Frontends can distinguish the step-up case from a fresh login without
+// special-casing string bodies.
 func (a *TheAuth) RequireAuth() func(http.Handler) http.Handler {
 	authn := a.Authn()
 	return func(next http.Handler) http.Handler {
 		return authn(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			sess, ok := SessionFromContext(r.Context())
 			if !ok {
-				http.Error(w, "unauthorized", http.StatusUnauthorized)
+				writeUnauthenticated(w, "auth.unauthenticated", "Missing or invalid session")
 				return
 			}
 			// AuthLevel is "" on pre-v0.5 rows; treat as full for back compat.
 			if sess.AuthLevel != "" && sess.AuthLevel != AuthLevelFull {
-				http.Error(w, "unauthorized", http.StatusUnauthorized)
+				writeUnauthenticated(w, "auth.step_up_required", "Session requires second-factor verification")
 				return
 			}
 			next.ServeHTTP(w, r)
@@ -68,7 +79,7 @@ func (a *TheAuth) RequirePendingOrFull() func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return authn(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if _, ok := SessionFromContext(r.Context()); !ok {
-				http.Error(w, "unauthorized", http.StatusUnauthorized)
+				writeUnauthenticated(w, "auth.unauthenticated", "Missing or invalid session")
 				return
 			}
 			next.ServeHTTP(w, r)
@@ -91,17 +102,17 @@ func (a *TheAuth) RequirePermission(perms ...string) func(http.Handler) http.Han
 	return func(next http.Handler) http.Handler {
 		return authn(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if a.rbacCfg == nil {
-				http.Error(w, "rbac disabled", http.StatusInternalServerError)
+				writeProblemJSON(w, http.StatusInternalServerError, "rbac.disabled", "RBAC is not enabled in Config", "")
 				return
 			}
 			user, okU := UserFromContext(r.Context())
 			sess, okS := SessionFromContext(r.Context())
 			if !okU || !okS || user == nil || sess == nil {
-				http.Error(w, "unauthorized", http.StatusUnauthorized)
+				writeUnauthenticated(w, "auth.unauthenticated", "Missing or invalid session")
 				return
 			}
 			if sess.AuthLevel != "" && sess.AuthLevel != AuthLevelFull {
-				http.Error(w, "unauthorized", http.StatusUnauthorized)
+				writeUnauthenticated(w, "auth.step_up_required", "Session requires second-factor verification")
 				return
 			}
 			if sess.ActiveOrganizationID == nil {
@@ -137,7 +148,7 @@ func (a *TheAuth) RequirePermission(perms ...string) func(http.Handler) http.Han
 				cache.set = permissionSetFromList(list)
 			})
 			if cache.err != nil {
-				http.Error(w, "internal error", http.StatusInternalServerError)
+				writeProblemJSON(w, http.StatusInternalServerError, "rbac.internal_error", "Permission lookup failed", "")
 				return
 			}
 			ctx := withPermissionCache(r.Context(), cache)
@@ -161,6 +172,15 @@ func writeProblemJSON(w http.ResponseWriter, status int, code, detail, instance 
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(status)
 	_, _ = w.Write(problemBody(status, code, detail, instance))
+}
+
+// writeUnauthenticated emits a 401 with both the RFC 7807 body and an
+// RFC 7235 WWW-Authenticate header. Session-cookie auth is the primary
+// scheme; consumers using bearer tokens against the OAuth AS / mcpresource
+// surface get the Bearer challenge from those packages instead.
+func writeUnauthenticated(w http.ResponseWriter, code, detail string) {
+	w.Header().Set("WWW-Authenticate", `Session realm="theauth", error="`+code+`"`)
+	writeProblemJSON(w, http.StatusUnauthorized, code, detail, "")
 }
 
 func problemBody(status int, code, detail, instance string) []byte {
