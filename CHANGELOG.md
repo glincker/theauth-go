@@ -6,6 +6,12 @@ adheres to [Semantic Versioning](https://semver.org/) from v1.0 forward.
 
 ## [Unreleased]
 
+## [2.5.0-rc.1] - 2026-06-22
+
+The "consumer feedback" release. Closes the three highest-impact friction points raised in the 2026-06-22 consumer-feedback session: the hook surface for lifecycle events, opt-in automatic tenant provisioning, and a unified RFC 7807 error envelope across all auth/RBAC middleware. All additions are fully additive: downstream code compiles unchanged.
+
+This is a release candidate so consumers can road-test the new surface (LifecycleHooks contract, TenancyConfig auto-provisioning, error envelope shape) before the stable v2.5.0 tag. The remaining hook wiring (passkey, SAML, OnPasswordChange, OnMFAEnabled, OnTokenIssued, OnOrgSwitch) and the selective re-exports work (#79) ship in subsequent v2.5.x patches without API change.
+
 ### Added
 
 - **`Config.LifecycleHooks` surface (#76, partial).** New optional hook bundle
