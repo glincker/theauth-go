@@ -184,6 +184,23 @@ type WebAuthnConfig struct {
 //   - OnSignup, OnSignin: wired at email + password.
 //   - OnPasswordChange, OnMFAEnabled, OnTokenIssued, OnOrgSwitch: reserved.
 //     Wiring lands incrementally in v2.5.x without API change.
+// OAuthConflictPayload is passed to LifecycleHooks.OnOAuthConflict when a
+// sign-in OAuth email matches an existing user who registered via a different
+// provider. The consumer creates a verification challenge and returns the URL
+// the browser should be redirected to.
+type OAuthConflictPayload struct {
+	Provider        string
+	ProviderUserID  string
+	ProviderEmail   string
+	ProviderName    string
+	ProviderAvatar  string
+	ExistingUserID  string // ULID string of the existing user
+	AccessTokenEnc  []byte // AES-GCM encrypted provider access token
+	RefreshTokenEnc []byte // AES-GCM encrypted provider refresh token (may be nil)
+	ExpiresAt       *time.Time
+	Scope           string
+}
+
 type LifecycleHooks struct {
 	OnSignup         func(ctx context.Context, user *User, method SignupMethod) error
 	OnSignin         func(ctx context.Context, user *User, sess *Session) error
@@ -191,6 +208,11 @@ type LifecycleHooks struct {
 	OnMFAEnabled     func(ctx context.Context, user *User, kind MFAKind) error
 	OnTokenIssued    func(ctx context.Context, claims map[string]any) (map[string]any, error)
 	OnOrgSwitch      func(ctx context.Context, user *User, orgID string) error
+	// OnOAuthConflict fires when a sign-in OAuth email matches an existing user
+	// registered via a different provider. The hook must create a short-lived
+	// verification challenge and return the redirect URL for it. When nil the
+	// sign-in proceeds normally (silent provider linking).
+	OnOAuthConflict func(ctx context.Context, p OAuthConflictPayload) (redirectURL string, err error)
 }
 
 // TenancyConfig (v2.5) wires opt-in tenant-provisioning behavior so

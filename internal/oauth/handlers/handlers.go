@@ -10,10 +10,12 @@ package handlers
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"time"
 
 	"github.com/glincker/theauth-go/internal/httpx"
+	"github.com/glincker/theauth-go/internal/models"
 	"github.com/go-chi/chi/v5"
 )
 
@@ -121,6 +123,11 @@ func (h *Handler) handleCallback(w http.ResponseWriter, r *http.Request) {
 
 	sessToken, err := h.svc.Callback(r.Context(), name, code, state, r.UserAgent(), httpx.ClientIP(r))
 	if err != nil {
+		var conflictRedirect *models.OAuthConflictRedirectError
+		if errors.As(err, &conflictRedirect) {
+			http.Redirect(w, r, conflictRedirect.URL, http.StatusFound)
+			return
+		}
 		http.Error(w, "oauth callback failed", http.StatusBadRequest)
 		return
 	}

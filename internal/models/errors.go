@@ -204,6 +204,18 @@ func (e *IdentityConflictError) Unwrap() error {
 	return ErrIdentityConflict
 }
 
+// OAuthConflictRedirectError is returned (not wrapped) by oauth.Service.Callback
+// when a sign-in email matches an existing user who registered via a different
+// provider AND an OnOAuthConflict lifecycle hook is configured. The HTTP layer
+// detects it and issues a 302 to URL instead of a generic 400.
+type OAuthConflictRedirectError struct {
+	URL string
+}
+
+func (e *OAuthConflictRedirectError) Error() string {
+	return "theauth: oauth conflict redirect to " + e.URL
+}
+
 // Stable error codes that callers can switch on. New endpoints return
 // TheAuthError; old endpoints keep returning the sentinels above. Lifted
 // to the models package (PR D architecture reorg, 2026-06-20) so internal

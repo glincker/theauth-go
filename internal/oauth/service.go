@@ -113,35 +113,65 @@ type SessionIssuer interface {
 	Issue(ctx context.Context, user models.User, userAgent, ip string) (string, models.Session, error)
 }
 
+// findBranch records which resolution path findOrCreateUser took so Callback
+// can decide whether to fire the OnOAuthConflict hook.
+type findBranch int
+
+const (
+	foundByProvider findBranch = iota // existing oauth_accounts row for this provider
+	foundByEmail                      // user found by email; provider not yet linked
+	brandNewUser                      // no prior record; new user was created
+)
+
+// ConflictPayload carries provider data when an email-matched user is found.
+// Mirrors theauth.OAuthConflictPayload; defined locally to avoid an import
+// cycle between internal/oauth and the root package.
+type ConflictPayload struct {
+	Provider        string
+	ProviderUserID  string
+	ProviderEmail   string
+	ProviderName    string
+	ProviderAvatar  string
+	ExistingUserID  string
+	AccessTokenEnc  []byte
+	RefreshTokenEnc []byte
+	ExpiresAt       *time.Time
+	Scope           string
+}
+
 // Service owns the OAuth start/callback state machine.
 type Service struct {
-	providers map[string]Provider
-	storage   Storage
-	baseURL   string
-	encKey    []byte
-	sessions  SessionIssuer
-	auditEm   audit.Emitter
-	states    sync.Map // map[string]*oauthState
-	stopGC    chan struct{}
+	providers       map[string]Provider
+	storage         Storage
+	baseURL         string
+	encKey          []byte
+	sessions        SessionIssuer
+	auditEm         audit.Emitter
+	states          sync.Map // map[string]*oauthState
+	stopGC          chan struct{}
+	onOAuthConflict func(ctx context.Context, p ConflictPayload) (string, error) // may be nil
 }
 
 // New constructs a Service. providers is a name-keyed map; storage satisfies
 // the minimal Storage interface; baseURL is the authority origin (e.g.
 // "https://example.com") used to build the callback redirect URI; encKey is
 // the 32-byte AES key for token encryption; sessions mints sessions at
-// callback success; em records audit events.
-func New(providers map[string]Provider, storage Storage, baseURL string, encKey []byte, sessions SessionIssuer, em audit.Emitter) *Service {
+// callback success; em records audit events. onConflict is the optional hook
+// called when a sign-in email matches an existing user registered via a
+// different provider; when nil the flow proceeds normally.
+func New(providers map[string]Provider, storage Storage, baseURL string, encKey []byte, sessions SessionIssuer, em audit.Emitter, onConflict func(ctx context.Context, p ConflictPayload) (string, error)) *Service {
 	if em == nil {
 		em = audit.NoopEmitter{}
 	}
 	s := &Service{
-		providers: providers,
-		storage:   storage,
-		baseURL:   baseURL,
-		encKey:    encKey,
-		sessions:  sessions,
-		auditEm:   em,
-		stopGC:    make(chan struct{}),
+		providers:       providers,
+		storage:         storage,
+		baseURL:         baseURL,
+		encKey:          encKey,
+		sessions:        sessions,
+		auditEm:         em,
+		stopGC:          make(chan struct{}),
+		onOAuthConflict: onConflict,
 	}
 	go s.gcLoop()
 	return s
@@ -229,7 +259,7 @@ func (s *Service) Callback(ctx context.Context, providerName, code, state, userA
 		return "", nil, false, errors.New("theauth: provider returned empty user id")
 	}
 
-	resolved, userCreated, err := s.findOrCreateUser(ctx, providerName, pu)
+	resolved, branch, err := s.findOrCreateUser(ctx, providerName, pu)
 	if err != nil {
 		return "", nil, false, err
 	}
@@ -250,6 +280,30 @@ func (s *Service) Callback(ctx context.Context, providerName, code, state, userA
 		e := tok.ExpiresAt
 		expiresAt = &e
 	}
+
+	// When the user was found by email match (not by provider ID), the incoming
+	// provider is not yet linked. If a hook is configured, pause the flow so
+	// the consumer can verify ownership before linking.
+	if branch == foundByEmail && s.onOAuthConflict != nil {
+		p := ConflictPayload{
+			Provider:        providerName,
+			ProviderUserID:  pu.ID,
+			ProviderEmail:   pu.Email,
+			ProviderName:    pu.Name,
+			ProviderAvatar:  pu.AvatarURL,
+			ExistingUserID:  resolved.ID.String(),
+			AccessTokenEnc:  accessEnc,
+			RefreshTokenEnc: refreshEnc,
+			ExpiresAt:       expiresAt,
+			Scope:           tok.Scope,
+		}
+		redirectURL, hookErr := s.onOAuthConflict(ctx, p)
+		if hookErr != nil {
+			return "", nil, false, fmt.Errorf("theauth: onOAuthConflict hook: %w", hookErr)
+		}
+		return "", nil, false, &models.OAuthConflictRedirectError{URL: redirectURL}
+	}
+
 	now := time.Now()
 	oauthRowID := ulid.New()
 	if _, err := s.storage.UpsertOAuthAccount(ctx, models.OAuthAccount{
@@ -278,31 +332,31 @@ func (s *Service) Callback(ctx context.Context, providerName, code, state, userA
 		"auth_method": "oauth:" + providerName,
 	})
 	slog.Info("theauth: oauth signin", "provider", providerName, "user_id", resolved.ID.String())
-	return sessToken, resolved, userCreated, nil
+	return sessToken, resolved, branch == brandNewUser, nil
 }
 
 // findOrCreateUser implements the three-branch resolution: (1) existing
-// oauth_accounts row -> load that user, (2) email match -> reuse that user,
-// (3) brand new user. The created return is true only in branch (3).
-func (s *Service) findOrCreateUser(ctx context.Context, providerName string, pu *ProviderUser) (*models.User, bool, error) {
+// oauth_accounts row -> load that user (foundByProvider), (2) email match ->
+// reuse that user (foundByEmail), (3) brand new user (brandNewUser).
+func (s *Service) findOrCreateUser(ctx context.Context, providerName string, pu *ProviderUser) (*models.User, findBranch, error) {
 	acct, err := s.storage.OAuthAccountByProviderUserID(ctx, providerName, pu.ID)
 	if err == nil && acct != nil {
 		u, err := s.storage.UserByID(ctx, acct.UserID)
 		if err != nil {
-			return nil, false, fmt.Errorf("theauth: load linked user: %w", err)
+			return nil, 0, fmt.Errorf("theauth: load linked user: %w", err)
 		}
-		return u, false, nil
+		return u, foundByProvider, nil
 	} else if err != nil && !errors.Is(err, models.ErrStorageNotFound) {
-		return nil, false, fmt.Errorf("theauth: lookup oauth account: %w", err)
+		return nil, 0, fmt.Errorf("theauth: lookup oauth account: %w", err)
 	}
 
 	if pu.Email != "" {
 		u, err := s.storage.UserByEmail(ctx, pu.Email)
 		if err == nil && u != nil {
-			return u, false, nil
+			return u, foundByEmail, nil
 		}
 		if err != nil && !errors.Is(err, models.ErrStorageNotFound) {
-			return nil, false, fmt.Errorf("theauth: lookup user by email: %w", err)
+			return nil, 0, fmt.Errorf("theauth: lookup user by email: %w", err)
 		}
 	}
 
@@ -320,9 +374,9 @@ func (s *Service) findOrCreateUser(ctx context.Context, providerName string, pu 
 	}
 	created, err := s.storage.CreateUser(ctx, newUser)
 	if err != nil {
-		return nil, false, fmt.Errorf("theauth: create oauth user: %w", err)
+		return nil, 0, fmt.Errorf("theauth: create oauth user: %w", err)
 	}
-	return &created, true, nil
+	return &created, brandNewUser, nil
 }
 
 // gcLoop sweeps expired entries from s.states.
