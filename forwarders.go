@@ -189,6 +189,14 @@ func (a *TheAuth) LinkOAuthProviderBySession(
 	)
 }
 
+// UnlinkOAuthProvider removes the named OAuth provider from the current
+// user's linked accounts. Returns ErrLastAuthMethod when the provider is
+// the only sign-in method. Used by the /api/v1/me/connections DELETE
+// handler in glinr-v2.
+func (a *TheAuth) UnlinkOAuthProvider(ctx context.Context, sessionToken, provider string) error {
+	return a.identityLinkSvc.UnlinkOAuthProvider(ctx, sessionToken, provider)
+}
+
 // ---------- Magic-link forwarders ----------
 
 // requestMagicLink mints a magic-link token, persists its hash, and emails
