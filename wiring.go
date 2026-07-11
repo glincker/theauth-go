@@ -348,6 +348,24 @@ func wireServices(a *TheAuth, cfg Config, providers map[string]Provider, sp saml
 	// Wire OAuth provider service. The GC goroutine is started inside
 	// internaloauth.New so there is no separate Start call needed.
 	if len(providers) > 0 {
+		var onConflict func(ctx context.Context, p internaloauth.ConflictPayload) (string, error)
+		if cfg.LifecycleHooks != nil && cfg.LifecycleHooks.OnOAuthConflict != nil {
+			hook := cfg.LifecycleHooks.OnOAuthConflict
+			onConflict = func(ctx context.Context, p internaloauth.ConflictPayload) (string, error) {
+				return hook(ctx, OAuthConflictPayload{
+					Provider:        p.Provider,
+					ProviderUserID:  p.ProviderUserID,
+					ProviderEmail:   p.ProviderEmail,
+					ProviderName:    p.ProviderName,
+					ProviderAvatar:  p.ProviderAvatar,
+					ExistingUserID:  p.ExistingUserID,
+					AccessTokenEnc:  p.AccessTokenEnc,
+					RefreshTokenEnc: p.RefreshTokenEnc,
+					ExpiresAt:       p.ExpiresAt,
+					Scope:           p.Scope,
+				})
+			}
+		}
 		a.oauthSvc = internaloauth.New(
 			providers,
 			a.storage,
@@ -355,6 +373,7 @@ func wireServices(a *TheAuth, cfg Config, providers map[string]Provider, sp saml
 			a.encryptionKey,
 			oauthSessionAdapter{svc: a.sessionSvc},
 			a,
+			onConflict,
 		)
 	}
 

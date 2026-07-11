@@ -15,8 +15,10 @@ package theauth
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
+	"time"
 
 	internalas "github.com/glincker/theauth-go/internal/as"
 	"github.com/glincker/theauth-go/internal/audit"
@@ -157,6 +159,42 @@ func (a *TheAuth) issueSession(ctx context.Context, user User, userAgent, ip str
 // sessionSvc.Validate.
 func (a *TheAuth) validateSession(ctx context.Context, token string) (*Session, *User, error) {
 	return a.sessionSvc.Validate(ctx, token)
+}
+
+// IssueSessionByUserID mints a full session for the given user without
+// requiring an existing session token. Used by the account-linking flow after
+// OTP verification to sign the user in to their existing account.
+func (a *TheAuth) IssueSessionByUserID(ctx context.Context, userID ULID, userAgent, ip string) (string, error) {
+	u, err := a.UserByID(ctx, userID)
+	if err != nil {
+		return "", fmt.Errorf("theauth: user not found for session: %w", err)
+	}
+	tok, _, err := a.issueSession(ctx, *u, userAgent, ip)
+	return tok, err
+}
+
+// LinkOAuthProviderBySession links an OAuth provider account to the user
+// identified by sessionToken. Intended for the post-OTP account-linking flow
+// where the session was just issued by IssueSessionByUserID.
+func (a *TheAuth) LinkOAuthProviderBySession(
+	ctx context.Context,
+	sessionToken, providerName, providerUserID string,
+	accessTokenEnc, refreshTokenEnc []byte,
+	expiresAt *time.Time,
+	scope string,
+) error {
+	return a.identityLinkSvc.LinkOAuthToCurrentUser(
+		ctx, sessionToken, providerName, providerUserID,
+		accessTokenEnc, refreshTokenEnc, expiresAt, scope,
+	)
+}
+
+// UnlinkOAuthProvider removes the named OAuth provider from the current
+// user's linked accounts. Returns ErrLastAuthMethod when the provider is
+// the only sign-in method. Used by the /api/v1/me/connections DELETE
+// handler in glinr-v2.
+func (a *TheAuth) UnlinkOAuthProvider(ctx context.Context, sessionToken, provider string) error {
+	return a.identityLinkSvc.UnlinkOAuthProvider(ctx, sessionToken, provider)
 }
 
 // ---------- Magic-link forwarders ----------
