@@ -237,6 +237,18 @@ func (s *Store) SessionByTokenHash(ctx context.Context, hash []byte) (*theauth.S
 	return &sess, nil
 }
 
+func (s *Store) SessionByID(ctx context.Context, id theauth.ULID) (*theauth.Session, error) {
+	row, err := s.q.SessionByID(ctx, ulidToPgUUID(id))
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, storage.ErrNotFound
+		}
+		return nil, err
+	}
+	sess := rowToSession(row)
+	return &sess, nil
+}
+
 func (s *Store) RevokeSession(ctx context.Context, id theauth.ULID) error {
 	if err := s.q.RevokeSession(ctx, ulidToPgUUID(id)); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {

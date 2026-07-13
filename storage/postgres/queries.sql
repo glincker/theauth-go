@@ -21,6 +21,10 @@ RETURNING id, user_id, token_hash, user_agent, ip, created_at, expires_at, revok
 SELECT id, user_id, token_hash, user_agent, ip, created_at, expires_at, revoked_at, auth_level, active_organization_id
 FROM sessions WHERE token_hash = $1;
 
+-- name: SessionByID :one
+SELECT id, user_id, token_hash, user_agent, ip, created_at, expires_at, revoked_at, auth_level, active_organization_id
+FROM sessions WHERE id = $1;
+
 -- name: RevokeSession :exec
 UPDATE sessions SET revoked_at = now() WHERE id = $1;
 

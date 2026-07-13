@@ -116,6 +116,13 @@ func (s *Store) SessionByTokenHash(ctx context.Context, hash []byte) (*theauth.S
 	return &sess, nil
 }
 
+// SessionByID is the public counterpart of the internal sessionByID helper
+// already used by CreateSession, exposed to satisfy the Storage interface's
+// SessionByID method.
+func (s *Store) SessionByID(ctx context.Context, id theauth.ULID) (*theauth.Session, error) {
+	return s.sessionByID(ctx, id)
+}
+
 func (s *Store) RevokeSession(ctx context.Context, id theauth.ULID) error {
 	res, err := s.db.ExecContext(ctx,
 		`UPDATE sessions SET revoked_at = ? WHERE id = ?`,

@@ -119,6 +119,17 @@ func (s *Store) SessionByTokenHash(_ context.Context, hash []byte) (*theauth.Ses
 	return nil, storage.ErrNotFound
 }
 
+func (s *Store) SessionByID(_ context.Context, id theauth.ULID) (*theauth.Session, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	sess, ok := s.sessions[id]
+	if !ok {
+		return nil, storage.ErrNotFound
+	}
+	cp := sess
+	return &cp, nil
+}
+
 func (s *Store) RevokeSession(_ context.Context, id theauth.ULID) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
