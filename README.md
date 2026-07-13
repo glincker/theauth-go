@@ -255,8 +255,8 @@ In-repo references:
 
 | Document | Description |
 |---|---|
-| [AGENTS.md](AGENTS.md) | Concise reference for AI coding assistants: patterns, anti-patterns, file map |
-| [STABILITY.md](STABILITY.md) | Public API surface, SemVer rules, Storage interface special rules |
+| [AGENTS.md](docs/AGENTS.md) | Concise reference for AI coding assistants: patterns, anti-patterns, file map |
+| [STABILITY.md](docs/STABILITY.md) | Public API surface, SemVer rules, Storage interface special rules |
 | [CHANGELOG.md](CHANGELOG.md) | Per-release notable changes following Keep a Changelog |
 | [SECURITY.md](SECURITY.md) | Vulnerability disclosure policy and contact |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | Dev setup, test commands, commit convention, PR process |

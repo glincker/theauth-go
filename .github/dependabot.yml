@@ -18,6 +18,15 @@ updates:
     commit-message:
       prefix: "chore"
 
+  - package-ecosystem: "gomod"
+    directory: "/audit/sinks/otlp"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    labels: ["type/chore", "area/ci"]
+    commit-message:
+      prefix: "chore"
+
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
