@@ -55,7 +55,7 @@ func (s *Store) UpdateSAMLConnectionRow(ctx context.Context, c theauth.SAMLConne
 	if string(attrMap) == "null" {
 		attrMap = []byte("{}")
 	}
-	_, err = s.db.ExecContext(ctx, `
+	res, err := s.db.ExecContext(ctx, `
 UPDATE saml_connections SET
     idp_entity_id = ?, idp_sso_url = ?, idp_x509_cert = ?,
     sp_entity_id = ?, sp_acs_url = ?,
@@ -66,7 +66,14 @@ WHERE id = ?`,
 		attrMap, timeUTC(time.Now()),
 		ulidToBytes(c.ID),
 	)
-	return err
+	if err != nil {
+		return err
+	}
+	n, _ := res.RowsAffected()
+	if n == 0 {
+		return storage.ErrNotFound
+	}
+	return nil
 }
 
 func (s *Store) DeleteSAMLConnection(ctx context.Context, id theauth.ULID) error {

@@ -142,19 +142,33 @@ func (s *Store) RevokeUserSessions(ctx context.Context, userID theauth.ULID) err
 }
 
 func (s *Store) UpdateSessionAuthLevel(ctx context.Context, id theauth.ULID, level string) error {
-	_, err := s.db.ExecContext(ctx,
+	res, err := s.db.ExecContext(ctx,
 		`UPDATE sessions SET auth_level = ? WHERE id = ?`,
 		level,
 		ulidToBytes(id),
 	)
-	return err
+	if err != nil {
+		return err
+	}
+	n, _ := res.RowsAffected()
+	if n == 0 {
+		return storage.ErrNotFound
+	}
+	return nil
 }
 
 func (s *Store) SetSessionActiveOrganization(ctx context.Context, sessionID theauth.ULID, orgID *theauth.ULID) error {
-	_, err := s.db.ExecContext(ctx,
+	res, err := s.db.ExecContext(ctx,
 		`UPDATE sessions SET active_organization_id = ? WHERE id = ?`,
 		ulidPtrToBytes(orgID),
 		ulidToBytes(sessionID),
 	)
-	return err
+	if err != nil {
+		return err
+	}
+	n, _ := res.RowsAffected()
+	if n == 0 {
+		return storage.ErrNotFound
+	}
+	return nil
 }

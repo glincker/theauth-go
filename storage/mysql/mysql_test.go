@@ -3,13 +3,18 @@ package mysql_test
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	_ "github.com/go-sql-driver/mysql"
 
+	"github.com/glincker/theauth-go"
+	"github.com/glincker/theauth-go/internal/ulid"
+	"github.com/glincker/theauth-go/storage"
 	"github.com/glincker/theauth-go/storage/mysql"
 	"github.com/glincker/theauth-go/storagetest"
 )
@@ -54,6 +59,37 @@ func TestMySQLStoreContract(t *testing.T) {
 
 	store := mysql.New(db)
 	storagetest.Run(t, store)
+
+	t.Run("UpdateSessionAuthLevelUnknownID", func(t *testing.T) {
+		if err := store.UpdateSessionAuthLevel(ctx, ulid.New(), "full"); !errors.Is(err, storage.ErrNotFound) {
+			t.Fatalf("want ErrNotFound, got %v", err)
+		}
+	})
+	t.Run("SetSessionActiveOrganizationUnknownID", func(t *testing.T) {
+		if err := store.SetSessionActiveOrganization(ctx, ulid.New(), nil); !errors.Is(err, storage.ErrNotFound) {
+			t.Fatalf("want ErrNotFound, got %v", err)
+		}
+	})
+	t.Run("UpdateSAMLConnectionRowUnknownID", func(t *testing.T) {
+		if err := store.UpdateSAMLConnectionRow(ctx, theauth.SAMLConnection{ID: ulid.New()}); !errors.Is(err, storage.ErrNotFound) {
+			t.Fatalf("want ErrNotFound, got %v", err)
+		}
+	})
+	t.Run("UpdateGroupUnknownID", func(t *testing.T) {
+		if err := store.UpdateGroup(ctx, theauth.Group{ID: ulid.New()}); !errors.Is(err, storage.ErrNotFound) {
+			t.Fatalf("want ErrNotFound, got %v", err)
+		}
+	})
+	t.Run("UpdateAgentLastActiveUnknownID", func(t *testing.T) {
+		if err := store.UpdateAgentLastActive(ctx, ulid.New(), time.Now()); !errors.Is(err, storage.ErrNotFound) {
+			t.Fatalf("want ErrNotFound, got %v", err)
+		}
+	})
+	t.Run("UpdateAgentCredentialLastUsedUnknownID", func(t *testing.T) {
+		if err := store.UpdateAgentCredentialLastUsed(ctx, ulid.New(), time.Now()); !errors.Is(err, storage.ErrNotFound) {
+			t.Fatalf("want ErrNotFound, got %v", err)
+		}
+	})
 }
 
 // dropTables removes tables in reverse dependency order so the test always
