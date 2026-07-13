@@ -135,6 +135,40 @@ func TestPostgresSessionAndRevoke(t *testing.T) {
 	}
 }
 
+func TestPostgresSessionByID(t *testing.T) {
+	pool := testPool(t)
+	defer pool.Close()
+	s := New(pool)
+	ctx := context.Background()
+
+	uid := ulid.New()
+	if _, err := s.CreateUser(ctx, theauth.User{ID: uid, Email: "byid@s.com", CreatedAt: time.Now(), UpdatedAt: time.Now()}); err != nil {
+		t.Fatal(err)
+	}
+	tokenHash := sha256.Sum256([]byte("byid"))
+	sess := theauth.Session{
+		ID: ulid.New(), UserID: uid,
+		TokenHash: tokenHash[:],
+		UserAgent: "test-agent",
+		CreatedAt: time.Now(), ExpiresAt: time.Now().Add(time.Hour),
+	}
+	if _, err := s.CreateSession(ctx, sess); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := s.SessionByID(ctx, sess.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.ID != sess.ID || got.UserAgent != "test-agent" {
+		t.Fatalf("SessionByID returned %+v, want ID=%v UserAgent=test-agent", got, sess.ID)
+	}
+
+	if _, err := s.SessionByID(ctx, ulid.New()); !errors.Is(err, storage.ErrNotFound) {
+		t.Fatalf("SessionByID(unknown) = %v, want storage.ErrNotFound", err)
+	}
+}
+
 func TestPostgresPasswordRoundtrip(t *testing.T) {
 	pool := testPool(t)
 	defer pool.Close()

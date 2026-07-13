@@ -28,6 +28,7 @@ type Storage interface {
 	// Sessions
 	CreateSession(ctx context.Context, s Session) (Session, error)
 	SessionByTokenHash(ctx context.Context, hash []byte) (*Session, error)
+	SessionByID(ctx context.Context, id ULID) (*Session, error)
 	RevokeSession(ctx context.Context, id ULID) error
 	RevokeUserSessions(ctx context.Context, userID ULID) error
 

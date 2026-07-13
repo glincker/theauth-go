@@ -70,6 +70,35 @@ func TestSessionRoundtripAndRevoke(t *testing.T) {
 	}
 }
 
+func TestStore_SessionByID(t *testing.T) {
+	s := New()
+	ctx := context.Background()
+	sess := theauth.Session{
+		ID:        ulid.New(),
+		UserID:    ulid.New(),
+		TokenHash: []byte("hash"),
+		UserAgent: "test-agent",
+		IP:        "127.0.0.1",
+		CreatedAt: time.Now(),
+		ExpiresAt: time.Now().Add(time.Hour),
+	}
+	if _, err := s.CreateSession(ctx, sess); err != nil {
+		t.Fatalf("CreateSession: %v", err)
+	}
+
+	got, err := s.SessionByID(ctx, sess.ID)
+	if err != nil {
+		t.Fatalf("SessionByID: %v", err)
+	}
+	if got.ID != sess.ID || got.UserAgent != "test-agent" {
+		t.Errorf("SessionByID returned %+v, want ID=%v UserAgent=test-agent", got, sess.ID)
+	}
+
+	if _, err := s.SessionByID(ctx, ulid.New()); !errors.Is(err, storage.ErrNotFound) {
+		t.Errorf("SessionByID(unknown) = %v, want storage.ErrNotFound", err)
+	}
+}
+
 func TestConsumeMagicLinkOnce(t *testing.T) {
 	s := New()
 	ctx := context.Background()

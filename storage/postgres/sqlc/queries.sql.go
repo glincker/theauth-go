@@ -229,6 +229,28 @@ func (q *Queries) SessionByTokenHash(ctx context.Context, tokenHash []byte) (Ses
 	return i, err
 }
 
+const sessionByID = `-- name: SessionByID :one
+SELECT id, user_id, token_hash, user_agent, ip, created_at, expires_at, revoked_at, auth_level, active_organization_id FROM sessions WHERE id = $1
+`
+
+func (q *Queries) SessionByID(ctx context.Context, id pgtype.UUID) (Session, error) {
+	row := q.db.QueryRow(ctx, sessionByID, id)
+	var i Session
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.TokenHash,
+		&i.UserAgent,
+		&i.Ip,
+		&i.CreatedAt,
+		&i.ExpiresAt,
+		&i.RevokedAt,
+		&i.AuthLevel,
+		&i.ActiveOrganizationID,
+	)
+	return i, err
+}
+
 const setUserPassword = `-- name: SetUserPassword :exec
 UPDATE users SET password_hash = $2, updated_at = now() WHERE id = $1
 `

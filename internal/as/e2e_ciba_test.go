@@ -486,6 +486,9 @@ func (s *noCIBAStore) CreateSession(ctx context.Context, sess theauth.Session) (
 func (s *noCIBAStore) SessionByTokenHash(ctx context.Context, hash []byte) (*theauth.Session, error) {
 	return s.inner.SessionByTokenHash(ctx, hash)
 }
+func (s *noCIBAStore) SessionByID(ctx context.Context, id theauth.ULID) (*theauth.Session, error) {
+	return s.inner.SessionByID(ctx, id)
+}
 func (s *noCIBAStore) RevokeSession(ctx context.Context, id theauth.ULID) error {
 	return s.inner.RevokeSession(ctx, id)
 }

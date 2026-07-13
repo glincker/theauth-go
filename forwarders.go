@@ -417,6 +417,29 @@ func (a *TheAuth) QueryAudit(ctx context.Context, q AuditQuery) ([]AuditEvent, s
 	return a.auditSvc.Query(ctx, q)
 }
 
+// RevokeSession revokes a single session by id. Callers must authorize
+// (confirm the session belongs to the caller, or the caller is an admin)
+// before calling this, RevokeSession itself does no ownership check.
+func (a *TheAuth) RevokeSession(ctx context.Context, id ULID) error {
+	return a.storage.RevokeSession(ctx, id)
+}
+
+// RevokeUserSessions revokes every session belonging to userID. Callers
+// wanting to preserve one session (e.g. "sign out other devices") must
+// re-issue or otherwise except that session themselves, this revokes
+// unconditionally.
+func (a *TheAuth) RevokeUserSessions(ctx context.Context, userID ULID) error {
+	return a.storage.RevokeUserSessions(ctx, userID)
+}
+
+// SessionByID returns a session's current state (including RevokedAt and
+// ExpiresAt) by id, or ErrNotFound. Exists so callers with a session id
+// from another source (e.g. an audit log actor_session_id) can resolve
+// its live status without a token hash.
+func (a *TheAuth) SessionByID(ctx context.Context, id ULID) (*Session, error) {
+	return a.storage.SessionByID(ctx, id)
+}
+
 // ---------- OAuth 2.1 authorization server (v2.0: DCR, introspect, revoke, token, metadata, authorize) ----------
 // ---------- DCR (RFC 7591) ----------
 
