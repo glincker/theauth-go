@@ -296,15 +296,16 @@ func TestPostgresMagicLinkConsume(t *testing.T) {
 }
 
 // TestPostgresStoreContract runs the full storagetest contract suite against
-// the Postgres backend. Requires THEAUTH_TEST_PG_DSN (or POSTGRES_TEST_URL)
-// to be set; skipped otherwise.
-// TestPostgresStoreContract runs the full storagetest contract suite against
 // the Postgres backend. Opt in by setting THEAUTH_PG_CONTRACT=1 alongside
-// THEAUTH_TEST_PG_DSN. The Postgres backend currently has known divergences
-// from the contract (operations on missing rows return nil rather than
-// ErrNotFound on a handful of UPDATE/DELETE paths). Tracked for a follow-up
-// hardening PR; the contract suite stays authoritative against the memory
-// backend in CI today.
+// THEAUTH_TEST_PG_DSN. The Postgres backend currently fails this suite
+// beyond the UpdateAgentLastActive divergence fixed in v2.5.x: NOT NULL
+// constraint violations (agents.scope_grant, webauthn_credentials.aaguid),
+// foreign-key violations (delegation_grants, audit_events), and cascading
+// not-found errors across Agents, Delegations, WebAuthn, AuthorizationCodes,
+// RefreshTokens, and JWKSKeys, likely because storagetest fixtures don't populate
+// fields/rows Postgres enforces but the lenient memory backend doesn't.
+// Tracked as dedicated follow-up work (see ROADMAP.md); the contract suite
+// stays authoritative against the memory backend in CI today.
 func TestPostgresStoreContract(t *testing.T) {
 	if os.Getenv("THEAUTH_PG_CONTRACT") != "1" {
 		t.Skip("THEAUTH_PG_CONTRACT=1 not set; Postgres contract test gated on opt-in until backend ErrNotFound divergences are fixed")
