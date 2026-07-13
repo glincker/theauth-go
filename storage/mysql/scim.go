@@ -167,11 +167,18 @@ FROM `+"`groups`"+` WHERE organization_id = ? AND external_id = ?`,
 }
 
 func (s *Store) UpdateGroup(ctx context.Context, g theauth.Group) error {
-	_, err := s.db.ExecContext(ctx, `
+	res, err := s.db.ExecContext(ctx, `
 UPDATE `+"`groups`"+` SET display_name = ?, external_id = ?, updated_at = ? WHERE id = ?`,
 		g.DisplayName, nullStringVal(g.ExternalID), timeUTC(time.Now()), ulidToBytes(g.ID),
 	)
-	return err
+	if err != nil {
+		return err
+	}
+	n, _ := res.RowsAffected()
+	if n == 0 {
+		return storage.ErrNotFound
+	}
+	return nil
 }
 
 func (s *Store) DeleteGroup(ctx context.Context, id theauth.ULID) error {

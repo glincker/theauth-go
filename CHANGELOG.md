@@ -6,6 +6,15 @@ adheres to [Semantic Versioning](https://semver.org/) from v1.0 forward.
 
 ## [Unreleased]
 
+### Fixed
+
+- `storage/postgres`: `UpdateAgentLastActive` now returns `storage.ErrNotFound`
+  instead of silently succeeding when the agent ID doesn't exist.
+- `storage/mysql`: six methods (`UpdateSessionAuthLevel`,
+  `SetSessionActiveOrganization`, `UpdateSAMLConnectionRow`, `UpdateGroup`,
+  `UpdateAgentLastActive`, `UpdateAgentCredentialLastUsed`) now return
+  `storage.ErrNotFound` instead of silently succeeding on a missing row.
+
 ## [2.5.0-rc.1] - 2026-06-22
 
 The "consumer feedback" release. Closes the three highest-impact friction points raised in the 2026-06-22 consumer-feedback session: the hook surface for lifecycle events, opt-in automatic tenant provisioning, and a unified RFC 7807 error envelope across all auth/RBAC middleware. All additions are fully additive: downstream code compiles unchanged.

@@ -25,6 +25,21 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
+      # Deliberately unused by any test today: THEAUTH_MYSQL_CONTRACT is not
+      # set below, so TestMySQLStoreContract still skips. This container
+      # exists so the opt-in gate can be flipped on once MySQL's status
+      # against the shared contract suite is verified (see ROADMAP.md).
+      mysql:
+        image: mysql:8
+        env:
+          MYSQL_ROOT_PASSWORD: theauth
+          MYSQL_DATABASE: theauth_test
+        ports: ["3306:3306"]
+        options: >-
+          --health-cmd "mysqladmin ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -34,6 +49,10 @@ jobs:
       - run: go test -race -timeout=120s -coverprofile=coverage.out ./...
         env:
           POSTGRES_TEST_URL: postgres://theauth:theauth@localhost:5432/theauth_test?sslmode=disable
+      - uses: codecov/codecov-action@v5
+        with:
+          files: coverage.out
+          fail_ci_if_error: false
       - run: go test -bench=. -benchmem -run=^$ -benchtime=1x ./internal/bench/...
 
   fuzz:

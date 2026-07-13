@@ -125,11 +125,18 @@ func (s *Store) UpdateAgentStatus(ctx context.Context, id theauth.ULID, status s
 }
 
 func (s *Store) UpdateAgentLastActive(ctx context.Context, id theauth.ULID, at time.Time) error {
-	_, err := s.db.ExecContext(ctx,
+	res, err := s.db.ExecContext(ctx,
 		`UPDATE agents SET last_active_at = ? WHERE id = ?`,
 		timeUTC(at), ulidToBytes(id),
 	)
-	return err
+	if err != nil {
+		return err
+	}
+	n, _ := res.RowsAffected()
+	if n == 0 {
+		return storage.ErrNotFound
+	}
+	return nil
 }
 
 func scanAgent(row interface{ Scan(...interface{}) error }) (theauth.Agent, error) {
@@ -220,11 +227,18 @@ func (s *Store) RevokeAgentCredential(ctx context.Context, id theauth.ULID, at t
 }
 
 func (s *Store) UpdateAgentCredentialLastUsed(ctx context.Context, id theauth.ULID, at time.Time) error {
-	_, err := s.db.ExecContext(ctx,
+	res, err := s.db.ExecContext(ctx,
 		`UPDATE agent_credentials SET last_used_at = ? WHERE id = ?`,
 		timeUTC(at), ulidToBytes(id),
 	)
-	return err
+	if err != nil {
+		return err
+	}
+	n, _ := res.RowsAffected()
+	if n == 0 {
+		return storage.ErrNotFound
+	}
+	return nil
 }
 
 func scanAgentCredential(row interface{ Scan(...interface{}) error }) (theauth.AgentCredential, error) {

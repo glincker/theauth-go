@@ -127,8 +127,14 @@ func (s *Store) UpdateAgentStatus(ctx context.Context, id theauth.ULID, status s
 
 func (s *Store) UpdateAgentLastActive(ctx context.Context, id theauth.ULID, at time.Time) error {
 	const q = `UPDATE agents SET last_active_at = $2 WHERE id = $1`
-	_, err := s.pool.Exec(ctx, q, ulidToPgUUID(id), timeToTs(at))
-	return err
+	tag, err := s.pool.Exec(ctx, q, ulidToPgUUID(id), timeToTs(at))
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return storage.ErrNotFound
+	}
+	return nil
 }
 
 // ---------- agent credentials ----------
