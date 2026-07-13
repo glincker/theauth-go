@@ -46,7 +46,7 @@ jobs:
       # supply-chain tools can verify the release was produced by this
       # workflow on this exact commit.
       - name: Attest SLSA provenance for release artifacts
-        uses: actions/attest-build-provenance@v2
+        uses: actions/attest-build-provenance@v4
         with:
           subject-path: |
             dist/theauth-go-*.tar.gz
