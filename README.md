@@ -18,6 +18,7 @@
 [![Release](https://img.shields.io/github/v/release/glincker/theauth-go?label=latest)](https://github.com/glincker/theauth-go/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![CI](https://github.com/glincker/theauth-go/actions/workflows/ci.yml/badge.svg)](https://github.com/glincker/theauth-go/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/glincker/theauth-go/branch/main/graph/badge.svg)](https://codecov.io/gh/glincker/theauth-go)
 [![Go](https://img.shields.io/badge/built%20with-Go-00ADD8?logo=go&logoColor=white)](https://go.dev)
 [![Postgres](https://img.shields.io/badge/storage-Postgres%20%7C%20MySQL%20%7C%20Memory-336791?logo=postgresql&logoColor=white)](storage/)
 [![SLSA 3](https://slsa.dev/images/gh-badge-level3.svg)](https://github.com/glincker/theauth-go/releases)
@@ -55,6 +56,7 @@ http.ListenAndServe(":8080", r)
 - [Examples](#examples)
 - [Storage backends](#storage-backends)
 - [Security](#security)
+- [FAQ](#faq)
 - [Contributing](#contributing)
 - [License](#license)
 
@@ -303,6 +305,35 @@ Please **do not** open a public GitHub issue for security vulnerabilities.
 Report to **security@glincker.com** or use [GitHub Security Advisories](https://github.com/glincker/theauth-go/security/advisories/new).
 
 See [SECURITY.md](SECURITY.md) for supported versions, disclosure policy, scope, and SLA targets.
+
+---
+
+## FAQ
+
+**Is this production ready?**
+Yes for v1.0+ surfaces (session auth, OAuth providers, RBAC, audit log),
+covered by [STABILITY.md](docs/STABILITY.md)'s SemVer contract. v2.0's
+OAuth 2.1 authorization server and agent-identity primitives are feature
+complete as of v2.0.0. Check [CHANGELOG.md](CHANGELOG.md) for the
+current release.
+
+**How does it compare to Auth0, better-auth, or Ory Hydra?**
+See the [comparison table](#why-theauth-go) above. The short version:
+theauth-go is self-hosted like better-auth/Hydra but also ships MCP
+authorization and FAPI 2.0-adjacent features (PAR+JAR+DPoP) that none of
+the alternatives have.
+
+**Does it support AI agent / MCP use cases specifically?**
+Yes, this is one of the two things that differentiate it from every
+other Go auth library. See the [MCP resource server](#mcp-resource-server)
+section, and the agent-identity and delegation-chain docs.
+
+**What databases are supported?**
+Postgres and MySQL, plus an in-memory backend for tests. The `Storage`
+interface is public, so custom backends are possible.
+
+**Is it free and open source?**
+Yes, MIT licensed, no paid tier gating any feature in this repository.
 
 ---
 
