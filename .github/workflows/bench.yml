@@ -62,7 +62,7 @@ jobs:
       # the cache is stable across PR re-runs.
       - name: Restore base benchmark cache
         id: cache-base
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: base-bench.txt
           key: bench-baseline-${{ github.event.pull_request.base.sha || github.event.before }}
@@ -113,7 +113,7 @@ jobs:
 
       - name: Save base benchmark to cache
         if: steps.cache-base.outputs.cache-hit != 'true' && env.SKIP_DIFF != 'true'
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v6
         with:
           path: base-bench.txt
           key: bench-baseline-${{ github.event.pull_request.base.sha || github.event.before }}
