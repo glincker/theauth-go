@@ -136,7 +136,7 @@ jobs:
       - name: Comment benchstat diff on PR
         if: github.event_name == 'pull_request' && env.SKIP_DIFF != 'true'
         continue-on-error: true
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         with:
           script: |
             const diff = `${{ steps.benchstat.outputs.diff_output }}`;
