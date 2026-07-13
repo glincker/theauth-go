@@ -37,3 +37,6 @@ coverage.html
 *-CLEANUP-MAP.md
 scratch/
 tmp/
+
+# agent worktrees
+.claude/worktrees/
