@@ -243,3 +243,59 @@ func TestSuperAdminNotGrantable(t *testing.T) {
 		t.Fatalf("expected ErrForbidden when granting super_admin, got %v", err)
 	}
 }
+
+func TestRevokeRoleUnknownRole(t *testing.T) {
+	fx := newRBACFixture(t)
+	actor := internalulid.New()
+	err := fx.auth.RevokeRole(fx.ctx, actor, fx.userID, internalulid.New())
+	if !errors.Is(err, theauth.ErrStorageNotFound) {
+		t.Fatalf("expected ErrStorageNotFound, got %v", err)
+	}
+}
+
+func TestUpdateRoleUnknownRole(t *testing.T) {
+	fx := newRBACFixture(t)
+	_, err := fx.auth.UpdateRole(fx.ctx, internalulid.New(), "new-name", "desc", nil)
+	if !errors.Is(err, theauth.ErrStorageNotFound) {
+		t.Fatalf("expected ErrStorageNotFound, got %v", err)
+	}
+}
+
+func TestDeleteRoleUnknownRole(t *testing.T) {
+	fx := newRBACFixture(t)
+	err := fx.auth.DeleteRole(fx.ctx, internalulid.New())
+	if !errors.Is(err, theauth.ErrStorageNotFound) {
+		t.Fatalf("expected ErrStorageNotFound, got %v", err)
+	}
+}
+
+func TestDeleteRoleRemovesCustomRole(t *testing.T) {
+	fx := newRBACFixture(t)
+	role, err := fx.auth.CreateRole(fx.ctx, fx.orgID, "custom-readonly", "read only", []string{theauth.PermissionUsersRead})
+	if err != nil {
+		t.Fatalf("CreateRole: %v", err)
+	}
+	if err := fx.auth.DeleteRole(fx.ctx, role.ID); err != nil {
+		t.Fatalf("DeleteRole: %v", err)
+	}
+	got, err := fx.store.RoleByID(fx.ctx, role.ID)
+	if !errors.Is(err, theauth.ErrStorageNotFound) {
+		t.Fatalf("expected ErrStorageNotFound after delete, got err=%v", err)
+	}
+	if got != nil {
+		t.Fatalf("expected role to be gone after DeleteRole, got %+v", got)
+	}
+}
+
+func TestDeleteRoleBlockedWhenSoleUsersAdminGrantor(t *testing.T) {
+	fx := newRBACFixture(t)
+	actor := internalulid.New()
+	adminRole := fx.roles[theauth.OrgRoleAdmin]
+	if err := fx.auth.GrantRole(fx.ctx, actor, fx.userID, adminRole.ID); err != nil {
+		t.Fatalf("GrantRole: %v", err)
+	}
+	err := fx.auth.DeleteRole(fx.ctx, adminRole.ID)
+	if !errors.Is(err, theauth.ErrRoleInUse) {
+		t.Fatalf("expected ErrRoleInUse, got %v", err)
+	}
+}
