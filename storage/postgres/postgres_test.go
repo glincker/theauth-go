@@ -335,4 +335,10 @@ func TestPostgresStoreContract(t *testing.T) {
 
 	store := New(pool)
 	storagetest.Run(t, store)
+
+	t.Run("UpdateAgentLastActiveUnknownID", func(t *testing.T) {
+		if err := store.UpdateAgentLastActive(context.Background(), ulid.New(), time.Now()); !errors.Is(err, storage.ErrNotFound) {
+			t.Fatalf("want ErrNotFound, got %v", err)
+		}
+	})
 }
