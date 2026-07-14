@@ -35,7 +35,7 @@ body:
 
         We follow responsible disclosure. Once a fix is available we will publish a patched release, a GitHub Security Advisory, and credit the reporter (unless you prefer anonymity).
 
-        For full details see [SECURITY.md](https://github.com/glincker/theauth-go/blob/main/SECURITY.md).
+        For full details see [SECURITY.md](https://github.com/glincker/theauth-go/blob/main/.github/SECURITY.md).
 
         ---
 

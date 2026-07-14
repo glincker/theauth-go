@@ -258,9 +258,10 @@ In-repo references:
 | [AGENTS.md](docs/AGENTS.md) | Concise reference for AI coding assistants: patterns, anti-patterns, file map |
 | [STABILITY.md](docs/STABILITY.md) | Public API surface, SemVer rules, Storage interface special rules |
 | [CHANGELOG.md](CHANGELOG.md) | Per-release notable changes following Keep a Changelog |
-| [SECURITY.md](SECURITY.md) | Vulnerability disclosure policy and contact |
-| [CONTRIBUTING.md](CONTRIBUTING.md) | Dev setup, test commands, commit convention, PR process |
-| [MIGRATION.md](MIGRATION.md) | Step-by-step upgrade guides between major versions |
+| [ROADMAP.md](docs/ROADMAP.md) | In-flight work and known gaps |
+| [SECURITY.md](.github/SECURITY.md) | Vulnerability disclosure policy and contact |
+| [CONTRIBUTING.md](.github/CONTRIBUTING.md) | Dev setup, test commands, commit convention, PR process |
+| [MIGRATION.md](docs/MIGRATION.md) | Step-by-step upgrade guides between major versions |
 
 ---
 
@@ -304,7 +305,7 @@ Please **do not** open a public GitHub issue for security vulnerabilities.
 
 Report to **security@glincker.com** or use [GitHub Security Advisories](https://github.com/glincker/theauth-go/security/advisories/new).
 
-See [SECURITY.md](SECURITY.md) for supported versions, disclosure policy, scope, and SLA targets.
+See [SECURITY.md](.github/SECURITY.md) for supported versions, disclosure policy, scope, and SLA targets.
 
 ---
 
@@ -339,7 +340,7 @@ Yes, MIT licensed, no paid tier gating any feature in this repository.
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for dev setup, test commands, commit convention, and PR process.
+See [CONTRIBUTING.md](.github/CONTRIBUTING.md) for dev setup, test commands, commit convention, and PR process.
 
 Short version:
 

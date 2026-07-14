@@ -8,7 +8,7 @@ body:
       value: |
         Thank you for taking the time to report a bug. Please fill out all required fields so we can triage quickly.
 
-        If you believe you have found a **security vulnerability**, do NOT file a public issue. See [SECURITY.md](https://github.com/glincker/theauth-go/blob/main/SECURITY.md) instead.
+        If you believe you have found a **security vulnerability**, do NOT file a public issue. See [SECURITY.md](https://github.com/glincker/theauth-go/blob/main/.github/SECURITY.md) instead.
 
   - type: input
     id: version

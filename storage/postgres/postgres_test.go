@@ -338,7 +338,7 @@ func TestPostgresMagicLinkConsume(t *testing.T) {
 // not-found errors across Agents, Delegations, WebAuthn, AuthorizationCodes,
 // RefreshTokens, and JWKSKeys, likely because storagetest fixtures don't populate
 // fields/rows Postgres enforces but the lenient memory backend doesn't.
-// Tracked as dedicated follow-up work (see ROADMAP.md); the contract suite
+// Tracked as dedicated follow-up work (see docs/ROADMAP.md); the contract suite
 // stays authoritative against the memory backend in CI today.
 func TestPostgresStoreContract(t *testing.T) {
 	if os.Getenv("THEAUTH_PG_CONTRACT") != "1" {

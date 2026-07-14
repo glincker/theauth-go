@@ -21,7 +21,7 @@ import (
 
 // TestMySQLStoreContract runs the full storagetest suite against a live MySQL
 // instance. Gate behind THEAUTH_MYSQL_CONTRACT=1: MySQL's status against the
-// shared contract suite is unverified (see ROADMAP.md), so this stays opt-in
+// shared contract suite is unverified (see docs/ROADMAP.md), so this stays opt-in
 // until that's confirmed, even though CI now runs a MySQL service container.
 //
 // Example:

@@ -28,7 +28,7 @@ jobs:
       # Deliberately unused by any test today: THEAUTH_MYSQL_CONTRACT is not
       # set below, so TestMySQLStoreContract still skips. This container
       # exists so the opt-in gate can be flipped on once MySQL's status
-      # against the shared contract suite is verified (see ROADMAP.md).
+      # against the shared contract suite is verified (see docs/ROADMAP.md).
       mysql:
         image: mysql:8
         env:
