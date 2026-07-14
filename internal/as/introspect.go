@@ -199,7 +199,7 @@ func (s *Service) chainStillActive(ctx context.Context, resp *IntrospectionRespo
 	if s == nil {
 		return true
 	}
-	now := time.Now()
+	now := s.Cfg.Clock.Now()
 
 	// Grant check is never cached: revocations must propagate immediately.
 	if resp.DelegationGrantID != "" {
@@ -227,7 +227,7 @@ func (s *Service) chainStillActive(ctx context.Context, resp *IntrospectionRespo
 	if cacheKey != "" {
 		if v, ok := s.chainCache.Load(cacheKey); ok {
 			if entry, ok := v.(*chainCacheEntry); ok {
-				if time.Since(entry.checkedAt) < chainCacheTTL {
+				if s.Cfg.Clock.Now().Sub(entry.checkedAt) < chainCacheTTL {
 					return entry.active
 				}
 				// Stale: fall through to re-walk.
@@ -252,7 +252,7 @@ func (s *Service) chainStillActive(ctx context.Context, resp *IntrospectionRespo
 	if cacheKey != "" {
 		s.chainCache.Store(cacheKey, &chainCacheEntry{
 			active:    active,
-			checkedAt: time.Now(),
+			checkedAt: s.Cfg.Clock.Now(),
 		})
 	}
 	return active
@@ -333,7 +333,7 @@ func (s *Service) introspectCacheGet(token, aud string) ([]byte, bool) {
 	if !ok || entry == nil {
 		return nil, false
 	}
-	if time.Now().After(entry.expiresAt) {
+	if s.Cfg.Clock.Now().After(entry.expiresAt) {
 		s.introspectCache.Delete(key)
 		return nil, false
 	}
@@ -345,7 +345,7 @@ func (s *Service) introspectCacheSet(token, aud string, body []byte) {
 		return
 	}
 	s.introspectCache.Store(introspectCacheKey(token, aud), &introspectCacheEntry{
-		expiresAt: time.Now().Add(s.Cfg.IntrospectionCacheTTL),
+		expiresAt: s.Cfg.Clock.Now().Add(s.Cfg.IntrospectionCacheTTL),
 		body:      body,
 	})
 }

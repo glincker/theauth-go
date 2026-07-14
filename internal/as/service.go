@@ -234,6 +234,9 @@ func New(d Deps) *Service {
 		jwtBearerStorage: d.JWTBearerStorage,
 		Hooks:            hooks,
 	}
+	if s.Cfg.Clock == nil {
+		s.Cfg.Clock = realClock{}
+	}
 	if d.Cfg.CIMD != nil {
 		s.cimdSvc = cimd.NewService(*d.Cfg.CIMD, emitter)
 	}

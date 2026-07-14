@@ -307,6 +307,19 @@ Report to **security@glincker.com** or use [GitHub Security Advisories](https://
 
 See [SECURITY.md](.github/SECURITY.md) for supported versions, disclosure policy, scope, and SLA targets.
 
+### Password policy
+
+- **Minimum length: 12 characters**, enforced at the library level
+  (`internal/password.MinPasswordLength`, NIST 2024 baseline). Signup and
+  password-change requests below this length return `weak_password`.
+- **Hashing:** Argon2id, using the parameter defaults from
+  `golang.org/x/crypto/argon2`.
+- **Anti-enumeration:** a fixed-cost dummy Argon2id verify runs on
+  user-not-found, so login timing doesn't reveal whether an email is
+  registered.
+- The 12-character minimum is currently fixed at the package level; there
+  is no `Config` field to override it yet.
+
 ---
 
 ## FAQ
