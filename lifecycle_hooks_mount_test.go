@@ -98,7 +98,7 @@ func TestLifecycleHooksFireThroughRealHTTPMount(t *testing.T) {
 	if resp.StatusCode != http.StatusCreated {
 		t.Fatalf("signup: got %d", resp.StatusCode)
 	}
-	resp.Body.Close()
+	_ = resp.Body.Close()
 
 	mu.Lock()
 	if signupCount != 1 || signupMethod != theauth.SignupMethodPassword {
@@ -122,7 +122,7 @@ func TestLifecycleHooksFireThroughRealHTTPMount(t *testing.T) {
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("reset: got %d", resp.StatusCode)
 	}
-	resp.Body.Close()
+	_ = resp.Body.Close()
 
 	mu.Lock()
 	if passwordChangeCount != 1 {
@@ -141,7 +141,7 @@ func TestLifecycleHooksFireThroughRealHTTPMount(t *testing.T) {
 	if signinResp.StatusCode != http.StatusOK {
 		t.Fatalf("signin after reset: got %d", signinResp.StatusCode)
 	}
-	signinResp.Body.Close()
+	_ = signinResp.Body.Close()
 
 	// --- TOTP enrollment via the real /auth/totp/enroll/* HTTP routes ---
 	// The fresh session cookie rides along automatically via the client's
@@ -158,7 +158,7 @@ func TestLifecycleHooksFireThroughRealHTTPMount(t *testing.T) {
 		EnrollmentID string `json:"enrollmentId"`
 	}
 	decodeErr := json.NewDecoder(beginResp.Body).Decode(&enroll)
-	beginResp.Body.Close()
+	_ = beginResp.Body.Close()
 	if decodeErr != nil {
 		t.Fatal(decodeErr)
 	}
@@ -175,7 +175,7 @@ func TestLifecycleHooksFireThroughRealHTTPMount(t *testing.T) {
 	if finishResp.StatusCode != http.StatusOK {
 		t.Fatalf("enroll/finish: got %d", finishResp.StatusCode)
 	}
-	finishResp.Body.Close()
+	_ = finishResp.Body.Close()
 
 	mu.Lock()
 	defer mu.Unlock()
