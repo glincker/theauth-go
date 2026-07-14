@@ -16,7 +16,7 @@ require (
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/crewjam/saml v0.5.1 // indirect
 	github.com/fxamacker/cbor/v2 v2.9.0 // indirect
-	github.com/go-chi/chi/v5 v5.3.0 // indirect
+	github.com/go-chi/chi/v5 v5.3.1 // indirect
 	github.com/go-webauthn/webauthn v0.13.4 // indirect
 	github.com/go-webauthn/x v0.1.23 // indirect
 	github.com/golang-jwt/jwt/v5 v5.2.3 // indirect
