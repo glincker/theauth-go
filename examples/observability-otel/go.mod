@@ -6,16 +6,16 @@ replace github.com/glincker/theauth-go => ../..
 
 require (
 	github.com/glincker/theauth-go v0.0.0-00010101000000-000000000000
-	go.opentelemetry.io/otel v1.32.0
-	go.opentelemetry.io/otel/trace v1.32.0
+	go.opentelemetry.io/otel v1.44.0
+	go.opentelemetry.io/otel/trace v1.44.0
 )
 
 require (
 	github.com/beevik/etree v1.5.0 // indirect
 	github.com/boombuler/barcode v1.0.1-0.20190219062509-6c824513bacc // indirect
+	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/crewjam/saml v0.5.1 // indirect
 	github.com/fxamacker/cbor/v2 v2.9.0 // indirect
-	github.com/glincker/theauth-go/mcpresource v0.0.0-20260622024558-417fe5657526 // indirect
 	github.com/go-chi/chi/v5 v5.3.0 // indirect
 	github.com/go-webauthn/webauthn v0.13.4 // indirect
 	github.com/go-webauthn/x v0.1.23 // indirect
