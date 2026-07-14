@@ -8,6 +8,7 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"time"
@@ -17,6 +18,20 @@ import (
 	"github.com/glincker/theauth-go/internal/totp"
 	"github.com/go-chi/chi/v5"
 )
+
+// Service is the TOTP surface this package's HTTP handlers need. The
+// root *theauth.TheAuth constructs an adapter satisfying this interface
+// (rather than passing *totp.Service directly) so FinishEnrollment
+// dispatches through the root forwarder that fires
+// LifecycleHooks.OnMFAEnabled. Passing the raw internal Service here
+// would silently skip that hook.
+type Service interface {
+	BeginEnrollment(ctx context.Context, userID models.ULID, accountName string) (totp.EnrollResult, error)
+	FinishEnrollment(ctx context.Context, userID models.ULID, enrollmentID, code string) ([]string, error)
+	Verify(ctx context.Context, pendingSessionToken, code string) (string, models.Session, error)
+	ConsumeRecoveryCode(ctx context.Context, pendingSessionToken, code string) (string, models.Session, error)
+	Delete(ctx context.Context, userID models.ULID) error
+}
 
 // CookieConfig captures the session cookie shape (name, secure, TTL)
 // needed to refresh the session cookie after a successful verify or
@@ -31,7 +46,7 @@ type CookieConfig struct {
 // indirection lets us pull the authenticated user without importing
 // the root package.
 type Handler struct {
-	svc         *totp.Service
+	svc         Service
 	cookie      CookieConfig
 	userFromCtx func(r *http.Request) (*models.User, bool)
 }
@@ -39,7 +54,7 @@ type Handler struct {
 // New constructs a Handler. userFromCtx is invoked on requests that
 // run through RequireAuth (enroll/begin, enroll/finish, delete) to
 // pull the user out of the chi-attached request context.
-func New(svc *totp.Service, cookie CookieConfig, userFromCtx func(r *http.Request) (*models.User, bool)) *Handler {
+func New(svc Service, cookie CookieConfig, userFromCtx func(r *http.Request) (*models.User, bool)) *Handler {
 	return &Handler{svc: svc, cookie: cookie, userFromCtx: userFromCtx}
 }
 

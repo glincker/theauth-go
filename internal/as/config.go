@@ -1,6 +1,7 @@
 package as
 
 import (
+	"context"
 	"errors"
 	"strings"
 	"time"
@@ -78,6 +79,18 @@ type Config struct {
 	// Tests pass a fake clock to assert revocation propagation
 	// deterministically instead of sleeping past IntrospectionCacheTTL.
 	Clock Clock
+
+	// OnTokenIssued mirrors root LifecycleHooks.OnTokenIssued. Nil is a
+	// no-op. When set, it runs immediately before every access token JWT
+	// is signed (authorization_code, refresh_token, client_credentials,
+	// and RFC 8693 token exchange), receiving a map of the claims about to
+	// be signed and returning the map to actually sign. A non-nil error
+	// aborts issuance since the token has not yet been minted. Extra keys
+	// returned land in the JWT's non-registered (Extra) claim set;
+	// returning a key that collides with a registered claim (iss, sub,
+	// aud, exp, iat, jti, client_id, scope, typ) is silently dropped at
+	// marshal time, registered fields always win.
+	OnTokenIssued func(ctx context.Context, claims map[string]any) (map[string]any, error)
 
 	// LoginURL is the path on this origin where unauthenticated authorize
 	// requests are redirected. Defaults to "/auth/login".

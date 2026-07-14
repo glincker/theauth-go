@@ -731,7 +731,7 @@ func (a *samlServiceAdapter) BeginLogin(ctx context.Context, _ models.ULID, rela
 }
 
 func (a *samlServiceAdapter) FinishLogin(ctx context.Context, _ models.ULID, samlResp, ua, ip string) (string, error) {
-	tok, _, err := a.svc.FinishLogin(ctx, a.connID, samlResp, ua, ip)
+	tok, _, _, err := a.svc.FinishLogin(ctx, a.connID, samlResp, ua, ip)
 	return tok, err
 }
 

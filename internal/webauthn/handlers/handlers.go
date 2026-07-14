@@ -8,15 +8,32 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"time"
 
 	"github.com/glincker/theauth-go/internal/httpx"
 	"github.com/glincker/theauth-go/internal/models"
-	"github.com/glincker/theauth-go/internal/webauthn"
 	"github.com/go-chi/chi/v5"
+	"github.com/go-webauthn/webauthn/protocol"
 )
+
+// Service is the WebAuthn surface this package's HTTP handlers need. The
+// root *theauth.TheAuth constructs an adapter satisfying this interface
+// (rather than passing *webauthn.Service directly) so FinishRegistration
+// dispatches through the root forwarder that fires
+// LifecycleHooks.OnSignup on a user's first credential. Passing the raw
+// internal Service here would silently skip that hook.
+type Service interface {
+	BeginRegistration(ctx context.Context, userID models.ULID) (*protocol.CredentialCreation, string, error)
+	FinishRegistration(ctx context.Context, userID models.ULID, challengeToken, name string, body io.Reader) (models.WebAuthnCredential, error)
+	BeginLogin(ctx context.Context) (*protocol.CredentialAssertion, string, error)
+	FinishLogin(ctx context.Context, challengeToken string, body io.Reader, ua, ip string) (string, models.Session, error)
+	ListCredentials(ctx context.Context, userID models.ULID) ([]models.WebAuthnCredential, error)
+	DeleteCredential(ctx context.Context, id, userID models.ULID) error
+}
 
 // webauthnChallengeCookieName is the short-lived cookie set at /begin
 // and read at /finish that binds the in-memory ceremony entry to the
@@ -44,7 +61,7 @@ type ChallengeCookieConfig struct {
 
 // Handler owns the six WebAuthn HTTP endpoints.
 type Handler struct {
-	svc           *webauthn.Service
+	svc           Service
 	sessionCookie SessionCookieConfig
 	challengeCfg  ChallengeCookieConfig
 	userFromCtx   func(r *http.Request) (*models.User, bool)
@@ -54,7 +71,7 @@ type Handler struct {
 // register and credential endpoints pull the authenticated user out
 // of the request context without importing the root.
 func New(
-	svc *webauthn.Service,
+	svc Service,
 	sessionCookie SessionCookieConfig,
 	challengeCfg ChallengeCookieConfig,
 	userFromCtx func(r *http.Request) (*models.User, bool),

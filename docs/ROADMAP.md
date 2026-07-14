@@ -6,19 +6,27 @@ this file is forward-looking and gets pruned as items land.
 
 ## Now (v2.5.x)
 
-Continuing the `Config.LifecycleHooks` surface introduced in v2.5.0-rc.1.
-Shipped so far: `OnSignup`, `OnSignin` (password, magic-link, OAuth
-callback paths), `OnOAuthConflict`, plus the `IssueSessionByUserID` /
-`LinkOAuthProviderBySession` / `UnlinkOAuthProvider` forwarders that
-support custom OAuth-conflict resolution flows.
+The `Config.LifecycleHooks` surface introduced in v2.5.0-rc.1 is now fully
+wired: `OnSignup` (password, magic-link, OAuth callback, passkey-first-
+credential, SAML), `OnSignin` (password, magic-link, OAuth callback),
+`OnPasswordChange`, `OnMFAEnabled`, `OnOrgSwitch` (explicit
+`SetActiveOrganization` only, not auto-provisioned personal orgs),
+`OnTokenIssued` (every access-token grant), and `OnOAuthConflict`, plus
+the `IssueSessionByUserID` / `LinkOAuthProviderBySession` /
+`UnlinkOAuthProvider` forwarders that support custom OAuth-conflict
+resolution flows.
 
-Remaining hook wiring, landing incrementally without API changes:
+Fixed alongside the remaining wiring: `passwordhandlers`, `totphandlers`,
+and `webauthnhandlers` previously held the raw internal Service directly,
+bypassing the hook-firing root forwarders entirely, so `OnSignup`/
+`OnSignin`/`OnPasswordChange`/`OnMFAEnabled` never fired for consumers
+using the batteries-included `a.Mount()` routes. Each package now takes a
+root-backed adapter (mirroring the pattern already used correctly for
+OAuth/Organizations/SAML), so hooks fire through the default `Mount()`
+path too.
 
-- [ ] Passkey and SAML signup paths call `OnSignup`
-- [ ] `OnPasswordChange`
-- [ ] `OnMFAEnabled`
-- [ ] `OnTokenIssued`
-- [ ] `OnOrgSwitch`
+Remaining:
+
 - [ ] Selective package re-exports (#79) so consumers can import fewer
       symbols from the root package
 

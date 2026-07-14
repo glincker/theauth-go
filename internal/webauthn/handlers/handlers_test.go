@@ -21,6 +21,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -165,11 +166,23 @@ func newTestService(t *testing.T, store *fakeWebAuthnStorage) *webauthn.Service 
 // for handler tests that do not exercise rate-limiting or session auth.
 func passthrough(next http.Handler) http.Handler { return next }
 
+// testServiceAdapter adapts *webauthn.Service to handlers.Service,
+// dropping the isFirstCredential bool that only the root's
+// FinishPasskeyRegistration forwarder needs (to fire OnSignup). These
+// handler-level tests exercise the HTTP contract directly against a real
+// Service with no root TheAuth involved, so there is no hook to fire.
+type testServiceAdapter struct{ *webauthn.Service }
+
+func (a testServiceAdapter) FinishRegistration(ctx context.Context, userID models.ULID, challengeToken, name string, body io.Reader) (models.WebAuthnCredential, error) {
+	cred, _, err := a.Service.FinishRegistration(ctx, userID, challengeToken, name, body)
+	return cred, err
+}
+
 // mountHandler builds a chi.Router with the webauthn handler mounted and
 // returns an httptest.Server.
 func mountHandler(svc *webauthn.Service, userFromCtx func(*http.Request) (*models.User, bool)) *httptest.Server {
 	h := handlers.New(
-		svc,
+		testServiceAdapter{svc},
 		handlers.SessionCookieConfig{Name: "theauth_sess", SecureFlag: false, TTL: time.Hour},
 		handlers.ChallengeCookieConfig{SecureFlag: false, TTL: 5 * time.Minute},
 		userFromCtx,

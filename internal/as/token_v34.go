@@ -110,6 +110,9 @@ func (s *Service) ClientCredentialsToken(ctx context.Context, req TokenRequest) 
 			},
 		},
 	}
+	if err := s.applyOnTokenIssued(ctx, &claims); err != nil {
+		return TokenResponse{}, err
+	}
 	access, err := jwt.Sign(claims, signingKey.KID, priv)
 	if err != nil {
 		return TokenResponse{}, fmt.Errorf("sign agent token: %w", err)
@@ -291,6 +294,9 @@ func (s *Service) ExchangeToken(ctx context.Context, req TokenExchangeRequest) (
 			"act":                 actorClaimToMap(newActor),
 			"delegation_grant_id": grant.ID.String(),
 		},
+	}
+	if err := s.applyOnTokenIssued(ctx, &claims); err != nil {
+		return TokenResponse{}, err
 	}
 	access, err := jwt.Sign(claims, signingKey.KID, priv)
 	if err != nil {

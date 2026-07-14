@@ -81,6 +81,39 @@ func (a *TheAuth) fireOnSignin(ctx context.Context, user *User, sess *Session) {
 	})
 }
 
+// fireOnPasswordChange dispatches LifecycleHooks.OnPasswordChange. Silent
+// no-op when the hook is unset.
+func (a *TheAuth) fireOnPasswordChange(ctx context.Context, user *User) {
+	if a.lifecycle.OnPasswordChange == nil || user == nil {
+		return
+	}
+	runLifecycleHook(ctx, "OnPasswordChange", func() error {
+		return a.lifecycle.OnPasswordChange(ctx, user)
+	})
+}
+
+// fireOnMFAEnabled dispatches LifecycleHooks.OnMFAEnabled. Silent no-op
+// when the hook is unset.
+func (a *TheAuth) fireOnMFAEnabled(ctx context.Context, user *User, kind MFAKind) {
+	if a.lifecycle.OnMFAEnabled == nil || user == nil {
+		return
+	}
+	runLifecycleHook(ctx, "OnMFAEnabled", func() error {
+		return a.lifecycle.OnMFAEnabled(ctx, user, kind)
+	})
+}
+
+// fireOnOrgSwitch dispatches LifecycleHooks.OnOrgSwitch. Silent no-op
+// when the hook is unset.
+func (a *TheAuth) fireOnOrgSwitch(ctx context.Context, user *User, orgID string) {
+	if a.lifecycle.OnOrgSwitch == nil || user == nil {
+		return
+	}
+	runLifecycleHook(ctx, "OnOrgSwitch", func() error {
+		return a.lifecycle.OnOrgSwitch(ctx, user, orgID)
+	})
+}
+
 // ---------- v2.5 Public lookup helpers ----------
 
 // UserByID looks up a user by ID. Returns (nil, ErrNotFound) when the row
@@ -299,9 +332,16 @@ func (a *TheAuth) requestPasswordResetForTest(ctx context.Context, emailAddr str
 
 // resetPassword atomically consumes a reset token, updates the user's
 // password, and revokes all existing sessions. Forwards to
-// passwordSvc.Reset.
+// passwordSvc.Reset, then fires OnPasswordChange on success.
 func (a *TheAuth) resetPassword(ctx context.Context, token, newPassword string) error {
-	return a.passwordSvc.Reset(ctx, token, newPassword)
+	userID, err := a.passwordSvc.Reset(ctx, token, newPassword)
+	if err != nil {
+		return err
+	}
+	if user, uerr := a.storage.UserByID(ctx, userID); uerr == nil {
+		a.fireOnPasswordChange(ctx, user)
+	}
+	return nil
 }
 
 // ---------- TOTP forwarders ----------
@@ -316,9 +356,17 @@ func (a *TheAuth) BeginTOTPEnrollment(ctx context.Context, userID ULID, accountN
 
 // FinishTOTPEnrollment validates one code against the pending secret,
 // confirms the row, generates recovery codes, and returns them to the
-// caller. Forwards to totpSvc.FinishEnrollment.
+// caller. Forwards to totpSvc.FinishEnrollment, then fires OnMFAEnabled
+// on success.
 func (a *TheAuth) FinishTOTPEnrollment(ctx context.Context, userID ULID, enrollmentID, code string) ([]string, error) {
-	return a.totpSvc.FinishEnrollment(ctx, userID, enrollmentID, code)
+	codes, err := a.totpSvc.FinishEnrollment(ctx, userID, enrollmentID, code)
+	if err != nil {
+		return codes, err
+	}
+	if user, uerr := a.storage.UserByID(ctx, userID); uerr == nil {
+		a.fireOnMFAEnabled(ctx, user, MFAKindTOTP)
+	}
+	return codes, nil
 }
 
 // IssuePending2FA mints a short-lived session whose AuthLevel is
@@ -352,9 +400,22 @@ func (a *TheAuth) BeginPasskeyRegistration(ctx context.Context, userID ULID) (*p
 
 // FinishPasskeyRegistration validates the navigator.credentials.create
 // response, stores the resulting credential, and returns the stored row.
-// Forwards to webauthnSvc.FinishRegistration.
+// Forwards to webauthnSvc.FinishRegistration. Fires OnSignup with
+// SignupMethodPasskey when this was the user's first-ever credential:
+// WebAuthn registration always requires an already-authenticated user, so
+// there is no true account-creation moment the way password/magic-link/
+// OAuth signup have one; the first passkey is the closest equivalent.
 func (a *TheAuth) FinishPasskeyRegistration(ctx context.Context, userID ULID, challengeToken, name string, body io.Reader) (WebAuthnCredential, error) {
-	return a.webauthnSvc.FinishRegistration(ctx, userID, challengeToken, name, body)
+	cred, isFirst, err := a.webauthnSvc.FinishRegistration(ctx, userID, challengeToken, name, body)
+	if err != nil {
+		return cred, err
+	}
+	if isFirst {
+		if user, uerr := a.storage.UserByID(ctx, userID); uerr == nil {
+			a.fireOnSignup(ctx, user, SignupMethodPasskey)
+		}
+	}
+	return cred, nil
 }
 
 // BeginPasskeyLogin starts a WebAuthn assertion ceremony. Returns a
