@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"log/slog"
 	"net/http"
 	"net/mail"
@@ -17,6 +18,7 @@ import (
 	totphandlers "github.com/glincker/theauth-go/internal/totp/handlers"
 	webauthnhandlers "github.com/glincker/theauth-go/internal/webauthn/handlers"
 	"github.com/go-chi/chi/v5"
+	"github.com/go-webauthn/webauthn/protocol"
 )
 
 // Mount wires TheAuth's HTTP routes onto the supplied chi router under /auth.
@@ -285,12 +287,35 @@ func (s oauthServiceAdapter) Callback(ctx context.Context, providerName, code, s
 	return tok, err
 }
 
+// passwordServiceAdapter implements internal/password/handlers.Service on
+// top of the root *TheAuth so Signup/Signin/Reset dispatch through the
+// hook-firing root forwarders (signupWithPassword, signinWithPassword,
+// resetPassword) instead of calling passwordSvc directly, which would
+// silently skip LifecycleHooks (OnSignup, OnSignin, OnPasswordChange).
+type passwordServiceAdapter struct{ a *TheAuth }
+
+func (s passwordServiceAdapter) Signup(ctx context.Context, emailAddr, pw string) (*User, string, error) {
+	return s.a.signupWithPassword(ctx, emailAddr, pw)
+}
+
+func (s passwordServiceAdapter) Signin(ctx context.Context, emailAddr, pw, userAgent, ip string) (string, *User, SigninStep, error) {
+	return s.a.signinWithPassword(ctx, emailAddr, pw, userAgent, ip)
+}
+
+func (s passwordServiceAdapter) RequestReset(ctx context.Context, emailAddr string) error {
+	return s.a.passwordSvc.RequestReset(ctx, emailAddr)
+}
+
+func (s passwordServiceAdapter) Reset(ctx context.Context, token, newPassword string) error {
+	return s.a.resetPassword(ctx, token, newPassword)
+}
+
 // mountPasswordHandlers wires /email-password/* subroutes via the
 // extracted internal/password/handlers package. PR E architecture
 // reorg (2026-06-20) moved the four endpoints to that package; this
 // thin coordinator is what the root Mount calls.
 func (a *TheAuth) mountPasswordHandlers(r chi.Router, ipLimit, emailLimit func(http.Handler) http.Handler) {
-	h := passwordhandlers.New(a.passwordSvc, passwordhandlers.CookieConfig{
+	h := passwordhandlers.New(passwordServiceAdapter{a: a}, passwordhandlers.CookieConfig{
 		Name:       a.cookieName,
 		SecureFlag: a.secureCookie,
 		TTL:        a.sessionTTL,
@@ -303,9 +328,35 @@ func (a *TheAuth) mountPasswordHandlers(r chi.Router, ipLimit, emailLimit func(h
 // (2026-06-20) moved the five endpoints to that package; the root
 // keeps this thin coordinator so handlers.go is the single Mount
 // caller.
+// totpServiceAdapter implements internal/totp/handlers.Service on top of
+// the root *TheAuth so FinishEnrollment dispatches through the
+// hook-firing root forwarder (FinishTOTPEnrollment) instead of calling
+// totpSvc directly, which would silently skip LifecycleHooks.OnMFAEnabled.
+type totpServiceAdapter struct{ a *TheAuth }
+
+func (s totpServiceAdapter) BeginEnrollment(ctx context.Context, userID ULID, accountName string) (EnrollTOTPResult, error) {
+	return s.a.BeginTOTPEnrollment(ctx, userID, accountName)
+}
+
+func (s totpServiceAdapter) FinishEnrollment(ctx context.Context, userID ULID, enrollmentID, code string) ([]string, error) {
+	return s.a.FinishTOTPEnrollment(ctx, userID, enrollmentID, code)
+}
+
+func (s totpServiceAdapter) Verify(ctx context.Context, pendingSessionToken, code string) (string, Session, error) {
+	return s.a.VerifyTOTP(ctx, pendingSessionToken, code)
+}
+
+func (s totpServiceAdapter) ConsumeRecoveryCode(ctx context.Context, pendingSessionToken, code string) (string, Session, error) {
+	return s.a.ConsumeRecoveryCode(ctx, pendingSessionToken, code)
+}
+
+func (s totpServiceAdapter) Delete(ctx context.Context, userID ULID) error {
+	return s.a.totpSvc.Delete(ctx, userID)
+}
+
 func (a *TheAuth) mountTOTP(r chi.Router, ipLimit func(http.Handler) http.Handler) {
 	h := totphandlers.New(
-		a.totpSvc,
+		totpServiceAdapter{a: a},
 		totphandlers.CookieConfig{
 			Name:       a.cookieName,
 			SecureFlag: a.secureCookie,
@@ -323,9 +374,40 @@ func (a *TheAuth) mountTOTP(r chi.Router, ipLimit func(http.Handler) http.Handle
 // (2026-06-20) moved the six endpoints to that package; the root
 // keeps this thin coordinator so handlers.go is the single Mount
 // caller.
+// webauthnServiceAdapter implements internal/webauthn/handlers.Service on
+// top of the root *TheAuth so FinishRegistration dispatches through the
+// hook-firing root forwarder (FinishPasskeyRegistration) instead of
+// calling webauthnSvc directly, which would silently skip
+// LifecycleHooks.OnSignup on a user's first credential.
+type webauthnServiceAdapter struct{ a *TheAuth }
+
+func (s webauthnServiceAdapter) BeginRegistration(ctx context.Context, userID ULID) (*protocol.CredentialCreation, string, error) {
+	return s.a.BeginPasskeyRegistration(ctx, userID)
+}
+
+func (s webauthnServiceAdapter) FinishRegistration(ctx context.Context, userID ULID, challengeToken, name string, body io.Reader) (WebAuthnCredential, error) {
+	return s.a.FinishPasskeyRegistration(ctx, userID, challengeToken, name, body)
+}
+
+func (s webauthnServiceAdapter) BeginLogin(ctx context.Context) (*protocol.CredentialAssertion, string, error) {
+	return s.a.BeginPasskeyLogin(ctx)
+}
+
+func (s webauthnServiceAdapter) FinishLogin(ctx context.Context, challengeToken string, body io.Reader, ua, ip string) (string, Session, error) {
+	return s.a.FinishPasskeyLogin(ctx, challengeToken, body, ua, ip)
+}
+
+func (s webauthnServiceAdapter) ListCredentials(ctx context.Context, userID ULID) ([]WebAuthnCredential, error) {
+	return s.a.webauthnSvc.ListCredentials(ctx, userID)
+}
+
+func (s webauthnServiceAdapter) DeleteCredential(ctx context.Context, id, userID ULID) error {
+	return s.a.webauthnSvc.DeleteCredential(ctx, id, userID)
+}
+
 func (a *TheAuth) mountWebAuthn(r chi.Router, ipLimit func(http.Handler) http.Handler) {
 	h := webauthnhandlers.New(
-		a.webauthnSvc,
+		webauthnServiceAdapter{a: a},
 		webauthnhandlers.SessionCookieConfig{
 			Name:       a.cookieName,
 			SecureFlag: a.secureCookie,

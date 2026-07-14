@@ -349,35 +349,36 @@ func (s *Service) RequestResetForTest(ctx context.Context, emailAddr string) (st
 // Reset atomically consumes a reset token, updates the user's password,
 // and revokes all existing sessions. Returns CodePasswordResetInvalid on
 // missing/unknown tokens, CodePasswordResetExpired on stale ones, and
-// CodeWeakPassword on too-short new passwords.
-func (s *Service) Reset(ctx context.Context, token, newPassword string) error {
+// CodeWeakPassword on too-short new passwords. Returns the affected
+// user's ID on success so callers can dispatch LifecycleHooks.OnPasswordChange.
+func (s *Service) Reset(ctx context.Context, token, newPassword string) (models.ULID, error) {
 	if token == "" {
-		return models.NewError(models.CodePasswordResetInvalid, "missing token", nil)
+		return models.ULID{}, models.NewError(models.CodePasswordResetInvalid, "missing token", nil)
 	}
 	if len(newPassword) < MinPasswordLength {
-		return models.NewError(models.CodeWeakPassword, fmt.Sprintf("password must be at least %d characters", MinPasswordLength), nil)
+		return models.ULID{}, models.NewError(models.CodeWeakPassword, fmt.Sprintf("password must be at least %d characters", MinPasswordLength), nil)
 	}
 
 	rt, err := s.storage.ConsumePasswordResetToken(ctx, crypto.HashToken(token))
 	if errors.Is(err, models.ErrStorageNotFound) {
-		return models.NewError(models.CodePasswordResetInvalid, "invalid or already-used token", nil)
+		return models.ULID{}, models.NewError(models.CodePasswordResetInvalid, "invalid or already-used token", nil)
 	}
 	if err != nil {
-		return err
+		return models.ULID{}, err
 	}
 	// ConsumePasswordResetToken already enforces expires_at > now() in SQL,
 	// but the in-memory adapter mirrors the same filter. Defensive
 	// double-check for forward-compat with future storage backends.
 	if rt.ExpiresAt.Before(time.Now()) {
-		return models.NewError(models.CodePasswordResetExpired, "reset token expired", nil)
+		return models.ULID{}, models.NewError(models.CodePasswordResetExpired, "reset token expired", nil)
 	}
 
 	hash, err := crypto.HashPassword(newPassword)
 	if err != nil {
-		return err
+		return models.ULID{}, err
 	}
 	if err := s.storage.SetUserPassword(ctx, rt.UserID, hash); err != nil {
-		return err
+		return models.ULID{}, err
 	}
 	if err := s.storage.RevokeUserSessions(ctx, rt.UserID); err != nil {
 		// Non-fatal: log so ops know revocation did not complete, but the
@@ -387,5 +388,5 @@ func (s *Service) Reset(ctx context.Context, token, newPassword string) error {
 	s.auditEm.EmitAudit(ctx, "password.reset.completed", models.TargetRef{Type: "user", ID: rt.UserID.String()}, nil)
 	s.auditEm.EmitAudit(ctx, "password.changed", models.TargetRef{Type: "user", ID: rt.UserID.String()}, nil)
 	slog.Info("theauth: password reset", "user_id", rt.UserID.String())
-	return nil
+	return rt.UserID, nil
 }

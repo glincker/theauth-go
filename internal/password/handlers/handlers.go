@@ -8,14 +8,29 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"time"
 
 	"github.com/glincker/theauth-go/internal/httpx"
+	"github.com/glincker/theauth-go/internal/models"
 	"github.com/glincker/theauth-go/internal/password"
 	"github.com/go-chi/chi/v5"
 )
+
+// Service is the password surface this package's HTTP handlers need. The
+// root *theauth.TheAuth constructs an adapter satisfying this interface
+// (rather than passing *password.Service directly) so Signup/Signin/Reset
+// dispatch through the root forwarders that fire LifecycleHooks
+// (OnSignup, OnSignin, OnPasswordChange). Passing the raw internal
+// Service here would silently skip those hooks.
+type Service interface {
+	Signup(ctx context.Context, emailAddr, pw string) (*models.User, string, error)
+	Signin(ctx context.Context, emailAddr, pw, userAgent, ip string) (string, *models.User, password.SigninStep, error)
+	RequestReset(ctx context.Context, emailAddr string) error
+	Reset(ctx context.Context, token, newPassword string) error
+}
 
 // CookieConfig captures the session cookie attributes the password
 // flow needs to mint a Set-Cookie. Owned by the root TheAuth and
@@ -28,17 +43,17 @@ type CookieConfig struct {
 }
 
 // Handler owns the four password HTTP endpoints. It depends on the
-// extracted password Service for business logic and on a CookieConfig
-// for the session cookie shape.
+// Service interface for business logic and on a CookieConfig for the
+// session cookie shape.
 type Handler struct {
-	svc    *password.Service
+	svc    Service
 	cookie CookieConfig
 }
 
-// New constructs a Handler. Both arguments are required; pass a real
-// password.Service constructed by the root and a populated CookieConfig
-// matching the operator session settings.
-func New(svc *password.Service, cookie CookieConfig) *Handler {
+// New constructs a Handler. Both arguments are required; pass a Service
+// adapter constructed by the root (so LifecycleHooks fire) and a
+// populated CookieConfig matching the operator session settings.
+func New(svc Service, cookie CookieConfig) *Handler {
 	return &Handler{svc: svc, cookie: cookie}
 }
 

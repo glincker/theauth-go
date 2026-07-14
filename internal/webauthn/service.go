@@ -297,32 +297,40 @@ func (s *Service) BeginRegistration(ctx context.Context, userID models.ULID) (*p
 // the new row is inserted and returned to the caller for display
 // (nickname, AAGUID, transports). Single-use: the challenge entry is
 // removed before the library is invoked so a failed verify burns it.
-func (s *Service) FinishRegistration(ctx context.Context, userID models.ULID, challengeToken, name string, body io.Reader) (models.WebAuthnCredential, error) {
+//
+// The second return value reports whether this was the user's first
+// credential (no prior rows existed when the ceremony started). WebAuthn
+// registration always requires an already-authenticated user, so there is
+// no "create account via passkey" moment the way password/magic-link/OAuth
+// signup have one; callers treat a user's first-ever passkey as the
+// closest equivalent for LifecycleHooks.OnSignup purposes.
+func (s *Service) FinishRegistration(ctx context.Context, userID models.ULID, challengeToken, name string, body io.Reader) (models.WebAuthnCredential, bool, error) {
 	if s.wa == nil {
-		return models.WebAuthnCredential{}, errors.New("theauth: WebAuthn not configured")
+		return models.WebAuthnCredential{}, false, errors.New("theauth: WebAuthn not configured")
 	}
 	raw, ok := s.challenges.LoadAndDelete(challengeToken)
 	if !ok {
-		return models.WebAuthnCredential{}, models.NewError(models.CodeWebAuthn, "challenge unknown or expired", nil)
+		return models.WebAuthnCredential{}, false, models.NewError(models.CodeWebAuthn, "challenge unknown or expired", nil)
 	}
 	chal, ok := raw.(*challenge)
 	if !ok || chal.userID == nil || *chal.userID != userID {
-		return models.WebAuthnCredential{}, models.NewError(models.CodeWebAuthn, "challenge user mismatch", nil)
+		return models.WebAuthnCredential{}, false, models.NewError(models.CodeWebAuthn, "challenge user mismatch", nil)
 	}
 	if time.Now().After(chal.expiresAt) {
-		return models.WebAuthnCredential{}, models.NewError(models.CodeWebAuthn, "challenge expired", nil)
+		return models.WebAuthnCredential{}, false, models.NewError(models.CodeWebAuthn, "challenge expired", nil)
 	}
 	wu, err := s.loadWebauthnUser(ctx, userID)
 	if err != nil {
-		return models.WebAuthnCredential{}, err
+		return models.WebAuthnCredential{}, false, err
 	}
+	isFirstCredential := len(wu.credentials) == 0
 	parsed, err := protocol.ParseCredentialCreationResponseBody(body)
 	if err != nil {
-		return models.WebAuthnCredential{}, models.NewError(models.CodeWebAuthn, "invalid attestation body", err)
+		return models.WebAuthnCredential{}, false, models.NewError(models.CodeWebAuthn, "invalid attestation body", err)
 	}
 	cred, err := s.wa.CreateCredential(wu, *chal.session, parsed)
 	if err != nil {
-		return models.WebAuthnCredential{}, models.NewError(models.CodeWebAuthn, "create credential failed", err)
+		return models.WebAuthnCredential{}, false, models.NewError(models.CodeWebAuthn, "create credential failed", err)
 	}
 	transports := make([]string, 0, len(cred.Transport))
 	for _, t := range cred.Transport {
@@ -342,13 +350,13 @@ func (s *Service) FinishRegistration(ctx context.Context, userID models.ULID, ch
 	}
 	stored, err := s.storage.InsertWebAuthnCredential(ctx, row)
 	if err != nil {
-		return models.WebAuthnCredential{}, fmt.Errorf("theauth: insert webauthn credential: %w", err)
+		return models.WebAuthnCredential{}, false, fmt.Errorf("theauth: insert webauthn credential: %w", err)
 	}
 	s.auditEm.EmitAudit(ctx, "passkey.registered", models.TargetRef{Type: "webauthn_credential", ID: stored.ID.String()}, map[string]any{
 		"aaguid": fmt.Sprintf("%x", stored.AAGUID),
 	})
 	slog.Info("theauth: webauthn registered", "user_id", userID.String(), "credential_id_len", len(stored.CredentialID))
-	return stored, nil
+	return stored, isFirstCredential, nil
 }
 
 // BeginLogin starts a discoverable-credential login. The user is not

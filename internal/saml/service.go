@@ -296,15 +296,17 @@ func (s *Service) BeginLogin(ctx context.Context, connectionID models.ULID, rela
 
 // FinishLogin validates an inbound SAMLResponse, runs find-or-create,
 // issues a session, and returns its token. ua + ip annotate the session
-// for audit.
-func (s *Service) FinishLogin(ctx context.Context, connectionID models.ULID, samlResponseB64 string, ua, ip string) (string, models.Session, error) {
+// for audit. The third return value reports whether the user row was
+// created during this call, so callers can dispatch
+// LifecycleHooks.OnSignup with SignupMethodSAML.
+func (s *Service) FinishLogin(ctx context.Context, connectionID models.ULID, samlResponseB64 string, ua, ip string) (string, models.Session, bool, error) {
 	conn, err := s.storage.SAMLConnectionByID(ctx, connectionID)
 	if err != nil {
-		return "", models.Session{}, err
+		return "", models.Session{}, false, err
 	}
 	sp, err := s.serviceProviderFor(conn)
 	if err != nil {
-		return "", models.Session{}, err
+		return "", models.Session{}, false, err
 	}
 
 	// Collect outstanding request IDs for replay protection. The IdP-
@@ -314,7 +316,7 @@ func (s *Service) FinishLogin(ctx context.Context, connectionID models.ULID, sam
 
 	rawBytes, err := base64.StdEncoding.DecodeString(samlResponseB64)
 	if err != nil {
-		return "", models.Session{}, fmt.Errorf("theauth: saml response base64 decode: %w", err)
+		return "", models.Session{}, false, fmt.Errorf("theauth: saml response base64 decode: %w", err)
 	}
 	// Explicit signed-assertion gate runs against the raw XML before we
 	// hand it to crewjam/saml. Once ParseXMLResponse normalises the
@@ -323,15 +325,15 @@ func (s *Service) FinishLogin(ctx context.Context, connectionID models.ULID, sam
 	// raw-text check is what catches a syntactically valid but unsigned
 	// assertion before any state mutation happens.
 	if !rawHasAssertionSignature(rawBytes) {
-		return "", models.Session{}, ErrSAMLUnsignedAssertion
+		return "", models.Session{}, false, ErrSAMLUnsignedAssertion
 	}
 	acsURL, err := url.Parse(conn.SPACSURL)
 	if err != nil {
-		return "", models.Session{}, fmt.Errorf("theauth: sp acs url invalid: %w", err)
+		return "", models.Session{}, false, fmt.Errorf("theauth: sp acs url invalid: %w", err)
 	}
 	assertion, err := sp.ParseXMLResponse(rawBytes, ids, *acsURL)
 	if err != nil {
-		return "", models.Session{}, errors.Join(ErrSAMLInvalidAssertion, err)
+		return "", models.Session{}, false, errors.Join(ErrSAMLInvalidAssertion, err)
 	}
 
 	// Once an InResponseTo lands, consume it so a replay against the same
@@ -346,18 +348,17 @@ func (s *Service) FinishLogin(ctx context.Context, connectionID models.ULID, sam
 
 	mapped := mapAssertion(conn, assertion)
 	if mapped.Email == "" {
-		return "", models.Session{}, ErrSAMLMissingEmail
+		return "", models.Session{}, false, ErrSAMLMissingEmail
 	}
 
 	user, isNew, err := s.findOrCreateUser(ctx, conn, assertion, mapped)
 	if err != nil {
-		return "", models.Session{}, err
+		return "", models.Session{}, false, err
 	}
-	_ = isNew
 
 	token, sess, err := s.issueSessionForOrg(ctx, user, conn.OrganizationID, ua, ip)
 	if err != nil {
-		return "", models.Session{}, err
+		return "", models.Session{}, false, err
 	}
 
 	auditCtx := audit.WithAuditMetadata(ctx, audit.AuditMetadata{
@@ -370,7 +371,7 @@ func (s *Service) FinishLogin(ctx context.Context, connectionID models.ULID, sam
 		"connection_id": conn.ID.String(),
 	})
 
-	return token, sess, nil
+	return token, sess, isNew, nil
 }
 
 // MetadataXML serialises the per-connection SP metadata as XML, ready to

@@ -218,9 +218,21 @@ func (a *TheAuth) BeginSAMLLogin(ctx context.Context, connectionID ULID, relaySt
 }
 
 // FinishSAMLLogin validates an inbound SAMLResponse, runs find-or-create,
-// issues a session, and returns its token.
+// issues a session, and returns its token. Fires OnSignup with
+// SignupMethodSAML when the user row was created during this call.
+// (OnSignin is intentionally not fired here: per docs/ROADMAP.md it ships
+// only for password, magic-link, and OAuth callback paths so far.)
 func (a *TheAuth) FinishSAMLLogin(ctx context.Context, connectionID ULID, samlResponseB64 string, ua, ip string) (string, Session, error) {
-	return a.samlSvc.FinishLogin(ctx, connectionID, samlResponseB64, ua, ip)
+	token, sess, isNew, err := a.samlSvc.FinishLogin(ctx, connectionID, samlResponseB64, ua, ip)
+	if err != nil {
+		return token, sess, err
+	}
+	if isNew {
+		if user, uerr := a.storage.UserByID(ctx, sess.UserID); uerr == nil {
+			a.fireOnSignup(ctx, user, SignupMethodSAML)
+		}
+	}
+	return token, sess, nil
 }
 
 // SAMLMetadataXML serialises the per-connection SP metadata as XML.

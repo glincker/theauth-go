@@ -141,9 +141,23 @@ func (a *TheAuth) ListUserOrganizations(ctx context.Context, userID ULID) ([]Org
 // SetActiveOrganization sets (or clears, when orgID is nil) the active
 // organization on a session. The caller is responsible for verifying
 // that the session's user is a member of orgID before calling. Forwards
-// to orgsSvc.SetActive.
+// to orgsSvc.SetActive, then fires OnOrgSwitch on success. orgID being
+// nil (clearing the active org) still fires the hook with an empty
+// string so consumers can observe both directions.
 func (a *TheAuth) SetActiveOrganization(ctx context.Context, sessionID ULID, orgID *ULID) error {
-	return a.orgsSvc.SetActive(ctx, sessionID, orgID)
+	if err := a.orgsSvc.SetActive(ctx, sessionID, orgID); err != nil {
+		return err
+	}
+	if sess, serr := a.storage.SessionByID(ctx, sessionID); serr == nil && sess != nil {
+		if user, uerr := a.storage.UserByID(ctx, sess.UserID); uerr == nil {
+			orgIDStr := ""
+			if orgID != nil {
+				orgIDStr = orgID.String()
+			}
+			a.fireOnOrgSwitch(ctx, user, orgIDStr)
+		}
+	}
+	return nil
 }
 
 // autoProvisionPersonalOrg is the v2.5 tenancy auto-provisioner. Called by
