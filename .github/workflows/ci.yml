@@ -49,7 +49,7 @@ jobs:
       - run: go test -race -timeout=120s -coverprofile=coverage.out ./...
         env:
           POSTGRES_TEST_URL: postgres://theauth:theauth@localhost:5432/theauth_test?sslmode=disable
-      - uses: codecov/codecov-action@v5
+      - uses: codecov/codecov-action@v7
         with:
           files: coverage.out
           fail_ci_if_error: false
