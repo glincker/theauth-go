@@ -125,7 +125,15 @@ type Service struct {
 // audit.NoopEmitter. totpPending may be nil only when cfg.TOTPEnabled is
 // false; Signin would otherwise hit a nil-pointer dereference on the
 // step-up path.
-func NewService(storage Storage, sender email.Sender, sessions SessionIssuer, magicLinks MagicLinkRequester, totpPending PendingTOTPIssuer, em audit.Emitter, cfg Config) (*Service, error) {
+func NewService(
+	storage Storage,
+	sender email.Sender,
+	sessions SessionIssuer,
+	magicLinks MagicLinkRequester,
+	totpPending PendingTOTPIssuer,
+	em audit.Emitter,
+	cfg Config,
+) (*Service, error) {
 	if em == nil {
 		em = audit.NoopEmitter{}
 	}

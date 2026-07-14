@@ -91,7 +91,14 @@ type Handler struct {
 
 // New constructs a Handler. pathPrefix is the operator-supplied
 // /admin path override (defaults to /admin/v1 when empty).
-func New(storage Storage, rbac RBACService, audit AuditService, pathPrefix string, userFromCtx UserFromCtx, sessFromCtx SessionFromCtx) *Handler {
+func New(
+	storage Storage,
+	rbac RBACService,
+	audit AuditService,
+	pathPrefix string,
+	userFromCtx UserFromCtx,
+	sessFromCtx SessionFromCtx,
+) *Handler {
 	if pathPrefix == "" {
 		pathPrefix = "/admin/v1"
 	} else {

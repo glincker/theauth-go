@@ -336,7 +336,6 @@ func TestOAuthStateConcurrentReadWrite(t *testing.T) {
 	if rec.Code != http.StatusFound {
 		t.Fatalf("post-race start returned %d, want 302", rec.Code)
 	}
-	_ = context.Background()
 }
 
 // ---------- shared fuzz helpers (originally fuzz_helpers_test.go) ----------

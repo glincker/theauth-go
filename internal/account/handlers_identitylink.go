@@ -207,7 +207,12 @@ func (h *Handler) handleMerge(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.identityLink.MergeAccounts(r.Context(), sessToken, secondaryID, identitylink.MergeInput{AuditReason: body.Reason}); err != nil {
+	if err := h.identityLink.MergeAccounts(
+		r.Context(),
+		sessToken,
+		secondaryID,
+		identitylink.MergeInput{AuditReason: body.Reason},
+	); err != nil {
 		if errors.Is(err, models.ErrStepUpRequired) {
 			admin.Write(w, http.StatusForbidden, models.CodeStepUpRequired, err.Error(), "")
 			return

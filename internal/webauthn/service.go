@@ -60,7 +60,7 @@ type webauthnUser struct {
 // WebAuthnID returns the user's 16 raw ULID bytes as the WebAuthn user
 // handle. ULID fits well inside the 64 byte handle limit and is stable
 // across email or display name renames.
-func (w *webauthnUser) WebAuthnID() []byte { id := w.u.ID; return id[:] }
+func (w *webauthnUser) WebAuthnID() []byte { return w.u.ID[:] }
 
 // WebAuthnName is the human-readable identifier (email).
 func (w *webauthnUser) WebAuthnName() string { return w.u.Email }
@@ -304,7 +304,12 @@ func (s *Service) BeginRegistration(ctx context.Context, userID models.ULID) (*p
 // no "create account via passkey" moment the way password/magic-link/OAuth
 // signup have one; callers treat a user's first-ever passkey as the
 // closest equivalent for LifecycleHooks.OnSignup purposes.
-func (s *Service) FinishRegistration(ctx context.Context, userID models.ULID, challengeToken, name string, body io.Reader) (models.WebAuthnCredential, bool, error) {
+func (s *Service) FinishRegistration(
+	ctx context.Context,
+	userID models.ULID,
+	challengeToken, name string,
+	body io.Reader,
+) (models.WebAuthnCredential, bool, error) {
 	if s.wa == nil {
 		return models.WebAuthnCredential{}, false, errors.New("theauth: WebAuthn not configured")
 	}

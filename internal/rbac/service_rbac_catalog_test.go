@@ -37,7 +37,6 @@ func TestPermissionMatrixFullCatalog(t *testing.T) {
 		theauth.PermissionAuditRead: true,
 	}
 	for _, p := range allPerms {
-		p := p
 		t.Run("owner/"+p.Name, func(t *testing.T) {
 			assertRoleHolds(t, fx, theauth.OrgRoleOwner, p.Name, true)
 		})

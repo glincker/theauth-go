@@ -346,7 +346,8 @@ func (s *Service) findOrCreateUser(ctx context.Context, providerName string, pu 
 			return nil, 0, fmt.Errorf("theauth: load linked user: %w", err)
 		}
 		return u, foundByProvider, nil
-	} else if err != nil && !errors.Is(err, models.ErrStorageNotFound) {
+	}
+	if err != nil && !errors.Is(err, models.ErrStorageNotFound) {
 		return nil, 0, fmt.Errorf("theauth: lookup oauth account: %w", err)
 	}
 

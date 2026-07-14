@@ -254,6 +254,7 @@ func TestSigninRateLimited(t *testing.T) {
 	a.Mount(r)
 	srv := httptest.NewServer(r)
 	t.Cleanup(srv.Close)
+	t.Cleanup(a.Close)
 	// 6 signin attempts from same IP within a minute, 6th should 429.
 	// All attempts use a fresh email per request so the per-email limiter (100/min)
 	// doesn't kick in first. The per-IP limiter (5/min) is what we're testing.
@@ -295,6 +296,7 @@ func TestSigninRateLimitedPerEmail(t *testing.T) {
 	a.Mount(r)
 	srv := httptest.NewServer(r)
 	t.Cleanup(srv.Close)
+	t.Cleanup(a.Close)
 
 	email := "perlimit@h.com"
 	for i := 0; i < 3; i++ {
@@ -386,6 +388,7 @@ func TestMagicLinkRateLimited(t *testing.T) {
 	a.Mount(r)
 	srv := httptest.NewServer(r)
 	t.Cleanup(srv.Close)
+	t.Cleanup(a.Close)
 
 	// First 3 requests must pass through the IP limiter (they succeed or
 	// return 200 regardless of whether the email is registered).

@@ -246,13 +246,10 @@ func resolveClientJARKeys(client *models.OAuthClient) ([]clientPublicKey, error)
 	if client == nil {
 		return nil, errors.New("nil client")
 	}
-	var jwksJSON []byte
-	if len(client.Jwks) > 0 {
-		jwksJSON = client.Jwks
-	} else {
+	if len(client.Jwks) == 0 {
 		return nil, errors.New("client has no inline jwks")
 	}
-	return parseJWKS(jwksJSON)
+	return parseJWKS(client.Jwks)
 }
 
 // clientJWKSDoc is the minimal shape we parse from a client's JSON Web Key Set.

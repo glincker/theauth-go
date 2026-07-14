@@ -34,9 +34,11 @@ func TestIsBcryptHash(t *testing.T) {
 		{"notahash", false},
 	}
 	for _, tc := range tests {
-		if got := crypto.IsBcryptHash(tc.hash); got != tc.want {
-			t.Errorf("IsBcryptHash(%q)=%v; want %v", tc.hash, got, tc.want)
-		}
+		t.Run(tc.hash, func(t *testing.T) {
+			if got := crypto.IsBcryptHash(tc.hash); got != tc.want {
+				t.Errorf("IsBcryptHash(%q)=%v; want %v", tc.hash, got, tc.want)
+			}
+		})
 	}
 }
 

@@ -8,7 +8,6 @@ import (
 	theauth "github.com/glincker/theauth-go"
 	"github.com/glincker/theauth-go/internal/samltest"
 	"github.com/glincker/theauth-go/internal/theauthtest"
-	"github.com/glincker/theauth-go/internal/ulid"
 	"github.com/glincker/theauth-go/storage/memory"
 )
 
@@ -229,7 +228,6 @@ func TestSAMLConnectionCRUD(t *testing.T) {
 	if len(conns) != 0 {
 		t.Fatalf("expected 0, got %d", len(conns))
 	}
-	_ = ulid.New()
 }
 
 func containsString(haystack []byte, needle string) bool {

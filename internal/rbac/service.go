@@ -257,7 +257,6 @@ func (s *Service) RevokeRole(ctx context.Context, actor, target, roleID models.U
 	if err := s.storage.RevokeUserRole(ctx, target, roleID); err != nil {
 		return err
 	}
-	_ = actor
 	s.auditEm.EmitAudit(ctx, "role.revoked", models.TargetRef{Type: "user", ID: target.String()}, map[string]any{
 		"role_id":   roleID.String(),
 		"role_name": role.Name,

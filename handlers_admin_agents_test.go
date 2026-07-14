@@ -204,7 +204,6 @@ func TestAdminDelegations_CreateAndRevoke(t *testing.T) {
 	base := "/admin/v1/organizations/" + fx.orgID.String()
 
 	// Create an agent first.
-	uid := fx.ownerUser.ID
 	agent, _, err := fx.auth.CreateAgent(t.Context(), theauth.CreateAgentInput{
 		Owner: theauth.AgentOwner{OrganizationID: &fx.orgID},
 		Name:  "deleg-bot",
@@ -213,7 +212,6 @@ func TestAdminDelegations_CreateAndRevoke(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateAgent: %v", err)
 	}
-	_ = uid
 
 	// Create a delegation as owner.
 	body := map[string]any{

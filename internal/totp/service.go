@@ -292,7 +292,7 @@ func (s *Service) FinishEnrollment(ctx context.Context, userID models.ULID, enro
 	count := s.cfg.RecoveryCodeCount
 	plain := make([]string, 0, count)
 	stored := make([]models.RecoveryCode, 0, count)
-	for i := 0; i < count; i++ {
+	for range count {
 		c, err := crypto.GenerateRecoveryCode()
 		if err != nil {
 			return nil, fmt.Errorf("theauth: generate recovery code: %w", err)

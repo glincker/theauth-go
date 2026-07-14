@@ -36,6 +36,7 @@ func newTestAuth(t *testing.T) (*theauth.TheAuth, *memory.Store) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(a.Close)
 	return a, store
 }
 
@@ -275,13 +276,13 @@ func TestConsumeMagicLinkTwiceFails(t *testing.T) {
 func TestLifecycleHooks_PasswordSignupAndSignin(t *testing.T) {
 	store := memory.New()
 	var (
-		mu             sync.Mutex
-		signupCount    int
-		signinCount    int
-		signupMethod   theauth.SignupMethod
-		signupUserID   theauth.ULID
-		signinUserID   theauth.ULID
-		seenSessionID  theauth.ULID
+		mu            sync.Mutex
+		signupCount   int
+		signinCount   int
+		signupMethod  theauth.SignupMethod
+		signupUserID  theauth.ULID
+		signinUserID  theauth.ULID
+		seenSessionID theauth.ULID
 	)
 
 	a, err := theauth.New(theauth.Config{
