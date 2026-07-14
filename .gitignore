@@ -40,3 +40,8 @@ tmp/
 
 # agent worktrees
 .claude/worktrees/
+
+# local-only agent instructions (never commit; docs/AGENTS.md is the
+# separate, public, committed LLM-facing doc served on theauth.dev)
+/CLAUDE.md
+/AGENTS.md
