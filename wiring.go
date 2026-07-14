@@ -287,8 +287,12 @@ func wireServices(a *TheAuth, cfg Config, providers map[string]Provider, sp saml
 		if jbs, ok := cfg.Storage.(JWTBearerStorage); ok {
 			jwtBearerStore = jwtBearerStorageAdapter{jbs}
 		}
+		asCfg := asConfigFromRoot(cfg.AuthorizationServer)
+		if cfg.LifecycleHooks != nil {
+			asCfg.OnTokenIssued = cfg.LifecycleHooks.OnTokenIssued
+		}
 		a.as = internalas.New(internalas.Deps{
-			Cfg:              asConfigFromRoot(cfg.AuthorizationServer),
+			Cfg:              asCfg,
 			Storage:          oss,
 			EncryptionKey:    cfg.EncryptionKey,
 			AgentPolicy:      policy,

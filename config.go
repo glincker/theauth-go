@@ -180,10 +180,14 @@ type WebAuthnConfig struct {
 // updated map. Returning a non-nil error from OnTokenIssued does fail token
 // issuance because the token has not yet been minted.
 //
-// Wiring status (v2.5):
-//   - OnSignup, OnSignin: wired at email + password.
-//   - OnPasswordChange, OnMFAEnabled, OnTokenIssued, OnOrgSwitch: reserved.
-//     Wiring lands incrementally in v2.5.x without API change.
+// Wiring status (v2.5): every hook below is wired. OnSignup fires from
+// password, magic-link, OAuth callback, SAML, and a user's first-ever
+// WebAuthn credential (passkey registration has no true account-creation
+// moment, so the first credential is the closest equivalent). OnSignin
+// fires from password, magic-link, and OAuth callback. OnTokenIssued
+// fires from every OAuth access-token grant. OnOrgSwitch fires only from
+// the explicit SetActiveOrganization call, not from auto-provisioned
+// personal orgs.
 // OAuthConflictPayload is passed to LifecycleHooks.OnOAuthConflict when a
 // sign-in OAuth email matches an existing user who registered via a different
 // provider. The consumer creates a verification challenge and returns the URL

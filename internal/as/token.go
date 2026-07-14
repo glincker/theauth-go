@@ -255,6 +255,9 @@ func (s *Service) mintAccessAndRefresh(ctx context.Context, in mintInput) (Token
 		// resource server keys its dispatching logic off of this.
 		tokenType = "DPoP"
 	}
+	if err := s.applyOnTokenIssued(ctx, &claims); err != nil {
+		return TokenResponse{}, err
+	}
 	access, err := jwt.Sign(claims, signingKey.KID, priv)
 	if err != nil {
 		return TokenResponse{}, fmt.Errorf("sign access token: %w", err)
