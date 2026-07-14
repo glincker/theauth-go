@@ -512,6 +512,7 @@ func asConfigFromRoot(c *AuthorizationServerConfig) internalas.Config {
 		RegistrationTokens:             append([]string(nil), c.RegistrationTokens...),
 		RegistrationRateLimitPerMinute: c.RegistrationRateLimitPerMinute,
 		IntrospectionCacheTTL:          c.IntrospectionCacheTTL,
+		Clock:                          c.Clock,
 		LoginURL:                       c.LoginURL,
 		DisableRotation:                c.DisableRotation,
 		CIMD:                           c.CIMD,

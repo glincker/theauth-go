@@ -73,6 +73,12 @@ type Config struct {
 	// endpoint emits. Defaults to 60 seconds.
 	IntrospectionCacheTTL time.Duration
 
+	// Clock is the time source used by the introspection cache and the
+	// chain-cache TTL. Defaults to a wrapper around time.Now when nil.
+	// Tests pass a fake clock to assert revocation propagation
+	// deterministically instead of sleeping past IntrospectionCacheTTL.
+	Clock Clock
+
 	// LoginURL is the path on this origin where unauthenticated authorize
 	// requests are redirected. Defaults to "/auth/login".
 	LoginURL string
@@ -191,6 +197,9 @@ func Validate(cfg *Config, encryptionKey []byte) error {
 	}
 	if cfg.IntrospectionCacheTTL <= 0 {
 		cfg.IntrospectionCacheTTL = 60 * time.Second
+	}
+	if cfg.Clock == nil {
+		cfg.Clock = realClock{}
 	}
 	if cfg.LoginURL == "" {
 		cfg.LoginURL = "/auth/login"

@@ -13,6 +13,14 @@ import (
 // implementation to internal/as; the struct + asConfigFromRoot at the
 // bottom of theauth.go preserve the wire shape and the New() defaults.
 
+// Clock is the time source used by the introspection cache and the
+// chain-cache TTL. Tests pass a fake clock to assert revocation
+// propagation deterministically instead of sleeping past
+// IntrospectionCacheTTL.
+type Clock interface {
+	Now() time.Time
+}
+
 // AuthorizationServerConfig wires the OAuth 2.1 + MCP authorization
 // server surface. Set on Config.AuthorizationServer to enable
 // /.well-known/ and /oauth/ routes. Leave nil for v1.0 behavior.
@@ -97,6 +105,13 @@ type AuthorizationServerConfig struct {
 	// introspection endpoint emits. Defaults to 60 seconds. Resource
 	// servers may cache responses up to this duration.
 	IntrospectionCacheTTL time.Duration
+
+	// Clock is the time source used by the introspection cache and the
+	// chain-cache TTL. Defaults to a wrapper around time.Now when nil.
+	// Tests pass a fake clock to assert revocation propagation
+	// deterministically (e.g. introspecting immediately after revoke)
+	// instead of sleeping past IntrospectionCacheTTL.
+	Clock Clock
 
 	// LoginURL is the path on this origin where unauthenticated
 	// authorize requests are redirected. Defaults to "/auth/login". The
@@ -418,6 +433,7 @@ func validateASConfig(cfg *AuthorizationServerConfig, encryptionKey []byte) erro
 		AllowAnonymousRegistration:     cfg.AllowAnonymousRegistration,
 		RegistrationRateLimitPerMinute: cfg.RegistrationRateLimitPerMinute,
 		IntrospectionCacheTTL:          cfg.IntrospectionCacheTTL,
+		Clock:                          cfg.Clock,
 		LoginURL:                       cfg.LoginURL,
 		DisableRotation:                cfg.DisableRotation,
 		DPoP:                           dpopConfigFromRoot(cfg.DPoP),
@@ -444,6 +460,7 @@ func validateASConfig(cfg *AuthorizationServerConfig, encryptionKey []byte) erro
 	cfg.RegistrationAccessTokenTTL = internal.RegistrationAccessTokenTTL
 	cfg.RegistrationRateLimitPerMinute = internal.RegistrationRateLimitPerMinute
 	cfg.IntrospectionCacheTTL = internal.IntrospectionCacheTTL
+	cfg.Clock = internal.Clock
 	cfg.LoginURL = internal.LoginURL
 	// Mirror CIBA defaults back.
 	if cfg.CIBA != nil && internal.CIBA != nil {
