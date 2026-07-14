@@ -13,7 +13,7 @@ require (
 	github.com/oklog/ulid/v2 v2.1.1
 	github.com/pquerna/otp v1.4.0
 	github.com/russellhaering/goxmldsig v1.4.0
-	golang.org/x/crypto v0.53.0
+	golang.org/x/crypto v0.54.0
 	golang.org/x/time v0.15.0
 )
 
@@ -33,7 +33,7 @@ require (
 	github.com/mattermost/xml-roundtrip-validator v0.1.0 // indirect
 	github.com/mitchellh/mapstructure v1.5.0 // indirect
 	github.com/x448/float16 v0.8.4 // indirect
-	golang.org/x/sync v0.21.0 // indirect
-	golang.org/x/sys v0.46.0 // indirect
-	golang.org/x/text v0.38.0 // indirect
+	golang.org/x/sync v0.22.0 // indirect
+	golang.org/x/sys v0.47.0 // indirect
+	golang.org/x/text v0.40.0 // indirect
 )
