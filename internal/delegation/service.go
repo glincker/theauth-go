@@ -137,9 +137,9 @@ func (s *Service) GrantDelegation(ctx context.Context, in models.GrantDelegation
 	if in.MaxDurationSeconds <= 0 {
 		return models.DelegationGrant{}, errors.New("theauth: GrantDelegation MaxDurationSeconds must be > 0")
 	}
-	cap := int(s.cfg.MaxDelegationDuration.Seconds())
-	if in.MaxDurationSeconds > cap {
-		return models.DelegationGrant{}, fmt.Errorf("theauth: MaxDurationSeconds exceeds policy cap %d", cap)
+	maxSeconds := int(s.cfg.MaxDelegationDuration.Seconds())
+	if in.MaxDurationSeconds > maxSeconds {
+		return models.DelegationGrant{}, fmt.Errorf("theauth: MaxDurationSeconds exceeds policy cap %d", maxSeconds)
 	}
 	// Verify the agent exists and is active before we record any approval.
 	ag, err := s.storage.AgentByID(ctx, in.AgentID)

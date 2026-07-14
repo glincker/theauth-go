@@ -136,7 +136,6 @@ func applyUserRemove(u *models.User, activeOut *bool, path string) error {
 	default:
 		return ErrUnsupportedFilter
 	}
-	_ = u
 	return nil
 }
 

@@ -300,10 +300,9 @@ func TestRegisterBegin_OK(t *testing.T) {
 	}
 }
 
-// TestRegisterBegin_UserNotFound verifies that when userFromCtx returns a nil
-// user the handler panics with nil dereference... actually the handler
-// does u.ID on a nil pointer. Let's test it returns non-200 by using a user
-// whose ID is not in storage.
+// TestRegisterBegin_UserNotInStorage verifies that BeginRegistration for an
+// authenticated user who has no row in storage returns a non-200 (storage
+// error mapped to 500).
 func TestRegisterBegin_UserNotInStorage(t *testing.T) {
 	store := newFakeWebAuthnStorage()
 	// user is NOT added to storage; BeginRegistration will fail on UserByID.

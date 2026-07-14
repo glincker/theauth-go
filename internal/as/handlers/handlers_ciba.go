@@ -34,7 +34,7 @@ func (h *Handler) handleBCAuthorize(w http.ResponseWriter, r *http.Request) {
 	}
 	if raw := r.PostFormValue("requested_expiry"); raw != "" {
 		var n int
-		if _, err := parseIntField(raw, &n); err == nil && n > 0 {
+		if err := parseIntField(raw, &n); err == nil && n > 0 {
 			req.RequestedExpiry = n
 		}
 	}
@@ -94,18 +94,18 @@ func writeCIBATokenError(w http.ResponseWriter, err error) {
 
 // parseIntField parses a decimal integer string into n. Returns an error for
 // empty or non-numeric input.
-func parseIntField(s string, n *int) (string, error) {
+func parseIntField(s string, n *int) error {
 	s = strings.TrimSpace(s)
 	if s == "" {
-		return s, errors.New("empty")
+		return errors.New("empty")
 	}
 	v := 0
 	for _, ch := range s {
 		if ch < '0' || ch > '9' {
-			return s, errors.New("non-numeric")
+			return errors.New("non-numeric")
 		}
 		v = v*10 + int(ch-'0')
 	}
 	*n = v
-	return s, nil
+	return nil
 }

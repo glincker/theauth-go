@@ -36,7 +36,7 @@ const nonceVersion byte = 1
 // 8 iat bytes + 32 HMAC bytes.
 const nonceLen = 1 + 8 + sha256.Size
 
-// IssueNonce returns a fresh DPoP-Nonce. now defaults to time.Now().UTC()
+// issueNonce returns a fresh DPoP-Nonce. now defaults to time.Now().UTC()
 // when zero. secret must be the per-service HMAC secret allocated by
 // Service.New (32 random bytes).
 func issueNonce(secret []byte, now time.Time) string {
