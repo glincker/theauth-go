@@ -37,14 +37,22 @@ Remaining:
 - [x] MySQL service container available in CI (opt-in contract gate, not
       yet enabled by default)
 - [x] Dependency and static-analysis scanning (Dependabot, CodeQL)
+- [x] Fix `mysql.Migrate()` against MySQL 8.4: several migrations used
+      `TEXT/BLOB ... DEFAULT ''`, which 8.4 rejects outright, and the
+      statement splitter dropped statements preceded by comment lines (and
+      mis-split on a semicolon that happened to appear inside a comment).
+      Migrations now apply cleanly end-to-end against a live MySQL 8.4
+      instance.
 - [ ] Raise `internal/rbac` and `internal/webauthn` unit coverage further
       beyond the DeleteRole/DeleteCredential gaps closed in this pass
 - [ ] **Full storage-contract-suite parity (bigger, separate effort).**
-      The shared contract test suite fails today against Postgres on
-      constraint and foreign-key edge cases the lenient in-memory backend
-      doesn't enforce; MySQL's status against the same suite is
-      unverified. Each backend needs its own investigation before the
-      opt-in contract gates can be enabled by default in CI.
+      The shared contract test suite fails against both Postgres and (now
+      confirmed, not just suspected) MySQL on constraint and foreign-key
+      edge cases the lenient in-memory backend doesn't enforce, plus a
+      couple of correctness bugs in individual methods (e.g. JWKS key
+      update on an unknown KID doesn't return `ErrNotFound`). Each backend
+      needs its own investigation before the opt-in contract gates can be
+      enabled by default in CI.
 
 ## Under consideration
 

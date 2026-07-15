@@ -8,7 +8,7 @@ CREATE TABLE IF NOT EXISTS agents (
     owner_user_id   BINARY(16),
     organization_id BINARY(16),
     name            VARCHAR(255) NOT NULL,
-    description     TEXT NOT NULL DEFAULT '',
+    description     TEXT NOT NULL DEFAULT (''),
     status          VARCHAR(16) NOT NULL DEFAULT 'active',
     client_id       VARCHAR(255) NOT NULL,
     scope_grant     JSON NOT NULL,

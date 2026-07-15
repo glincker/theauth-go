@@ -11,7 +11,7 @@ CREATE TABLE IF NOT EXISTS webauthn_credentials (
     sign_count    BIGINT NOT NULL DEFAULT 0,
     transports    JSON NOT NULL,
     aaguid        VARBINARY(16) NOT NULL,
-    name          TEXT NOT NULL DEFAULT '',
+    name          TEXT NOT NULL DEFAULT (''),
     created_at    DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
     last_used_at  DATETIME(6),
     UNIQUE KEY uq_webauthn_credentials_credential_id (credential_id),

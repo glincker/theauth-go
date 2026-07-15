@@ -8,7 +8,7 @@
 CREATE TABLE IF NOT EXISTS permissions (
     id          BINARY(16) PRIMARY KEY,
     name        VARCHAR(255) NOT NULL,
-    description TEXT NOT NULL DEFAULT '',
+    description TEXT NOT NULL DEFAULT (''),
     created_at  DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
     UNIQUE KEY uq_permissions_name (name)
 );
@@ -17,7 +17,7 @@ CREATE TABLE IF NOT EXISTS roles (
     id              BINARY(16) PRIMARY KEY,
     organization_id BINARY(16),
     name            VARCHAR(255) NOT NULL,
-    description     TEXT NOT NULL DEFAULT '',
+    description     TEXT NOT NULL DEFAULT (''),
     created_at      DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
     updated_at      DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
     KEY idx_roles_organization_id (organization_id),
