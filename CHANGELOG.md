@@ -6,14 +6,63 @@ adheres to [Semantic Versioning](https://semver.org/) from v1.0 forward.
 
 ## [Unreleased]
 
+## [2.5.0] - 2026-07-14
+
+Stable release graduating v2.5.0-rc.1. Completes the `Config.LifecycleHooks`
+surface (#76) with all six hooks fully wired, fixes a real bug where the
+batteries-included `Mount()` HTTP routes bypassed hook dispatch entirely for
+password/TOTP/WebAuthn, and closes out a batch of storage-layer correctness
+fixes across Postgres and MySQL.
+
+### Added
+
+- **`Config.LifecycleHooks` fully wired (#76).** `OnSignup` now also fires
+  from SAML signup and a user's first WebAuthn credential (passkey
+  registration has no true account-creation moment, so the first credential
+  is the closest equivalent). `OnPasswordChange`, `OnMFAEnabled`, and
+  `OnOrgSwitch` (explicit `SetActiveOrganization` only, not auto-provisioned
+  personal orgs) now fire. `OnTokenIssued` fires immediately before signing
+  on every OAuth access-token grant (authorization_code, refresh_token,
+  client_credentials, RFC 8693 exchange, CIBA); consumer-returned claims
+  merge into the JWT, and a non-nil error aborts issuance.
+- **`AuthorizationServerConfig.Clock` (#38).** Injectable time source for
+  the introspection cache and agent-chain cache, so tests can assert
+  revocation propagation deterministically instead of sleeping past
+  `IntrospectionCacheTTL`.
+- **Password policy documented in README (#39).** Minimum length, Argon2id
+  hashing, and the anti-enumeration dummy-verify behavior.
+
 ### Fixed
 
-- `storage/postgres`: `UpdateAgentLastActive` now returns `storage.ErrNotFound`
-  instead of silently succeeding when the agent ID doesn't exist.
-- `storage/mysql`: six methods (`UpdateSessionAuthLevel`,
-  `SetSessionActiveOrganization`, `UpdateSAMLConnectionRow`, `UpdateGroup`,
-  `UpdateAgentLastActive`, `UpdateAgentCredentialLastUsed`) now return
-  `storage.ErrNotFound` instead of silently succeeding on a missing row.
+- **`a.Mount()` bypassed `LifecycleHooks` for password, TOTP, and WebAuthn.**
+  `passwordhandlers`/`totphandlers`/`webauthnhandlers` held the raw internal
+  `Service` directly instead of a hook-aware adapter, unlike OAuth/
+  Organizations/SAML, which already routed correctly. `OnSignup`/`OnSignin`/
+  `OnPasswordChange`/`OnMFAEnabled` never fired for any consumer using the
+  batteries-included `Mount()` routes, even though `OnSignup`/`OnSignin` were
+  marked shipped in v2.5.0-rc.1. Each package now takes a root-backed
+  adapter, mirroring the already-correct pattern.
+- **SCIM `PATCH /Groups/{id}`** silently discarded member-write errors,
+  always returning 200 even when the storage write failed.
+- **Admin `GET /audit`** classified bad-cursor errors by substring-matching
+  `err.Error()` instead of `errors.Is`. Added a proper `ErrBadCursor`
+  sentinel.
+- **`storage/mysql.MoveTOTPSecret`** treated any error from its existence
+  check (not just "no rows") as "primary already has a secret," which could
+  silently delete a secondary user's real TOTP secret on a transient DB
+  error.
+- **`storage/postgres.UpdateAgentLastActive`** and **six `storage/mysql`
+  methods** (`UpdateSessionAuthLevel`, `SetSessionActiveOrganization`,
+  `UpdateSAMLConnectionRow`, `UpdateGroup`, `UpdateAgentLastActive`,
+  `UpdateAgentCredentialLastUsed`) now return `storage.ErrNotFound` instead
+  of silently succeeding on a missing row.
+- **`mysql.Migrate()` failed entirely against MySQL 8.4** (the current MySQL
+  major version): several migrations used `TEXT/BLOB DEFAULT ''`, which 8.4
+  rejects, and the statement splitter mis-handled a semicolon appearing
+  inside a SQL comment. Migrations now apply cleanly end-to-end.
+- **`identitylink.MergeAccounts`** partial-failure behavior documented and
+  tested: a failure partway through its four move steps is safe to retry
+  with the same IDs.
 
 ## [2.5.0-rc.1] - 2026-06-22
 
