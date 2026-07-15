@@ -384,6 +384,43 @@ func TestSCIM_GroupsCreatePatchMembers(t *testing.T) {
 	}
 }
 
+// TestSCIM_GroupPatchMemberWriteFailurePropagates proves a failed member
+// write surfaces as a SCIM error instead of a silent 200.
+func TestSCIM_GroupPatchMemberWriteFailurePropagates(t *testing.T) {
+	_, _, _, token, srv := newSCIMTestStack(t)
+	create := map[string]interface{}{
+		"schemas":     []string{"urn:ietf:params:scim:schemas:core:2.0:Group"},
+		"displayName": "Engineers",
+	}
+	r := scimReq(t, srv, "POST", "/scim/v2/Groups", token, create)
+	if r.StatusCode != http.StatusCreated {
+		t.Fatalf("want 201, got %d", r.StatusCode)
+	}
+	var g map[string]interface{}
+	decodeBody(t, r, &g)
+	gid := g["id"].(string)
+
+	// Valid ULID, no such user -- AddGroupMembers rejects it.
+	patch := map[string]interface{}{
+		"schemas": []string{"urn:ietf:params:scim:api:messages:2.0:PatchOp"},
+		"Operations": []map[string]interface{}{
+			{"op": "add", "path": "members", "value": []map[string]interface{}{{"value": "01H00000000000000000000000", "type": "User"}}},
+		},
+	}
+	patchResp := scimReq(t, srv, "PATCH", "/scim/v2/Groups/"+gid, token, patch)
+	defer func() { _ = patchResp.Body.Close() }()
+	if patchResp.StatusCode == http.StatusOK {
+		t.Fatalf("want a non-200 error response when the member write fails, got 200")
+	}
+
+	get := scimReq(t, srv, "GET", "/scim/v2/Groups/"+gid, token, nil)
+	var after map[string]interface{}
+	decodeBody(t, get, &after)
+	if members, ok := after["members"].([]interface{}); ok && len(members) != 0 {
+		t.Fatalf("expected 0 members after the rejected add, got %d", len(members))
+	}
+}
+
 func TestSCIM_GroupsRejectNested(t *testing.T) {
 	_, _, _, token, srv := newSCIMTestStack(t)
 	body := map[string]interface{}{

@@ -578,7 +578,7 @@ func (h *Handler) queryAudit(w http.ResponseWriter, r *http.Request) {
 	}
 	events, next, err := h.audit.QueryAudit(r.Context(), q)
 	if err != nil {
-		if strings.Contains(err.Error(), "pagination.bad_cursor") || strings.Contains(err.Error(), "cursor") {
+		if errors.Is(err, models.ErrBadCursor) {
 			admin.Write(w, http.StatusBadRequest, admin.CodeBadCursor, err.Error(), "")
 			return
 		}

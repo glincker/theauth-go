@@ -29,6 +29,10 @@ var (
 	// storage adapters return on lookup misses.
 	ErrStorageNotFound = models.ErrStorageNotFound
 
+	// ErrBadCursor is returned by storage adapters when a caller-supplied
+	// keyset pagination cursor fails to decode.
+	ErrBadCursor = models.ErrBadCursor
+
 	// ErrReplayDetected (v0.5) is returned by storage on a WebAuthn sign
 	// count update where the new count is not strictly greater than the
 	// stored value. The library treats this as a clone-attempt and refuses

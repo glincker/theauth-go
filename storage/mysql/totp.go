@@ -106,7 +106,10 @@ func (s *Store) MoveTOTPSecret(ctx context.Context, primaryID, secondaryID theau
 		`SELECT 1 FROM totp_secrets WHERE user_id = ?`,
 		ulidToBytes(primaryID),
 	).Scan(&exists)
-	primaryHas := !errors.Is(err, sql.ErrNoRows)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return err
+	}
+	primaryHas := err == nil
 
 	if primaryHas {
 		// Drop secondary; do not overwrite active primary factor.

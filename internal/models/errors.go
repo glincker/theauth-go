@@ -30,6 +30,13 @@ var (
 	// (which would create an import cycle).
 	ErrStorageNotFound = errors.New("theauth: storage row not found")
 
+	// ErrBadCursor is returned by storage adapters (storage/postgres,
+	// storage/mysql) when a caller-supplied keyset pagination cursor fails
+	// to decode. Handlers errors.Is-check against this instead of
+	// substring-matching err.Error(), so a wording change in the wrapped
+	// decode error can never silently break 400-vs-500 branching.
+	ErrBadCursor = errors.New("theauth: invalid pagination cursor")
+
 	// ErrLastOwner is returned when an org member removal would leave the
 	// organization with zero owners.
 	ErrLastOwner = errors.New("theauth: cannot remove the last owner")

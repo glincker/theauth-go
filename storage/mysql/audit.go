@@ -103,7 +103,7 @@ func (s *Store) QueryAuditEvents(ctx context.Context, q theauth.AuditQuery) ([]t
 	if q.After != "" {
 		ts, id, err := decodeAuditCursor(q.After)
 		if err != nil {
-			return nil, "", fmt.Errorf("pagination.bad_cursor: %w", err)
+			return nil, "", fmt.Errorf("pagination.bad_cursor: %w: %w", theauth.ErrBadCursor, err)
 		}
 		// Keyset: (created_at, id) < (cursor_ts, cursor_id) in DESC order.
 		wheres = append(wheres,

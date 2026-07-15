@@ -561,13 +561,22 @@ func (h *Handler) handleGroupPatch(w http.ResponseWriter, r *http.Request) {
 		cleanRemoves = append(cleanRemoves, u)
 	}
 	if hasReplace {
-		_ = h.storage.SetGroupMembers(r.Context(), g.ID, adds)
+		if err := h.storage.SetGroupMembers(r.Context(), g.ID, adds); err != nil {
+			writeSCIMError(w, http.StatusBadRequest, "invalidValue", "member assignment failed")
+			return
+		}
 	} else {
 		if len(adds) > 0 {
-			_ = h.storage.AddGroupMembers(r.Context(), g.ID, adds)
+			if err := h.storage.AddGroupMembers(r.Context(), g.ID, adds); err != nil {
+				writeSCIMError(w, http.StatusBadRequest, "invalidValue", "member assignment failed")
+				return
+			}
 		}
 		if len(cleanRemoves) > 0 {
-			_ = h.storage.RemoveGroupMembers(r.Context(), g.ID, cleanRemoves)
+			if err := h.storage.RemoveGroupMembers(r.Context(), g.ID, cleanRemoves); err != nil {
+				writeSCIMError(w, http.StatusBadRequest, "invalidValue", "member removal failed")
+				return
+			}
 		}
 	}
 	members, _ := h.storage.GroupMembers(r.Context(), g.ID)

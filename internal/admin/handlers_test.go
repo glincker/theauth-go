@@ -20,6 +20,8 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -1319,6 +1321,41 @@ func TestQueryAudit_OK(t *testing.T) {
 	}
 	if _, ok := body["events"]; !ok {
 		t.Fatal("response missing events field")
+	}
+}
+
+// TestQueryAudit_BadCursorMapsTo400 proves a wrapped ErrBadCursor maps to
+// 400 via errors.Is, not string-matching.
+func TestQueryAudit_BadCursorMapsTo400(t *testing.T) {
+	orgID := ulid.New()
+	store := newStubStorage()
+	user := fakeAdminUser()
+	sess := fakeAdminSession(orgID)
+	audit := &stubAudit{queryErr: fmt.Errorf("pagination.bad_cursor: %w: decode failed", models.ErrBadCursor)}
+	srv := buildAdminServer(store, &stubRBAC{}, audit, user, sess, true)
+	defer srv.Close()
+
+	resp := doAdminJSON(t, http.MethodGet, adminURL(srv, orgID, "/audit?after=garbage"), nil)
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("want 400 for a bad-cursor error, got %d", resp.StatusCode)
+	}
+}
+
+// TestQueryAudit_OtherErrorMapsTo500 proves non-cursor errors still 500.
+func TestQueryAudit_OtherErrorMapsTo500(t *testing.T) {
+	orgID := ulid.New()
+	store := newStubStorage()
+	user := fakeAdminUser()
+	sess := fakeAdminSession(orgID)
+	audit := &stubAudit{queryErr: errors.New("connection reset by peer")}
+	srv := buildAdminServer(store, &stubRBAC{}, audit, user, sess, true)
+	defer srv.Close()
+
+	resp := doAdminJSON(t, http.MethodGet, adminURL(srv, orgID, "/audit"), nil)
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusInternalServerError {
+		t.Fatalf("want 500 for a non-cursor error, got %d", resp.StatusCode)
 	}
 }
 

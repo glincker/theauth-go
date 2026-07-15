@@ -233,6 +233,9 @@ type MergeInput struct {
 //
 // Returns ErrStepUpRequired when sessionToken is not fully authenticated.
 // Returns an error when primaryID and secondaryID are equal.
+//
+// Not transactional: a failure partway through is safe to retry with the
+// same IDs, since every move step no-ops once its data is already moved.
 func (s *Service) MergeAccounts(
 	ctx context.Context,
 	sessionToken string,
