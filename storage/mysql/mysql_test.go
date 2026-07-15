@@ -91,6 +91,61 @@ func TestMySQLStoreContract(t *testing.T) {
 			t.Fatalf("want ErrNotFound, got %v", err)
 		}
 	})
+	t.Run("MoveTOTPSecretPrimaryHasSecretDropsSecondary", func(t *testing.T) {
+		primary, secondary := newTOTPMoveFixtureUsers(t, ctx, store)
+		if err := store.UpsertPendingTOTPSecret(ctx, theauth.TOTPSecret{UserID: primary.ID, SecretEnc: []byte("primary-secret")}); err != nil {
+			t.Fatalf("seed primary secret: %v", err)
+		}
+		if err := store.UpsertPendingTOTPSecret(ctx, theauth.TOTPSecret{UserID: secondary.ID, SecretEnc: []byte("secondary-secret")}); err != nil {
+			t.Fatalf("seed secondary secret: %v", err)
+		}
+		if err := store.MoveTOTPSecret(ctx, primary.ID, secondary.ID); err != nil {
+			t.Fatalf("MoveTOTPSecret: %v", err)
+		}
+		got, err := store.TOTPSecretByUserID(ctx, primary.ID)
+		if err != nil || got == nil {
+			t.Fatalf("primary secret should still exist, err=%v", err)
+		}
+		if string(got.SecretEnc) != "primary-secret" {
+			t.Fatalf("primary secret should be untouched, got %q", got.SecretEnc)
+		}
+		if _, err := store.TOTPSecretByUserID(ctx, secondary.ID); !errors.Is(err, storage.ErrNotFound) {
+			t.Fatalf("secondary secret should have been dropped, got err=%v", err)
+		}
+	})
+	t.Run("MoveTOTPSecretPrimaryHasNoneMovesSecondary", func(t *testing.T) {
+		primary, secondary := newTOTPMoveFixtureUsers(t, ctx, store)
+		if err := store.UpsertPendingTOTPSecret(ctx, theauth.TOTPSecret{UserID: secondary.ID, SecretEnc: []byte("secondary-only-secret")}); err != nil {
+			t.Fatalf("seed secondary secret: %v", err)
+		}
+		if err := store.MoveTOTPSecret(ctx, primary.ID, secondary.ID); err != nil {
+			t.Fatalf("MoveTOTPSecret: %v", err)
+		}
+		got, err := store.TOTPSecretByUserID(ctx, primary.ID)
+		if err != nil || got == nil {
+			t.Fatalf("secret should have moved to primary, err=%v", err)
+		}
+		if string(got.SecretEnc) != "secondary-only-secret" {
+			t.Fatalf("moved secret content mismatch, got %q", got.SecretEnc)
+		}
+		if _, err := store.TOTPSecretByUserID(ctx, secondary.ID); !errors.Is(err, storage.ErrNotFound) {
+			t.Fatalf("secondary row should no longer exist under its old user_id, got err=%v", err)
+		}
+	})
+}
+
+// newTOTPMoveFixtureUsers creates a fresh primary/secondary user pair.
+func newTOTPMoveFixtureUsers(t *testing.T, ctx context.Context, store *mysql.Store) (theauth.User, theauth.User) {
+	t.Helper()
+	primary, err := store.CreateUser(ctx, theauth.User{ID: ulid.New(), Email: fmt.Sprintf("totp-move-primary-%s@x.test", ulid.New())})
+	if err != nil {
+		t.Fatalf("create primary user: %v", err)
+	}
+	secondary, err := store.CreateUser(ctx, theauth.User{ID: ulid.New(), Email: fmt.Sprintf("totp-move-secondary-%s@x.test", ulid.New())})
+	if err != nil {
+		t.Fatalf("create secondary user: %v", err)
+	}
+	return primary, secondary
 }
 
 // dropTables removes tables in reverse dependency order so the test always
