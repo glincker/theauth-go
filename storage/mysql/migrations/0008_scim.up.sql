@@ -5,10 +5,10 @@
 -- is NULL when external_id is NULL, and unique otherwise.
 
 ALTER TABLE users
-    ADD COLUMN IF NOT EXISTS external_id  VARCHAR(255) NOT NULL DEFAULT '',
-    ADD COLUMN IF NOT EXISTS given_name   TEXT NOT NULL DEFAULT '',
-    ADD COLUMN IF NOT EXISTS family_name  TEXT NOT NULL DEFAULT '',
-    ADD COLUMN IF NOT EXISTS display_name TEXT NOT NULL DEFAULT '';
+    ADD COLUMN external_id  VARCHAR(255) NOT NULL DEFAULT '',
+    ADD COLUMN given_name   TEXT NOT NULL DEFAULT (''),
+    ADD COLUMN family_name  TEXT NOT NULL DEFAULT (''),
+    ADD COLUMN display_name TEXT NOT NULL DEFAULT ('');
 
 CREATE TABLE IF NOT EXISTS scim_tokens (
     id              BINARY(16) PRIMARY KEY,

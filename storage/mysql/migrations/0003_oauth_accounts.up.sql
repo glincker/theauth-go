@@ -9,7 +9,7 @@ CREATE TABLE IF NOT EXISTS oauth_accounts (
     access_token_enc  BLOB NOT NULL,
     refresh_token_enc BLOB,
     expires_at        DATETIME(6),
-    scope             TEXT NOT NULL DEFAULT '',
+    scope             TEXT NOT NULL DEFAULT (''),
     created_at        DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
     updated_at        DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
     UNIQUE KEY uq_oauth_accounts_provider (provider, provider_user_id),

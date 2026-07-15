@@ -71,28 +71,28 @@ func Migrate(ctx context.Context, db *sql.DB) error {
 	return nil
 }
 
-// splitStatements splits a SQL file into individual statements by semicolon.
-// Empty statements (whitespace-only) are dropped.
+// splitStatements splits a SQL file into individual statements by
+// semicolon. Comments are stripped a full line at a time before the
+// semicolon split runs, not after: a "--" comment can itself contain a
+// semicolon (e.g. "-- monotonic counter; checked strictly-greater..."),
+// and splitting on ";" first would mistake that for a statement
+// terminator, corrupting both the statement before and after it.
 func splitStatements(body string) []string {
-	parts := strings.Split(body, ";")
-	out := make([]string, 0, len(parts))
-	for _, p := range parts {
-		s := strings.TrimSpace(p)
-		if s == "" || strings.HasPrefix(s, "--") {
+	lines := strings.Split(body, "\n")
+	var cleaned []string
+	for _, l := range lines {
+		trimmed := strings.TrimSpace(l)
+		if trimmed == "" || strings.HasPrefix(trimmed, "--") {
 			continue
 		}
-		// Strip leading comment lines but keep the body.
-		lines := strings.Split(s, "\n")
-		var kept []string
-		for _, l := range lines {
-			trimmed := strings.TrimSpace(l)
-			if trimmed == "" {
-				continue
-			}
-			kept = append(kept, l)
-		}
-		if len(kept) > 0 {
-			out = append(out, strings.Join(kept, "\n"))
+		cleaned = append(cleaned, l)
+	}
+
+	parts := strings.Split(strings.Join(cleaned, "\n"), ";")
+	out := make([]string, 0, len(parts))
+	for _, p := range parts {
+		if s := strings.TrimSpace(p); s != "" {
+			out = append(out, s)
 		}
 	}
 	return out

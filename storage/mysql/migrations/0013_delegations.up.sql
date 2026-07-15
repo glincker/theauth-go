@@ -13,7 +13,7 @@ CREATE TABLE IF NOT EXISTS delegation_grants (
     created_at           DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
     expires_at           DATETIME(6),
     revoked_at           DATETIME(6),
-    revocation_note      TEXT NOT NULL DEFAULT '',
+    revocation_note      TEXT NOT NULL DEFAULT (''),
     KEY idx_delegation_grants_user_id (user_id),
     KEY idx_delegation_grants_agent_id (agent_id),
     KEY idx_delegation_grants_resource (resource(191)),
