@@ -1,5 +1,26 @@
 # theauth-go
 
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "SoftwareSourceCode",
+  "name": "theauth-go",
+  "description": "OAuth 2.1 authorization server and auth library for Go: sessions, magic links, WebAuthn/passkeys, TOTP, SAML, SCIM, RBAC, and MCP resource-server authorization. Postgres, MySQL, and in-memory storage.",
+  "codeRepository": "https://github.com/glincker/theauth-go",
+  "url": "https://theauth.dev/go/",
+  "programmingLanguage": "Go",
+  "license": "https://github.com/glincker/theauth-go/blob/main/LICENSE",
+  "runtimePlatform": "Go 1.25+",
+  "applicationCategory": "Authentication Library",
+  "keywords": "oauth2, oidc, mcp, mcp-authorization, golang, authorization-server, passkeys, webauthn, saml, scim, rbac, totp, jwt",
+  "author": {
+    "@type": "Organization",
+    "name": "Glincker",
+    "url": "https://github.com/glincker"
+  }
+}
+</script>
+
 [![Go Reference](https://pkg.go.dev/badge/github.com/glincker/theauth-go.svg)](https://pkg.go.dev/github.com/glincker/theauth-go)
 [![CI](https://github.com/glincker/theauth-go/actions/workflows/ci.yml/badge.svg)](https://github.com/glincker/theauth-go/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/glincker/theauth-go)](https://github.com/glincker/theauth-go/releases)
