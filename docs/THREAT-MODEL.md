@@ -85,7 +85,7 @@ The following are explicitly **not** mitigated by this library. They are the dep
 |---|---|---|
 | Client impersonation via stolen `client_secret` | `client_secret_hash` stored as Argon2id PHC; verified with `subtle.ConstantTimeCompare` (`internal/clientauthcache/cache.go:118`). Cache invalidated on suspend/revoke (`internal/clientauthcache/cache.go:165`). | Operator must protect secret in transit (HTTPS) and at rest (secret store). |
 | Authorization code interception (open-redirect) | `redirect_uri` must match the registered URI exactly (`internal/as/token.go:92-93`). Registration enforces HTTPS or localhost-only (`internal/as/dcr.go:206-228`). | Operator must not register wildcard redirect URIs. |
-| Authorization code injection (inline param tampering) | PKCE S256 enforced on every code exchange (`internal/as/token.go:99-103`). PAR (Pushed Authorization Request) is not yet implemented; see residual risk. | Without PAR, `state` can carry injected parameters on the redirect leg. Mitigated by `RequireState=true` (`internal/as/config.go:102-107`) to force callers to include a non-empty state. Full mitigation requires PAR (planned). |
+| Authorization code injection (inline param tampering) | PKCE S256 enforced on every code exchange (`internal/as/token.go:99-103`). RFC 9126 Pushed Authorization Requests (PAR) is implemented (`internal/as/par.go`) and available via `AuthorizationServerConfig.PAR`; see the PAR section below. | PAR is opt-in (`AuthorizationServerConfig.PAR` is nil by default) and additionally requires the storage backend to implement `PARStorage`. Deployments that have not enabled it should combine `RequireState=true` (`internal/as/config.go:102-107`) with PKCE S256 as the interim mitigation. |
 | Token replay after bearer theft | DPoP (RFC 9449) binding embeds `cnf.jkt` in the access token (`internal/as/token.go:234-245`), tying the token to the proof key. Resource servers must require a matching DPoP proof on each request. | Operator must enable `DPoP` in AS config and configure resource servers to require it. Bearer tokens remain exchangeable without DPoP when the operator has not enabled it. |
 
 **Tampering**
@@ -303,9 +303,9 @@ The following are explicitly **not** mitigated by this library. They are the dep
 
 ### PAR (Pushed Authorization Request)
 
-PAR is not yet implemented in the current codebase. Without PAR, authorization request parameters are passed as query string values on the redirect. An attacker who can intercept the redirect URL can observe but not forge them (PKCE protects the exchange). Full authorization code injection mitigation requires PAR. When PAR lands, the `request_uri` reference replaces the inline parameters.
+PAR (RFC 9126) is implemented (`internal/as/par.go`). When `AuthorizationServerConfig.PAR` is set and the configured storage backend implements the optional `PARStorage` interface, `POST /oauth/par` accepts the full set of authorization parameters over a back-channel POST and returns a `request_uri` reference; `GET /oauth/authorize` then accepts that `request_uri` in place of inline query parameters. `PARConfig.RequirePAR` (default `false`) can be set to reject any `/oauth/authorize` request that still passes inline parameters, forcing every client through PAR.
 
-**Residual risk (current):** Operators with strict injection requirements should combine `RequireState=true` with PKCE S256 (both currently available) until PAR is implemented.
+**Residual risk:** PAR is opt-in and not mounted at all unless the storage backend satisfies `PARStorage` (both in-tree adapters do). Deployments that have not enabled `AuthorizationServerConfig.PAR` still pass authorization parameters as query string values on the redirect; an attacker who can intercept the redirect URL can observe but not forge them (PKCE protects the exchange). Those deployments should combine `RequireState=true` with PKCE S256 as an interim mitigation.
 
 ---
 
@@ -438,7 +438,7 @@ The following threats are referenced in the summary above. For procurement, this
 | T-01 | Token theft / bearer replay | Mitigated (DPoP) | `internal/as/token.go:234-245` |
 | T-02 | Token replay across resources | Mitigated (cnf.jkt + aud) | `internal/as/token.go:234-245`; `mcpresource/validator.go` |
 | T-03 | PKCE downgrade | Mitigated (S256 only) | `crypto/pkce.go`; `internal/as/token.go:99-103` |
-| T-04 | Authorization code injection | Partially mitigated (PKCE + state); PAR planned | `internal/as/token.go:99-103`; `internal/as/config.go:102-107` |
+| T-04 | Authorization code injection | Mitigated when PAR is enabled (opt-in); partially mitigated (PKCE + state) otherwise | `internal/as/par.go`; `internal/as/token.go:99-103`; `internal/as/config.go:102-107` |
 | T-05 | Open redirect on /authorize | Mitigated (redirect_uri whitelist) | `internal/as/dcr.go:206-228`; `internal/as/token.go:92-93` |
 | T-06 | CSRF on /authorize | Mitigated when `RequireState=true` | `internal/as/config.go:102-107` |
 | T-07 | Session fixation | Mitigated (new token on level promotion) | `internal/session/service.go`; `internal/oauth/handlers/handlers.go:122` |
