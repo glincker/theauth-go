@@ -9,6 +9,7 @@ docs-site/.cache/
 /examples/chi-app/chi-app
 /examples/echo-app/echo-app
 /examples/gin-app/gin-app
+/examples/mcp-server/mcp-server
 /examples/oauth-multi-provider/oauth-multi-provider
 /examples/stdlib-app/stdlib-app
 /examples/totp-stepup/totp-stepup
