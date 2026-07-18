@@ -378,6 +378,6 @@ Open an issue first for anything beyond a typo or one-file fix.
 
 *Built by the founder of [theSVG.org](https://thesvg.org).*
 
-*A Product of **GLINR STUDIOS** | **A GLINCKER COMPANY***
+*A Product of **GLINR STUDIOS***
 
 </div>
