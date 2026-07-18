@@ -16,7 +16,7 @@ OAuth 2.1 is the modernization of OAuth 2.0 (RFC 6749) that removes insecure gra
 
 ## Grant types
 
-theauth-go supports three grant types:
+theauth-go supports six grant types:
 
 | Grant | Use case |
 |---|---|
@@ -24,6 +24,8 @@ theauth-go supports three grant types:
 | `refresh_token` | Obtaining a new access token without user interaction. Rotation with family revocation on replay. |
 | `client_credentials` | An agent authenticating as itself (no user). Used by machine-to-machine flows and MCP agents. |
 | `urn:ietf:params:oauth:grant-type:token-exchange` | An agent acting on behalf of a user, per RFC 8693. |
+| `urn:ietf:params:oauth:grant-type:jwt-bearer` | Exchanging an external JWT (e.g. a Kubernetes ServiceAccount token) for a theauth token, per RFC 7523. See [JWT-Bearer](jwt-bearer.md). |
+| `urn:openid:params:grant-type:ciba` | Redeeming an approved backchannel authentication request, per RFC 9509. See [CIBA](ciba.md). |
 
 ## JWTs and JWKS
 

@@ -76,9 +76,9 @@ Create an agent:
 
 ```go
 agent, secret, err := a.CreateAgent(ctx, theauth.CreateAgentInput{
-    Name:    "my-mcp-agent",
-    OwnerID: userID,
-    Resource: "https://api.example.com",
+    Owner: theauth.AgentOwner{UserID: &userID}, // or OrganizationID for an org-owned agent
+    Name:  "my-mcp-agent",
+    Scope: []string{"read", "write"},
 })
 ```
 

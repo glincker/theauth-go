@@ -1,25 +1,56 @@
 # Stream Audit Logs to Splunk
 
-theauth-go ships an append-only async audit log. The default destination is the database (`audit_events` table). You can stream events to Splunk, a SIEM, or any external sink via the `AuditConfig.Sink` interface.
+theauth-go ships an append-only async audit log. The default destination is the database (`audit_events` table). You can stream events to Splunk, a SIEM, or any external sink via `AuditConfig.Sinks`, a slice of `theauth.AuditSink`.
 
 ## How the audit log works
 
-Every state-changing handler calls `EmitAudit(ctx, action, target, metadata)`. The call is non-blocking: the event is placed on a buffered channel. A background writer goroutine drains the channel in batches and flushes on `Close` (5-second deadline). If the channel is full, `Stats.AuditDropped` is incremented and the event is discarded (this is the documented tradeoff to protect authentication latency under spikes).
+Every state-changing handler calls `EmitAudit(ctx, action, target, metadata)`. The call is non-blocking: the event is placed on a buffered channel. A background writer goroutine drains the channel in batches, writes them to the canonical storage layer, and then fans out each batch to every configured sink in a separate goroutine. If the channel is full, `Stats.AuditDropped` is incremented and the event is discarded (this is the documented tradeoff to protect authentication latency under spikes). A failing sink is logged, counted in `Stats.AuditSinkFailed`, and never blocks or delays storage writes.
 
-## Implement an audit sink
+## Use the built-in Splunk HEC sink
 
-Define a type that satisfies the audit sink interface and pass it to `AuditConfig`:
+theauth-go ships a ready-made Splunk HTTP Event Collector sink under `audit/sinks/splunkhec`, so writing your own is usually unnecessary:
 
 ```go
-type Sink interface {
-    Write(ctx context.Context, events []theauth.AuditEvent) error
+import (
+    "github.com/glincker/theauth-go"
+    "github.com/glincker/theauth-go/audit/sinks/splunkhec"
+)
+
+sink, err := splunkhec.New("https://splunk.example.com:8088", os.Getenv("SPLUNK_HEC_TOKEN"))
+if err != nil {
+    log.Fatal(err)
+}
+
+a, _ := theauth.New(theauth.Config{
+    Storage: store,
+    BaseURL: "https://myapp.com",
+    Audit: &theauth.AuditConfig{
+        Sinks: []theauth.AuditSink{sink},
+    },
+})
+```
+
+`splunkhec.New` POSTs each batch to `<endpoint>/services/collector/event` with `Authorization: Splunk <token>`. Options: `WithHTTPClient`, `WithTimeout` (default 5s), `WithRedactor` (per-event transform applied on top of the canonical `DefaultRedactor`).
+
+Other built-in sinks live under `audit/sinks/`: `audit/sinks/otlp` (OTLP/HTTP logs exporter) and `audit/sinks/webhook` (generic CloudEvents 1.0 POST).
+
+## Implementing a custom sink
+
+If you need a destination other than Splunk, OTLP, or a generic webhook, implement `theauth.AuditSink` directly:
+
+```go
+type AuditSink interface {
+    // Stream sends a batch of audit events to the external system.
+    Stream(ctx context.Context, batch []AuditEvent) error
+    // Name identifies the sink for logging and metrics labels.
+    Name() string
 }
 ```
 
-Example Splunk HEC sink:
+Example custom sink:
 
 ```go
-package splunksink
+package mysink
 
 import (
     "bytes"
@@ -31,71 +62,58 @@ import (
     "github.com/glincker/theauth-go"
 )
 
-type SplunkSink struct {
-    HECURL string
-    Token  string
+type Sink struct {
+    URL    string
     Client *http.Client
 }
 
-func (s *SplunkSink) Write(ctx context.Context, events []theauth.AuditEvent) error {
+func (s *Sink) Name() string { return "mysink" }
+
+func (s *Sink) Stream(ctx context.Context, batch []theauth.AuditEvent) error {
     var buf bytes.Buffer
-    for _, e := range events {
-        payload := map[string]any{
-            "time":       e.CreatedAt.Unix(),
-            "sourcetype": "theauth:audit",
-            "event":      e,
-        }
-        if err := json.NewEncoder(&buf).Encode(map[string]any{"event": payload}); err != nil {
-            return err
-        }
+    if err := json.NewEncoder(&buf).Encode(batch); err != nil {
+        return err
     }
-    req, _ := http.NewRequestWithContext(ctx, http.MethodPost, s.HECURL, &buf)
-    req.Header.Set("Authorization", "Splunk "+s.Token)
+    req, err := http.NewRequestWithContext(ctx, http.MethodPost, s.URL, &buf)
+    if err != nil {
+        return err
+    }
     req.Header.Set("Content-Type", "application/json")
     resp, err := s.Client.Do(req)
     if err != nil {
         return err
     }
-    resp.Body.Close()
+    defer resp.Body.Close()
     if resp.StatusCode >= 300 {
-        return fmt.Errorf("splunk HEC returned %d", resp.StatusCode)
+        return fmt.Errorf("sink returned %d", resp.StatusCode)
     }
     return nil
 }
 ```
 
-## Wire the sink
+Wire it the same way, appending it to `Sinks`:
 
 ```go
-a, _ := theauth.New(theauth.Config{
-    Storage: store,
-    BaseURL: "https://myapp.com",
-    Audit: &theauth.AuditConfig{
-        // The default sink writes to the database.
-        // Pass a custom sink to fan out to external systems.
-        // Note: check the actual AuditConfig fields in reference/configuration.md
-        // for the exact field name in your version.
-    },
-})
+Audit: &theauth.AuditConfig{
+    Sinks: []theauth.AuditSink{&mysink.Sink{URL: "...", Client: http.DefaultClient}},
+},
 ```
-
-!!! note
-    Check the [Configuration Reference](../reference/configuration.md) for the exact `AuditConfig` field name used for a custom sink in your version of theauth-go.
 
 ## Audit event shape
 
 ```go
 type AuditEvent struct {
-    ID           ULID
-    Action       string          // e.g. "user.login", "delegation.granted"
-    Target       TargetRef       // {Type, ID}
-    ActorUserID  *ULID
-    ActorAgentID *ULID
-    OrgID        *ULID
-    IP           string
-    UserAgent    string
-    Metadata     map[string]any  // redacted by DefaultRedactor
-    CreatedAt    time.Time
+    ID             ULID
+    OrganizationID *ULID
+    ActorUserID    *ULID
+    ActorSessionID *ULID
+    Action         string          // e.g. "user.login", "delegation.granted"
+    TargetType     string
+    TargetID       string
+    Metadata       map[string]any  // redacted by DefaultRedactor
+    IP             string
+    UserAgent      string
+    CreatedAt      time.Time
 }
 ```
 

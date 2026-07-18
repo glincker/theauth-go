@@ -4,7 +4,7 @@ theauth-go ships a pluggable `Tracer` adapter. The library has zero hard depende
 
 ## How the adapter works
 
-The library calls `hooks.Tracer.StartSpan(ctx, spanName, attrs...)` at the entry point of every instrumented operation and records the outcome via `span.End(status, attrs...)`. The `Tracer` and `Span` interfaces are defined in `theauth.Tracer` and `theauth.Span` (re-exported from `internal/observability`).
+The library calls `hooks.Tracer.Start(ctx, spanName, attrs...)` at the entry point of every instrumented operation, then records the outcome with `span.RecordError(err)` (on failure) and `span.SetAttributes(...)` before calling `span.End()`. The `Tracer` and `Span` interfaces are defined in `theauth.Tracer` and `theauth.Span` (re-exported from `internal/observability`).
 
 ## Write an OpenTelemetry adapter
 
@@ -24,7 +24,8 @@ type otelTracer struct{ t oteltrace.Tracer }
 
 func New(t oteltrace.Tracer) theauth.Tracer { return &otelTracer{t: t} }
 
-func (o *otelTracer) StartSpan(ctx context.Context, name string, attrs ...theauth.Attr) (context.Context, theauth.Span) {
+// Start implements theauth.Tracer.
+func (o *otelTracer) Start(ctx context.Context, name string, attrs ...theauth.Attr) (context.Context, theauth.Span) {
     otelAttrs := make([]attribute.KeyValue, len(attrs))
     for i, a := range attrs {
         otelAttrs[i] = attribute.String(a.Key, fmt.Sprint(a.Value))
@@ -35,15 +36,27 @@ func (o *otelTracer) StartSpan(ctx context.Context, name string, attrs ...theaut
 
 type otelSpan struct{ span oteltrace.Span }
 
-func (s *otelSpan) End(status theauth.Status, attrs ...theauth.Attr) {
-    for _, a := range attrs {
-        s.span.SetAttributes(attribute.String(a.Key, fmt.Sprint(a.Value)))
+// SetAttributes implements theauth.Span.
+func (s *otelSpan) SetAttributes(attrs ...theauth.Attr) {
+    otelAttrs := make([]attribute.KeyValue, len(attrs))
+    for i, a := range attrs {
+        otelAttrs[i] = attribute.String(a.Key, fmt.Sprint(a.Value))
     }
-    if status == theauth.StatusError {
-        s.span.SetStatus(codes.Error, "")
-    } else {
-        s.span.SetStatus(codes.Ok, "")
+    s.span.SetAttributes(otelAttrs...)
+}
+
+// RecordError implements theauth.Span.
+func (s *otelSpan) RecordError(err error) {
+    if err == nil {
+        return
     }
+    s.span.RecordError(err)
+    s.span.SetStatus(codes.Error, err.Error())
+}
+
+// End implements theauth.Span. Note it takes no arguments: the library
+// reports outcome via RecordError/SetAttributes before calling End.
+func (s *otelSpan) End() {
     s.span.End()
 }
 ```

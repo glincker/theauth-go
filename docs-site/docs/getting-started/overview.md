@@ -12,7 +12,7 @@ theauth-go is a production-ready Go auth library that covers the full authentica
 - Per-IP and per-email rate limiting on every credential endpoint.
 - WebAuthn / passkeys: discoverable login, sign-count replay protection, single-factor-strong per NIST SP 800-63B.
 - TOTP second factor with 10 single-use recovery codes and a `pending_2fa` session step-up state machine.
-- OAuth providers: GitHub, Google, Microsoft, Discord (PKCE-aware, AES-256-GCM at-rest token encryption).
+- OAuth providers: 12 built-in packages under `provider/` (GitHub, Google, Microsoft, Discord, Apple, Facebook, Slack, GitLab, Bitbucket, Twitch, LinkedIn, X), PKCE-aware with AES-256-GCM at-rest token encryption.
 
 ### OAuth 2.1 authorization server
 
@@ -43,7 +43,7 @@ theauth-go is a production-ready Go auth library that covers the full authentica
 - Append-only async audit log with default redactor and keyset pagination.
 - Admin HTTP API at `/admin/v1` with RFC 7807 problem+json errors.
 - Fuzz tests, race-clean test suite, benchmark gate.
-- Pluggable `Storage` interface: in-memory (zero deps) or Postgres (`pgx/v5` + `sqlc`).
+- Pluggable `Storage` interface: in-memory (zero deps), Postgres (`pgx/v5` + `sqlc`), or MySQL 8.x (`go-sql-driver/mysql` + `sqlc`).
 - Pluggable `Tracer` and `Metrics` adapters (OpenTelemetry, Prometheus, or any custom backend).
 
 ## Architecture
@@ -70,6 +70,7 @@ theauth-go is a production-ready Go auth library that covers the full authentica
     |  Storage interface     |  pluggable
     |  storage/memory        |  tests, demos
     |  storage/postgres      |  pgx + sqlc
+    |  storage/mysql         |  MySQL 8.x, sqlc
     +-----------------------+
 ```
 

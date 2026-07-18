@@ -85,7 +85,7 @@ The following are explicitly not covered by theauth-go:
 - **TLS termination.** Run a TLS-terminating reverse proxy (nginx, Caddy, AWS ALB) in front.
 - **DDoS and volumetric flood protection.** Use a WAF or CDN-level rate limiter for sustained volumetric attacks.
 - **Physical security of the host running Postgres.**
-- **Audit tamper-evidence.** The `audit_events` table is append-only but not Merkle-chained in v2.3. Tamper-evidence via signed audit chains is on the v2.x roadmap.
+- **Audit tamper-evidence.** The `audit_events` table is append-only (no `UPDATE`/`DELETE` in the `Storage` interface) but not cryptographically tamper-evident: it is not Merkle-chained or signed. This is not currently on [`docs/ROADMAP.md`](https://github.com/glincker/theauth-go/blob/main/docs/ROADMAP.md); operators who need tamper-evidence should layer Merkle signing or stream to an append-only SIEM sink themselves.
 - **ABAC and hierarchical roles.** RBAC is a closed permission catalog with flat roles. Time-bound and attribute-based access control are deferred.
 - **Hardware-attested agent credentials.** `AgentCredentialKindJWK` and `AgentCredentialKindX509` paths exist but return `ErrNotImplemented`. TPM-backed signing is a planned future feature.
 

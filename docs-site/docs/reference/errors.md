@@ -62,6 +62,26 @@ theauth-go exports sentinel errors and structured `TheAuthError` values. Use `er
 | `ErrAccountUXRequiresAgents` | `Config.AccountUX` is true but `Config.AgentIdentity` is nil. |
 | `ErrStorageMissingOAuthMethods` | Storage does not satisfy `OAuthServerStorage`. |
 
+## Sentinel errors (v2.3: identity linking)
+
+| Sentinel | Description |
+|---|---|
+| `ErrIdentityConflict` | `LinkOAuthToCurrentUser` target account is already bound to a different user. `errors.As` to `*IdentityConflictError` to read `ConflictingUserID`. |
+| `ErrStepUpRequired` | An identity-linking or merge method was called on a session whose `AuthLevel` is not `AuthLevelFull`. |
+| `ErrLastAuthMethod` | An unlink operation would leave the account with zero authentication methods. |
+
+## Sentinel errors (v2.4: CIBA, RFC 9509)
+
+| Sentinel | Description |
+|---|---|
+| `ErrCIBAAuthorizationPending` | `PollBackchannelToken` called before the user approved or denied the request. |
+| `ErrCIBASlowDown` | Client polled faster than `CIBAConfig.MinPollInterval`. |
+| `ErrCIBAAccessDenied` | The user denied the backchannel request. |
+| `ErrCIBAExpiredToken` | The `auth_req_id` has expired. |
+| `ErrCIBAInvalidRequest` | Required hint parameters are missing or mutually exclusive constraints were violated. |
+| `ErrCIBADisabled` | CIBA was attempted but `AuthorizationServerConfig.CIBA` is nil or storage does not implement `CIBAStorage`. |
+| `ErrCIBAUserMismatch` | `ApproveBackchannelAuth` / `DenyBackchannelAuth` called with a `userID` that does not match the resolved subject on the pending request. |
+
 ## `TheAuthError` and error codes
 
 Newer service methods return `*TheAuthError` (accessible via `errors.As`):
@@ -94,6 +114,9 @@ if errors.As(err, &authErr) {
 | `CodeInvalidTOTP` | `"invalid_totp"` | Wrong TOTP code. |
 | `CodeAlreadyEnrolled` | `"already_enrolled"` | TOTP already configured; must delete before re-enrolling. |
 | `CodeWebAuthn` | `"webauthn"` | WebAuthn ceremony error (see `Message` for detail). |
+| `CodeIdentityConflict` | `"identity.conflict"` | OAuth account being linked already belongs to a different user. |
+| `CodeStepUpRequired` | `"identity.step_up_required"` | Session `AuthLevel` is not `AuthLevelFull`; re-authenticate before linking/merging. |
+| `CodeLastAuthMethod` | `"identity.last_auth_method"` | Unlinking would leave the account with no authentication method. |
 
 ## OAuth wire error codes
 

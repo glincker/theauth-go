@@ -63,10 +63,14 @@ On every request the middleware:
 ```go
 type Principal struct {
     Subject    string   // sub claim: user ULID or "agent:<id>"
-    Actor      string   // innermost act.sub (empty if no delegation)
+    Actor      string   // innermost acting identity; equals Subject when no delegation chain
     ActorChain []string // from innermost to outermost
-    Scopes     []string // scope claim split on spaces
-    Expiry     time.Time
+    Scope      []string // scope claim split on spaces
+    ClientID   string   // OAuth client that obtained the token
+    IssuedAt   time.Time
+    ExpiresAt  time.Time
+    // Issuer, Audience, JWTID, DelegationGrantID, and CnfJKT (DPoP jkt
+    // thumbprint) are also populated; see mcpresource/principal.go.
 }
 ```
 

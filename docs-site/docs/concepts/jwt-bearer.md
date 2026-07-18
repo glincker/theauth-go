@@ -44,26 +44,32 @@ as the root of trust.
 Configure one or more trusted external JWT issuers:
 
 ```go
+type k8sSubjectMapper struct{}
+
+func (k8sSubjectMapper) Resolve(claims map[string]any) (theauth.ULID, error) {
+    sub, _ := claims["sub"].(string)
+    // sub looks like "system:serviceaccount:my-namespace:my-sa"
+    if strings.HasPrefix(sub, "system:serviceaccount:prod:") {
+        return prodWorkloadUserID, nil
+    }
+    return theauth.ULID{}, theauth.ErrStorageNotFound
+}
+
 cfg := theauth.Config{
     AuthorizationServer: &theauth.AuthorizationServerConfig{
         Issuer: "https://auth.example.com",
         JWTBearer: &theauth.JWTBearerConfig{
-            TrustedIssuers: []theauth.TrustedJWTIssuer{
+            TrustedJWTIssuers: []theauth.TrustedJWTIssuer{
                 {
                     // Issuer claim in the incoming JWT.
                     Issuer: "https://kubernetes.default.svc.cluster.local",
                     // JWKS URL to fetch the issuer's public keys.
-                    JWKSU: "https://kubernetes.default.svc.cluster.local/openid/v1/jwks",
-                    // SubjectMapper maps the JWT subject to a theauth client ID.
-                    // Return ("", nil) to deny the request.
-                    SubjectMapper: func(ctx context.Context, claims map[string]any) (string, error) {
-                        sub, _ := claims["sub"].(string)
-                        // sub looks like "system:serviceaccount:my-namespace:my-sa"
-                        if strings.HasPrefix(sub, "system:serviceaccount:prod:") {
-                            return "k8s-prod-workload", nil
-                        }
-                        return "", nil
-                    },
+                    JWKSURL: "https://kubernetes.default.svc.cluster.local/openid/v1/jwks",
+                    // SubjectMapper resolves claims to a local user ULID.
+                    // theauth ships two built-ins (SubMapper, EmailMapper);
+                    // implement the Resolve(claims) (ULID, error) interface
+                    // for custom mapping logic like this one.
+                    SubjectMapper: k8sSubjectMapper{},
                 },
             },
         },
@@ -71,10 +77,14 @@ cfg := theauth.Config{
 }
 ```
 
-The `SubjectMapper` receives the full claims map and returns the theauth
-`client_id` that the assertion should authenticate as. Return an empty string
-and a nil error to deny without error detail leakage. Return a non-nil error to
-surface an `invalid_grant` error response.
+`SubjectMapper` is an interface (`Resolve(claims map[string]any) (ULID, error)`),
+not a plain function value. It receives the full claims map and returns the
+local user ULID the assertion should authenticate as. Return
+`theauth.ErrStorageNotFound` to deny without error detail leakage. Return any
+other non-nil error to surface an `invalid_grant` error response. Use the
+built-in `theauth.SubMapper{}` (parses `sub` as a ULID directly) or
+`theauth.EmailMapper{Lookup: ...}` (looks up by the `email` claim) when a
+custom mapper isn't needed.
 
 ## JWT-Bearer grant
 
@@ -151,19 +161,42 @@ This combination meets the FAPI 2.0 Security Profile baseline. See
 
 ```go
 type JWTBearerConfig struct {
-    // TrustedIssuers lists external OIDC/JWT issuers that may be used
+    // TrustedJWTIssuers lists external OIDC/JWT issuers that may be used
     // as the subject of a jwt-bearer grant assertion.
-    TrustedIssuers []TrustedJWTIssuer
+    TrustedJWTIssuers []TrustedJWTIssuer
+
+    // ClientAssertionMaxAge bounds the age of a client assertion JWT's iat
+    // claim. Defaults to 60 seconds.
+    ClientAssertionMaxAge time.Duration
+
+    // AssertionMaxAge bounds the age of a bearer grant assertion JWT's iat
+    // claim. Defaults to 300 seconds.
+    AssertionMaxAge time.Duration
+
+    // ReplayCacheTTL is how long JTIs remain in the replay cache.
+    // Defaults to 600 seconds.
+    ReplayCacheTTL time.Duration
+
+    // MaxActorChainDepth caps on-behalf-of actor chains in the RFC 8693
+    // token-exchange grant. Defaults to 5.
+    MaxActorChainDepth int
 }
 
 type TrustedJWTIssuer struct {
     // Issuer is the expected "iss" claim value.
     Issuer string
-    // JWKSU is the JWKS endpoint URL for this issuer.
-    JWKSU string
-    // SubjectMapper maps claims to a theauth client_id.
-    // Return ("", nil) to deny silently.
-    SubjectMapper func(ctx context.Context, claims map[string]any) (string, error)
+    // JWKSURL is the JWKS endpoint URL for this issuer.
+    JWKSURL string
+    // AllowedAlgorithms is the set of JWS algorithms accepted for this
+    // issuer. Defaults to ES256, RS256, EdDSA.
+    AllowedAlgorithms []string
+    // SubjectMapper resolves claims to a local user ULID. Built-in
+    // implementations: SubMapper, EmailMapper.
+    SubjectMapper SubjectMapper
+}
+
+type SubjectMapper interface {
+    Resolve(claims map[string]any) (ULID, error)
 }
 ```
 

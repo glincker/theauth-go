@@ -9,6 +9,7 @@ The spelling of every action listed here is part of the v1.0 stability commitmen
 | Action | Target type | Notable metadata keys |
 |---|---|---|
 | `user.login` | `user` | `method` (magic_link, password, oauth, passkey, saml) |
+| `user.logout` | `session` | |
 | `user.invited` | `user` | `email`, `org_id` |
 | `magic_link.requested` | `user` | `email` |
 | `magic_link.verified` | `user` | |
@@ -16,11 +17,31 @@ The spelling of every action listed here is part of the v1.0 stability commitmen
 | `password.reset.completed` | `user` | |
 | `password.changed` | `user` | |
 | `session.revoked` | `session` | |
-| `passkey.registered` | `webauthn_credential` | `aaguid`, `name` |
+| `passkey.registered` | `webauthn_credential` | `aaguid` |
 | `passkey.deleted` | `webauthn_credential` | |
 | `totp.enrolled` | `user` | |
 | `totp.disabled` | `user` | |
 | `saml.login_success` | `user` | `connection_id`, `name_id` |
+| `oauth_account.linked` | `oauth_account` | |
+
+## Identity linking events (v2.3)
+
+| Action | Target type | Notable metadata keys |
+|---|---|---|
+| `identity.linked` | `user` | `method` (`oauth` or `password`), `provider` (OAuth only) |
+| `identity.unlinked` | `user` | `provider`, `method` |
+| `account.merged` | `user` | Emitted twice per merge: once against the primary user (with `secondary_user_id`, optional `reason`), once against the secondary user (with `merged_into`). |
+
+## SCIM provisioning events
+
+| Action | Target type | Notable metadata keys |
+|---|---|---|
+| `scim.user.create` | `user` | |
+| `scim.user.patch` | `user` | |
+| `scim.user.delete` | `user` | |
+| `scim.group.create` | `group` | |
+| `scim.group.patch` | `group` | |
+| `scim.group.delete` | `group` | |
 
 ## Organization events
 
@@ -53,6 +74,7 @@ The spelling of every action listed here is part of the v1.0 stability commitmen
 | `delegation.granted` | `delegation_grant` | `user_id`, `agent_id`, `resource`, `scope` |
 | `delegation.revoked` | `delegation_grant` | `user_id`, `agent_id`, `resource` |
 | `token.exchanged` | `delegation_grant` | `subject`, `actor`, `resource`, `scope` |
+| `jwt_bearer.token_minted` | `user` | RFC 7523 jwt-bearer grant token issuance. |
 
 ## Admin surface events
 
@@ -88,3 +110,4 @@ Monitor audit pipeline health via `a.Stats()`:
 | `AuditWritten` | Total events successfully written to storage. |
 | `AuditDropped` | Events discarded because the channel buffer was full. |
 | `AuditFailed` | Events that failed the storage write (not retried). |
+| `AuditSinkFailed` | Individual `AuditSink.Stream` errors across all registered sinks. Sink failures never block or delay the canonical storage write. |

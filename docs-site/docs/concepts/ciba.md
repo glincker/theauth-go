@@ -30,20 +30,21 @@ denies on their authentication device.
 ```
 Client App                 theauth-go AS            Authentication Device (phone)
     |                           |                            |
-    | POST /ciba/bc-authorize   |                            |
+    | POST /oauth/bc-authorize  |                            |
     |  login_hint=user@example  |                            |
     |  scope=read:data          |                            |
     |  binding_message=TX-1234  |                            |
     |-------------------------->|                            |
-    |  { auth_req_id, interval: 5, expires_in: 120 }        |
+    |  { auth_req_id, interval: 5, expires_in: 300 }        |
     |<--------------------------|                            |
-    |                           | AuthenticationDevice.Notify(CIBARequest)
+    |                           | AuthenticationDevice.Notify(CIBANotification)
     |                           |--------------------------->|
     |                           |         (push notification delivered)
     |                           |                            |
     |   (wait interval seconds) |                            | User taps "Approve"
     |                           |<---------------------------|
-    | POST /ciba/token          |                            |
+    | POST /oauth/token         |                            |
+    |  grant_type=urn:openid:params:grant-type:ciba          |
     |  auth_req_id=...          |                            |
     |-------------------------->|                            |
     |  { access_token, ... }    |                            |
@@ -58,13 +59,13 @@ polling. The client registers a `client_notification_endpoint`.
 ```
 Client App                 theauth-go AS            Authentication Device (phone)
     |                           |                            |
-    | POST /ciba/bc-authorize   |                            |
+    | POST /oauth/bc-authorize  |                            |
     |  login_hint=user@example  |                            |
     |  client_notification_token=<secret>                    |
     |-------------------------->|                            |
-    |  { auth_req_id, expires_in: 120 }                     |
+    |  { auth_req_id, expires_in: 300 }                     |
     |<--------------------------|                            |
-    |                           | AuthenticationDevice.Notify(CIBARequest)
+    |                           | AuthenticationDevice.Notify(CIBANotification)
     |                           |--------------------------->|
     |                           |                            | User taps "Approve"
     |                           |<---------------------------|
@@ -73,7 +74,8 @@ Client App                 theauth-go AS            Authentication Device (phone
     |<--------------------------|  Authorization: Bearer <client_notification_token>
     |  { auth_req_id, ... }     |  { auth_req_id }           |
     |                           |                            |
-    | POST /ciba/token          |                            |
+    | POST /oauth/token         |                            |
+    |  grant_type=urn:openid:params:grant-type:ciba          |
     |  auth_req_id=...          |                            |
     |-------------------------->|                            |
     |  { access_token, ... }    |                            |
@@ -93,16 +95,19 @@ type AuthenticationDevice interface {
     // Notify delivers a CIBA authentication request to the user.
     // Return a non-nil error if the user cannot be reached.
     // The AS records a failed notification in the audit log.
-    Notify(ctx context.Context, req CIBARequest) error
+    Notify(ctx context.Context, req CIBANotification) error
 }
 
-type CIBARequest struct {
+// CIBANotification is the payload delivered to AuthenticationDevice.Notify.
+type CIBANotification struct {
     // AuthReqID is the opaque handle for this request.
     AuthReqID string
     // UserID is the theauth user ID resolved from the login hint.
     UserID string
-    // Scope is the requested scope set.
-    Scope []string
+    // ClientID identifies the client that initiated bc-authorize.
+    ClientID string
+    // Scopes is the requested scope set.
+    Scopes []string
     // BindingMessage is an optional operator-supplied short string
     // (e.g., "TX-1234") displayed on both the consumption device and
     // the authentication device to let the user correlate them.
@@ -119,13 +124,13 @@ type FCMDevice struct {
     fcmClient *fcm.Client
 }
 
-func (d *FCMDevice) Notify(ctx context.Context, req theauth.CIBARequest) error {
+func (d *FCMDevice) Notify(ctx context.Context, req theauth.CIBANotification) error {
     _, err := d.fcmClient.Send(ctx, &fcm.Message{
         Topic: "user-" + req.UserID,
         Data: map[string]string{
             "auth_req_id":     req.AuthReqID,
             "binding_message": req.BindingMessage,
-            "scope":           strings.Join(req.Scope, " "),
+            "scope":           strings.Join(req.Scopes, " "),
         },
     })
     return err
@@ -142,11 +147,11 @@ cfg := theauth.Config{
             // AuthenticationDevice is called when a bc-authorize request
             // is received. Required.
             AuthenticationDevice: &myFCMDevice{},
-            // ExpiresIn is the auth_req_id lifetime (default: 120s).
-            ExpiresIn: 120 * time.Second,
-            // PollingInterval is the minimum poll interval in seconds
-            // returned to clients (default: 5).
-            PollingInterval: 5,
+            // DefaultExpiry is the auth_req_id lifetime (default: 300s).
+            DefaultExpiry: 300 * time.Second,
+            // DefaultInterval is the poll interval in seconds returned to
+            // clients (default: 5s).
+            DefaultInterval: 5 * time.Second,
         },
     },
 }
@@ -154,9 +159,9 @@ cfg := theauth.Config{
 
 ## Endpoints
 
-### `POST /ciba/bc-authorize`
+### `POST /oauth/bc-authorize`
 
-Initiates a backchannel authentication request.
+Initiates a backchannel authentication request. Only mounted when `CIBAConfig` is set.
 
 | Parameter | Required | Notes |
 |---|---|---|
@@ -171,14 +176,15 @@ Response (200 OK):
 ```json
 {
   "auth_req_id": "1c266114-a1be-4252-8ad1-04986c5b9ac9",
-  "expires_in": 120,
+  "expires_in": 300,
   "interval": 5
 }
 ```
 
-### `POST /ciba/token`
+### `POST /oauth/token`
 
-Redeems an `auth_req_id` for an access token.
+Redeems an `auth_req_id` for an access token via the CIBA grant, dispatched
+through the same token endpoint as every other grant type.
 
 | Parameter | Required | Notes |
 |---|---|---|

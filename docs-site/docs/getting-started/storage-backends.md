@@ -1,6 +1,6 @@
 # Storage Backends
 
-theauth-go ships two built-in storage adapters. Both implement the same `Storage` interface, so you can switch between them by changing a single constructor argument.
+theauth-go ships three built-in storage adapters. All three implement the same `Storage` interface, so you can switch between them by changing a single constructor argument.
 
 ## In-memory (`storage/memory`)
 
@@ -35,13 +35,15 @@ store := postgres.New(pool)
 
 ### Running migrations
 
-The store does not auto-migrate. Run migrations yourself at startup or via a CI step:
+The store does not auto-migrate. Run migrations yourself at startup or via a CI step, using the package-level `Migrate` function (not a method on `Store`):
 
 ```go
-// If the postgres.Store exposes a Migrate method, call it:
-if err := store.Migrate(ctx); err != nil {
+// postgres.Migrate applies every embedded migration under an advisory lock,
+// so it is safe to call from every replica on boot.
+if err := postgres.Migrate(ctx, pool); err != nil {
     log.Fatal(err)
 }
+store := postgres.New(pool)
 ```
 
 Or apply the SQL files directly:
@@ -86,15 +88,23 @@ store := mysql.New(db)
 
 ### Running migrations
 
-Apply the SQL files under `storage/mysql/migrations/` in order:
+Like the Postgres adapter, `storage/mysql` embeds its migrations and exposes a
+package-level `Migrate` function that applies them under a `GET_LOCK` advisory
+lock:
 
-```bash
-mysql -u root "$MYSQL_DATABASE" < storage/mysql/migrations/0001_users.up.sql
-# ... repeat for each migration in order
+```go
+if err := mysql.Migrate(ctx, db); err != nil {
+    log.Fatal(err)
+}
+store := mysql.New(db)
 ```
 
-There is no embedded `Migrate` helper yet (planned for v2.5). Use your existing
-migration runner (Flyway, Liquibase, Atlas, or a shell script).
+Or apply the SQL files under `storage/mysql/migrations/` directly:
+
+```bash
+mysql -u root "$MYSQL_DATABASE" < storage/mysql/migrations/0001_init.up.sql
+# ... repeat for each migration in order
+```
 
 ### Contract testing
 
@@ -114,7 +124,6 @@ available.
 
 ### Current parity caveats
 
-- No embedded `Migrate` helper. Apply migrations manually (see above).
 - Advisory lock serialization (`GET_LOCK`) is weaker than Postgres serializable
   transactions. Avoid running concurrent schema migrations.
 - MySQL does not support partial unique indexes. The `state='current'` JWKS

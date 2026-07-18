@@ -1,5 +1,7 @@
 # Quick Start
 
+This walks through the smallest working theauth-go server: an in-memory store, magic links, and email/password sign-in, wired to a chi router in a handful of lines.
+
 ## Minimal server (magic links + email/password)
 
 ```go
@@ -85,7 +87,7 @@ a, _ := theauth.New(theauth.Config{
 | `GET /auth/me` | Current user (requires auth) |
 | `DELETE /auth/sessions/current` | Sign out |
 
-OAuth providers (`GET /auth/providers/{name}/start` and `/callback`): github, google, microsoft, discord.
+OAuth providers (`GET /auth/providers/{name}/start` and `/callback`): 12 built-in providers, including github, google, microsoft, discord, apple, facebook, slack, gitlab, bitbucket, twitch, linkedin, and x. See [Add an OAuth Provider](../guides/add-oauth-provider.md) for the full list.
 
 WebAuthn: `/auth/webauthn/register/{begin,finish}`, `/auth/webauthn/login/{begin,finish}`, `/auth/webauthn/credentials`.
 
