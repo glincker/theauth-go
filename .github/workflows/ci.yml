@@ -42,7 +42,7 @@ jobs:
           --health-retries 5
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-go@v6
+      - uses: actions/setup-go@v7
         with:
           go-version: "1.25"
       - run: go vet ./...
@@ -75,7 +75,7 @@ jobs:
           - { pkg: ".", name: FuzzCallbackProviderName }
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-go@v6
+      - uses: actions/setup-go@v7
         with:
           go-version: "1.25"
       - name: Fuzz ${{ matrix.target.name }}
@@ -89,7 +89,7 @@ jobs:
         with:
           fetch-depth: 0
       - run: git fetch origin main:refs/remotes/origin/main
-      - uses: actions/setup-go@v6
+      - uses: actions/setup-go@v7
         with:
           go-version: "1.25"
       - uses: golangci/golangci-lint-action@v9
