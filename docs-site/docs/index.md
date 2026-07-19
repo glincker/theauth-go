@@ -7,7 +7,7 @@
   "name": "theauth-go",
   "description": "OAuth 2.1 authorization server and auth library for Go: sessions, magic links, WebAuthn/passkeys, TOTP, SAML, SCIM, RBAC, and MCP resource-server authorization. Postgres, MySQL, and in-memory storage.",
   "codeRepository": "https://github.com/glincker/theauth-go",
-  "url": "https://theauth.dev/go/",
+  "url": "https://go.theauth.dev/",
   "programmingLanguage": "Go",
   "license": "https://github.com/glincker/theauth-go/blob/main/LICENSE",
   "runtimePlatform": "Go 1.25+",

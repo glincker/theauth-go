@@ -17,7 +17,7 @@ theauth-go is not a SaaS or hosted IdP. It is a Go library you mount into your o
 ## Docs
 
 - [README](https://github.com/glincker/theauth-go/blob/main/README.md): quick start, feature comparison table, examples index.
-- [Full documentation](https://theauth.dev/go/): getting started, concepts, guides, API reference.
+- [Full documentation](https://go.theauth.dev/): getting started, concepts, guides, API reference.
 - [AGENTS.md](https://github.com/glincker/theauth-go/blob/main/docs/AGENTS.md): version-by-version shipped feature history, written for AI coding assistants.
 - [STABILITY.md](https://github.com/glincker/theauth-go/blob/main/docs/STABILITY.md): SemVer contract and API surface guarantees.
 - [CHANGELOG](https://github.com/glincker/theauth-go/blob/main/CHANGELOG.md): release notes.
