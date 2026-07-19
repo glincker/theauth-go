@@ -1,6 +1,6 @@
 # Example Apps
 
-The repository ships eight runnable example applications. Each example has a `README`, single-file `main.go`, `go.mod`, `docker-compose.yml`, `.env.example`, and `Makefile`.
+The repository ships runnable example applications covering every framework integration, OAuth provider, and observability backend. Each example has a `README`, single-file `main.go`, `go.mod`, `docker-compose.yml`, `.env.example`, and `Makefile`.
 
 | Example | What it shows |
 |---|---|
@@ -9,9 +9,19 @@ The repository ships eight runnable example applications. Each example has a `RE
 | [`examples/echo-app/`](https://github.com/glincker/theauth-go/tree/main/examples/echo-app) | Drop-in with Echo |
 | [`examples/stdlib-app/`](https://github.com/glincker/theauth-go/tree/main/examples/stdlib-app) | Pure `net/http`, no framework |
 | [`examples/oauth-multi-provider/`](https://github.com/glincker/theauth-go/tree/main/examples/oauth-multi-provider) | GitHub + Google + Microsoft + Discord in one app |
+| [`examples/oauth-apple/`](https://github.com/glincker/theauth-go/tree/main/examples/oauth-apple) | Sign in with Apple |
+| [`examples/oauth-facebook/`](https://github.com/glincker/theauth-go/tree/main/examples/oauth-facebook) | Facebook OAuth 2.0 |
+| [`examples/oauth-slack/`](https://github.com/glincker/theauth-go/tree/main/examples/oauth-slack) | Sign in with Slack |
+| [`examples/oauth-gitlab/`](https://github.com/glincker/theauth-go/tree/main/examples/oauth-gitlab) | GitLab OIDC, including self-hosted instances |
+| [`examples/oauth-bitbucket/`](https://github.com/glincker/theauth-go/tree/main/examples/oauth-bitbucket) | Bitbucket Cloud OAuth 2.0 |
+| [`examples/oauth-twitch/`](https://github.com/glincker/theauth-go/tree/main/examples/oauth-twitch) | Twitch OIDC |
+| [`examples/oauth-linkedin/`](https://github.com/glincker/theauth-go/tree/main/examples/oauth-linkedin) | Sign In with LinkedIn |
+| [`examples/oauth-x/`](https://github.com/glincker/theauth-go/tree/main/examples/oauth-x) | X (formerly Twitter) OAuth 2.0 |
 | [`examples/webauthn-passkey/`](https://github.com/glincker/theauth-go/tree/main/examples/webauthn-passkey) | Passkey register and discoverable login |
 | [`examples/totp-stepup/`](https://github.com/glincker/theauth-go/tree/main/examples/totp-stepup) | Password + TOTP step-up flow |
 | [`examples/mcp-server/`](https://github.com/glincker/theauth-go/tree/main/examples/mcp-server) | MCP resource server using `mcpresource` middleware |
+| [`examples/observability-otel/`](https://github.com/glincker/theauth-go/tree/main/examples/observability-otel) | Reference OpenTelemetry `Tracer` adapter |
+| [`examples/observability-prom/`](https://github.com/glincker/theauth-go/tree/main/examples/observability-prom) | Reference Prometheus `Metrics` adapter |
 
 ## Running an example
 

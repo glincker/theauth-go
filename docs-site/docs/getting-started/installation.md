@@ -1,5 +1,7 @@
 # Installation
 
+Getting theauth-go into a Go module is a single `go get`. This page covers the main module, the standalone `mcpresource` resource-server SDK, and the Postgres migration step, plus how to verify the install worked.
+
 ## Requirements
 
 - **Go 1.25+**
@@ -31,8 +33,12 @@ The Postgres adapter uses `pgx/v5` and generated SQL via `sqlc`. It is bundled i
 import "github.com/glincker/theauth-go/storage/postgres"
 
 pool, err := pgxpool.New(ctx, os.Getenv("DATABASE_URL"))
-store, err := postgres.New(pool)
-// Migrations are embedded; call store.Migrate(ctx) or run them from storage/postgres/migrations/
+// Migrations are embedded; postgres.Migrate applies them (append-only,
+// advisory-lock-serialized so it is safe to call from every replica).
+if err := postgres.Migrate(ctx, pool); err != nil {
+    log.Fatal(err)
+}
+store := postgres.New(pool)
 ```
 
 ## Verify the installation

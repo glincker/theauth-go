@@ -228,7 +228,7 @@ An auditor will assess whether the operator has implemented the controls listed 
 - RBAC policy authoring: the library enforces; the operator defines which permissions exist and who holds which roles.
 - Periodic access review: the audit log surfaces `role.granted` and `role.revoked` events; the operator must review them on a defined cadence.
 
-**Audit evidence theauth-go provides:** `audit_events` rows for `role.granted`, `role.revoked`, `user.suspended`, `agent.suspended`, `agent.revoked`.
+**Audit evidence theauth-go provides:** `audit_events` rows for `role.granted`, `role.revoked`, `agent.suspended`, `agent.revoked`. (There is no `user.suspended` event: the library has no user-suspension state to emit it for -- see CC6.2 and CC7.4.)
 
 ---
 
@@ -237,10 +237,10 @@ An auditor will assess whether the operator has implemented the controls listed 
 **What SOC 2 requires:** Access is provisioned and deprovisioned in accordance with established policies.
 
 **How theauth-go helps:**
-- User invite/creation is audit-logged (`user.created`, `user.invited`).
-- User suspension and removal are exposed via admin handlers (`internal/admin/handlers.go:381-403`), with audit events.
+- Admin-driven user invitation is audit-logged (`user.invited`). Self-service signup (password, magic link, OAuth, SAML) is audit-logged via `user.login` on first sign-in; there is no separate `user.created` event.
+- Organization removal is exposed via the `removeUser` admin handler (`internal/admin/handlers.go:388-406`), audit-logged as `organization.member.removed`. This removes org membership only -- it does not delete or suspend the user account (see CC7.4).
 - Agent provisioning (`CreateAgent`, `MintAgentCredential`) and deprovisioning (`SuspendAgent`, `RevokeAgent`) are fully audit-logged.
-- SCIM 2.0 provisioning support for automated IdP-driven user lifecycle.
+- SCIM 2.0 provisioning support for automated IdP-driven user lifecycle (`scim.user.create`, `scim.user.patch`, `scim.user.delete` audit events).
 
 **What the operator must implement:** Offboarding runbook that triggers user suspension/removal, integration with HR system or IdP lifecycle events.
 
@@ -363,8 +363,8 @@ An auditor will assess whether the operator has implemented the controls listed 
 **What SOC 2 requires:** The entity responds to identified security incidents.
 
 **How theauth-go helps:**
-- `SuspendUser` and `RevokeSession` provide immediate containment actions (`internal/admin/handlers.go:297-403`).
-- `SuspendAgent` and `RevokeAgent` provide immediate machine-credential containment (`internal/agent/service.go:397-403`).
+- `revokeSession` provides immediate session-level containment (`internal/admin/handlers.go:428-447`). There is no library-level `SuspendUser`: the `User` model and `Storage` interface have no suspension state, so account-level containment beyond revoking sessions is an operator-built control (see COMPLIANCE-GDPR.md, Article 18).
+- `SuspendAgent` and `RevokeAgent` provide immediate machine-credential containment (`internal/agent/service.go`).
 - Session revocation is audit-logged with `session.revoked` events.
 
 **What the operator must implement:** Incident response playbooks; breach notification procedures.
@@ -552,9 +552,9 @@ An auditor will assess whether the operator has implemented the controls listed 
 
 **How theauth-go helps:**
 - Audit events for every authentication action enable compliance monitoring.
-- Data subject export and erasure APIs are available (see COMPLIANCE-GDPR.md, Section 2).
+- Data-access primitives (`UserByID`, session listing, `listOAuthAccounts`, `QueryAuditEvents`, etc.) that an operator can assemble into export and erasure endpoints exist (see COMPLIANCE-GDPR.md, Section 2). These are building blocks, not ready-made export/erasure endpoints: the library does not ship a data-subject export API, and erasure (Article 17) is an explicit operator gap because there is no `DeleteUser` method on the `Storage` interface.
 
-**What the operator must implement:** Privacy compliance reviews; data subject request intake process; retention policy enforcement.
+**What the operator must implement:** Privacy compliance reviews; data subject request intake process; retention policy enforcement; the export and erasure endpoints themselves (see COMPLIANCE-GDPR.md, Section 2, "Operator gap").
 
 ---
 

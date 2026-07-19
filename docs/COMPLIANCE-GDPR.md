@@ -17,7 +17,7 @@ The following table lists every personal data field stored by the library's buil
 | `users` | `email` | Personal identifier | Required; used as login identifier. |
 | `users` | `name` | Personal data | Optional; populated from OAuth provider or SCIM. |
 | `users` | `avatar_url` | Personal data | Optional; populated from OAuth provider. |
-| `users` | `status` | Operational | `active` or `suspended`. |
+| `users` | `email_verified_at` | Operational | Timestamp of email verification, or null. There is no `status`/suspension field on the `users` table or the `User` model; see Article 18 below. |
 | `user_passwords` | `password_hash` | Derived credential | Argon2id PHC string; never plaintext. |
 | `sessions` | `user_agent` | Pseudonymous technical data | HTTP User-Agent string of the session-creating request. |
 | `sessions` | `ip` | Pseudonymous technical data | Client IP at session creation time. |
@@ -107,9 +107,9 @@ For each GDPR right, this section describes which library API satisfies the requ
 
 **What the data subject can request:** That their data not be actively processed while a dispute is resolved.
 
-**Library API:** `patchUser` supports setting `status=suspended` (`internal/admin/handlers.go:309-325`). A suspended user cannot authenticate; their data remains in the database but is not used for active authentication.
+**Library API:** None. `patchUser` (`internal/admin/handlers.go:304-387`) accepts a `status` field in its request body but the handler never persists or acts on it (it currently only applies `roleIds` changes) -- there is no user-suspension state anywhere in the `User` model, the `users` table, or the `Storage` interface. The closest built-in primitive is `revokeSession` (`internal/admin/handlers.go:428-447`), which invalidates the user's active sessions but does not prevent them from signing in again.
 
-**Operator gap:** Build a workflow that sets `status=suspended` on request and notifies the data subject. Implement a review and lift process when the dispute is resolved.
+**Operator gap (critical):** There is no built-in restriction-of-processing flag. To honor Article 18, the operator must add their own suspension state (e.g., an application-level `status` column consulted at the top of every auth flow) and revoke existing sessions via `revokeSession` when a restriction request is received. Build the review-and-lift process on top of that operator-owned state.
 
 ---
 
@@ -127,9 +127,9 @@ For each GDPR right, this section describes which library API satisfies the requ
 
 **What the data subject can request:** That processing stop, particularly for direct marketing or legitimate-interest grounds.
 
-**Library API:** Combination of revoking all sessions and setting `status=suspended` prevents any further authentication. Session revocation is available via `revokeSession` (`internal/admin/handlers.go:421-435`).
+**Library API:** Session revocation is available via `revokeSession` (`internal/admin/handlers.go:428-447`), which invalidates a session immediately. This stops that session but, as noted under Article 18, there is no library-level account suspension to prevent the user from signing in again with a fresh session.
 
-**Operator gap:** Build an objection intake form. Map the objection to the appropriate action (suspend, revoke sessions, or both). Log the objection and the action taken.
+**Operator gap:** Build an objection intake form. Revoke active sessions via `revokeSession` as an immediate step, and layer an operator-owned suspension/deactivation flag on top if processing must stop entirely rather than just ending the current session. Log the objection and the action taken.
 
 ---
 
@@ -158,7 +158,7 @@ For each GDPR right, this section describes which library API satisfies the requ
 
 ### Audit Event Retention
 
-Audit events are INSERT-only and have no built-in TTL. This is intentional for security (tamper-evident log), but creates a tension with GDPR data minimization.
+Audit events are INSERT-only (the `Storage` interface exposes no update or delete path for `audit_events`) and have no built-in TTL. This is intentional for security, but it is append-only, not cryptographically tamper-evident: nothing in the library prevents a party with direct database access from rewriting rows, and no Merkle-chaining or signing is implemented (see THREAT-MODEL.md, "Audit log tampering"). The append-only design still creates a tension with GDPR data minimization.
 
 **Operator actions required:**
 

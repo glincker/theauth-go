@@ -23,9 +23,8 @@ import (
 )
 
 func TestConformance(t *testing.T) {
-    storagetest.Run(t, func() theauth.Storage {
-        return mystorage.New(/* your config */)
-    })
+    store := mystorage.New(/* your config */)
+    storagetest.Run(t, store)
 }
 ```
 

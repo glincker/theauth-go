@@ -88,10 +88,13 @@ type WebAuthnConfig struct {
 
 ```go
 type RBACConfig struct {
-    // ExtraPermissions extends the closed permission catalog.
-    ExtraPermissions []string
-    // ExtraRoleSeeds adds additional org roles beyond owner/admin/member.
-    ExtraRoleSeeds []RoleSeed
+    // Permissions extends the seeded catalog. New returns an error if a
+    // name collides case-sensitively with a seeded permission.
+    Permissions []Permission
+    // DefaultRoles seeds every new organization. Empty uses the three
+    // built-in roles (owner, admin, member); overrides must still include
+    // those reserved names.
+    DefaultRoles []RoleSeed
 }
 ```
 
@@ -103,13 +106,25 @@ type RBACConfig struct {
 
 ```go
 type AuditConfig struct {
-    // BufferSize is the channel depth (default 4096).
+    // BufferSize is the channel depth between EmitAudit and the writer
+    // goroutine (default 4096). When full, EmitAudit drops the event.
     BufferSize int
-    // FlushTimeout is the Close() drain deadline (default 5s).
-    FlushTimeout time.Duration
-    // Redactor is called on every metadata map before storage.
-    // Defaults to DefaultRedactor (masks password/secret/token/code fields).
-    Redactor func(action string, metadata map[string]any)
+    // BatchSize is the maximum events per INSERT (default 100).
+    BatchSize int
+    // FlushInterval is the maximum delay before a partial batch flushes
+    // (default 1s).
+    FlushInterval time.Duration
+    // DrainTimeout caps how long Close waits for the writer goroutine to
+    // drain remaining events (default 5s).
+    DrainTimeout time.Duration
+    // Redactor optionally transforms metadata before storage; return value
+    // replaces the metadata map. Defaults to DefaultRedactor (masks
+    // password/secret/token/code/refresh_token/access_token fields).
+    Redactor func(metadata map[string]any) map[string]any
+    // Sinks is the optional list of external SIEM streaming destinations
+    // (OTLP, Splunk HEC, webhook). A failing sink is logged and counted;
+    // it never blocks or delays canonical storage writes.
+    Sinks []AuditSink
 }
 ```
 
@@ -154,7 +169,7 @@ type AuthorizationServerConfig struct {
     // Negative value disables the cap.
     RegistrationRateLimitPerMinute int
 
-    // AccessTokenTTL is the JWT access token lifetime (default 15m).
+    // AccessTokenTTL is the JWT access token lifetime (default 1h).
     AccessTokenTTL time.Duration
 
     // RefreshTokenTTL is the refresh token lifetime (default 30d).
@@ -187,39 +202,57 @@ type AuthorizationServerConfig struct {
 
 // PARConfig controls Pushed Authorization Request behaviour (v2.4).
 type PARConfig struct {
-    // Required rejects plain /authorize requests that do not use request_uri.
-    // Set true for FAPI 2.0 profiles.
-    Required bool
-    // TTL is the lifetime of the request_uri handle (default: 60s).
-    TTL time.Duration
+    // RequestURITTL is how long a pushed request_uri stays valid
+    // (default: 60s per RFC 9126 section 2.2).
+    RequestURITTL time.Duration
+    // RequirePAR rejects /authorize requests that carry inline parameters
+    // instead of a request_uri. Default: false.
+    RequirePAR bool
 }
 
 // JARConfig controls JWT-Secured Authorization Request behaviour (v2.4).
 type JARConfig struct {
-    // Required rejects /authorize requests that do not carry a signed
-    // request JWT. Set true for FAPI 2.0 profiles.
-    Required bool
-    // AllowedAlgorithms limits accepted signing algorithms.
-    // Default: ES256, RS256.
-    AllowedAlgorithms []string
+    // AcceptedAlgorithms lists the JWS algorithms accepted on request
+    // objects. Default: ES256, RS256, EdDSA. HS* and "none" are always
+    // rejected.
+    AcceptedAlgorithms []string
+    // RequireJAR rejects /authorize and /oauth/par requests that do not
+    // carry a request= parameter. Default: false.
+    RequireJAR bool
 }
 
 // JWTBearerConfig controls JWT-Bearer client auth and grants (v2.4, RFC 7523).
 type JWTBearerConfig struct {
-    // TrustedIssuers lists external OIDC/JWT issuers trusted for jwt-bearer
-    // grant assertions.
-    TrustedIssuers []TrustedJWTIssuer
+    // TrustedJWTIssuers lists external issuers trusted for the jwt-bearer
+    // grant (RFC 7523 section 2.1).
+    TrustedJWTIssuers []TrustedJWTIssuer
+    // ClientAssertionMaxAge bounds how far in the past a client_assertion
+    // JWT's iat may be (default: 60s).
+    ClientAssertionMaxAge time.Duration
+    // AssertionMaxAge bounds how far in the past a jwt-bearer grant
+    // assertion's iat may be (default: 300s).
+    AssertionMaxAge time.Duration
+    // ReplayCacheTTL is how long JTIs remain in the replay cache
+    // (default: 600s).
+    ReplayCacheTTL time.Duration
+    // MaxActorChainDepth caps on-behalf-of actor chains in the RFC 8693
+    // token-exchange grant (default: 5).
+    MaxActorChainDepth int
 }
 
 // TrustedJWTIssuer represents one external JWT issuer for jwt-bearer grants.
 type TrustedJWTIssuer struct {
     // Issuer is the expected "iss" claim value.
     Issuer string
-    // JWKSU is the JWKS endpoint URL for this issuer.
-    JWKSU string
-    // SubjectMapper maps the JWT claims to a theauth client_id.
-    // Return ("", nil) to deny silently.
-    SubjectMapper func(ctx context.Context, claims map[string]any) (string, error)
+    // JWKSURL is the JWKS endpoint URL for this issuer.
+    JWKSURL string
+    // AllowedAlgorithms whitelists JWS algorithms for this issuer.
+    // Default: ES256, RS256, EdDSA.
+    AllowedAlgorithms []string
+    // SubjectMapper resolves claims to a local user ULID. When nil, the
+    // built-in SubMapper parses the "sub" claim directly as a ULID; use
+    // EmailMapper to resolve by the "email" claim instead.
+    SubjectMapper SubjectMapper // interface{ Resolve(claims map[string]any) (ULID, error) }
 }
 
 // CIBAConfig controls Client-Initiated Backchannel Authentication (v2.4, RFC 9509).
@@ -227,18 +260,25 @@ type CIBAConfig struct {
     // AuthenticationDevice delivers the out-of-band auth request to the user.
     // Required.
     AuthenticationDevice AuthenticationDevice
-    // ExpiresIn is the auth_req_id lifetime (default: 120s).
-    ExpiresIn time.Duration
-    // PollingInterval is the minimum client poll interval in seconds (default: 5).
-    PollingInterval int
+    // DefaultExpiry is the default auth_req_id lifetime (default: 300s).
+    DefaultExpiry time.Duration
+    // DefaultInterval is the default client poll interval (default: 5s).
+    DefaultInterval time.Duration
+    // MaxRequestedExpiry caps the requested_expiry parameter (default: 600s).
+    MaxRequestedExpiry time.Duration
+    // MinPollInterval is the floor that triggers slow_down when breached
+    // (default: 3s).
+    MinPollInterval time.Duration
 }
 ```
+
+`AuthorizationServerConfig` also carries several fields not detailed above: `SigningAlg`, `KeyRotationPeriod`, `KeyRetention`, `AuthorizationCodeTTL`, `RegistrationAccessTokenTTL`, `Clock`, `LoginURL`, `DisableRotation`, `DPoP *DPoPConfig` (RFC 9449 sender-constrained tokens), and `CIMD *CIMDConfig` (Client ID Metadata Documents resolver). See `as.go` and `domains.go` in the repository for the full field list until this page is expanded.
 
 ## Password policy (v2.4)
 
 | Field | Type | Description |
 |---|---|---|
-| `PasswordPolicy` | `*PasswordPolicyConfig` | Additional password handling options. Nil uses defaults. |
+| `PasswordPolicy` | `PasswordPolicyConfig` | Additional password handling options. This is a value field, not a pointer; the zero value `PasswordPolicyConfig{}` is safe and disables all extensions. |
 
 ```go
 type PasswordPolicyConfig struct {

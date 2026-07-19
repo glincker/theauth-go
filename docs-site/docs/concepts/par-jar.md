@@ -112,11 +112,11 @@ cfg := theauth.Config{
     AuthorizationServer: &theauth.AuthorizationServerConfig{
         Issuer: "https://auth.example.com",
         PAR: &theauth.PARConfig{
-            // Required = true rejects plain /authorize requests that do
+            // RequirePAR = true rejects plain /authorize requests that do
             // not reference a request_uri. Recommended for FAPI profiles.
-            Required: false,
-            // TTL for the request_uri handle. Default: 60s.
-            TTL: 60 * time.Second,
+            RequirePAR: false,
+            // RequestURITTL for the request_uri handle. Default: 60s.
+            RequestURITTL: 60 * time.Second,
         },
     },
 }
@@ -132,11 +132,13 @@ cfg := theauth.Config{
     AuthorizationServer: &theauth.AuthorizationServerConfig{
         Issuer: "https://auth.example.com",
         JAR: &theauth.JARConfig{
-            // Allowed signing algorithms. Defaults: ES256, RS256.
-            AllowedAlgorithms: []string{"ES256", "PS256"},
-            // Required = true rejects plain parameter requests; all
+            // AcceptedAlgorithms lists the JWS algorithms the AS accepts on
+            // request objects. Defaults: ES256, RS256, EdDSA. HS* and "none"
+            // are always rejected regardless of this list.
+            AcceptedAlgorithms: []string{"ES256", "PS256"},
+            // RequireJAR = true rejects plain parameter requests; all
             // parameters must be inside a signed request JWT.
-            Required: false,
+            RequireJAR: false,
         },
     },
 }

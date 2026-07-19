@@ -38,7 +38,7 @@ Metric names are exported as constants (`theauth.MetricOAuthTokenRequestsTotal`,
 
 | Label | Fixed values |
 |---|---|
-| `grant_type` | `authorization_code`, `refresh_token`, `client_credentials`, `token-exchange` |
+| `grant_type` | `authorization_code`, `refresh_token`, `client_credentials`, `urn:ietf:params:oauth:grant-type:token-exchange`, `urn:openid:params:grant-type:ciba` -- the label carries the exact `grant_type` request parameter value, which for token exchange and CIBA is the full grant-type URN, not a short alias. |
 | `status` | `success`, `error` |
 | `rule` | `ip`, `email` |
 | `kind` | `oauth_client` |

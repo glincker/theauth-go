@@ -15,7 +15,7 @@
   "keywords": "oauth2, oidc, mcp, mcp-authorization, golang, authorization-server, passkeys, webauthn, saml, scim, rbac, totp, jwt",
   "author": {
     "@type": "Organization",
-    "name": "Glincker",
+    "name": "GLINR Studios",
     "url": "https://github.com/glincker"
   }
 }
