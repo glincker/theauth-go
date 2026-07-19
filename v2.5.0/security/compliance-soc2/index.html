@@ -1,0 +1,3838 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Go auth library covering OAuth 2.1, MCP authorization, agent identities, WebAuthn, SAML, SCIM, and more.">
+      
+      
+      
+        <link rel="canonical" href="https://go.theauth.dev/latest/security/compliance-soc2/">
+      
+      
+        <link rel="prev" href="../benchmarks/">
+      
+      
+        <link rel="next" href="../compliance-gdpr/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>SOC 2 Mapping - theauth-go</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.ec1eaa64.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  
+<meta property="og:type" content="website" />
+<meta property="og:title" content="SOC 2 Mapping - theauth-go" />
+<meta property="og:description" content="Go auth library covering OAuth 2.1, MCP authorization, agent identities, WebAuthn, SAML, SCIM, and more." />
+<meta property="og:image" content="https://go.theauth.dev/latest/assets/images/social/security/compliance-soc2.png" />
+<meta property="og:image:type" content="image/png" />
+<meta property="og:image:width" content="1200" />
+<meta property="og:image:height" content="630" />
+<meta property="og:url" content="https://go.theauth.dev/latest/security/compliance-soc2/" />
+<meta property="twitter:card" content="summary_large_image" />
+<meta property="twitter:title" content="SOC 2 Mapping - theauth-go" />
+<meta property="twitter:description" content="Go auth library covering OAuth 2.1, MCP authorization, agent identities, WebAuthn, SAML, SCIM, and more." />
+<meta property="twitter:image" content="https://go.theauth.dev/latest/assets/images/social/security/compliance-soc2.png" />
+</head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#soc-2-trust-services-criteria-mapping" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+      <div data-md-color-scheme="default" data-md-component="outdated" hidden>
+        
+      </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow md-header--lifted" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="theauth-go" class="md-header__button md-logo" aria-label="theauth-go" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            theauth-go
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              SOC 2 Mapping
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/glincker/theauth-go" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    glincker/theauth-go
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+    
+      
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../.." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../getting-started/overview/" class="md-tabs__link">
+          
+  
+  
+  Getting Started
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../concepts/oauth21-primer/" class="md-tabs__link">
+          
+  
+  
+  Concepts
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../guides/add-oauth-provider/" class="md-tabs__link">
+          
+  
+  
+  Guides
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../reference/configuration/" class="md-tabs__link">
+          
+  
+  
+  Reference
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+    
+  
+  
+    
+    
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="../threat-model/" class="md-tabs__link">
+          
+  
+  
+  Security
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../migrations/v2.3-to-v2.4/" class="md-tabs__link">
+          
+  
+  
+  Migrations
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../changelog/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Changelog
+
+      </a>
+    </li>
+  
+
+      
+    </ul>
+  </div>
+</nav>
+    
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="theauth-go" class="md-nav__button md-logo" aria-label="theauth-go" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    theauth-go
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/glincker/theauth-go" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    glincker/theauth-go
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting Started
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Getting Started
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/overview/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/installation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Installation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/quick-start/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Quick Start
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/storage-backends/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Storage Backends
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/example-apps/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Example Apps
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Concepts
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Concepts
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../concepts/oauth21-primer/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    OAuth 2.1 Primer
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../concepts/mcp-authorization/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MCP Authorization
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../concepts/authorization-server/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Authorization Server
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../concepts/resource-server/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Resource Server (mcpresource)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../concepts/par-jar/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    PAR + JAR (FAPI 2.0)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../concepts/jwt-bearer/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    JWT-Bearer Client Auth
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../concepts/ciba/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CIBA Backchannel Auth
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Guides
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Guides
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guides/add-oauth-provider/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Add an OAuth Provider
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guides/webauthn-passkeys/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Enable WebAuthn Passkeys
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guides/opentelemetry-tracing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Wire OpenTelemetry Tracing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guides/audit-log-splunk/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Stream Audit Logs to Splunk
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guides/custom-storage-backend/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Write a Custom Storage Backend
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guides/migrate-from-cognito/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Migrate from Cognito
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guides/migrate-from-auth0/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Migrate from Auth0
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/configuration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/storage/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Storage Interface
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/errors/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Errors
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/metrics/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Metrics
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/spans/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Spans
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/audit-events/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Audit Events
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Security
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Security
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../threat-model/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Threat Model
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../releases/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Releases and Verification
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../benchmarks/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Benchmarks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SOC 2 Mapping
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SOC 2 Mapping
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#disclaimer" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Disclaimer
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#cc1-control-environment" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CC1 -- Control Environment
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="CC1 -- Control Environment">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#cc11-boardmanagement-oversight-of-controls" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CC1.1 -- Board/Management Oversight of Controls
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#cc12-board-independence-and-oversight-of-internal-control" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CC1.2 -- Board Independence and Oversight of Internal Control
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#cc13-management-structure-and-reporting-lines" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CC1.3 -- Management Structure and Reporting Lines
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#cc14-commitment-to-competence" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CC1.4 -- Commitment to Competence
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#cc15-accountability-for-internal-control-responsibilities" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CC1.5 -- Accountability for Internal Control Responsibilities
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#cc2-communication-and-information" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CC2 -- Communication and Information
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="CC2 -- Communication and Information">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#cc21-information-quality" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CC2.1 -- Information Quality
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#cc22-internal-communication" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CC2.2 -- Internal Communication
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#cc23-external-communication" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CC2.3 -- External Communication
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#cc3-risk-assessment" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CC3 -- Risk Assessment
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="CC3 -- Risk Assessment">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#cc31-specification-of-objectives" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CC3.1 -- Specification of Objectives
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#cc32-risk-identification-and-analysis" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CC3.2 -- Risk Identification and Analysis
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#cc33-fraud-risk-assessment" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CC3.3 -- Fraud Risk Assessment
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#cc34-significant-changes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CC3.4 -- Significant Changes
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#cc4-monitoring-activities" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CC4 -- Monitoring Activities
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="CC4 -- Monitoring Activities">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#cc41-ongoing-and-separate-evaluations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CC4.1 -- Ongoing and Separate Evaluations
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#cc42-evaluation-and-communication-of-deficiencies" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CC4.2 -- Evaluation and Communication of Deficiencies
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#cc5-control-activities" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CC5 -- Control Activities
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="CC5 -- Control Activities">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#cc51-controls-to-mitigate-risks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CC5.1 -- Controls to Mitigate Risks
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#cc52-controls-over-technology" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CC5.2 -- Controls over Technology
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#cc53-policies-and-procedures" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CC5.3 -- Policies and Procedures
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#cc6-logical-and-physical-access-controls" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CC6 -- Logical and Physical Access Controls
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="CC6 -- Logical and Physical Access Controls">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#cc61-logical-access-controls" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CC6.1 -- Logical Access Controls
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#cc62-provisioning-and-deprovisioning" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CC6.2 -- Provisioning and Deprovisioning
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#cc63-role-based-access" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CC6.3 -- Role-based Access
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#cc64-restriction-of-access-to-privileged-accounts" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CC6.4 -- Restriction of Access to Privileged Accounts
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#cc65-identification-and-authentication" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CC6.5 -- Identification and Authentication
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#cc66-network-access-restrictions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CC6.6 -- Network Access Restrictions
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#cc67-transmission-integrity-and-confidentiality" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CC6.7 -- Transmission Integrity and Confidentiality
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#cc68-physical-access-controls" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CC6.8 -- Physical Access Controls
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#cc7-system-operations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CC7 -- System Operations
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="CC7 -- System Operations">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#cc71-configuration-management" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CC7.1 -- Configuration Management
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#cc72-monitoring-of-system-components" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CC7.2 -- Monitoring of System Components
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#cc73-evaluation-of-security-events" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CC7.3 -- Evaluation of Security Events
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#cc74-response-to-identified-security-incidents" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CC7.4 -- Response to Identified Security Incidents
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#cc75-recovery-from-identified-security-incidents" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CC7.5 -- Recovery from Identified Security Incidents
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#cc8-change-management" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CC8 -- Change Management
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="CC8 -- Change Management">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#cc81-change-management-process" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CC8.1 -- Change Management Process
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#cc9-risk-mitigation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CC9 -- Risk Mitigation
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="CC9 -- Risk Mitigation">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#cc91-vendor-and-business-partner-risk-management" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CC9.1 -- Vendor and Business Partner Risk Management
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#cc92-business-disruption-and-recovery-risk-management" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CC9.2 -- Business Disruption and Recovery Risk Management
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#a1-availability" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A1 -- Availability
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="A1 -- Availability">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#a11-capacity-planning" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A1.1 -- Capacity Planning
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#a12-environmental-protections" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A1.2 -- Environmental Protections
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#a13-recovery-plan-testing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A1.3 -- Recovery Plan Testing
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#c1-confidentiality" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        C1 -- Confidentiality
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="C1 -- Confidentiality">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#c11-confidentiality-policies" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        C1.1 -- Confidentiality Policies
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#pi1-processing-integrity" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        PI1 -- Processing Integrity
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="PI1 -- Processing Integrity">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#pi11-processing-completeness-and-accuracy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        PI1.1 -- Processing Completeness and Accuracy
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#p-privacy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        P -- Privacy
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="P -- Privacy">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#p11-privacy-notice" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        P1.1 -- Privacy Notice
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#p3-collection-of-personal-information" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        P3 -- Collection of Personal Information
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#p4-use-of-personal-information" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        P4 -- Use of Personal Information
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#p6-disclosure-of-personal-information" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        P6 -- Disclosure of Personal Information
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#p7-quality-of-personal-information" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        P7 -- Quality of Personal Information
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#p8-monitoring-and-enforcement" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        P8 -- Monitoring and Enforcement
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-theauth-go-does-not-provide" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What theauth-go Does NOT Provide
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../compliance-gdpr/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    GDPR Reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Migrations
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Migrations
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../migrations/v2.3-to-v2.4/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v2.3 to v2.4
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../migrations/v2.0-to-v2.1/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v2.0 to v2.1
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../migrations/v1.0-to-v2.0/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v1.0 to v2.0
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../migrations/v0.7-to-v1.0/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v0.7 to v1.0
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../changelog/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Changelog
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#disclaimer" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Disclaimer
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#cc1-control-environment" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CC1 -- Control Environment
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="CC1 -- Control Environment">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#cc11-boardmanagement-oversight-of-controls" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CC1.1 -- Board/Management Oversight of Controls
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#cc12-board-independence-and-oversight-of-internal-control" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CC1.2 -- Board Independence and Oversight of Internal Control
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#cc13-management-structure-and-reporting-lines" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CC1.3 -- Management Structure and Reporting Lines
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#cc14-commitment-to-competence" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CC1.4 -- Commitment to Competence
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#cc15-accountability-for-internal-control-responsibilities" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CC1.5 -- Accountability for Internal Control Responsibilities
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#cc2-communication-and-information" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CC2 -- Communication and Information
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="CC2 -- Communication and Information">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#cc21-information-quality" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CC2.1 -- Information Quality
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#cc22-internal-communication" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CC2.2 -- Internal Communication
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#cc23-external-communication" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CC2.3 -- External Communication
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#cc3-risk-assessment" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CC3 -- Risk Assessment
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="CC3 -- Risk Assessment">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#cc31-specification-of-objectives" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CC3.1 -- Specification of Objectives
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#cc32-risk-identification-and-analysis" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CC3.2 -- Risk Identification and Analysis
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#cc33-fraud-risk-assessment" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CC3.3 -- Fraud Risk Assessment
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#cc34-significant-changes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CC3.4 -- Significant Changes
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#cc4-monitoring-activities" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CC4 -- Monitoring Activities
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="CC4 -- Monitoring Activities">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#cc41-ongoing-and-separate-evaluations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CC4.1 -- Ongoing and Separate Evaluations
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#cc42-evaluation-and-communication-of-deficiencies" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CC4.2 -- Evaluation and Communication of Deficiencies
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#cc5-control-activities" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CC5 -- Control Activities
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="CC5 -- Control Activities">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#cc51-controls-to-mitigate-risks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CC5.1 -- Controls to Mitigate Risks
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#cc52-controls-over-technology" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CC5.2 -- Controls over Technology
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#cc53-policies-and-procedures" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CC5.3 -- Policies and Procedures
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#cc6-logical-and-physical-access-controls" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CC6 -- Logical and Physical Access Controls
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="CC6 -- Logical and Physical Access Controls">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#cc61-logical-access-controls" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CC6.1 -- Logical Access Controls
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#cc62-provisioning-and-deprovisioning" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CC6.2 -- Provisioning and Deprovisioning
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#cc63-role-based-access" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CC6.3 -- Role-based Access
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#cc64-restriction-of-access-to-privileged-accounts" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CC6.4 -- Restriction of Access to Privileged Accounts
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#cc65-identification-and-authentication" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CC6.5 -- Identification and Authentication
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#cc66-network-access-restrictions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CC6.6 -- Network Access Restrictions
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#cc67-transmission-integrity-and-confidentiality" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CC6.7 -- Transmission Integrity and Confidentiality
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#cc68-physical-access-controls" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CC6.8 -- Physical Access Controls
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#cc7-system-operations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CC7 -- System Operations
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="CC7 -- System Operations">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#cc71-configuration-management" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CC7.1 -- Configuration Management
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#cc72-monitoring-of-system-components" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CC7.2 -- Monitoring of System Components
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#cc73-evaluation-of-security-events" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CC7.3 -- Evaluation of Security Events
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#cc74-response-to-identified-security-incidents" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CC7.4 -- Response to Identified Security Incidents
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#cc75-recovery-from-identified-security-incidents" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CC7.5 -- Recovery from Identified Security Incidents
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#cc8-change-management" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CC8 -- Change Management
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="CC8 -- Change Management">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#cc81-change-management-process" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CC8.1 -- Change Management Process
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#cc9-risk-mitigation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CC9 -- Risk Mitigation
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="CC9 -- Risk Mitigation">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#cc91-vendor-and-business-partner-risk-management" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CC9.1 -- Vendor and Business Partner Risk Management
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#cc92-business-disruption-and-recovery-risk-management" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CC9.2 -- Business Disruption and Recovery Risk Management
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#a1-availability" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A1 -- Availability
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="A1 -- Availability">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#a11-capacity-planning" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A1.1 -- Capacity Planning
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#a12-environmental-protections" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A1.2 -- Environmental Protections
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#a13-recovery-plan-testing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A1.3 -- Recovery Plan Testing
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#c1-confidentiality" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        C1 -- Confidentiality
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="C1 -- Confidentiality">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#c11-confidentiality-policies" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        C1.1 -- Confidentiality Policies
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#pi1-processing-integrity" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        PI1 -- Processing Integrity
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="PI1 -- Processing Integrity">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#pi11-processing-completeness-and-accuracy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        PI1.1 -- Processing Completeness and Accuracy
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#p-privacy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        P -- Privacy
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="P -- Privacy">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#p11-privacy-notice" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        P1.1 -- Privacy Notice
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#p3-collection-of-personal-information" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        P3 -- Collection of Personal Information
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#p4-use-of-personal-information" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        P4 -- Use of Personal Information
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#p6-disclosure-of-personal-information" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        P6 -- Disclosure of Personal Information
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#p7-quality-of-personal-information" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        P7 -- Quality of Personal Information
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#p8-monitoring-and-enforcement" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        P8 -- Monitoring and Enforcement
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-theauth-go-does-not-provide" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What theauth-go Does NOT Provide
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+                
+
+
+
+  
+
+
+  <nav class="md-path" aria-label="Navigation" >
+    <ol class="md-path__list">
+      
+        
+  
+  
+    <li class="md-path__item">
+      <a href="../.." class="md-path__link">
+        
+  <span class="md-ellipsis">
+    Home
+  </span>
+
+      </a>
+    </li>
+  
+
+      
+      
+        
+  
+  
+    
+    
+      <li class="md-path__item">
+        <a href="../threat-model/" class="md-path__link">
+          
+  <span class="md-ellipsis">
+    Security
+  </span>
+
+        </a>
+      </li>
+    
+  
+
+      
+    </ol>
+  </nav>
+
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="soc-2-trust-services-criteria-mapping">SOC 2 Trust Services Criteria Mapping<a class="headerlink" href="#soc-2-trust-services-criteria-mapping" title="Permanent link">&para;</a></h1>
+<p><strong>Standard:</strong> AICPA Trust Services Criteria 2017 (as updated), commonly referred to as SOC 2 Type II.
+<strong>Subject:</strong> theauth-go library.
+<strong>Last reviewed:</strong> 2026-06-22.</p>
+<p><strong>How to read this document:</strong> For each criterion, we describe what SOC 2 auditors look for, how theauth-go helps satisfy it, and what the deploying <strong>operator</strong> must implement. A SOC 2 Type II audit covers the operator's complete system; this document covers only theauth-go's contribution to that system.</p>
+<hr />
+<h2 id="disclaimer">Disclaimer<a class="headerlink" href="#disclaimer" title="Permanent link">&para;</a></h2>
+<p>SOC 2 Type II certification is achieved by the <strong>operator's entire service</strong>, not by any single component or library. theauth-go is a Go authentication library. It provides controls, audit evidence, and enforcement points, but it cannot:</p>
+<ul>
+<li>Author or enforce the operator's access-review processes.</li>
+<li>Generate the operator's System Description (SD-1) or Management's Assertion.</li>
+<li>Substitute for the operator's change-management procedures, vendor management program, or incident response plan.</li>
+<li>Guarantee the operator's data center, network, or hosting environment meets any criterion.</li>
+</ul>
+<p>An auditor will assess whether the operator has implemented the controls listed in the "What the operator must implement" sections below.</p>
+<hr />
+<h2 id="cc1-control-environment">CC1 -- Control Environment<a class="headerlink" href="#cc1-control-environment" title="Permanent link">&para;</a></h2>
+<h3 id="cc11-boardmanagement-oversight-of-controls">CC1.1 -- Board/Management Oversight of Controls<a class="headerlink" href="#cc11-boardmanagement-oversight-of-controls" title="Permanent link">&para;</a></h3>
+<p><strong>What SOC 2 requires:</strong> The entity demonstrates a commitment to integrity and ethical values.</p>
+<p><strong>How theauth-go helps:</strong> Not directly addressable by a library. theauth-go is open-source; the codebase is available for inspection.</p>
+<p><strong>What the operator must implement:</strong> Governance structure, code of conduct, and management review.</p>
+<hr />
+<h3 id="cc12-board-independence-and-oversight-of-internal-control">CC1.2 -- Board Independence and Oversight of Internal Control<a class="headerlink" href="#cc12-board-independence-and-oversight-of-internal-control" title="Permanent link">&para;</a></h3>
+<p><strong>What SOC 2 requires:</strong> Board exercises oversight responsibility for the design and operation of internal controls.</p>
+<p><strong>How theauth-go helps:</strong> Not directly addressable. No library control maps here.</p>
+<p><strong>What the operator must implement:</strong> Board-level governance and oversight process.</p>
+<hr />
+<h3 id="cc13-management-structure-and-reporting-lines">CC1.3 -- Management Structure and Reporting Lines<a class="headerlink" href="#cc13-management-structure-and-reporting-lines" title="Permanent link">&para;</a></h3>
+<p><strong>What SOC 2 requires:</strong> Management establishes reporting lines and appropriate authorities and responsibilities.</p>
+<p><strong>How theauth-go helps:</strong> Not directly addressable.</p>
+<p><strong>What the operator must implement:</strong> Organizational chart, ownership assignments, and escalation procedures.</p>
+<hr />
+<h3 id="cc14-commitment-to-competence">CC1.4 -- Commitment to Competence<a class="headerlink" href="#cc14-commitment-to-competence" title="Permanent link">&para;</a></h3>
+<p><strong>What SOC 2 requires:</strong> The entity demonstrates a commitment to attract, develop, and retain competent individuals.</p>
+<p><strong>How theauth-go helps:</strong> Not directly addressable.</p>
+<p><strong>What the operator must implement:</strong> Hiring, training, and retention policies.</p>
+<hr />
+<h3 id="cc15-accountability-for-internal-control-responsibilities">CC1.5 -- Accountability for Internal Control Responsibilities<a class="headerlink" href="#cc15-accountability-for-internal-control-responsibilities" title="Permanent link">&para;</a></h3>
+<p><strong>What SOC 2 requires:</strong> The entity holds individuals accountable for their internal control responsibilities.</p>
+<p><strong>How theauth-go helps:</strong> The RBAC subsystem (<code>internal/rbac/</code>) assigns specific permissions (e.g., <code>sessions:revoke</code>, <code>scim:admin</code>) to named roles. Permission grants are audit-logged with <code>role.granted</code> and <code>role.revoked</code> events, providing evidence of who held which access and when.</p>
+<p><strong>What the operator must implement:</strong> Process for periodically reviewing role grants and removing stale access.</p>
+<hr />
+<h2 id="cc2-communication-and-information">CC2 -- Communication and Information<a class="headerlink" href="#cc2-communication-and-information" title="Permanent link">&para;</a></h2>
+<h3 id="cc21-information-quality">CC2.1 -- Information Quality<a class="headerlink" href="#cc21-information-quality" title="Permanent link">&para;</a></h3>
+<p><strong>What SOC 2 requires:</strong> The entity uses quality information to support the functioning of internal controls.</p>
+<p><strong>How theauth-go helps:</strong> Audit events include user ID, session ID, IP address, user agent, event type, and structured metadata, giving operators the raw material for quality reporting.</p>
+<p><strong>What the operator must implement:</strong> Tooling (SIEM, dashboards) to query and aggregate theauth-go audit events.</p>
+<hr />
+<h3 id="cc22-internal-communication">CC2.2 -- Internal Communication<a class="headerlink" href="#cc22-internal-communication" title="Permanent link">&para;</a></h3>
+<p><strong>What SOC 2 requires:</strong> The entity internally communicates information, including objectives and responsibilities.</p>
+<p><strong>How theauth-go helps:</strong> Not directly addressable.</p>
+<p><strong>What the operator must implement:</strong> Security policy documentation, runbooks, and internal communication channels.</p>
+<hr />
+<h3 id="cc23-external-communication">CC2.3 -- External Communication<a class="headerlink" href="#cc23-external-communication" title="Permanent link">&para;</a></h3>
+<p><strong>What SOC 2 requires:</strong> The entity communicates with external parties about matters affecting the functioning of internal controls.</p>
+<p><strong>How theauth-go helps:</strong> SECURITY.md provides a vulnerability disclosure process. The library emits structured error codes (defined in <code>internal/models/errors.go</code>) that can be surfaced to end users without leaking implementation details.</p>
+<p><strong>What the operator must implement:</strong> Privacy notice, terms of service, security contact page.</p>
+<hr />
+<h2 id="cc3-risk-assessment">CC3 -- Risk Assessment<a class="headerlink" href="#cc3-risk-assessment" title="Permanent link">&para;</a></h2>
+<h3 id="cc31-specification-of-objectives">CC3.1 -- Specification of Objectives<a class="headerlink" href="#cc31-specification-of-objectives" title="Permanent link">&para;</a></h3>
+<p><strong>What SOC 2 requires:</strong> The entity specifies objectives clearly enough to enable identification of risks.</p>
+<p><strong>How theauth-go helps:</strong> This threat model document specifies the library's security objectives per component. Each STRIDE entry documents residual risk for operator action.</p>
+<p><strong>What the operator must implement:</strong> Operator-level security objectives aligned with their specific deployment context.</p>
+<hr />
+<h3 id="cc32-risk-identification-and-analysis">CC3.2 -- Risk Identification and Analysis<a class="headerlink" href="#cc32-risk-identification-and-analysis" title="Permanent link">&para;</a></h3>
+<p><strong>What SOC 2 requires:</strong> The entity identifies risks to the achievement of its objectives and analyzes them.</p>
+<p><strong>How theauth-go helps:</strong> The THREAT-MODEL.md (this repository) is the risk analysis artifact for the authentication subsystem. Per-component STRIDE tables map each risk to a mitigation or a residual risk for operator action.</p>
+<p><strong>What the operator must implement:</strong> Risk register covering risks outside theauth-go (infrastructure, supply chain, business logic, third-party processors).</p>
+<hr />
+<h3 id="cc33-fraud-risk-assessment">CC3.3 -- Fraud Risk Assessment<a class="headerlink" href="#cc33-fraud-risk-assessment" title="Permanent link">&para;</a></h3>
+<p><strong>What SOC 2 requires:</strong> The entity considers the potential for fraud in assessing risks to achieving its objectives.</p>
+<p><strong>How theauth-go helps:</strong> Refresh token family revocation on replay (<code>internal/as/token.go:150-176</code>) and SCIM <code>last_used_at</code> tracking (<code>internal/scim/service.go:117-138</code>) are direct defenses against credential abuse. The audit subsystem provides a stream of authentication events for anomaly detection.</p>
+<p><strong>What the operator must implement:</strong> Anomaly detection rules in their SIEM, account lockout policies beyond rate limits.</p>
+<hr />
+<h3 id="cc34-significant-changes">CC3.4 -- Significant Changes<a class="headerlink" href="#cc34-significant-changes" title="Permanent link">&para;</a></h3>
+<p><strong>What SOC 2 requires:</strong> The entity identifies and assesses changes that could affect the system of internal controls.</p>
+<p><strong>How theauth-go helps:</strong> CHANGELOG.md documents security-relevant changes per release. The library versions are pinned in <code>go.mod</code>.</p>
+<p><strong>What the operator must implement:</strong> Dependency update process, change-management approval gates, and a test suite that validates authentication behavior on library upgrades.</p>
+<hr />
+<h2 id="cc4-monitoring-activities">CC4 -- Monitoring Activities<a class="headerlink" href="#cc4-monitoring-activities" title="Permanent link">&para;</a></h2>
+<h3 id="cc41-ongoing-and-separate-evaluations">CC4.1 -- Ongoing and Separate Evaluations<a class="headerlink" href="#cc41-ongoing-and-separate-evaluations" title="Permanent link">&para;</a></h3>
+<p><strong>What SOC 2 requires:</strong> The entity selects and develops ongoing or separate evaluations to verify controls are present and functioning.</p>
+<p><strong>How theauth-go helps:</strong>
+- Built-in observability hooks (spans, counters, histograms) are surfaced through the <code>Hooks</code> interface (<code>observability.go</code>). Operators wire these to OpenTelemetry-compatible backends.
+- The OTLP audit sink (<code>audit/sinks/otlp/</code>) streams events to any OTLP-capable collector for ongoing monitoring.
+- Race-detector test suite (<code>go test -race</code>) is part of CI.</p>
+<p><strong>What the operator must implement:</strong> Alerting rules on anomalous authentication rates, failed MFA counts, and unexpected role grants.</p>
+<hr />
+<h3 id="cc42-evaluation-and-communication-of-deficiencies">CC4.2 -- Evaluation and Communication of Deficiencies<a class="headerlink" href="#cc42-evaluation-and-communication-of-deficiencies" title="Permanent link">&para;</a></h3>
+<p><strong>What SOC 2 requires:</strong> The entity evaluates and communicates internal control deficiencies.</p>
+<p><strong>How theauth-go helps:</strong> SECURITY.md provides a vulnerability disclosure path. Critical deficiencies are tagged in CHANGELOG.md.</p>
+<p><strong>What the operator must implement:</strong> Internal process for receiving, triaging, and remediating reported deficiencies; SLA for patching critical vulnerabilities.</p>
+<hr />
+<h2 id="cc5-control-activities">CC5 -- Control Activities<a class="headerlink" href="#cc5-control-activities" title="Permanent link">&para;</a></h2>
+<h3 id="cc51-controls-to-mitigate-risks">CC5.1 -- Controls to Mitigate Risks<a class="headerlink" href="#cc51-controls-to-mitigate-risks" title="Permanent link">&para;</a></h3>
+<p><strong>What SOC 2 requires:</strong> The entity selects and develops control activities that contribute to the mitigation of risks to the achievement of objectives.</p>
+<p><strong>How theauth-go helps:</strong> The following table maps key risks to theauth-go controls.</p>
+<table>
+<thead>
+<tr>
+<th>Risk</th>
+<th>theauth-go Control</th>
+<th>Reference</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Unauthorized token issuance</td>
+<td>PKCE S256 + redirect_uri binding</td>
+<td><code>internal/as/token.go:63-103</code></td>
+</tr>
+<tr>
+<td>Credential theft via weak hashing</td>
+<td>Argon2id at OWASP 2026 parameters</td>
+<td><code>crypto/password.go:14,26-28</code></td>
+</tr>
+<tr>
+<td>Stolen bearer token reuse</td>
+<td>DPoP (RFC 9449) cnf.jkt binding</td>
+<td><code>internal/as/token.go:234-245</code></td>
+</tr>
+<tr>
+<td>Privilege escalation via role abuse</td>
+<td>RBAC permission gates on admin endpoints</td>
+<td><code>internal/admin/handlers.go:115-146</code></td>
+</tr>
+<tr>
+<td>Replay of refresh tokens</td>
+<td>Family-wide revocation on replay</td>
+<td><code>internal/as/token.go:122-176</code></td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h3 id="cc52-controls-over-technology">CC5.2 -- Controls over Technology<a class="headerlink" href="#cc52-controls-over-technology" title="Permanent link">&para;</a></h3>
+<p><strong>What SOC 2 requires:</strong> The entity deploys control activities through policies and procedures that address technology-related risks.</p>
+<p><strong>How theauth-go helps:</strong>
+- Session cookies are <code>HttpOnly</code>, <code>SameSite=Lax</code>; <code>Secure</code> flag enabled via <code>SecureCookie=true</code> (<code>handlers.go:147</code>).
+- All sensitive comparisons use <code>crypto/subtle.ConstantTimeCompare</code> (<code>internal/as/token.go:99-103</code>; <code>internal/clientauthcache/cache.go:118</code>).
+- TOTP secrets are AES-256-GCM-encrypted at rest (<code>internal/totp/service.go:225</code>).</p>
+<p><strong>What the operator must implement:</strong> TLS configuration at the edge, secret rotation policy for the TOTP encryption key and JWKS signing keys.</p>
+<hr />
+<h3 id="cc53-policies-and-procedures">CC5.3 -- Policies and Procedures<a class="headerlink" href="#cc53-policies-and-procedures" title="Permanent link">&para;</a></h3>
+<p><strong>What SOC 2 requires:</strong> Management establishes policies and procedures to achieve objectives.</p>
+<p><strong>How theauth-go helps:</strong> Provides configurable policy knobs: <code>RequireState</code> (CSRF protection), <code>RateLimitPerIP</code>, <code>RateLimitPerEmail</code>, <code>RefreshTokenTTL</code>, <code>SessionTTL</code>, <code>MagicLinkTTL</code>, <code>SecureCookie</code>.</p>
+<p><strong>What the operator must implement:</strong> Documented policy choices (which knobs are enabled and why), change-management approval to modify them.</p>
+<hr />
+<h2 id="cc6-logical-and-physical-access-controls">CC6 -- Logical and Physical Access Controls<a class="headerlink" href="#cc6-logical-and-physical-access-controls" title="Permanent link">&para;</a></h2>
+<h3 id="cc61-logical-access-controls">CC6.1 -- Logical Access Controls<a class="headerlink" href="#cc61-logical-access-controls" title="Permanent link">&para;</a></h3>
+<p><strong>What SOC 2 requires:</strong> Restrict logical access to information assets based on authorization.</p>
+<p><strong>How theauth-go helps:</strong>
+- The RBAC subsystem (<code>internal/rbac/</code>) enforces authorization on every admin endpoint. Permissions are checked before handler logic executes (<code>internal/admin/handlers.go:115-146</code>).
+- Agent identity flow scopes machine credentials to a specific owner and scope list (<code>internal/agent/service.go</code>).
+- Delegation chains limit agent-on-behalf-of scope to the intersection of all delegators' scopes (<code>internal/delegation/service.go:263-291</code>).</p>
+<p><strong>What the operator must implement:</strong>
+- RBAC policy authoring: the library enforces; the operator defines which permissions exist and who holds which roles.
+- Periodic access review: the audit log surfaces <code>role.granted</code> and <code>role.revoked</code> events; the operator must review them on a defined cadence.</p>
+<p><strong>Audit evidence theauth-go provides:</strong> <code>audit_events</code> rows for <code>role.granted</code>, <code>role.revoked</code>, <code>agent.suspended</code>, <code>agent.revoked</code>. (There is no <code>user.suspended</code> event: the library has no user-suspension state to emit it for -- see CC6.2 and CC7.4.)</p>
+<hr />
+<h3 id="cc62-provisioning-and-deprovisioning">CC6.2 -- Provisioning and Deprovisioning<a class="headerlink" href="#cc62-provisioning-and-deprovisioning" title="Permanent link">&para;</a></h3>
+<p><strong>What SOC 2 requires:</strong> Access is provisioned and deprovisioned in accordance with established policies.</p>
+<p><strong>How theauth-go helps:</strong>
+- Admin-driven user invitation is audit-logged (<code>user.invited</code>). Self-service signup (password, magic link, OAuth, SAML) is audit-logged via <code>user.login</code> on first sign-in; there is no separate <code>user.created</code> event.
+- Organization removal is exposed via the <code>removeUser</code> admin handler (<code>internal/admin/handlers.go:388-406</code>), audit-logged as <code>organization.member.removed</code>. This removes org membership only -- it does not delete or suspend the user account (see CC7.4).
+- Agent provisioning (<code>CreateAgent</code>, <code>MintAgentCredential</code>) and deprovisioning (<code>SuspendAgent</code>, <code>RevokeAgent</code>) are fully audit-logged.
+- SCIM 2.0 provisioning support for automated IdP-driven user lifecycle (<code>scim.user.create</code>, <code>scim.user.patch</code>, <code>scim.user.delete</code> audit events).</p>
+<p><strong>What the operator must implement:</strong> Offboarding runbook that triggers user suspension/removal, integration with HR system or IdP lifecycle events.</p>
+<hr />
+<h3 id="cc63-role-based-access">CC6.3 -- Role-based Access<a class="headerlink" href="#cc63-role-based-access" title="Permanent link">&para;</a></h3>
+<p><strong>What SOC 2 requires:</strong> Access to system components is based on roles and responsibilities.</p>
+<p><strong>How theauth-go helps:</strong>
+- Roles are organization-scoped. Each role carries a set of named permissions from a predefined catalog (<code>internal/rbac/service.go</code>).
+- Custom roles can be created with any subset of the permission catalog; unknown permission names are rejected at role creation time (<code>internal/rbac/service_rbac_catalog_test.go</code> documents this behavior).</p>
+<p><strong>What the operator must implement:</strong> Definition of roles matching their least-privilege requirements; regular role review.</p>
+<hr />
+<h3 id="cc64-restriction-of-access-to-privileged-accounts">CC6.4 -- Restriction of Access to Privileged Accounts<a class="headerlink" href="#cc64-restriction-of-access-to-privileged-accounts" title="Permanent link">&para;</a></h3>
+<p><strong>What SOC 2 requires:</strong> Access to privileged accounts is restricted and monitored.</p>
+<p><strong>How theauth-go helps:</strong>
+- The <code>users:admin</code>, <code>sessions:revoke</code>, <code>agents:admin</code>, and <code>scim:admin</code> permissions are distinct; each requires an explicit role grant.
+- Admin handler endpoints require both authentication and the appropriate permission (<code>internal/admin/handlers.go:115-146</code>).
+- All admin actions are audit-logged.</p>
+<p><strong>What the operator must implement:</strong> Separation of duties (e.g., the person who creates roles should not be the same person who grants them); MFA requirement for users holding admin permissions.</p>
+<hr />
+<h3 id="cc65-identification-and-authentication">CC6.5 -- Identification and Authentication<a class="headerlink" href="#cc65-identification-and-authentication" title="Permanent link">&para;</a></h3>
+<p><strong>What SOC 2 requires:</strong> The system identifies and authenticates users before allowing access.</p>
+<p><strong>How theauth-go helps:</strong>
+- Supports password + TOTP (<code>internal/password/</code>, <code>internal/totp/</code>), WebAuthn (<code>internal/webauthn/</code>), magic link (<code>internal/magiclink/</code>), OAuth social login (<code>internal/oauth/</code>), and SAML (<code>internal/saml/</code>).
+- MFA step-up is enforced before any identity-merge or privilege-escalating operation (<code>internal/identitylink/service.go:72-84</code>).
+- Session tokens are 32-byte crypto/rand values, stored as SHA-256 hashes.</p>
+<p><strong>What the operator must implement:</strong> MFA enrollment requirement for privileged users; session revocation on suspected compromise.</p>
+<hr />
+<h3 id="cc66-network-access-restrictions">CC6.6 -- Network Access Restrictions<a class="headerlink" href="#cc66-network-access-restrictions" title="Permanent link">&para;</a></h3>
+<p><strong>What SOC 2 requires:</strong> Logical access controls restrict network access to the system.</p>
+<p><strong>How theauth-go helps:</strong>
+- CIMD metadata URL fetches are restricted to HTTPS and a <code>TrustPolicy</code>-approved host list (<code>internal/cimd/service.go:114-115,224-245</code>).
+- The library does not open inbound ports or create outbound connections except to operator-configured audit sinks and email providers.</p>
+<p><strong>What the operator must implement:</strong> Network perimeter controls (firewall rules, VPC policies) to restrict who can reach the authentication endpoints.</p>
+<hr />
+<h3 id="cc67-transmission-integrity-and-confidentiality">CC6.7 -- Transmission Integrity and Confidentiality<a class="headerlink" href="#cc67-transmission-integrity-and-confidentiality" title="Permanent link">&para;</a></h3>
+<p><strong>What SOC 2 requires:</strong> The system protects against unauthorized transmission of information.</p>
+<p><strong>How theauth-go helps:</strong>
+- Session cookies are <code>Secure</code> when <code>SecureCookie=true</code> (preventing transmission over non-HTTPS).
+- Passwords and secrets are never logged; the audit redactor strips them before any sink receives the event (<code>audit.go:15-40</code>).
+- Webhook payloads are HMAC-SHA256 signed to ensure transmission integrity (<code>audit/sinks/webhook/webhook.go:131</code>).</p>
+<p><strong>What the operator must implement:</strong> TLS 1.2+ on all external endpoints; HSTS headers; certificate pinning where appropriate.</p>
+<hr />
+<h3 id="cc68-physical-access-controls">CC6.8 -- Physical Access Controls<a class="headerlink" href="#cc68-physical-access-controls" title="Permanent link">&para;</a></h3>
+<p><strong>What SOC 2 requires:</strong> Physical access to facilities and system components is restricted.</p>
+<p><strong>How theauth-go helps:</strong> Not addressable by a library.</p>
+<p><strong>What the operator must implement:</strong> Data center physical access controls (badge, biometric, visitor logs).</p>
+<hr />
+<h2 id="cc7-system-operations">CC7 -- System Operations<a class="headerlink" href="#cc7-system-operations" title="Permanent link">&para;</a></h2>
+<h3 id="cc71-configuration-management">CC7.1 -- Configuration Management<a class="headerlink" href="#cc71-configuration-management" title="Permanent link">&para;</a></h3>
+<p><strong>What SOC 2 requires:</strong> The entity obtains, generates, and uses quality information to support operations.</p>
+<p><strong>How theauth-go helps:</strong>
+- Configuration is centralized in the <code>Config</code> struct (<code>theauth.go</code>); all security-relevant fields have documented defaults.
+- Default values are documented: <code>SessionTTL=24h</code>, <code>MagicLinkTTL=15m</code>, <code>CookieName="theauth_session"</code> (<code>theauth.go:29</code>).</p>
+<p><strong>What the operator must implement:</strong> Configuration version control; diff-tracking of security-relevant config changes.</p>
+<hr />
+<h3 id="cc72-monitoring-of-system-components">CC7.2 -- Monitoring of System Components<a class="headerlink" href="#cc72-monitoring-of-system-components" title="Permanent link">&para;</a></h3>
+<p><strong>What SOC 2 requires:</strong> The entity monitors system components for anomalies.</p>
+<p><strong>How theauth-go helps:</strong>
+- OpenTelemetry spans and metrics are emitted through the <code>Hooks</code> interface for every major operation.
+- Specific metrics: <code>theauth_rate_limit_blocked_total</code> (<code>observability.go:111</code>), per-grant-type token counters, and span timing.
+- Audit events provide a structured log of authentication successes and failures.</p>
+<p><strong>What the operator must implement:</strong> Alerting thresholds; SIEM correlation rules; on-call escalation paths.</p>
+<hr />
+<h3 id="cc73-evaluation-of-security-events">CC7.3 -- Evaluation of Security Events<a class="headerlink" href="#cc73-evaluation-of-security-events" title="Permanent link">&para;</a></h3>
+<p><strong>What SOC 2 requires:</strong> The entity evaluates security events to determine whether they represent a threat.</p>
+<p><strong>How theauth-go helps:</strong>
+- Audit events carry structured metadata (user ID, IP, user agent) enabling correlation.
+- SIEM sinks (OTLP, Splunk HEC, webhook) support streaming to a central security analytics platform.</p>
+<p><strong>What the operator must implement:</strong> Threat detection rules; incident triage process.</p>
+<hr />
+<h3 id="cc74-response-to-identified-security-incidents">CC7.4 -- Response to Identified Security Incidents<a class="headerlink" href="#cc74-response-to-identified-security-incidents" title="Permanent link">&para;</a></h3>
+<p><strong>What SOC 2 requires:</strong> The entity responds to identified security incidents.</p>
+<p><strong>How theauth-go helps:</strong>
+- <code>revokeSession</code> provides immediate session-level containment (<code>internal/admin/handlers.go:428-447</code>). There is no library-level <code>SuspendUser</code>: the <code>User</code> model and <code>Storage</code> interface have no suspension state, so account-level containment beyond revoking sessions is an operator-built control (see COMPLIANCE-GDPR.md, Article 18).
+- <code>SuspendAgent</code> and <code>RevokeAgent</code> provide immediate machine-credential containment (<code>internal/agent/service.go</code>).
+- Session revocation is audit-logged with <code>session.revoked</code> events.</p>
+<p><strong>What the operator must implement:</strong> Incident response playbooks; breach notification procedures.</p>
+<hr />
+<h3 id="cc75-recovery-from-identified-security-incidents">CC7.5 -- Recovery from Identified Security Incidents<a class="headerlink" href="#cc75-recovery-from-identified-security-incidents" title="Permanent link">&para;</a></h3>
+<p><strong>What SOC 2 requires:</strong> The entity recovers from identified security incidents.</p>
+<p><strong>How theauth-go helps:</strong>
+- <code>ResumeAgent</code> restores a suspended agent after containment investigation (<code>internal/agent/service.go:407</code>).
+- JWKS key rotation can be triggered manually to replace potentially compromised signing keys.</p>
+<p><strong>What the operator must implement:</strong> Business continuity and disaster recovery plans; DB backup and restore procedures.</p>
+<hr />
+<h2 id="cc8-change-management">CC8 -- Change Management<a class="headerlink" href="#cc8-change-management" title="Permanent link">&para;</a></h2>
+<h3 id="cc81-change-management-process">CC8.1 -- Change Management Process<a class="headerlink" href="#cc81-change-management-process" title="Permanent link">&para;</a></h3>
+<p><strong>What SOC 2 requires:</strong> The entity authorizes, designs, develops, tests, approves, and deploys changes.</p>
+<p><strong>How theauth-go helps:</strong>
+- All changes are tracked in CHANGELOG.md and RELEASING.md.
+- CI enforces <code>go vet</code>, <code>go test -race</code>, and benchmark regression gates before any merge.
+- STABILITY.md documents the stability guarantees and breaking-change policy.</p>
+<p><strong>What the operator must implement:</strong> Operator-side change management: staging environment, approval gates, rollback plans for theauth-go version upgrades.</p>
+<hr />
+<h2 id="cc9-risk-mitigation">CC9 -- Risk Mitigation<a class="headerlink" href="#cc9-risk-mitigation" title="Permanent link">&para;</a></h2>
+<h3 id="cc91-vendor-and-business-partner-risk-management">CC9.1 -- Vendor and Business Partner Risk Management<a class="headerlink" href="#cc91-vendor-and-business-partner-risk-management" title="Permanent link">&para;</a></h3>
+<p><strong>What SOC 2 requires:</strong> The entity identifies, assesses, and mitigates risks associated with vendors and business partners.</p>
+<p><strong>How theauth-go helps:</strong>
+- Direct third-party dependencies are minimal and security-sensitive ones are pinned (e.g., <code>crewjam/saml v0.5.1</code>, <code>russellhaering/goxmldsig v1.4.0</code>; see <code>go.mod</code>).
+- theauth-go itself introduces no external network calls except operator-configured sinks and CIMD fetches.</p>
+<p><strong>What the operator must implement:</strong> Software supply-chain assessment (e.g., <code>go mod verify</code>, SBOM generation, vulnerability scanning via <code>govulncheck</code>).</p>
+<hr />
+<h3 id="cc92-business-disruption-and-recovery-risk-management">CC9.2 -- Business Disruption and Recovery Risk Management<a class="headerlink" href="#cc92-business-disruption-and-recovery-risk-management" title="Permanent link">&para;</a></h3>
+<p><strong>What SOC 2 requires:</strong> The entity assesses and manages risks associated with business disruption.</p>
+<p><strong>How theauth-go helps:</strong>
+- Memory store available for development/testing; Postgres store for production with standard HA replication.
+- Session expiry and refresh token TTL are configurable to match recovery objectives.</p>
+<p><strong>What the operator must implement:</strong> Multi-AZ database deployment; connection pool fallback; session state recovery procedures.</p>
+<hr />
+<h2 id="a1-availability">A1 -- Availability<a class="headerlink" href="#a1-availability" title="Permanent link">&para;</a></h2>
+<h3 id="a11-capacity-planning">A1.1 -- Capacity Planning<a class="headerlink" href="#a11-capacity-planning" title="Permanent link">&para;</a></h3>
+<p><strong>What SOC 2 requires:</strong> The entity maintains, monitors, and evaluates current processing capacity.</p>
+<p><strong>How theauth-go helps:</strong>
+- Benchmark suite (<code>internal/bench/</code>) provides baseline throughput figures.
+- Benchstat regression gate in CI (<code>benchgate/</code>) catches performance regressions.</p>
+<p><strong>What the operator must implement:</strong> Load testing, capacity forecasting, and autoscaling policies.</p>
+<hr />
+<h3 id="a12-environmental-protections">A1.2 -- Environmental Protections<a class="headerlink" href="#a12-environmental-protections" title="Permanent link">&para;</a></h3>
+<p><strong>What SOC 2 requires:</strong> Environmental controls protect against environmental threats.</p>
+<p><strong>How theauth-go helps:</strong> Not addressable by a library.</p>
+<p><strong>What the operator must implement:</strong> Data center environmental controls (power redundancy, cooling, fire suppression).</p>
+<hr />
+<h3 id="a13-recovery-plan-testing">A1.3 -- Recovery Plan Testing<a class="headerlink" href="#a13-recovery-plan-testing" title="Permanent link">&para;</a></h3>
+<p><strong>What SOC 2 requires:</strong> Recovery plan testing demonstrates the ability to recover from business disruption.</p>
+<p><strong>How theauth-go helps:</strong>
+- theauth-go's stateless validation path (resource server / mcpresource) is resilient to AS downtime during the JWKS cache TTL window.</p>
+<p><strong>What the operator must implement:</strong> Documented and tested disaster recovery runbooks; tested DB restore procedures.</p>
+<hr />
+<h2 id="c1-confidentiality">C1 -- Confidentiality<a class="headerlink" href="#c1-confidentiality" title="Permanent link">&para;</a></h2>
+<h3 id="c11-confidentiality-policies">C1.1 -- Confidentiality Policies<a class="headerlink" href="#c11-confidentiality-policies" title="Permanent link">&para;</a></h3>
+<p><strong>What SOC 2 requires:</strong> The entity identifies and maintains confidential information per commitments.</p>
+<p><strong>How theauth-go helps:</strong>
+- Secrets (passwords, TOTP keys, session tokens) are never stored in plaintext.
+- Audit redactor removes secret-class keys from all event metadata at emission time (<code>audit.go:15-40</code>).
+- <code>SecureCookie=true</code> prevents session tokens from traversing non-HTTPS channels.</p>
+<p><strong>What the operator must implement:</strong> Data classification policy; encryption-at-rest for the database; key management procedures.</p>
+<hr />
+<h2 id="pi1-processing-integrity">PI1 -- Processing Integrity<a class="headerlink" href="#pi1-processing-integrity" title="Permanent link">&para;</a></h2>
+<h3 id="pi11-processing-completeness-and-accuracy">PI1.1 -- Processing Completeness and Accuracy<a class="headerlink" href="#pi11-processing-completeness-and-accuracy" title="Permanent link">&para;</a></h3>
+<p><strong>What SOC 2 requires:</strong> Processing is complete, valid, accurate, timely, and authorized.</p>
+<p><strong>How theauth-go helps:</strong>
+- All mutations (user create, session create, token issue) are transactional; partial failures are rolled back.
+- SCIM provisioning uses atomic upserts to prevent partial user state.
+- Token issuance includes a structured audit event with the full request context.</p>
+<p><strong>What the operator must implement:</strong> Data validation at the application layer above theauth-go; reconciliation jobs for SCIM sync.</p>
+<hr />
+<h2 id="p-privacy">P -- Privacy<a class="headerlink" href="#p-privacy" title="Permanent link">&para;</a></h2>
+<h3 id="p11-privacy-notice">P1.1 -- Privacy Notice<a class="headerlink" href="#p11-privacy-notice" title="Permanent link">&para;</a></h3>
+<p><strong>What SOC 2 requires:</strong> The entity provides notice to data subjects about the collection and use of personal information.</p>
+<p><strong>How theauth-go helps:</strong> Minimal. The library collects email, optional name, IP, user agent, and auth event data (see COMPLIANCE-GDPR.md for the full inventory).</p>
+<p><strong>What the operator must implement:</strong> Privacy notice (DPN) published at a discoverable URL, listing all data fields collected by theauth-go on the operator's behalf.</p>
+<hr />
+<h3 id="p3-collection-of-personal-information">P3 -- Collection of Personal Information<a class="headerlink" href="#p3-collection-of-personal-information" title="Permanent link">&para;</a></h3>
+<p><strong>What SOC 2 requires:</strong> Personal information is collected only for the purposes identified in the privacy notice.</p>
+<p><strong>How theauth-go helps:</strong> The library collects only what is needed for authentication: email (identifier), optional name/avatar, hashed password, session metadata (IP, user agent), OAuth provider links, and WebAuthn credentials.</p>
+<p><strong>What the operator must implement:</strong> Ensure no additional personal data is collected via custom audit metadata without a corresponding DPN update.</p>
+<hr />
+<h3 id="p4-use-of-personal-information">P4 -- Use of Personal Information<a class="headerlink" href="#p4-use-of-personal-information" title="Permanent link">&para;</a></h3>
+<p><strong>What SOC 2 requires:</strong> Personal information is used only for the purposes identified in the privacy notice.</p>
+<p><strong>How theauth-go helps:</strong> Personal data stored by the library is used solely for authentication and session management. No marketing, analytics, or profiling use is embedded in the library.</p>
+<p><strong>What the operator must implement:</strong> Ensure application-layer code does not repurpose theauth-go data for undisclosed purposes.</p>
+<hr />
+<h3 id="p6-disclosure-of-personal-information">P6 -- Disclosure of Personal Information<a class="headerlink" href="#p6-disclosure-of-personal-information" title="Permanent link">&para;</a></h3>
+<p><strong>What SOC 2 requires:</strong> Personal information is disclosed only to authorized parties.</p>
+<p><strong>How theauth-go helps:</strong>
+- Audit sinks forward event data to operator-configured destinations only.
+- CIMD fetches go outbound to operator-allowlisted HTTPS hosts only.
+- No personal data is sent to Anthropic, GitHub, or any third party by the library itself.</p>
+<p><strong>What the operator must implement:</strong> DPAs with audit sink destinations (Splunk, OTLP collector vendor, webhook receiver) before enabling those sinks.</p>
+<hr />
+<h3 id="p7-quality-of-personal-information">P7 -- Quality of Personal Information<a class="headerlink" href="#p7-quality-of-personal-information" title="Permanent link">&para;</a></h3>
+<p><strong>What SOC 2 requires:</strong> Personal information is accurate, complete, and relevant.</p>
+<p><strong>How theauth-go helps:</strong>
+- <code>UpdateUser</code> (<code>internal/admin/handlers.go:297-376</code>) supports correction of name and email.
+- SCIM PATCH operations support incremental attribute updates.</p>
+<p><strong>What the operator must implement:</strong> User-facing profile update interface; validation on updated fields.</p>
+<hr />
+<h3 id="p8-monitoring-and-enforcement">P8 -- Monitoring and Enforcement<a class="headerlink" href="#p8-monitoring-and-enforcement" title="Permanent link">&para;</a></h3>
+<p><strong>What SOC 2 requires:</strong> The entity monitors compliance with its privacy commitments.</p>
+<p><strong>How theauth-go helps:</strong>
+- Audit events for every authentication action enable compliance monitoring.
+- Data-access primitives (<code>UserByID</code>, session listing, <code>listOAuthAccounts</code>, <code>QueryAuditEvents</code>, etc.) that an operator can assemble into export and erasure endpoints exist (see COMPLIANCE-GDPR.md, Section 2). These are building blocks, not ready-made export/erasure endpoints: the library does not ship a data-subject export API, and erasure (Article 17) is an explicit operator gap because there is no <code>DeleteUser</code> method on the <code>Storage</code> interface.</p>
+<p><strong>What the operator must implement:</strong> Privacy compliance reviews; data subject request intake process; retention policy enforcement; the export and erasure endpoints themselves (see COMPLIANCE-GDPR.md, Section 2, "Operator gap").</p>
+<hr />
+<h2 id="what-theauth-go-does-not-provide">What theauth-go Does NOT Provide<a class="headerlink" href="#what-theauth-go-does-not-provide" title="Permanent link">&para;</a></h2>
+<p>This section is explicit about the gaps that an operator's SOC 2 scope must cover independently.</p>
+<ol>
+<li><strong>System Description (SD-1).</strong> The operator writes this; it covers their entire system.</li>
+<li><strong>Management's Assertion.</strong> Signed by the operator's management, not the library authors.</li>
+<li><strong>Physical security controls.</strong> Data center, office, and device controls are entirely the operator's responsibility.</li>
+<li><strong>Vendor and supply-chain assessment.</strong> The operator must assess theauth-go and all other dependencies.</li>
+<li><strong>Incident response and business continuity plans.</strong> The library provides containment primitives (suspend, revoke); the plans are the operator's.</li>
+<li><strong>User training and awareness programs.</strong> The library cannot enforce security culture.</li>
+<li><strong>Audit of operator's own code.</strong> theauth-go secures authentication; the operator's application code wrapping it is not in scope for this document.</li>
+<li><strong>Penetration testing.</strong> The library has been designed with the threats in THREAT-MODEL.md in mind, but periodic external penetration testing of the operator's deployed system is the operator's responsibility.</li>
+</ol>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.tabs", "navigation.tabs.sticky", "navigation.sections", "navigation.expand", "navigation.path", "navigation.top", "search.highlight", "search.suggest", "content.code.copy", "content.code.annotate"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"default": "latest", "provider": "mike"}}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+    
+  </body>
+</html>

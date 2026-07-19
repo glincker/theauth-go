@@ -1,0 +1,37 @@
+# theauth-go
+
+> Go library providing OAuth 2.1 authorization server, MCP (Model Context Protocol) authorization, agent identities with revocable delegation chains, and traditional authentication (magic-link, email/password, WebAuthn passkeys, TOTP, SAML, SCIM). Self-hosted, MIT licensed, single `go get` import.
+
+theauth-go is not a SaaS or hosted IdP. It is a Go library you mount into your own `chi` or `net/http` server.
+
+## Core capabilities
+
+- OAuth 2.1: authorization code + mandatory PKCE S256, refresh token rotation with family revocation, client_credentials, RFC 8693 token exchange, RFC 9509 CIBA, RFC 9126 PAR, RFC 9101 JAR, RFC 9449 DPoP-bound tokens.
+- MCP authorization: RFC 9728 OAuth 2.0 Protected Resource Metadata, CIMD per MCP spec 2025-11-25, a companion zero-dependency SDK module at `github.com/glincker/theauth-go/mcpresource`.
+- Authentication: magic-link email, email/password (argon2id), WebAuthn/FIDO2 passkeys, TOTP with recovery codes, SAML 2.0 Service Provider, SCIM 2.0 provisioning.
+- Agent identity: Agent + AgentCredential primitives, delegation grants, chain-depth-capped token exchange for AI agent use cases.
+- Authorization: organization-scoped RBAC with seeded permissions and default roles.
+- Storage: in-memory (tests), Postgres (pgx), MySQL. Pluggable `Storage` interface for custom backends.
+- Observability: OpenTelemetry tracing, Prometheus metrics, structured audit log with pluggable sinks (webhook, Splunk HEC).
+
+## Docs
+
+- [README](https://github.com/glincker/theauth-go/blob/main/README.md): quick start, feature comparison table, examples index.
+- [Full documentation](https://go.theauth.dev/): getting started, concepts, guides, API reference.
+- [AGENTS.md](https://github.com/glincker/theauth-go/blob/main/docs/AGENTS.md): version-by-version shipped feature history, written for AI coding assistants.
+- [STABILITY.md](https://github.com/glincker/theauth-go/blob/main/docs/STABILITY.md): SemVer contract and API surface guarantees.
+- [CHANGELOG](https://github.com/glincker/theauth-go/blob/main/CHANGELOG.md): release notes.
+- [Migrating from Auth0](https://github.com/glincker/theauth-go/blob/main/docs/MIGRATING-FROM-AUTH0.md) / [Migrating from Cognito](https://github.com/glincker/theauth-go/blob/main/docs/MIGRATING-FROM-COGNITO.md).
+
+## Quick start
+
+```go
+a, _ := theauth.New(theauth.Config{
+    Storage: memory.New(),
+    BaseURL: "http://localhost:8080",
+})
+r := chi.NewRouter()
+a.Mount(r) // /auth/* magic-link, email-password, OAuth, passkeys, TOTP, SAML
+```
+
+`go get github.com/glincker/theauth-go`. Requires Go 1.25+.
