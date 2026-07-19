@@ -1,0 +1,2989 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Go auth library covering OAuth 2.1, MCP authorization, agent identities, WebAuthn, SAML, SCIM, and more.">
+      
+      
+      
+        <link rel="canonical" href="https://go.theauth.dev/latest/changelog/">
+      
+      
+        <link rel="prev" href="../migrations/v0.7-to-v1.0/">
+      
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>Changelog - theauth-go</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.ec1eaa64.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  
+<meta property="og:type" content="website" />
+<meta property="og:title" content="Changelog - theauth-go" />
+<meta property="og:description" content="Go auth library covering OAuth 2.1, MCP authorization, agent identities, WebAuthn, SAML, SCIM, and more." />
+<meta property="og:image" content="https://go.theauth.dev/latest/assets/images/social/changelog.png" />
+<meta property="og:image:type" content="image/png" />
+<meta property="og:image:width" content="1200" />
+<meta property="og:image:height" content="630" />
+<meta property="og:url" content="https://go.theauth.dev/latest/changelog/" />
+<meta property="twitter:card" content="summary_large_image" />
+<meta property="twitter:title" content="Changelog - theauth-go" />
+<meta property="twitter:description" content="Go auth library covering OAuth 2.1, MCP authorization, agent identities, WebAuthn, SAML, SCIM, and more." />
+<meta property="twitter:image" content="https://go.theauth.dev/latest/assets/images/social/changelog.png" />
+</head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#changelog" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+      <div data-md-color-scheme="default" data-md-component="outdated" hidden>
+        
+      </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow md-header--lifted" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="theauth-go" class="md-header__button md-logo" aria-label="theauth-go" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            theauth-go
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Changelog
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/glincker/theauth-go" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    glincker/theauth-go
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+    
+      
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href=".." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../getting-started/overview/" class="md-tabs__link">
+          
+  
+  
+  Getting Started
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../concepts/oauth21-primer/" class="md-tabs__link">
+          
+  
+  
+  Concepts
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../guides/add-oauth-provider/" class="md-tabs__link">
+          
+  
+  
+  Guides
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../reference/configuration/" class="md-tabs__link">
+          
+  
+  
+  Reference
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../security/threat-model/" class="md-tabs__link">
+          
+  
+  
+  Security
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../migrations/v2.3-to-v2.4/" class="md-tabs__link">
+          
+  
+  
+  Migrations
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+    
+  
+  
+    <li class="md-tabs__item md-tabs__item--active">
+      <a href="./" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Changelog
+
+      </a>
+    </li>
+  
+
+      
+    </ul>
+  </div>
+</nav>
+    
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="theauth-go" class="md-nav__button md-logo" aria-label="theauth-go" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    theauth-go
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/glincker/theauth-go" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    glincker/theauth-go
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting Started
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Getting Started
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../getting-started/overview/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../getting-started/installation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Installation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../getting-started/quick-start/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Quick Start
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../getting-started/storage-backends/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Storage Backends
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../getting-started/example-apps/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Example Apps
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Concepts
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Concepts
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../concepts/oauth21-primer/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    OAuth 2.1 Primer
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../concepts/mcp-authorization/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MCP Authorization
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../concepts/authorization-server/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Authorization Server
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../concepts/resource-server/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Resource Server (mcpresource)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../concepts/par-jar/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    PAR + JAR (FAPI 2.0)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../concepts/jwt-bearer/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    JWT-Bearer Client Auth
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../concepts/ciba/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CIBA Backchannel Auth
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Guides
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Guides
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../guides/add-oauth-provider/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Add an OAuth Provider
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../guides/webauthn-passkeys/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Enable WebAuthn Passkeys
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../guides/opentelemetry-tracing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Wire OpenTelemetry Tracing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../guides/audit-log-splunk/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Stream Audit Logs to Splunk
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../guides/custom-storage-backend/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Write a Custom Storage Backend
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../guides/migrate-from-cognito/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Migrate from Cognito
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../guides/migrate-from-auth0/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Migrate from Auth0
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/configuration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/storage/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Storage Interface
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/errors/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Errors
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/metrics/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Metrics
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/spans/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Spans
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/audit-events/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Audit Events
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Security
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Security
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../security/threat-model/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Threat Model
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../security/releases/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Releases and Verification
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../security/benchmarks/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Benchmarks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../security/compliance-soc2/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SOC 2 Mapping
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../security/compliance-gdpr/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    GDPR Reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Migrations
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Migrations
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../migrations/v2.3-to-v2.4/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v2.3 to v2.4
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../migrations/v2.0-to-v2.1/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v2.0 to v2.1
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../migrations/v1.0-to-v2.0/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v1.0 to v2.0
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../migrations/v0.7-to-v1.0/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v0.7 to v1.0
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Changelog
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+                
+
+
+
+  
+
+
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="changelog">Changelog<a class="headerlink" href="#changelog" title="Permanent link">&para;</a></h1>
+<p>All notable changes to theauth-go are recorded below. The format follows <a href="https://keepachangelog.com/en/1.1.0/">Keep a Changelog</a> and the project adheres to <a href="https://semver.org/">Semantic Versioning</a> from v1.0 forward.</p>
+<p>The authoritative source file is <a href="https://github.com/glincker/theauth-go/blob/main/CHANGELOG.md"><code>CHANGELOG.md</code></a> in the repository root.</p>
+<h1 id="changelog_1">Changelog<a class="headerlink" href="#changelog_1" title="Permanent link">&para;</a></h1>
+<p>All notable changes to theauth-go are recorded here. The format follows
+<a href="https://keepachangelog.com/en/1.1.0/">Keep a Changelog</a> and the project
+adheres to <a href="https://semver.org/">Semantic Versioning</a> from v1.0 forward.</p>
+<h2 id="unreleased">[Unreleased]<a class="headerlink" href="#unreleased" title="Permanent link">&para;</a></h2>
+<h2 id="250-2026-07-14">[2.5.0] - 2026-07-14<a class="headerlink" href="#250-2026-07-14" title="Permanent link">&para;</a></h2>
+<p>Stable release graduating v2.5.0-rc.1. Completes the <code>Config.LifecycleHooks</code>
+surface (#76) with all six hooks fully wired, fixes a real bug where the
+batteries-included <code>Mount()</code> HTTP routes bypassed hook dispatch entirely for
+password/TOTP/WebAuthn, and closes out a batch of storage-layer correctness
+fixes across Postgres and MySQL.</p>
+<h3 id="added">Added<a class="headerlink" href="#added" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong><code>Config.LifecycleHooks</code> fully wired (#76).</strong> <code>OnSignup</code> now also fires
+  from SAML signup and a user's first WebAuthn credential (passkey
+  registration has no true account-creation moment, so the first credential
+  is the closest equivalent). <code>OnPasswordChange</code>, <code>OnMFAEnabled</code>, and
+  <code>OnOrgSwitch</code> (explicit <code>SetActiveOrganization</code> only, not auto-provisioned
+  personal orgs) now fire. <code>OnTokenIssued</code> fires immediately before signing
+  on every OAuth access-token grant (authorization_code, refresh_token,
+  client_credentials, RFC 8693 exchange, CIBA); consumer-returned claims
+  merge into the JWT, and a non-nil error aborts issuance.</li>
+<li><strong><code>AuthorizationServerConfig.Clock</code> (#38).</strong> Injectable time source for
+  the introspection cache and agent-chain cache, so tests can assert
+  revocation propagation deterministically instead of sleeping past
+  <code>IntrospectionCacheTTL</code>.</li>
+<li><strong>Password policy documented in README (#39).</strong> Minimum length, Argon2id
+  hashing, and the anti-enumeration dummy-verify behavior.</li>
+</ul>
+<h3 id="fixed">Fixed<a class="headerlink" href="#fixed" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong><code>a.Mount()</code> bypassed <code>LifecycleHooks</code> for password, TOTP, and WebAuthn.</strong>
+  <code>passwordhandlers</code>/<code>totphandlers</code>/<code>webauthnhandlers</code> held the raw internal
+  <code>Service</code> directly instead of a hook-aware adapter, unlike OAuth/
+  Organizations/SAML, which already routed correctly. <code>OnSignup</code>/<code>OnSignin</code>/
+  <code>OnPasswordChange</code>/<code>OnMFAEnabled</code> never fired for any consumer using the
+  batteries-included <code>Mount()</code> routes, even though <code>OnSignup</code>/<code>OnSignin</code> were
+  marked shipped in v2.5.0-rc.1. Each package now takes a root-backed
+  adapter, mirroring the already-correct pattern.</li>
+<li><strong>SCIM <code>PATCH /Groups/{id}</code></strong> silently discarded member-write errors,
+  always returning 200 even when the storage write failed.</li>
+<li><strong>Admin <code>GET /audit</code></strong> classified bad-cursor errors by substring-matching
+  <code>err.Error()</code> instead of <code>errors.Is</code>. Added a proper <code>ErrBadCursor</code>
+  sentinel.</li>
+<li><strong><code>storage/mysql.MoveTOTPSecret</code></strong> treated any error from its existence
+  check (not just "no rows") as "primary already has a secret," which could
+  silently delete a secondary user's real TOTP secret on a transient DB
+  error.</li>
+<li><strong><code>storage/postgres.UpdateAgentLastActive</code></strong> and <strong>six <code>storage/mysql</code>
+  methods</strong> (<code>UpdateSessionAuthLevel</code>, <code>SetSessionActiveOrganization</code>,
+  <code>UpdateSAMLConnectionRow</code>, <code>UpdateGroup</code>, <code>UpdateAgentLastActive</code>,
+  <code>UpdateAgentCredentialLastUsed</code>) now return <code>storage.ErrNotFound</code> instead
+  of silently succeeding on a missing row.</li>
+<li><strong><code>mysql.Migrate()</code> failed entirely against MySQL 8.4</strong> (the current MySQL
+  major version): several migrations used <code>TEXT/BLOB DEFAULT ''</code>, which 8.4
+  rejects, and the statement splitter mis-handled a semicolon appearing
+  inside a SQL comment. Migrations now apply cleanly end-to-end.</li>
+<li><strong><code>identitylink.MergeAccounts</code></strong> partial-failure behavior documented and
+  tested: a failure partway through its four move steps is safe to retry
+  with the same IDs.</li>
+</ul>
+<h2 id="250-rc1-2026-06-22">[2.5.0-rc.1] - 2026-06-22<a class="headerlink" href="#250-rc1-2026-06-22" title="Permanent link">&para;</a></h2>
+<p>The "consumer feedback" release. Closes the three highest-impact friction points raised in the 2026-06-22 consumer-feedback session: the hook surface for lifecycle events, opt-in automatic tenant provisioning, and a unified RFC 7807 error envelope across all auth/RBAC middleware. All additions are fully additive: downstream code compiles unchanged.</p>
+<p>This is a release candidate so consumers can road-test the new surface (LifecycleHooks contract, TenancyConfig auto-provisioning, error envelope shape) before the stable v2.5.0 tag. The remaining hook wiring (passkey, SAML, OnPasswordChange, OnMFAEnabled, OnTokenIssued, OnOrgSwitch) and the selective re-exports work (#79) ship in subsequent v2.5.x patches without API change.</p>
+<h3 id="added_1">Added<a class="headerlink" href="#added_1" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong><code>Config.LifecycleHooks</code> surface (#76, partial).</strong> New optional hook bundle
+  lets consumers react to authentication-lifecycle events without forking
+  handlers or wrapping endpoints at the HTTP boundary. Six hook fields land
+  (<code>OnSignup</code>, <code>OnSignin</code>, <code>OnPasswordChange</code>, <code>OnMFAEnabled</code>, <code>OnTokenIssued</code>,
+  <code>OnOrgSwitch</code>), plus <code>SignupMethod</code> and <code>MFAKind</code> enums. Errors and panics
+  are recovered and logged; the triggering request never fails. This release
+  wires <code>OnSignup</code> and <code>OnSignin</code> at the password, magic-link, and OAuth
+  provider callback paths. The remaining hook points (passkey, SAML
+  signup; password change; MFA enable; token issuance; org switch) ship
+  incrementally in v2.5.x without API change. Magic-link consume and OAuth
+  callback both distinguish new vs returning users via an internal flag so
+  OnSignup only fires when the user row was actually created. See
+  <code>LifecycleHooks</code> doc comment for semantics.</li>
+<li><strong><code>Auth.UserByID</code> (#77).</strong> Public lookup that previously forced
+  consumers to reach into storage directly. Forwards to <code>Storage.UserByID</code>.</li>
+<li><strong><code>Config.Tenancy</code> auto-provisioning (#77).</strong> New <code>TenancyConfig</code> lets
+  consumers opt into automatic personal-organization creation on signup.
+  When <code>Tenancy.AutoCreatePersonalOrg = true</code> and <code>Organizations</code> is
+  enabled, every signup automatically creates a personal organization,
+  adds the user as its owner, and sets the session's active organization
+  to it. Closes the SQL-seeding friction the consumer feedback flagged.
+  <code>PersonalOrgNameFn</code> and <code>PersonalOrgSlugFn</code> knobs override the defaults
+  (<code>user.Email</code> and <code>"personal-" + lowercased ULID</code>). Wired at the same
+  three signup paths as the hook surface (password, magic-link, OAuth).</li>
+</ul>
+<h3 id="fixed_1">Fixed<a class="headerlink" href="#fixed_1" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong><code>RequireAuth</code> now emits RFC 7807 problem+json on 401 (#78).</strong> Previously
+  <code>RequireAuth</code> and <code>RequirePendingOrFull</code> wrote plain-text bodies (<code>"unauthorized"</code>)
+  while <code>RequirePermission</code> already emitted RFC 7807, forcing frontends to
+  special-case the 401 path. All three middlewares now share a single envelope:</li>
+</ul>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>HTTP/1.1 401 Unauthorized
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>Content-Type: application/problem+json
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>WWW-Authenticate: Session realm=&quot;theauth&quot;, error=&quot;auth.unauthenticated&quot;
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>{&quot;type&quot;:&quot;https://theauth.dev/problems/auth.unauthenticated&quot;,
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a> &quot;title&quot;:&quot;Unauthorized&quot;,&quot;status&quot;:401,
+<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a> &quot;detail&quot;:&quot;Missing or invalid session&quot;,&quot;code&quot;:&quot;auth.unauthenticated&quot;}
+</code></pre></div>
+<p>Two distinct codes are surfaced so frontends can distinguish "log in" from
+  "complete second factor":</p>
+<ul>
+<li><code>auth.unauthenticated</code> for no session cookie or failed validation.</li>
+<li><code>auth.step_up_required</code> for pending_2fa sessions that still need TOTP or WebAuthn verify.</li>
+</ul>
+<p><code>RequirePermission</code> 500 paths also moved off plain text (<code>rbac.disabled</code>,
+  <code>rbac.internal_error</code>) for the same reason. Tracked in milestone v2.5.0.</p>
+<h2 id="240-2026-06-22">[2.4.0] - 2026-06-22<a class="headerlink" href="#240-2026-06-22" title="Permanent link">&para;</a></h2>
+<p>The "enterprise security profile, supply chain hardening, and storage portability"
+release. v2.4 closes the FAPI 2.0 baseline by combining PAR (RFC 9126), JAR
+(RFC 9101), and JWT-Bearer client authentication (RFC 7523) in a single release.
+A new MySQL 8.x backend, a public <code>storagetest</code> contract suite, CIBA backchannel
+authentication (RFC 9509), and a CLI migration tool for Cognito and Auth0 round
+out the release. All additions are fully additive: downstream code compiles
+unchanged.</p>
+<h3 id="added_2">Added<a class="headerlink" href="#added_2" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>MySQL 8.x storage backend (#62).</strong> <code>storage/mysql</code> implements <code>theauth.Storage</code>
+  and <code>OAuthServerStorage</code> with full parity with the existing postgres backend.
+  The adapter uses <code>sqlc</code>-generated queries targeting MySQL 8.x dialect. All
+  dialect translations (e.g., <code>ILIKE</code> to <code>LIKE BINARY</code>, <code>gen_random_uuid()</code> to
+  <code>UUID()</code>, advisory locks to <code>GET_LOCK</code>) are handled internally. Enable the
+  contract test gate by setting <code>THEAUTH_MYSQL_CONTRACT=1</code> when running
+  <code>go test ./storage/mysql/...</code> against a live MySQL instance. The contract suite
+  (<code>storagetest.Run</code>) is the same set used by the postgres adapter, so parity
+  is enforced mechanically.</li>
+<li>
+<p>Current parity caveats: <code>postgres.Migrate</code> pattern not yet mirrored; operators
+    apply the <code>storage/mysql/migrations/</code> SQL files manually or via their
+    migration runner. Advisory lock serialization is weaker than Postgres
+    serializable transactions; avoid concurrent migrations.</p>
+</li>
+<li>
+<p><strong>Cognito + Auth0 migration CLI (#63).</strong> New <code>cmd/theauth-migrate/</code> binary
+  with sub-commands <code>cognito</code> and <code>auth0</code> exports users from AWS Cognito (CSV
+  or JSON input) and Auth0 (Management API or bulk export) into an intermediate
+  JSON bundle, then applies the bundle to any theauth-go storage backend.</p>
+</li>
+<li>Two-stage design: <code>export</code> then <code>apply</code> lets operators diff and validate
+    the bundle with <code>theauth-migrate validate</code> before touching production storage.</li>
+<li>Auth0 path preserves bcrypt password hashes and triggers transparent
+    re-hashing with Argon2id on next successful login. Enable with the new
+    <code>PasswordPolicy.AllowLegacyBcrypt = true</code> config flag during the migration
+    window; disable once active users have been re-hashed.</li>
+<li>
+<p>Build: <code>go build ./cmd/theauth-migrate</code>.</p>
+</li>
+<li>
+<p><strong>PAR (RFC 9126) + JAR (RFC 9101) for FAPI-adjacent profile (#64).</strong>
+  Pushed Authorization Requests and JWT-Secured Authorization Requests are now
+  supported by the OAuth 2.1 AS.</p>
+</li>
+<li>PAR: <code>POST /oauth/par</code> accepts the full authorization request body, stores
+    it under a <code>urn:ietf:params:oauth:request_uri</code> handle (9-character random
+    suffix), and returns the handle with a 60-second TTL. The authorize endpoint
+    accepts the <code>request_uri</code> parameter and rejects raw parameters when PAR is
+    required (<code>PARConfig.Required = true</code>).</li>
+<li>JAR: the authorize endpoint verifies <code>request</code> JWTs signed by the client's
+    registered public key (<code>JARConfig.AllowedAlgorithms</code>, default ES256/RS256).
+    The <code>request</code> JWT must contain <code>iss</code>, <code>aud</code>, <code>exp</code>, <code>iat</code>, <code>nbf</code>, and the
+    standard authorization parameters.</li>
+<li>PAR + JAR together reach the FAPI 2.0 Security Profile baseline when
+    combined with the JWT-Bearer client authentication added in #65. See
+    the PAR + JAR concept page in the docs site for the flow narrative.</li>
+<li>New config: <code>AuthorizationServerConfig.PAR *PARConfig</code>,
+    <code>AuthorizationServerConfig.JAR *JARConfig</code>.</li>
+<li>
+<p>Passes the zero-dependency mcpresource contract: mcpresource gains no new
+    transitive deps from this change.</p>
+</li>
+<li>
+<p><strong>JWT-Bearer client auth + grant + token exchange polish (#65, RFC 7523).</strong>
+  The AS now accepts JWT client assertions (<code>client_assertion_type=
+  urn:ietf:params:oauth:client-assertion-type:jwt-bearer</code>) as a client
+  authentication method alongside <code>client_secret_post</code> and <code>client_secret_basic</code>.</p>
+</li>
+<li>Issuers are registered via the new <code>TrustedJWTIssuer</code> config type; a
+    <code>SubjectMapper</code> callback maps the JWT subject to a theauth client ID.</li>
+<li>JWT-Bearer grant (<code>grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer</code>):
+    exchange an external JWT (e.g., a Kubernetes ServiceAccount token) for a
+    theauth access token without a prior interactive auth step.</li>
+<li>Token exchange polish: <code>requested_token_type</code> parameter is now respected
+    per RFC 8693; the response <code>issued_token_type</code> is set explicitly.</li>
+<li>Primary use case: Kubernetes workload identity. A Pod authenticates with
+    its projected ServiceAccount token; the AS verifies the OIDC issuer and
+    mints a scoped access token for the target resource. See the JWT-Bearer
+    concept page in the docs site.</li>
+<li>New config: <code>AuthorizationServerConfig.JWTBearer *JWTBearerConfig</code>.</li>
+<li>
+<p>Passes the zero-dependency mcpresource contract: no new transitive deps.</p>
+</li>
+<li>
+<p><strong>CIBA -- backchannel authentication, RFC 9509 (#66, Poll + Ping modes).</strong>
+  The CIBA profile lets a consumption device (e.g., a call center agent or voice
+  assistant) authenticate a user via a separate authentication device (e.g., a
+  phone push notification) without a browser redirect.</p>
+</li>
+<li><code>AuthenticationDevice</code> interface: implement <code>Notify(ctx, req CIBARequest)
+    error</code> to deliver push notifications, voice prompts, or any out-of-band
+    channel.</li>
+<li>Poll mode: the client calls <code>POST /ciba/token</code> periodically using the
+    <code>auth_req_id</code> returned by <code>POST /ciba/bc-authorize</code>. Returns
+    <code>authorization_pending</code> until the user approves (or <code>access_denied</code> on
+    denial).</li>
+<li>Ping mode: client registers a <code>client_notification_endpoint</code>; theauth-go
+    POSTs the token to that endpoint when the user approves. No polling required.</li>
+<li>When to use: IoT device pairing, voice-channel step-up, call center
+    agent-assisted authentication, TV/speaker without a keyboard.</li>
+<li>
+<p>New config: <code>AuthorizationServerConfig.CIBA *CIBAConfig</code>.</p>
+</li>
+<li>
+<p><strong><code>storagetest</code> public contract suite (#58).</strong> Any custom storage adapter can
+  now be verified against the canonical theauth-go contract by calling
+  <code>storagetest.Run(t, factory)</code> from its test file:
+  <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="kd">func</span><span class="w"> </span><span class="nx">TestConformance</span><span class="p">(</span><span class="nx">t</span><span class="w"> </span><span class="o">*</span><span class="nx">testing</span><span class="p">.</span><span class="nx">T</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="w">    </span><span class="nx">storagetest</span><span class="p">.</span><span class="nx">Run</span><span class="p">(</span><span class="nx">t</span><span class="p">,</span><span class="w"> </span><span class="kd">func</span><span class="p">()</span><span class="w"> </span><span class="nx">theauth</span><span class="p">.</span><span class="nx">Storage</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">return</span><span class="w"> </span><span class="nx">mystorage</span><span class="p">.</span><span class="nx">New</span><span class="p">()</span><span class="w"> </span><span class="p">})</span>
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="p">}</span>
+</code></pre></div>
+  The suite covers 12 functional areas (sessions, passwords, oauth clients,
+  refresh tokens, JWKS rotation, agents, delegations, CIBA, storagetest
+  idempotency, error sentinel conformance, concurrent writes, and audit
+  append-only). Both in-tree adapters run this suite in CI.</p>
+</li>
+<li>
+<p><strong><code>Config.RequireState bool</code> (#64, RFC 9700 BCP).</strong> When true, the AS rejects
+  <code>/authorize</code> requests without a non-empty <code>state</code> parameter. Default false
+  preserves backwards compatibility.</p>
+</li>
+<li>
+<p><strong><code>PasswordPolicy.AllowLegacyBcrypt bool</code> (#63).</strong> Opt-in to accept bcrypt
+  password hashes imported from Auth0 (and similar systems). When a user
+  authenticates, theauth-go detects the bcrypt PHC prefix, verifies with bcrypt,
+  and re-hashes with Argon2id on success. Disable this flag once the migration
+  window closes.</p>
+</li>
+</ul>
+<h3 id="changed">Changed<a class="headerlink" href="#changed" title="Permanent link">&para;</a></h3>
+<ul>
+<li>
+<p><strong><code>AuthorizationServerConfig</code> extended with new optional sub-configs (additive).</strong>
+  <code>PAR *PARConfig</code>, <code>JAR *JARConfig</code>, <code>JWTBearer *JWTBearerConfig</code>,
+  <code>CIBA *CIBAConfig</code>. All nil by default; nil means the feature is disabled.
+  Existing config structs compile and run unchanged.</p>
+</li>
+<li>
+<p><strong>Token exchange response now sets <code>issued_token_type</code> explicitly (#65).</strong>
+  Previously the field was omitted. It is now set to
+  <code>urn:ietf:params:oauth:token-type:access_token</code> per RFC 8693 section 2.2.1.
+  The field was not part of any guarantee in previous releases, so this is
+  classified as a bug fix rather than a breaking change.</p>
+</li>
+</ul>
+<h3 id="fixed_2">Fixed<a class="headerlink" href="#fixed_2" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong><code>gofmt</code> fixup on <code>jwtbearer.go</code> and <code>par_serialise.go</code> (#68).</strong> Two files
+  landed in #64 and #65 with minor formatting inconsistencies. No logic change.</li>
+</ul>
+<h3 id="tests">Tests<a class="headerlink" href="#tests" title="Permanent link">&para;</a></h3>
+<ul>
+<li>
+<p><strong>Root test file count: 35 to 27 (#67).</strong> Extracted
+  <code>internal/theauthtest/</code> helper package (test fixtures, JWT minting helpers,
+  request builders) consumed by the remaining root tests. Reduces root noise
+  and makes per-package test helpers importable without init-time side effects.</p>
+</li>
+<li>
+<p><strong>Performance regression CI gate (#59, 12 benchmarks).</strong> <code>benchgate</code> now runs
+  on every PR. Compares benchmark results with <code>benchstat</code>; any benchmark
+  regressing beyond the 25% default threshold fails the CI check. The diff is
+  posted as a PR comment. Baseline is pinned to the <code>main</code> branch. Override
+  threshold: <code>BENCHGATE_THRESHOLD=0.30</code>.</p>
+</li>
+</ul>
+<h3 id="internal">Internal<a class="headerlink" href="#internal" title="Permanent link">&para;</a></h3>
+<ul>
+<li>
+<p><strong>Goreleaser + SBOM + Sigstore keyless + SLSA provenance (#57).</strong> Tag pushes
+  now trigger <code>.github/workflows/release.yml</code>, which runs goreleaser, generates
+  a CycloneDX SBOM, signs the SBOM and source archive with <code>cosign</code> keyless
+  signing (GitHub Actions OIDC identity), and attaches an SLSA level-3
+  provenance attestation. Consumers can verify releases with <code>cosign verify-blob</code>
+  and <code>gh attestation verify</code>. See <a href="https://theauth.dev/go/security/releases/">Releases and Verification</a>.</p>
+</li>
+<li>
+<p><strong>MkDocs Material docs site with <code>mike</code> versioning (#60).</strong> <code>docs-site/</code> now
+  builds a versioned docs site deployed to GitHub Pages. The <code>mike</code> plugin
+  manages version aliases (<code>latest</code>, <code>stable</code>). The GH Pages workflow deploys
+  on every push to <code>main</code>. Build locally: <code>cd docs-site &amp;&amp; mkdocs build --strict</code>.</p>
+</li>
+</ul>
+<h3 id="security">Security<a class="headerlink" href="#security" title="Permanent link">&para;</a></h3>
+<ul>
+<li>
+<p><strong>Supply chain: goreleaser + cosign + SLSA (#57).</strong> Every release artifact
+  (source archive, SBOM) is now signed with Sigstore keyless signing via the
+  GitHub Actions OIDC identity. SLSA level-3 provenance is attached. Consumers
+  can cryptographically verify that a release was built by the official GitHub
+  Actions workflow and has not been tampered with post-build. See
+  <a href="https://theauth.dev/go/security/releases/">Releases and Verification</a> for the
+  verification commands.</p>
+</li>
+<li>
+<p><strong>Trust documentation (#61).</strong> <code>docs/THREAT-MODEL.md</code> (STRIDE analysis across
+  all subsystems), <code>docs/COMPLIANCE-SOC2.md</code> (AICPA TSC 2017 criteria mapping),
+  and <code>docs/COMPLIANCE-GDPR.md</code> (GDPR data handling reference and
+  operator/controller role clarification) are now in the repository. These
+  documents inform operator security assessments and SOC 2 evidence packs.</p>
+</li>
+</ul>
+<h2 id="230-2026-06-22">[2.3.0] - 2026-06-22<a class="headerlink" href="#230-2026-06-22" title="Permanent link">&para;</a></h2>
+<p>The "MCP wedge deepening and enterprise feature parity" release. Three major
+features land here that close the gap with Auth0, Clerk, and Better-Auth:
+account linking with mandatory step-up, eight new built-in OAuth providers
+(12 total), and pluggable SIEM streaming sinks for enterprise audit log
+shipping. Public API stays additive; downstream code compiles unchanged.</p>
+<h3 id="added_3">Added<a class="headerlink" href="#added_3" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Account linking and identity merge (#55).</strong> Users can now bind a new
+  authentication method to an existing account, or merge two accounts into
+  one, behind mandatory step-up auth.</li>
+<li><code>LinkOAuthToCurrentUser(ctx, sessionID, provider, payload) error</code> --
+    bind a new OAuth provider to the signed-in user.</li>
+<li><code>LinkPasswordToCurrentUser(ctx, sessionID, password) error</code> -- add a
+    backup password to an OAuth-only account.</li>
+<li><code>MergeAccounts(ctx, primaryID, secondaryID, mergeInput) error</code> --
+    destructive merge; moves OAuth accounts, passwords, WebAuthn
+    credentials, TOTP secrets from secondary to primary; revokes
+    secondary's sessions; cross-references via <code>merged_into</code> in the audit
+    log.</li>
+<li>HTTP endpoints under <code>/account/identities</code>: POST <code>/oauth</code>, GET
+    <code>/oauth/callback</code>, POST <code>/password</code>, POST <code>/merge</code>, DELETE
+    <code>/{provider}</code>.</li>
+<li>New errors: <code>ErrIdentityConflict</code>, <code>ErrStepUpRequired</code>,
+    <code>ErrLastAuthMethod</code> (cannot unlink the last auth method).</li>
+<li>New audit event types: <code>identity.linked</code>, <code>identity.unlinked</code>,
+    <code>account.merged</code>.</li>
+<li>
+<p>All methods require a fully-authenticated session (no <code>pending_2fa</code>);
+    callers receive <code>ErrStepUpRequired</code> otherwise.</p>
+</li>
+<li>
+<p><strong>Eight new built-in OAuth providers (#54). Total provider count: 4 to 12.</strong></p>
+</li>
+<li><code>provider/apple</code> -- Sign in with Apple. ES256 JWT client authentication
+    minted from a .p8 private key per token exchange. Parse the .p8 file
+    with <code>x509.ParsePKCS8PrivateKey</code> after <code>pem.Decode</code>, not
+    <code>x509.ParseECPrivateKey</code> (the file is downloadable only once from
+    Apple's developer console).</li>
+<li><code>provider/facebook</code> -- Meta OAuth 2.0 with PKCE; <code>email_verified</code>
+    conservatively false (Graph API does not attest it).</li>
+<li><code>provider/slack</code> -- Sign in with Slack via the OpenID Connect
+    endpoint.</li>
+<li><code>provider/gitlab</code> -- GitLab OIDC; <code>BaseURL</code> option supports
+    self-hosted instances.</li>
+<li><code>provider/bitbucket</code> -- Bitbucket Cloud OAuth 2.0 with HTTP Basic
+    auth on the token exchange per Atlassian spec.</li>
+<li><code>provider/twitch</code> -- Twitch OIDC; adds the <code>claims</code> parameter to
+    surface email on the userinfo response.</li>
+<li><code>provider/linkedin</code> -- Sign In with LinkedIn using OpenID Connect
+    (post-2023 <code>/v2/userinfo</code> endpoint).</li>
+<li><code>provider/x</code> -- X (formerly Twitter) OAuth 2.0 with mandatory PKCE;
+    <code>ExchangeCode</code> returns an error if <code>codeVerifier</code> is empty.</li>
+<li>
+<p>Each provider ships with its own <code>examples/oauth-&lt;provider&gt;/</code>
+    minimal demo.</p>
+</li>
+<li>
+<p><strong>SIEM audit streaming sinks (#53).</strong> New <code>AuditSink</code> interface on the
+  root package lets operators fan out audit events to external systems
+  without a polling job. Failed sinks never block the canonical storage
+  write; failures increment <code>Stats.AuditSinkFailed</code>.</p>
+</li>
+<li><code>AuditSink</code> interface: <code>Stream(ctx, batch []AuditEvent) error</code> +
+    <code>Name() string</code>.</li>
+<li><code>AuditConfig.Sinks []AuditSink</code> -- register zero or more sinks; root
+    package wires them through <code>wiring.go</code>.</li>
+<li>Built-in <code>audit/sinks/otlp</code> -- OTLP/HTTP logs exporter; deps in its
+    own go.mod (root gains zero new transitive deps).</li>
+<li>Built-in <code>audit/sinks/splunkhec</code> -- Splunk HEC envelope, token auth,
+    no new deps.</li>
+<li>Built-in <code>audit/sinks/webhook</code> -- generic CloudEvents 1.0 POST with
+    <code>X-CloudEvents-Signature</code> HMAC-SHA256 header.</li>
+<li>All three sinks support a <code>WithRedactor(func(AuditEvent) AuditEvent)</code>
+    option for per-sink PII stripping (stricter than the default).</li>
+<li>New stats field: <code>Stats.AuditSinkFailed uint64</code>.</li>
+</ul>
+<h3 id="changed_1">Changed<a class="headerlink" href="#changed_1" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Stats counters expanded.</strong> <code>Stats.AuditSinkFailed</code> added; existing
+  counters unchanged. Per the additive-fields contract, downstream code
+  consuming Stats does not need to change.</li>
+</ul>
+<h2 id="220-2026-06-22">[2.2.0] - 2026-06-22<a class="headerlink" href="#220-2026-06-22" title="Permanent link">&para;</a></h2>
+<p>The "production-grade observability and audit closure" release. Three RFC-level
+features (CIMD, DPoP, observability adapters), four security closures, four perf
+items, +175pp of direct handler coverage on two highest-blast-radius packages,
+and an architectural cleanup that brings <code>theauth.go</code> from 1,171 LOC under the
+500 LOC ceiling. Public API stays byte-stable; every addition is additive.</p>
+<h3 id="added_4">Added<a class="headerlink" href="#added_4" title="Permanent link">&para;</a></h3>
+<ul>
+<li>
+<p><strong>OAuth Client ID Metadata Documents (CIMD) per MCP spec 2025-11-25 (#42).</strong>
+  Clients identify themselves by HTTPS URL; theauth-go fetches and validates
+  the metadata JSON on first use, caches with TTL, and applies a configurable
+  trust policy. Default policy is <code>DenyAll</code> (fail-closed) for fresh deployments.
+  Demotes the RFC 7591 DCR registration flow without removing it.</p>
+</li>
+<li>
+<p><strong>RFC 9449 DPoP (Demonstrating Proof-of-Possession) support (#43).</strong> The
+  authorization server can now mint sender-constrained access tokens.
+  Enable by setting <code>Config.AuthorizationServer.DPoP = &amp;DPoPConfig{...}</code>.
+  When a client presents a <code>DPoP</code> header on the token request, the AS
+  verifies the proof JWT (typ, alg, jwk, htm, htu, iat, jti, optional
+  nonce) and embeds an RFC 7800 <code>cnf.jkt</code> claim in the issued access
+  token. The response carries <code>token_type: "DPoP"</code> per RFC 9449.
+  Resource servers wired with <code>mcpresource.WithDPoPVerification(...)</code>
+  re-verify the proof on every request, including the <code>ath</code> claim that
+  binds the proof to the access token. A stolen token cannot be replayed
+  without the holder's private key.</p>
+</li>
+<li>New public type: <code>theauth.DPoPConfig</code> (additive on
+    <code>AuthorizationServerConfig</code>; nil by default).</li>
+<li>New mcpresource option: <code>mcpresource.WithDPoPVerification(algs,
+    proofMaxAge, jtiReplayWindow)</code>. The mcpresource module gains no new
+    transitive dependencies.</li>
+<li>AS metadata now advertises <code>dpop_signing_alg_values_supported</code>.</li>
+<li>Supported proof algs: ES256, ES384, RS256, PS256, EdDSA. HS* and
+    <code>none</code> are unconditionally rejected.</li>
+<li>
+<p>Deferred (forward-compatible): authorization-code binding,
+    refresh-token DPoP rotation.</p>
+</li>
+<li>
+<p><strong>Pluggable observability adapters (OTel + Prometheus) (#44).</strong> New
+  <code>Tracer</code> and <code>Metrics</code> interfaces on the root package plus a coalesced
+  <code>Hooks</code> bundle wired via <code>Config.Observability</code>. 10 spans
+  (<code>theauth.oauth.token</code>, <code>theauth.oauth.introspect</code>, agent + delegation
+  lifecycle, etc.) and 10 metrics
+  (<code>theauth_oauth_token_latency_seconds{grant_type}</code>, clientauthcache
+  hits/misses/size, ratelimit blocked, audit queue depth, etc.) ship live.
+  Example bridges to <code>go.opentelemetry.io/otel</code> and <code>prometheus/client_golang</code>
+  live in <code>examples/observability-otel/</code> and <code>examples/observability-prom/</code>
+  with their own go.mod; root and <code>mcpresource</code> go.mod gain zero new deps.</p>
+</li>
+<li>
+<p><strong>Storage migration helper (#32).</strong> <code>postgres.Migrate(ctx, pool) error</code>
+  embeds the migration SQL files, applies pending versions under an
+  advisory lock, and is idempotent on re-run. Downstream consumers can
+  delete their own copies of the migration code.</p>
+</li>
+<li>
+<p><strong><code>Config.RequireState</code> knob (#45).</strong> When true, rejects <code>/authorize</code>
+  requests without a non-empty <code>state</code> parameter. Default false preserves
+  backwards compatibility. RFC 9700 best-current-practice.</p>
+</li>
+<li>
+<p><strong><code>Config.SuppressSecureCookieWarning</code> knob (#48).</strong> Opt-out for the
+  deprecation warning shipped this release ahead of v3.0 default flip of
+  <code>SecureCookie</code> from <code>false</code> to <code>true</code>.</p>
+</li>
+<li>
+<p><strong><code>mcpresource.Validator.Diagnostics()</code> (#48).</strong> Returns warnings about
+  validator misconfiguration (e.g., neither JWKS URL nor introspect URL
+  set). New public types: <code>mcpresource.Diagnostic</code>, severity constants.</p>
+</li>
+<li>
+<p><strong><code>AuthorizationServerNotConfigured</code> sentinel error (#50).</strong> Replaces
+  six ad-hoc <code>errors.New(...)</code> calls in <code>forwarders_oauth.go</code>. Use
+  <code>errors.Is(err, theauth.ErrAuthorizationServerNotConfigured)</code>.</p>
+</li>
+</ul>
+<h3 id="changed_2">Changed<a class="headerlink" href="#changed_2" title="Permanent link">&para;</a></h3>
+<ul>
+<li>
+<p><strong><code>theauth.go</code> LOC: 1,171 -&gt; 383 (#50).</strong> Wiring extracted to <code>wiring.go</code>,
+  storage interface to <code>storage.go</code>, config sub-structs to <code>config.go</code>.
+  OAuth provider state machine moved to <code>internal/oauth/service.go</code>.
+  <code>internal/account/handlers/</code> and <code>internal/admin/handlers/</code> parent
+  packages collapsed (handlers now live directly under <code>internal/account/</code>
+  and <code>internal/admin/</code>). Zero public-API impact; downstream code compiles
+  unchanged.</p>
+</li>
+<li>
+<p><strong>JWKS rotation is now transactional (#48).</strong> Migration <code>0015</code> adds a
+  partial unique index <code>WHERE state='current'</code>. <code>Service.RotateSigningKey</code>
+  serializes rotations within a process via a <code>sync.Mutex</code>; concurrent
+  rotations across processes are guaranteed to leave exactly one current
+  key by the database constraint. New optional storage interface
+  <code>JWKSAtomicRotator</code> lets postgres collapse the rotation into a single
+  serializable transaction.</p>
+</li>
+<li>
+<p><strong>Audit redactor uses precomputed lowercase key set (#46).</strong> Replaces
+  per-key <code>strings.ToLower</code> allocations with <code>strings.EqualFold</code> against a
+  set built once at construction. Allocs/op drop.</p>
+</li>
+<li>
+<p><strong><code>keyedLimiter</code> uses <code>sync.RWMutex</code> + atomic <code>lastUsed</code> (#46).</strong> Read
+  path no longer needs the write lock; 8-core read-heavy throughput
+  improves 5-10x under contention.</p>
+</li>
+<li>
+<p><strong>Chain-walk cache (5s TTL) (#46).</strong> <code>chainStillActive</code> cached per agent;
+  3+ storage calls per 3-deep chain drop to ~0 within the TTL window.
+  Suspend / revoke invalidates the cache via the same plumbing as
+  <code>clientauthcache</code>.</p>
+</li>
+<li>
+<p><strong>SCIM auth uses a single storage lookup (#46).</strong> <code>AuthenticateSCIMToken</code>
+  returns the token row; middleware reads from it directly.
+  <code>TouchSCIMTokenLastUsed</code> runs async via the audit channel-writer pattern.</p>
+</li>
+</ul>
+<h3 id="fixed_3">Fixed<a class="headerlink" href="#fixed_3" title="Permanent link">&para;</a></h3>
+<ul>
+<li>
+<p><strong>Magic-link endpoint is now rate-limited (#45).</strong> <code>POST /auth/magic-link</code>
+  applies the same <code>ipLimit</code> and <code>emailLimit</code> middleware buckets as the
+  password endpoints. Was previously the only credential-touching route
+  without rate limiting (enumeration vector).</p>
+</li>
+<li>
+<p><strong>PKCE verifier comparison is constant-time (#45).</strong> Replaced <code>!=</code> with
+  <code>crypto/subtle.ConstantTimeCompare</code> in <code>internal/as/token.go</code>.</p>
+</li>
+<li>
+<p><strong><code>RevokeToken</code> walks the refresh family (#45).</strong> A revoke now invalidates
+  the entire token family via the same <code>RevokeRefreshTokenFamily</code> helper
+  used by the replay-detection path. RFC 7009 "unknown token returns 200"
+  semantics preserved.</p>
+</li>
+<li>
+<p><strong><code>InsertOAuthClient</code> coerces nil text[] slices to empty arrays (#40).</strong>
+  Fixes <code>SQLSTATE 23502 violates not-null constraint</code> when a caller mints
+  an OAuth client with zero-value <code>RedirectURIs</code>, <code>GrantTypes</code>,
+  <code>ResponseTypes</code>, or <code>Contacts</code>. Most common hit: <code>CreateAgent</code> calling
+  <code>MintAgentCredential</code> on a fresh schema. Same fix applied to
+  <code>UpdateOAuthClient</code>.</p>
+</li>
+</ul>
+<h3 id="tests_1">Tests<a class="headerlink" href="#tests_1" title="Permanent link">&para;</a></h3>
+<ul>
+<li>
+<p><strong><code>internal/saml/handlers</code> 0% -&gt; 91.4% statement coverage (#47).</strong> 20
+  direct table tests covering happy path, signature failure, expired
+  <code>NotOnOrAfter</code>, wrong audience, and replay on <code>/saml/acs</code>. Plus 15
+  tests for the 5 CRUD endpoints.</p>
+</li>
+<li>
+<p><strong><code>internal/webauthn/handlers</code> 0% -&gt; 84.5% (#47).</strong> 21 tests covering
+  challenge cookie roundtrip, single-use guarantee, register/login Begin
+  and Finish, and credentials list / delete.</p>
+</li>
+<li>
+<p><strong><code>internal/organizations/handlers</code> 0% -&gt; 94.0% (#49).</strong> 22 tests for
+  the 7 endpoints (create / list / get / activate / clear-active /
+  add-member / remove-member) with happy paths and all documented error
+  codes.</p>
+</li>
+<li>
+<p><strong><code>internal/admin/handlers</code> 0% -&gt; 81.1% (#49).</strong> 52 tests for
+  <code>requireOrgMatch</code> middleware plus the 12 admin endpoints.</p>
+</li>
+<li>
+<p><strong><code>TestSuspendAgentBustsClientAuthCache</code> regression guard.</strong> Confirms a
+  suspended agent cannot re-authenticate via a cached Argon2 entry within
+  the 5-minute cache TTL.</p>
+</li>
+<li>
+<p><strong><code>TestJWKSRotationConcurrentSafe</code> (#48).</strong> 8 goroutines rotate the
+  signing key; asserts exactly one <code>state=current</code> row at the end.</p>
+</li>
+</ul>
+<h3 id="internal_1">Internal<a class="headerlink" href="#internal_1" title="Permanent link">&para;</a></h3>
+<ul>
+<li>
+<p><strong>PR H1 (#41) test relocation.</strong> 19 root-level <code>*_test.go</code> files moved
+  into their proper internal packages, ahead of the architectural
+  cleanup in #50.</p>
+</li>
+<li>
+<p><strong><code>/go.work</code> lists all 8 examples (#44 follow-up).</strong> Adds <code>chi-app</code>,
+  <code>echo-app</code>, <code>gin-app</code>, <code>mcp-server</code>, <code>oauth-multi-provider</code>,
+  <code>stdlib-app</code>, <code>observability-otel</code>, <code>observability-prom</code>.</p>
+</li>
+</ul>
+<h3 id="security_1">Security<a class="headerlink" href="#security_1" title="Permanent link">&para;</a></h3>
+<ul>
+<li>
+<p><strong>N1 (security re-audit).</strong> Cache invalidation gap: revoked / suspended
+  agents could authenticate via a cached Argon2 entry for up to 5 minutes.
+  Closed by an explicit <code>s.invalidate(cur.ClientID)</code> call in
+  <code>changeAgentStatus</code>. Regression test ships.</p>
+</li>
+<li>
+<p><strong>L1-L3 + L5 (security re-audit).</strong> All re-audit lows closed; see Added
+  / Fixed entries for #45 above.</p>
+</li>
+<li>
+<p><strong>M3-M5 (security re-audit).</strong> SecureCookie deprecation warning, JWKS
+  transactional rotation, mcpresource Diagnostics; see entries for #48.</p>
+</li>
+</ul>
+<h2 id="210-2026-06-21">[2.1.0] - 2026-06-21<a class="headerlink" href="#210-2026-06-21" title="Permanent link">&para;</a></h2>
+<p>Internal architecture reorganization plus the v2.0 security audit followups.
+<strong>The public API is byte-stable with v2.0</strong>: every exported type, function,
+and method on <code>*theauth.TheAuth</code> keeps the same identifier, signature, and
+method set. Downstream consumers compile unchanged. Anyone relying on
+unexported symbols via <code>//go:linkname</code> or unsafe reflection may break (we
+deleted several dead unexported root methods and consolidated forwarders).</p>
+<h3 id="internal-package-reorganization-prs-20-through-28">Internal package reorganization (PRs #20 through #28)<a class="headerlink" href="#internal-package-reorganization-prs-20-through-28" title="Permanent link">&para;</a></h3>
+<p>The 1.9k-line monolithic root grew to 49 non-test root files at v2.0; PRs</p>
+<h1 id="20-through-28-extracted-feature-by-feature-implementations-into">20 through #28 extracted feature-by-feature implementations into<a class="headerlink" href="#20-through-28-extracted-feature-by-feature-implementations-into" title="Permanent link">&para;</a></h1>
+<p><code>internal/&lt;flow&gt;</code> subpackages while the root kept the public surface as
+thin forwarders. PR G (this release) collapsed the remaining one-line
+forwarders into four grouped files and removed the dead bridges that
+earlier extractions left behind.</p>
+<ul>
+<li>New internal packages added across the refactor: <code>internal/models</code>,
+  <code>internal/as</code>, <code>internal/as/handlers</code>, <code>internal/agent</code>,
+  <code>internal/agent/handlers</code>, <code>internal/delegation</code>, <code>internal/session</code>,
+  <code>internal/password</code>, <code>internal/password/handlers</code>, <code>internal/totp</code>,
+  <code>internal/totp/handlers</code>, <code>internal/webauthn</code>, <code>internal/webauthn/handlers</code>,
+  <code>internal/magiclink</code>, <code>internal/oauth/handlers</code>, <code>internal/saml</code>,
+  <code>internal/saml/handlers</code>, <code>internal/scim</code>, <code>internal/scim/handlers</code>,
+  <code>internal/organizations</code>, <code>internal/organizations/handlers</code>,
+  <code>internal/rbac</code>, <code>internal/audit</code>, <code>internal/account/handlers</code>,
+  <code>internal/admin/handlers</code>, <code>internal/clientauthcache</code>,
+  <code>internal/jwt</code>, <code>internal/chain</code>, <code>internal/httpx</code>, <code>internal/wavt</code>,
+  <code>internal/ulid</code>, <code>internal/bench</code>, <code>internal/samltest</code>.</li>
+<li>Root non-test <code>.go</code> file count: 49 (v2.0) to 28 (v2.1). Public surface
+  unchanged.</li>
+</ul>
+<h3 id="dead-code-purge-pr-g">Dead code purge (PR G)<a class="headerlink" href="#dead-code-purge-pr-g" title="Permanent link">&para;</a></h3>
+<p>PR G deleted seven unused unexported root methods that lost their last
+in-tree caller during PRs B through F. Every one was forwarded to a
+<code>*as.Service</code> or <code>*&lt;flow&gt;.Service</code> method that handler packages now reach
+directly. None were on the public surface; consumers are unaffected.</p>
+<ul>
+<li><code>(*TheAuth).currentSigningKey</code> (was in <code>jwks.go</code>)</li>
+<li><code>(*TheAuth).publicKeyByKID</code> (was in <code>jwks.go</code>)</li>
+<li><code>(*TheAuth).invalidateClientAuthCache</code> (was in <code>as.go</code>)</li>
+<li><code>(*TheAuth).agentBySubjectClaim</code> (was in <code>service_agent.go</code>); the
+  <code>AgentLookup</code> adapter wired in <code>theauth.New</code> now points at
+  <code>a.agentSvc.AgentBySubjectClaim</code> directly.</li>
+<li><code>(*TheAuth).authenticateClient</code> (was in <code>service_token.go</code>)</li>
+<li><code>(*TheAuth).finishRegistrationFromRequest</code> (was in
+  <code>service_webauthn.go</code>); every handler now wraps the body in
+  <code>http.MaxBytesReader</code> itself.</li>
+<li><code>(*TheAuth).finishLoginFromRequest</code> (was in <code>service_webauthn.go</code>)</li>
+</ul>
+<h3 id="forwarder-consolidation-pr-g">Forwarder consolidation (PR G)<a class="headerlink" href="#forwarder-consolidation-pr-g" title="Permanent link">&para;</a></h3>
+<p>Twenty-one <code>service_*.go</code> forwarder files became three grouped files plus
+three substantive service files preserved as-is (because they still hold
+local logic, not just one-line thunks).</p>
+<ul>
+<li><code>forwarders_identity.go</code>: session, magic-link, password, TOTP,
+  WebAuthn, audit.</li>
+<li><code>forwarders_oauth.go</code>: DCR, introspect, revoke, token, token v3 / v4
+  grants, AS metadata, protected-resource metadata, authorize.</li>
+<li><code>forwarders_enterprise.go</code>: SCIM, organizations, RBAC, delegation.</li>
+<li>Retained: <code>service_oauth.go</code> (OAuth state cache + GC + provider flow),
+  <code>service_agent.go</code> (<code>validateAgentConfig</code> plus the agent CRUD
+  forwarders), <code>service_saml.go</code> (<code>toInternal</code> adapter plus SAML
+  forwarders).</li>
+</ul>
+<p>Twelve root <code>handlers_*.go</code> files became eight: the five thinnest mount
+forwarders (oauth, password, totp, webauthn, oauth_server) collapsed
+into <code>mounts_extracted.go</code>; the six handler files that carry substantive
+service adapters (<code>handlers_account.go</code>, <code>handlers_admin.go</code>,
+<code>handlers_admin_agents.go</code>, <code>handlers_organizations.go</code>,
+<code>handlers_saml.go</code>, <code>handlers_scim.go</code>) plus the top-level <code>handlers.go</code>
+stay separate.</p>
+<p><code>errors_v20.go</code> merged into <code>errors.go</code>; <code>models_v20.go</code> merged into
+<code>models.go</code>.</p>
+<h3 id="security-audit-2026-06-20-shipped-in-pr-17">Security (audit 2026-06-20, shipped in PR #17)<a class="headerlink" href="#security-audit-2026-06-20-shipped-in-pr-17" title="Permanent link">&para;</a></h3>
+<ul>
+<li>H1: POST <code>/oauth/register</code> Bearer gate now validates the supplied token
+  against <code>AuthorizationServerConfig.RegistrationTokens</code> under
+  <code>crypto/subtle.ConstantTimeCompare</code> against pre-hashed sha256 digests.
+  The legacy "any non-empty bearer is accepted" behavior is gone. Empty
+  and unknown bearers return 401 access_denied. When <code>RegistrationTokens</code>
+  is empty and <code>AllowAnonymousRegistration</code> is false (the default and
+  production-recommended state), all registration requests are denied.</li>
+<li>H2: POST <code>/oauth/register</code> is now rate limited per source IP. The cap
+  defaults to 1 req/min when <code>AllowAnonymousRegistration</code> is true (the
+  documented public-MCP profile) and 5 req/min otherwise. Operators can
+  override via the new
+  <code>AuthorizationServerConfig.RegistrationRateLimitPerMinute</code> field;
+  negative values disable the cap entirely.</li>
+<li>H3: organization-scoped delegation admin (POST
+  <code>/admin/v1/organizations/{orgID}/delegations</code>) now verifies that
+  <code>body.userId</code> is a member of the calling admin's organization before
+  creating the grant.</li>
+<li>H4: <code>X-Forwarded-For</code> is no longer trusted by default. The new
+  <code>Config.TrustedProxies []netip.Prefix</code> field gates XFF: the header is
+  consulted only when the incoming <code>r.RemoteAddr</code> is inside one of the
+  configured prefixes.</li>
+<li>M2: <code>AddOrganizationMember</code> now refuses to demote the last owner of an
+  organization.</li>
+<li>M6: the email + password signin path pays the Argon2id verify cost on
+  the user-not-found and password-empty branches by verifying against a
+  fixed dummy PHC hash synthesized once at <code>New</code> time.</li>
+</ul>
+<h3 id="reliability-pr-18">Reliability (PR #18)<a class="headerlink" href="#reliability-pr-18" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Closed the handleToken / SCIM PATCH / end-to-end AS to mcpresource
+  reliability gaps surfaced by the 2026-06 test audit.</li>
+</ul>
+<h3 id="performance-pr-19">Performance (PR #19)<a class="headerlink" href="#performance-pr-19" title="Permanent link">&para;</a></h3>
+<ul>
+<li><code>clientauthcache</code> interposes between the AS handlers and the Argon2id
+  client_secret verifier. First verification pays the Argon2id cost; every
+  subsequent verification of the same <code>(client_id, secret_hash)</code> pair is
+  served from the cache until the secret rotates or the entry ages out.</li>
+<li>JWKS key cache: the AES-decrypted Ed25519 private key is decrypted once
+  per signing key version (rotation refreshes it) and stashed on
+  <code>*as.Service</code>. Cold path is unchanged; hot path drops one AES decrypt
+  per JWT mint.</li>
+<li><code>mcpresource</code> validator switched from <code>sync.Mutex</code> to <code>sync.RWMutex</code> on
+  the JWKS + introspection caches so concurrent reads no longer serialize.</li>
+</ul>
+<h3 id="removed-in-pr-g">Removed in PR G<a class="headerlink" href="#removed-in-pr-g" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Seven unused unexported methods on <code>*TheAuth</code> (see "Dead code purge"
+  above).</li>
+<li>Twenty-one <code>service_*.go</code> files merged into three <code>forwarders_*.go</code>
+  files (see "Forwarder consolidation").</li>
+<li>Five <code>handlers_*.go</code> files merged into one <code>mounts_extracted.go</code>.</li>
+<li><code>errors_v20.go</code> merged into <code>errors.go</code>.</li>
+<li><code>models_v20.go</code> merged into <code>models.go</code>.</li>
+</ul>
+<h3 id="deferred-from-the-2026-06-20-audit">Deferred from the 2026-06-20 audit<a class="headerlink" href="#deferred-from-the-2026-06-20-audit" title="Permanent link">&para;</a></h3>
+<p>Tracked as follow-up issues: M1 (SCIM cross-tenant email fallback), M3
+(SecureCookie default), M4 (JWKS rotation transaction), M5 (mcpresource
+missing-introspection startup warning), L1-L5, I1-I7.</p>
+<h2 id="200-2026-06-20">[2.0.0] - 2026-06-20<a class="headerlink" href="#200-2026-06-20" title="Permanent link">&para;</a></h2>
+<p>v2.0 ships the OAuth 2.1 Authorization Server, agent identity and
+delegation chains (RFC 8693), and the <code>mcpresource</code> validator SDK for MCP
+servers. Three alpha tags shipped phases incrementally
+(<code>v2.0.0-alpha.1</code> through <code>v2.0.0-alpha.3</code>); <code>v2.0.0</code> consolidated them.</p>
+<h3 id="added-in-v20-phase-5-6-targeted-for-v200">Added in v2.0 phase 5 + 6 (targeted for <code>v2.0.0</code>)<a class="headerlink" href="#added-in-v20-phase-5-6-targeted-for-v200" title="Permanent link">&para;</a></h3>
+<ul>
+<li>New separately importable Go module: <code>github.com/glincker/theauth-go/mcpresource</code>.
+  Zero dependencies outside the standard library: a consumer importing the
+  package does not transitively pull theauth core or the storage adapters.
+  Public surface: <code>Validator</code>, <code>Principal</code>, <code>Option</code>, <code>New</code>,
+  <code>PrincipalFromContext</code>, <code>WithJWKS</code>, <code>WithIntrospection</code>, <code>WithCacheTTL</code>,
+  <code>WithHTTPClient</code>, <code>WithClockSkew</code>, <code>(*Validator).Middleware</code>,
+  <code>(*Validator).Principal</code>. Validates JWT signature against a cached JWKS
+  (refreshes on kid miss and at the configured cache TTL), enforces the
+  audience claim against the configured resource URI, checks expiry, nbf,
+  and iat with a 60 second skew tolerance by default, and walks the RFC 8693
+  <code>act</code> chain via the AS introspection endpoint so revocations propagate
+  inside the configured cache window. On any failure the middleware emits
+  HTTP 401 with <code>WWW-Authenticate: Bearer error="invalid_token",
+  resource_metadata="..."</code> per RFC 6750 + RFC 9728.</li>
+<li>RFC 9728 OAuth 2.0 Protected Resource Metadata: the AS exposes
+  <code>GET /.well-known/oauth-protected-resource</code> (bare path returns the first
+  configured resource) and <code>GET /.well-known/oauth-protected-resource/{path}</code>
+  (per-resource discovery for multi-resource deployments). The document
+  carries <code>resource</code>, <code>authorization_servers</code>, <code>bearer_methods_supported</code>,
+  plus <code>scopes_supported</code>, <code>resource_name</code>, <code>jwks_uri</code>, and
+  <code>resource_signing_alg_values_supported</code>.</li>
+<li>Organization-scoped admin UX under <code>/admin/v1/organizations/{orgID}</code>:
+  <code>GET/POST/PATCH/DELETE /agents</code> and
+  <code>GET/POST/DELETE /delegations</code>. Gated by the new seeded permissions
+  <code>agents:admin</code> and <code>delegations:admin</code>; both are added to the owner and
+  admin default org roles.</li>
+<li>End-user self-service UX under <code>/account</code> (enabled via
+  <code>Config.AccountUX</code>): <code>GET/POST /agents</code>, <code>DELETE /agents/{id}</code>,
+  <code>GET/POST /delegations</code>, <code>POST /delegations/{id}/revoke</code>. Session-cookie
+  gated; cross-user calls return 404 to avoid leaking record existence.</li>
+<li>New seeded RBAC permissions: <code>agents:admin</code>, <code>delegations:admin</code>.
+  Existing consumers see the additional permissions on the next
+  <code>SeedPermissions</code> call; downstream role definitions that did not pre-grant
+  them stay valid (catalog only grows).</li>
+<li>New error sentinels: <code>ErrAccountUXRequiresAgents</code>.</li>
+<li>Example <code>examples/mcp-server/</code>: standalone runnable demo of the
+  mcpresource middleware on a tiny chi server. Shows the one-import claim:
+  middleware wiring plus principal extraction in roughly ten lines of Go.</li>
+<li>Audit emission additions: every admin and account mutation emits the same
+  events used by the service layer (<code>agent.created</code>, <code>agent.suspended</code>,
+  <code>agent.resumed</code>, <code>agent.revoked</code>, <code>agent_credential.minted</code>,
+  <code>agent_credential.revoked</code>, <code>delegation.granted</code>, <code>delegation.revoked</code>).
+  No new action names introduced in this PR; the v2.0 phase 3 + 4 catalog
+  remains the source of truth.</li>
+</ul>
+<h3 id="v20-capability-summary">v2.0 capability summary<a class="headerlink" href="#v20-capability-summary" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Phase 1 + 2 (<code>v2.0.0-alpha.1</code>): OAuth 2.1 Authorization Server core.
+  <code>/oauth/authorize</code>, <code>/oauth/token</code>, <code>/oauth/revoke</code>, <code>/oauth/introspect</code>,
+  <code>/oauth/register</code>, <code>/oauth/jwks</code>, <code>/.well-known/oauth-authorization-server</code>.
+  RFC 9068 EdDSA JWT access tokens. RFC 8707 mandatory audience binding.
+  PKCE S256 mandatory. RFC 9700 refresh rotation with family revocation.
+  RFC 7591 dynamic client registration.</li>
+<li>Phase 3 + 4 (<code>v2.0.0-alpha.2</code>): agent identity and delegation chains.
+  Agents (user or org owned) with one-shot client secrets. Delegation grants
+  per <code>(user, agent, resource)</code>. <code>client_credentials</code> grant for agent
+  self-tokens. RFC 8693 token-exchange grant with strict scope narrowing,
+  strict duration tightening, and a hard chain-depth cap of 3.
+  Introspection walks the actor chain on every call.</li>
+<li>Phase 5 + 6 (<code>v2.0.0</code>): the consumption side and the operator surface.
+  <code>mcpresource</code> SDK for MCP servers. RFC 9728 protected-resource metadata.
+  Admin and end-user routes for agent and delegation lifecycle.</li>
+</ul>
+<h3 id="added-in-v20-phase-3-4-released-as-v200-alpha2">Added in v2.0 phase 3 + 4 (released as <code>v2.0.0-alpha.2</code>)<a class="headerlink" href="#added-in-v20-phase-3-4-released-as-v200-alpha2" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Agents: <code>Agent</code>, <code>AgentCredential</code>, <code>AgentOwner</code>, <code>CreateAgentInput</code>,
+  <code>AgentSecret</code> models. <code>CreateAgent</code>, <code>MintAgentCredential</code>,
+  <code>RotateAgentSecret</code>, <code>ListAgentsByOwner</code>, <code>GetAgent</code>, <code>SuspendAgent</code>,
+  <code>ResumeAgent</code>, <code>RevokeAgent</code> service methods. Agent credential kinds:
+  <code>secret</code> (Argon2id-hashed), <code>x509</code>, <code>jwk</code>. The X.509 and JWK kinds return
+  <code>ErrNotImplemented</code> in this phase so callers see a typed error.</li>
+<li>Delegations: <code>DelegationGrant</code>, <code>GrantDelegationInput</code> models.
+  <code>GrantDelegation</code>, <code>ListDelegationsForUser</code>, <code>ListDelegationsForAgent</code>,
+  <code>RevokeDelegation</code> service methods. Uniqueness on <code>(user_id, agent_id,
+  resource)</code> enforced at the database layer. Revoking a grant invalidates
+  every derived token at the next introspection refresh.</li>
+<li>Grants on <code>/oauth/token</code>:</li>
+<li><code>client_credentials</code> mints an agent self-token (<code>sub=agent:&lt;id&gt;</code>,
+    <code>aud</code> bound to the supplied resource).</li>
+<li><code>urn:ietf:params:oauth:grant-type:token-exchange</code> (RFC 8693) accepts a
+    user (or agent) <code>subject_token</code> plus an agent <code>actor_token</code>, looks up
+    the matching delegation grant, and mints a new JWT with the nested
+    <code>act</code> chain (RFC 8693 section 4.1). Chain depth is capped at 3; deeper
+    chains are rejected with <code>invalid_request</code> "actor chain depth exceeded".</li>
+<li>Introspection now walks the full <code>act</code> chain on every call and re-checks
+  the delegation grant. Any inactive actor or revoked grant flips
+  <code>active=false</code>, even on a cache hit.</li>
+<li>AS metadata advertises <code>client_credentials</code> and the token-exchange URN in
+  <code>grant_types_supported</code> whenever <code>Config.AgentIdentity</code> is configured.</li>
+<li>Audit emissions added: <code>agent.created</code>, <code>agent.suspended</code>, <code>agent.resumed</code>,
+  <code>agent.revoked</code>, <code>agent_credential.minted</code>, <code>agent_credential.revoked</code>,
+  <code>agent.token_minted</code>, <code>delegation.granted</code>, <code>delegation.revoked</code>,
+  <code>token.exchanged</code>.</li>
+<li>Migrations: <code>0012_agents.up.sql</code> (agents + agent_credentials),
+  <code>0013_delegations.up.sql</code> (delegation_grants + audit_events.actor_agent_id).
+  Down migrations included.</li>
+<li>Storage interface: <code>OAuthServerStorage</code> extended with agent + delegation
+  methods. v1.0 root <code>Storage</code> interface unchanged. Both in-tree adapters
+  (memory + postgres) implement the new methods.</li>
+<li>Errors: <code>ErrAgentNotFound</code>, <code>ErrAgentInactive</code>, <code>ErrDelegationNotFound</code>,
+  <code>ErrDelegationRevoked</code>, <code>ErrChainDepthExceeded</code>, <code>ErrSubjectTokenInvalid</code>,
+  <code>ErrActorTokenInvalid</code>, <code>ErrNotImplemented</code>, <code>ErrAgentRequiresAS</code>,
+  <code>ErrAgentChainDepthTooHigh</code>.</li>
+</ul>
+<h3 id="added-in-v20-phase-1-2-released-as-v200-alpha1">Added in v2.0 phase 1 + 2 (released as <code>v2.0.0-alpha.1</code>)<a class="headerlink" href="#added-in-v20-phase-1-2-released-as-v200-alpha1" title="Permanent link">&para;</a></h3>
+<ul>
+<li>OAuth 2.1 Authorization Server with <code>/.well-known/oauth-authorization-server</code>,
+  <code>/oauth/authorize</code>, <code>/oauth/token</code> (authorization_code + refresh_token),
+  <code>/oauth/revoke</code>, <code>/oauth/introspect</code>, <code>/oauth/register</code> (RFC 7591 dynamic
+  client registration), <code>/oauth/jwks</code> (Ed25519, 30 day rotation). Mandatory
+  PKCE S256; mandatory RFC 8707 resource binding; RFC 9068 JWT access
+  tokens; RFC 9700 refresh-token rotation with family revocation.</li>
+<li>New config: <code>AuthorizationServer *AuthorizationServerConfig</code>. New
+  storage extension interface <code>OAuthServerStorage</code>. Migrations 0011
+  (oauth_clients + authorization_codes + refresh_tokens) and 0014
+  (jwks_keys); 0012 / 0013 reserved as placeholders for phase 3 + 4.</li>
+</ul>
+<h2 id="100-2026-06-20">[1.0.0] - 2026-06-20<a class="headerlink" href="#100-2026-06-20" title="Permanent link">&para;</a></h2>
+<p>First production-ready release. Public API frozen per STABILITY.md. From
+v1.0 forward, breaking changes require a major bump; minor releases add
+optional config fields, new methods, new error sentinels, new audit
+actions, and new <code>Stats</code> fields without breaking existing callers.</p>
+<h3 id="v01-to-v10-capability-summary">v0.1 to v1.0 capability summary<a class="headerlink" href="#v01-to-v10-capability-summary" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Magic-link sign-in, opaque sessions, pluggable <code>Storage</code> (memory + postgres).</li>
+<li>Email + password with Argon2id, password reset via single-use token.</li>
+<li>OAuth 2.0 + OIDC with PKCE S256; built-in GitHub, Google, Microsoft, Discord.</li>
+<li>WebAuthn / passkey registration and discoverable login.</li>
+<li>TOTP second factor with salted SHA-256 recovery codes; session step-up via <code>pending_2fa</code>.</li>
+<li>SAML 2.0 Service Provider for enterprise IdPs (per-connection + per-org).</li>
+<li>SCIM 2.0 Users + Groups with eq-only filter and RFC 7644 PATCH.</li>
+<li>Organization multi-tenancy with <code>active_organization_id</code> session scope.</li>
+<li>Organization-scoped RBAC with a closed permission catalog and seeded roles.</li>
+<li>Append-only audit log with async batched writes, default redactor, keyset cursor read API.</li>
+<li>Admin HTTP API at <code>/admin/v1</code> with RFC 7807 problem+json errors.</li>
+<li>Fuzz tests, race-clean test suite, godoc with examples, finalized <code>STABILITY.md</code>.</li>
+</ul>
+<h3 id="added-in-10">Added in 1.0<a class="headerlink" href="#added-in-10" title="Permanent link">&para;</a></h3>
+<ul>
+<li>RBAC: <code>permissions</code>, <code>roles</code>, <code>role_permissions</code>, <code>user_roles</code> tables and the
+  matching <code>Storage</code> methods. <code>(*TheAuth).RequirePermission</code> middleware with a
+  per-request cache. <code>SeedPermissions</code>, <code>SeedOrganizationRoles</code>,
+  <code>GrantRole</code>, <code>RevokeRole</code>, <code>CreateRole</code>, <code>UpdateRole</code>, <code>DeleteRole</code>,
+  <code>PermissionsForUser</code>, <code>HasPermission</code>. Twelve seeded permission constants
+  plus the system <code>super_admin</code> role (granted out-of-band only).</li>
+<li>Audit log: <code>audit_events</code> table with org / actor / action DESC indexes.
+  <code>(*TheAuth).EmitAudit</code> is non-blocking; the writer goroutine drains in
+  batches and flushes on <code>Close</code> with a configurable timeout. <code>Stats</code>
+  exposes four atomic counters (<code>AuditEmitted</code>, <code>AuditWritten</code>,
+  <code>AuditDropped</code>, <code>AuditFailed</code>). <code>DefaultRedactor</code> masks
+  <code>password / secret / token / code / refresh_token / access_token</code> at any
+  nesting depth. Twenty-plus canonical actions emitted across every
+  state-changing handler in theauth.</li>
+<li>Admin API: twelve endpoints under <code>/admin/v1</code> (overridable via
+  <code>AdminConfig.PathPrefix</code>). Every endpoint requires <code>RequireAuth</code> plus a
+  catalog <code>RequirePermission</code>. Errors are <code>application/problem+json</code> per
+  RFC 7807 with a stable <code>code</code> extension; keyset pagination on the audit
+  read endpoint.</li>
+<li><code>(*TheAuth).Start</code> spawns the writer goroutine; <code>New</code> invokes <code>Start</code>
+  automatically so existing callers do not change. <code>Close</code> drains the
+  writer with a default 5 second deadline.</li>
+<li>New errors: <code>ErrAdminRequiresRBAC</code>, <code>ErrForbidden</code>, <code>ErrUnknownPermission</code>,
+  <code>ErrRoleInUse</code>, <code>ErrNoActiveOrg</code>, <code>ErrOrgMismatch</code>, <code>ErrRBACDisabled</code>.</li>
+<li>New <code>admin</code> subpackage: RFC 7807 <code>Write</code> helper, <code>Problem</code> type, keyset
+  cursor <code>EncodeCursor</code> / <code>DecodeCursor</code> codec, reserved problem code
+  constants.</li>
+<li>Migrations 0009 (rbac) and 0010 (audit) added under
+  <code>storage/postgres/migrations/</code>.</li>
+</ul>
+<h3 id="tradeoffs-documented">Tradeoffs documented<a class="headerlink" href="#tradeoffs-documented" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Audit writes are async; backpressure drops events with
+  <code>Stats.AuditDropped</code> incremented. Block-on-backpressure would degrade
+  authentication latency under spikes; this is the documented choice.</li>
+<li>Audit insert failures are not retried; <code>Stats.AuditFailed</code> is the ops
+  signal. A persistent retry queue is an order of magnitude more
+  complexity than v1.0 wants to absorb; SOC 2 evidence is better served
+  by an external audit sink (planned for v1.x).</li>
+<li>No wildcard permissions in v1.0 (planned for v1.1); the catalog is a
+  closed set so the permission check is a single set membership.</li>
+<li>ABAC, hierarchical roles, and time-bound permissions are explicitly
+  deferred to v1.x.</li>
+</ul>
+<h3 id="migrating-from-v07">Migrating from v0.7<a class="headerlink" href="#migrating-from-v07" title="Permanent link">&para;</a></h3>
+<ul>
+<li><code>Config.AuditHook</code> and the synchronous <code>AuditEvent</code> shape are removed.
+  Set <code>Config.Audit = &amp;AuditConfig{}</code> to enable the async writer; existing
+  no-op deployments leave it nil and see no behavior change.</li>
+<li><code>Storage</code> gains 16 new methods (14 RBAC + 2 audit). Custom adapters
+  built on top of <code>memory</code> or <code>postgres</code> keep working; in-tree custom
+  implementations must implement the new methods. Per the new
+  <code>Storage</code>-extension rule (STABILITY.md), v1.x will introduce future
+  persistence operations behind optional interfaces detected via type
+  assertion so this kind of break does not happen again.</li>
+</ul>
+<h2 id="070-2026-06-20">[0.7.0] - 2026-06-20<a class="headerlink" href="#070-2026-06-20" title="Permanent link">&para;</a></h2>
+<h3 id="added-v07">Added (v0.7)<a class="headerlink" href="#added-v07" title="Permanent link">&para;</a></h3>
+<ul>
+<li>SAML 2.0 Service Provider on top of <code>github.com/crewjam/saml</code> v0.5.1.
+  Per-connection IdP binding stored in <code>saml_connections</code>, signed
+  assertions only (raw-XML signature gate before parse), find-or-create
+  by <code>(connection_id, name_id)</code> with an email fallback, AuthnRequest
+  replay tracking with a configurable TTL. Public-facing flow at
+  <code>/auth/saml/{connectionId}/{login,acs,metadata}</code>. Per-organization
+  connection CRUD at <code>/auth/orgs/{orgId}/saml/connections</code>.</li>
+<li>SCIM 2.0 provisioning (RFC 7643 + RFC 7644). Users + Groups CRUD,
+  discovery endpoints (<code>ServiceProviderConfig</code>, <code>ResourceTypes</code>,
+  <code>Schemas</code>), eq-only filter parser, RFC 7644 PATCH (add / replace /
+  remove). Bearer auth with sha256-hashed 256-bit tokens, HTTPS
+  enforcement, per-organization isolation, idempotent upsert by
+  <code>externalId</code>. PUT returns 405 (documented deviation; Okta and Azure AD
+  default to PATCH). Endpoints live under <code>/scim/v2/</code>. Per-organization
+  token CRUD at <code>/auth/orgs/{orgId}/scim/tokens</code>.</li>
+<li>Organizations multi-tenancy: <code>organizations</code>, <code>organization_members</code>,
+  <code>sessions.active_organization_id</code>. Roles: <code>owner</code>, <code>admin</code>, <code>member</code>.
+  Single-tenant deployments leave <code>Config.Organizations</code> nil and see no
+  behavior change.</li>
+<li>Migrations: <code>0006_organizations</code>, <code>0007_saml</code>, <code>0008_scim</code> (additive
+  on <code>users.external_id</code>, <code>users.given_name</code>, <code>users.family_name</code>,
+  <code>users.display_name</code>).</li>
+<li>Audit hook (<code>Config.AuditHook</code>): synchronous no-op stub invoked on
+  every SCIM mutation and every successful SAML assertion. v1.0 replaces
+  the default binding with the real async writer; the consumer-facing
+  signature stays stable.</li>
+<li>Test fixtures: <code>internal/samltest</code> generates a fresh IdP keypair and
+  signs assertions in-process for the SAML end-to-end tests. SCIM tests
+  exercise the Okta / Azure AD provisioning cycle (create, patch,
+  deactivate, idempotent re-create, delete).</li>
+</ul>
+<h3 id="added-v06-hardening">Added (v0.6 hardening)<a class="headerlink" href="#added-v06-hardening" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Fuzz tests for every external byte boundary: AES-GCM encrypt and decrypt
+  round-trip, decrypt arbitrary input, PKCE verifier to challenge, PKCE
+  verifier generation, token hash round-trip, base64 URL decode, session
+  cookie parsing, OAuth state cookie parsing, email validation, OAuth
+  callback query parameters, and OAuth callback provider name routing.</li>
+<li>Concurrency tests covering the OAuth state map, the in-memory rate
+  limiter (same IP and different IP fan-out), and session creation under
+  contention. All assertions hold under <code>go test -race</code>.</li>
+<li>Benchmark suite under <code>internal/bench</code> measuring password sign in,
+  session lookup, OAuth callback storage cost, magic link consume, and
+  PKCE challenge derivation. Baselines are recorded in
+  <code>internal/bench/BASELINES.md</code>.</li>
+<li>Four new runnable example apps: <code>examples/gin-app</code>,
+  <code>examples/echo-app</code>, <code>examples/stdlib-app</code>, and
+  <code>examples/oauth-multi-provider</code>, each with a README, single-file
+  <code>main.go</code>, <code>go.mod</code>, <code>docker-compose.yml</code>, <code>.env.example</code>, and
+  <code>Makefile</code>.</li>
+<li>Package documentation: <code>doc.go</code> added for every package, doc comments
+  filled in on previously undocumented exports, runnable <code>Example</code>
+  functions for the most-used entry points.</li>
+<li><code>STABILITY.md</code> enumerating the stable surface and the rules that
+  govern future changes.</li>
+<li><code>golangci.yml</code> enables <code>godot</code> and <code>godox</code> to keep doc comments
+  punctuated and to flag stray <code>TODO</code> markers.</li>
+<li>CI workflow now runs a per-target fuzz job (<code>-fuzztime=10s</code>) on every
+  PR alongside the existing race-enabled test job.</li>
+</ul>
+<h3 id="post-g-follow-up-fixes-prs-30-31-33">Post-G follow-up fixes (PRs #30, #31, #33)<a class="headerlink" href="#post-g-follow-up-fixes-prs-30-31-33" title="Permanent link">&para;</a></h3>
+<p>After PR G landed, three small follow-ups also shipped in v2.1.0:</p>
+<ul>
+<li><strong>#30 chore: em-dash sweep</strong> removed 17 surviving em or en dashes from
+  comments in <code>middleware_ratelimit.go</code>, <code>handlers.go</code>, <code>crypto/</code>,
+  <code>storage/memory/</code>, and the related tests. Brings the repo into full
+  compliance with the project rule banning em and en dashes anywhere.</li>
+<li><strong>#31 fix(examples): go.work hygiene</strong> added the five missing example
+  modules (<code>chi-app</code>, <code>echo-app</code>, <code>gin-app</code>, <code>oauth-multi-provider</code>,
+  <code>stdlib-app</code>) to <code>go.work</code> so all eight examples now build cleanly
+  with default workspace settings. Incidental: three SAML-related deps
+  (<code>beevik/etree</code>, <code>crewjam/saml</code>, <code>russellhaering/goxmldsig</code>) were
+  promoted from indirect to direct in root <code>go.mod</code> by <code>go work sync</code>.</li>
+<li><strong>#33 fix(security): cache bust on agent suspend/revoke (N1)</strong> closes
+  a v2.1 security re-audit finding: <code>SuspendAgent</code> and <code>RevokeAgent</code>
+  did not call <code>s.invalidate(cur.ClientID)</code>, so a revoked agent could
+  authenticate via the <code>clientauthcache</code> Argon2-verified snapshot for
+  up to the 5-minute TTL added in PR #19. The shared
+  <code>changeAgentStatus</code> now invalidates whenever the new status is not
+  active. Regression test:
+  <code>TestSuspendAgentBustsClientAuthCache</code>.</li>
+</ul>
+<h3 id="notes">Notes<a class="headerlink" href="#notes" title="Permanent link">&para;</a></h3>
+<ul>
+<li>No new features. Hardening only.</li>
+<li>No public API changes. Existing callers compile and run unchanged.</li>
+</ul>
+<h2 id="v050-2026-06-19">[v0.5.0] - 2026-06-19<a class="headerlink" href="#v050-2026-06-19" title="Permanent link">&para;</a></h2>
+<p>WebAuthn passkeys, TOTP second factor with recovery codes, session
+step-up via <code>pending_2fa</code>. See git history for the full set of changes.</p>
+<h2 id="v040">[v0.4.0]<a class="headerlink" href="#v040" title="Permanent link">&para;</a></h2>
+<p>Discord OAuth provider. PKCE-aware flow shared across all four
+providers.</p>
+<h2 id="v030">[v0.3.0]<a class="headerlink" href="#v030" title="Permanent link">&para;</a></h2>
+<p>GitHub, Google, and Microsoft OAuth providers. AES-256-GCM at-rest
+encryption for provider tokens. Per-IP rate limiter.</p>
+<h2 id="v020">[v0.2.0]<a class="headerlink" href="#v020" title="Permanent link">&para;</a></h2>
+<p>Email and password credentials with Argon2id. Password reset via
+single-use token.</p>
+<h2 id="v010">[v0.1.0]<a class="headerlink" href="#v010" title="Permanent link">&para;</a></h2>
+<p>Initial release: magic-link email auth, opaque session tokens with
+revocation, chi-friendly middleware, in-memory and Postgres storage
+adapters.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.tabs", "navigation.tabs.sticky", "navigation.sections", "navigation.expand", "navigation.path", "navigation.top", "search.highlight", "search.suggest", "content.code.copy", "content.code.annotate"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"default": "latest", "provider": "mike"}}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+    
+  </body>
+</html>

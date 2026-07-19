@@ -1,0 +1,3095 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Go auth library covering OAuth 2.1, MCP authorization, agent identities, WebAuthn, SAML, SCIM, and more.">
+      
+      
+      
+        <link rel="canonical" href="https://go.theauth.dev/latest/security/compliance-gdpr/">
+      
+      
+        <link rel="prev" href="../compliance-soc2/">
+      
+      
+        <link rel="next" href="../../migrations/v2.3-to-v2.4/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>GDPR Reference - theauth-go</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.ec1eaa64.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  
+<meta property="og:type" content="website" />
+<meta property="og:title" content="GDPR Reference - theauth-go" />
+<meta property="og:description" content="Go auth library covering OAuth 2.1, MCP authorization, agent identities, WebAuthn, SAML, SCIM, and more." />
+<meta property="og:image" content="https://go.theauth.dev/latest/assets/images/social/security/compliance-gdpr.png" />
+<meta property="og:image:type" content="image/png" />
+<meta property="og:image:width" content="1200" />
+<meta property="og:image:height" content="630" />
+<meta property="og:url" content="https://go.theauth.dev/latest/security/compliance-gdpr/" />
+<meta property="twitter:card" content="summary_large_image" />
+<meta property="twitter:title" content="GDPR Reference - theauth-go" />
+<meta property="twitter:description" content="Go auth library covering OAuth 2.1, MCP authorization, agent identities, WebAuthn, SAML, SCIM, and more." />
+<meta property="twitter:image" content="https://go.theauth.dev/latest/assets/images/social/security/compliance-gdpr.png" />
+</head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#gdpr-data-handling-reference" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+      <div data-md-color-scheme="default" data-md-component="outdated" hidden>
+        
+      </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow md-header--lifted" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="theauth-go" class="md-header__button md-logo" aria-label="theauth-go" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            theauth-go
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              GDPR Reference
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/glincker/theauth-go" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    glincker/theauth-go
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+    
+      
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../.." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../getting-started/overview/" class="md-tabs__link">
+          
+  
+  
+  Getting Started
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../concepts/oauth21-primer/" class="md-tabs__link">
+          
+  
+  
+  Concepts
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../guides/add-oauth-provider/" class="md-tabs__link">
+          
+  
+  
+  Guides
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../reference/configuration/" class="md-tabs__link">
+          
+  
+  
+  Reference
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+    
+  
+  
+    
+    
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="../threat-model/" class="md-tabs__link">
+          
+  
+  
+  Security
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../migrations/v2.3-to-v2.4/" class="md-tabs__link">
+          
+  
+  
+  Migrations
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../changelog/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Changelog
+
+      </a>
+    </li>
+  
+
+      
+    </ul>
+  </div>
+</nav>
+    
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="theauth-go" class="md-nav__button md-logo" aria-label="theauth-go" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    theauth-go
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/glincker/theauth-go" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    glincker/theauth-go
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting Started
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Getting Started
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/overview/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/installation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Installation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/quick-start/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Quick Start
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/storage-backends/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Storage Backends
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/example-apps/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Example Apps
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Concepts
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Concepts
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../concepts/oauth21-primer/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    OAuth 2.1 Primer
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../concepts/mcp-authorization/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MCP Authorization
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../concepts/authorization-server/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Authorization Server
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../concepts/resource-server/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Resource Server (mcpresource)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../concepts/par-jar/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    PAR + JAR (FAPI 2.0)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../concepts/jwt-bearer/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    JWT-Bearer Client Auth
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../concepts/ciba/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CIBA Backchannel Auth
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Guides
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Guides
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guides/add-oauth-provider/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Add an OAuth Provider
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guides/webauthn-passkeys/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Enable WebAuthn Passkeys
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guides/opentelemetry-tracing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Wire OpenTelemetry Tracing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guides/audit-log-splunk/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Stream Audit Logs to Splunk
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guides/custom-storage-backend/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Write a Custom Storage Backend
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guides/migrate-from-cognito/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Migrate from Cognito
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guides/migrate-from-auth0/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Migrate from Auth0
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/configuration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/storage/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Storage Interface
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/errors/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Errors
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/metrics/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Metrics
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/spans/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Spans
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/audit-events/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Audit Events
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Security
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Security
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../threat-model/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Threat Model
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../releases/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Releases and Verification
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../benchmarks/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Benchmarks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../compliance-soc2/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SOC 2 Mapping
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    GDPR Reference
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    GDPR Reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#1-personal-data-theauth-go-stores-by-default" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Personal Data theauth-go Stores by Default
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-data-subject-rights-how-to-satisfy-each" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Data Subject Rights -- How to Satisfy Each
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="2. Data Subject Rights -- How to Satisfy Each">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#article-15-right-of-access" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Article 15 -- Right of Access
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#article-16-right-to-rectification" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Article 16 -- Right to Rectification
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#article-17-right-to-erasure-right-to-be-forgotten" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Article 17 -- Right to Erasure (Right to Be Forgotten)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#article-18-right-to-restriction-of-processing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Article 18 -- Right to Restriction of Processing
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#article-20-right-to-data-portability" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Article 20 -- Right to Data Portability
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#article-21-right-to-object" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Article 21 -- Right to Object
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#article-22-rights-related-to-automated-decision-making" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Article 22 -- Rights Related to Automated Decision-Making
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-data-retention" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Data Retention
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="3. Data Retention">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#default-ttls" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Default TTLs
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#audit-event-retention" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Audit Event Retention
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#sweep-patterns" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Sweep Patterns
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-data-residency-and-cross-border-transfers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Data Residency and Cross-Border Transfers
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="4. Data Residency and Cross-Border Transfers">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#where-theauth-go-stores-data" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Where theauth-go Stores Data
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#audit-sink-cross-border-risk" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Audit Sink Cross-Border Risk
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#oauth-provider-redirects" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        OAuth Provider Redirects
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#sub-processor-list" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Sub-processor List
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5-privacy-by-design-defaults" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Privacy-by-Design Defaults
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="5. Privacy-by-Design Defaults">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#credential-storage" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Credential Storage
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#secrets-never-logged" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Secrets Never Logged
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#session-cookie-security" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Session Cookie Security
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ip-and-user-agent-in-sessions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        IP and User Agent in Sessions
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#argon2id-work-factor" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Argon2id Work Factor
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#6-operators-gdpr-checklist" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Operator's GDPR Checklist
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Migrations
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Migrations
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../migrations/v2.3-to-v2.4/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v2.3 to v2.4
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../migrations/v2.0-to-v2.1/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v2.0 to v2.1
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../migrations/v1.0-to-v2.0/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v1.0 to v2.0
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../migrations/v0.7-to-v1.0/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v0.7 to v1.0
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../changelog/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Changelog
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#1-personal-data-theauth-go-stores-by-default" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Personal Data theauth-go Stores by Default
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-data-subject-rights-how-to-satisfy-each" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Data Subject Rights -- How to Satisfy Each
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="2. Data Subject Rights -- How to Satisfy Each">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#article-15-right-of-access" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Article 15 -- Right of Access
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#article-16-right-to-rectification" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Article 16 -- Right to Rectification
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#article-17-right-to-erasure-right-to-be-forgotten" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Article 17 -- Right to Erasure (Right to Be Forgotten)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#article-18-right-to-restriction-of-processing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Article 18 -- Right to Restriction of Processing
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#article-20-right-to-data-portability" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Article 20 -- Right to Data Portability
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#article-21-right-to-object" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Article 21 -- Right to Object
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#article-22-rights-related-to-automated-decision-making" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Article 22 -- Rights Related to Automated Decision-Making
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-data-retention" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Data Retention
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="3. Data Retention">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#default-ttls" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Default TTLs
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#audit-event-retention" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Audit Event Retention
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#sweep-patterns" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Sweep Patterns
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-data-residency-and-cross-border-transfers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Data Residency and Cross-Border Transfers
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="4. Data Residency and Cross-Border Transfers">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#where-theauth-go-stores-data" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Where theauth-go Stores Data
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#audit-sink-cross-border-risk" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Audit Sink Cross-Border Risk
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#oauth-provider-redirects" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        OAuth Provider Redirects
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#sub-processor-list" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Sub-processor List
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5-privacy-by-design-defaults" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Privacy-by-Design Defaults
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="5. Privacy-by-Design Defaults">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#credential-storage" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Credential Storage
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#secrets-never-logged" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Secrets Never Logged
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#session-cookie-security" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Session Cookie Security
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ip-and-user-agent-in-sessions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        IP and User Agent in Sessions
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#argon2id-work-factor" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Argon2id Work Factor
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#6-operators-gdpr-checklist" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Operator's GDPR Checklist
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+                
+
+
+
+  
+
+
+  <nav class="md-path" aria-label="Navigation" >
+    <ol class="md-path__list">
+      
+        
+  
+  
+    <li class="md-path__item">
+      <a href="../.." class="md-path__link">
+        
+  <span class="md-ellipsis">
+    Home
+  </span>
+
+      </a>
+    </li>
+  
+
+      
+      
+        
+  
+  
+    
+    
+      <li class="md-path__item">
+        <a href="../threat-model/" class="md-path__link">
+          
+  <span class="md-ellipsis">
+    Security
+  </span>
+
+        </a>
+      </li>
+    
+  
+
+      
+    </ol>
+  </nav>
+
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="gdpr-data-handling-reference">GDPR Data Handling Reference<a class="headerlink" href="#gdpr-data-handling-reference" title="Permanent link">&para;</a></h1>
+<p><strong>Applies to:</strong> Deployments of theauth-go that process personal data of EU/EEA data subjects.
+<strong>Standard:</strong> Regulation (EU) 2016/679 (General Data Protection Regulation).
+<strong>Last reviewed:</strong> 2026-06-22.</p>
+<p><strong>Role clarification:</strong> theauth-go is a Go library. It is not a service and has no data processing infrastructure of its own. When an operator deploys theauth-go, the operator is the <strong>data controller</strong> (and in some configurations also the <strong>data processor</strong>). theauth-go is tooling the operator uses; the library authors are not a sub-processor. Section 4 explains this in detail.</p>
+<hr />
+<h2 id="1-personal-data-theauth-go-stores-by-default">1. Personal Data theauth-go Stores by Default<a class="headerlink" href="#1-personal-data-theauth-go-stores-by-default" title="Permanent link">&para;</a></h2>
+<p>The following table lists every personal data field stored by the library's built-in storage adapters (memory and Postgres). Operators using a custom storage adapter may vary.</p>
+<table>
+<thead>
+<tr>
+<th>Table / Concept</th>
+<th>Field</th>
+<th>Classification</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>users</code></td>
+<td><code>email</code></td>
+<td>Personal identifier</td>
+<td>Required; used as login identifier.</td>
+</tr>
+<tr>
+<td><code>users</code></td>
+<td><code>name</code></td>
+<td>Personal data</td>
+<td>Optional; populated from OAuth provider or SCIM.</td>
+</tr>
+<tr>
+<td><code>users</code></td>
+<td><code>avatar_url</code></td>
+<td>Personal data</td>
+<td>Optional; populated from OAuth provider.</td>
+</tr>
+<tr>
+<td><code>users</code></td>
+<td><code>email_verified_at</code></td>
+<td>Operational</td>
+<td>Timestamp of email verification, or null. There is no <code>status</code>/suspension field on the <code>users</code> table or the <code>User</code> model; see Article 18 below.</td>
+</tr>
+<tr>
+<td><code>user_passwords</code></td>
+<td><code>password_hash</code></td>
+<td>Derived credential</td>
+<td>Argon2id PHC string; never plaintext.</td>
+</tr>
+<tr>
+<td><code>sessions</code></td>
+<td><code>user_agent</code></td>
+<td>Pseudonymous technical data</td>
+<td>HTTP User-Agent string of the session-creating request.</td>
+</tr>
+<tr>
+<td><code>sessions</code></td>
+<td><code>ip</code></td>
+<td>Pseudonymous technical data</td>
+<td>Client IP at session creation time.</td>
+</tr>
+<tr>
+<td><code>sessions</code></td>
+<td><code>token_hash</code></td>
+<td>Derived credential</td>
+<td>SHA-256 of the opaque session token; not reversible.</td>
+</tr>
+<tr>
+<td><code>oauth_accounts</code></td>
+<td><code>provider</code></td>
+<td>Operational</td>
+<td>Provider name (e.g., <code>github</code>, <code>google</code>).</td>
+</tr>
+<tr>
+<td><code>oauth_accounts</code></td>
+<td><code>provider_user_id</code></td>
+<td>Pseudonymous identifier</td>
+<td>Provider-assigned subject identifier.</td>
+</tr>
+<tr>
+<td><code>oauth_accounts</code></td>
+<td><code>provider_email</code></td>
+<td>Personal identifier</td>
+<td>Email as returned by the OAuth provider.</td>
+</tr>
+<tr>
+<td><code>webauthn_credentials</code></td>
+<td><code>public_key</code></td>
+<td>Credential</td>
+<td>COSE public key bytes; no private key ever stored.</td>
+</tr>
+<tr>
+<td><code>webauthn_credentials</code></td>
+<td><code>credential_id</code></td>
+<td>Pseudonymous identifier</td>
+<td>WebAuthn credential ID.</td>
+</tr>
+<tr>
+<td><code>webauthn_credentials</code></td>
+<td><code>sign_count</code></td>
+<td>Operational</td>
+<td>Monotonic counter for replay detection.</td>
+</tr>
+<tr>
+<td><code>totp_secrets</code></td>
+<td><code>secret_enc</code></td>
+<td>Credential</td>
+<td>AES-256-GCM encrypted TOTP shared secret (<code>internal/totp/service.go:225</code>).</td>
+</tr>
+<tr>
+<td><code>saml_identities</code></td>
+<td><code>name_id</code></td>
+<td>Personal identifier</td>
+<td>SAML NameID from the IdP (often an email or opaque ID).</td>
+</tr>
+<tr>
+<td><code>saml_identities</code></td>
+<td><code>attributes</code></td>
+<td>Personal data</td>
+<td>SAML attribute map as returned by the IdP.</td>
+</tr>
+<tr>
+<td><code>audit_events</code></td>
+<td><code>actor_user_id</code></td>
+<td>Pseudonymous identifier</td>
+<td>Internal ULID of the acting user.</td>
+</tr>
+<tr>
+<td><code>audit_events</code></td>
+<td><code>ip</code></td>
+<td>Pseudonymous technical data</td>
+<td>IP at event time.</td>
+</tr>
+<tr>
+<td><code>audit_events</code></td>
+<td><code>user_agent</code></td>
+<td>Pseudonymous technical data</td>
+<td>User agent at event time.</td>
+</tr>
+<tr>
+<td><code>audit_events</code></td>
+<td><code>event_type</code></td>
+<td>Operational</td>
+<td>String event name, e.g. <code>user.login</code>.</td>
+</tr>
+<tr>
+<td><code>audit_events</code></td>
+<td><code>metadata</code></td>
+<td>Variable</td>
+<td>Structured JSON; secret-class keys are stripped by the default redactor (<code>audit.go:15-40</code>).</td>
+</tr>
+<tr>
+<td><code>magic_links</code></td>
+<td><code>email</code></td>
+<td>Personal identifier</td>
+<td>Destination email for the sign-in link.</td>
+</tr>
+<tr>
+<td><code>magic_links</code></td>
+<td><code>token_hash</code></td>
+<td>Derived credential</td>
+<td>SHA-256 of the raw magic-link token.</td>
+</tr>
+<tr>
+<td><code>magic_links</code></td>
+<td><code>expires_at</code></td>
+<td>Operational</td>
+<td>Expiry timestamp; default 15 minutes (<code>wiring.go:52-53</code>).</td>
+</tr>
+<tr>
+<td><code>scim_tokens</code></td>
+<td><code>token_hash</code></td>
+<td>Derived credential</td>
+<td>SHA-256 of the SCIM bearer token.</td>
+</tr>
+<tr>
+<td><code>scim_tokens</code></td>
+<td><code>last_used_at</code></td>
+<td>Operational</td>
+<td>Timestamp of last authenticated SCIM request.</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Data not stored by theauth-go:</strong></p>
+<ul>
+<li>Raw passwords (only Argon2id PHC strings).</li>
+<li>Raw session tokens, magic-link tokens, or SCIM tokens (only SHA-256 hashes).</li>
+<li>TOTP secrets in plaintext (only AES-256-GCM ciphertext).</li>
+<li>Private signing keys in the database (Ed25519 private keys live in process memory only).</li>
+</ul>
+<hr />
+<h2 id="2-data-subject-rights-how-to-satisfy-each">2. Data Subject Rights -- How to Satisfy Each<a class="headerlink" href="#2-data-subject-rights-how-to-satisfy-each" title="Permanent link">&para;</a></h2>
+<p>For each GDPR right, this section describes which library API satisfies the request and what the operator must build on top.</p>
+<h3 id="article-15-right-of-access">Article 15 -- Right of Access<a class="headerlink" href="#article-15-right-of-access" title="Permanent link">&para;</a></h3>
+<p><strong>What the data subject can request:</strong> A copy of all personal data held about them, the purposes of processing, retention periods, and third-party disclosures.</p>
+<p><strong>Library APIs that provide the data:</strong></p>
+<table>
+<thead>
+<tr>
+<th>Data category</th>
+<th>Library API</th>
+<th>Location</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>User profile (email, name, avatar, status)</td>
+<td><code>GetUser</code> / <code>UserByID</code></td>
+<td><code>internal/admin/handlers.go:206-232</code></td>
+</tr>
+<tr>
+<td>Active sessions (IP, user agent, created_at, expires_at)</td>
+<td><code>listSessions</code> admin endpoint</td>
+<td><code>internal/admin/handlers.go:404-419</code></td>
+</tr>
+<tr>
+<td>OAuth-linked accounts</td>
+<td><code>listOAuthAccounts</code> admin endpoint</td>
+<td><code>internal/admin/handlers.go:598-609</code></td>
+</tr>
+<tr>
+<td>WebAuthn credentials</td>
+<td><code>ListWebAuthnCredentials</code> (storage interface <code>storage.go</code>)</td>
+<td><code>storage.go</code></td>
+</tr>
+<tr>
+<td>TOTP enrollment status</td>
+<td>Stored as a <code>totp_secrets</code> row; operator queries storage directly</td>
+<td><code>storage/postgres/</code></td>
+</tr>
+<tr>
+<td>SAML identities</td>
+<td><code>SAMLIdentityByConnectionAndNameID</code> and related storage methods</td>
+<td><code>storage/postgres/</code></td>
+</tr>
+<tr>
+<td>Audit events for this user</td>
+<td><code>QueryAuditEvents</code> with <code>ActorUserID</code> filter</td>
+<td><code>internal/audit/service.go:348</code>; <code>storage.go:222</code></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Operator gap:</strong> The operator must expose an export endpoint that calls these APIs, aggregates the results, and returns a structured response (JSON, CSV, or PDF as appropriate) to the authenticated data subject or their authorized representative. The library provides the data; the endpoint is the operator's responsibility.</p>
+<hr />
+<h3 id="article-16-right-to-rectification">Article 16 -- Right to Rectification<a class="headerlink" href="#article-16-right-to-rectification" title="Permanent link">&para;</a></h3>
+<p><strong>What the data subject can request:</strong> Correction of inaccurate or incomplete personal data.</p>
+<p><strong>Library API:</strong> <code>patchUser</code> admin endpoint accepts <code>name</code>, <code>email</code> field updates (<code>internal/admin/handlers.go:297-376</code>). SCIM PATCH operations also support incremental updates.</p>
+<p><strong>Operator gap:</strong> The operator must expose a user-facing profile update form or endpoint that calls <code>patchUser</code>. If the user's email is their login identifier, the operator must verify ownership of the new address before applying the change.</p>
+<hr />
+<h3 id="article-17-right-to-erasure-right-to-be-forgotten">Article 17 -- Right to Erasure (Right to Be Forgotten)<a class="headerlink" href="#article-17-right-to-erasure-right-to-be-forgotten" title="Permanent link">&para;</a></h3>
+<p><strong>What the data subject can request:</strong> Deletion of their personal data when the data is no longer necessary or when they withdraw consent.</p>
+<p><strong>Library behavior:</strong></p>
+<ul>
+<li><code>removeUser</code> admin handler (<code>internal/admin/handlers.go:381-403</code>) removes the user from their organization.</li>
+<li>Database foreign key constraints cascade deletion of sessions, OAuth accounts, WebAuthn credentials, TOTP secrets, SAML identities, and magic links when a user row is deleted (cascade behavior enforced at the storage layer).</li>
+<li><code>audit_events</code> rows reference <code>actor_user_id</code> but are not automatically deleted on user removal because audit integrity requires them. The <code>actor_user_id</code> field may be replaced with a tombstone value (e.g., a zeroed ULID) by an operator-written sweep without losing the event record.</li>
+</ul>
+<p><strong>Operator gap (critical):</strong></p>
+<ol>
+<li>Implement a hard-delete or anonymize endpoint that removes the user row and triggers cascades.</li>
+<li>Implement an audit event anonymization sweep that replaces <code>actor_user_id</code>, <code>ip</code>, and <code>user_agent</code> with tombstone values for the erased subject, if full GDPR erasure of audit trails is required.</li>
+<li>If backup retention exceeds the erasure window, document this in the DPN and implement a backup purge or crypto-shredding strategy.</li>
+</ol>
+<hr />
+<h3 id="article-18-right-to-restriction-of-processing">Article 18 -- Right to Restriction of Processing<a class="headerlink" href="#article-18-right-to-restriction-of-processing" title="Permanent link">&para;</a></h3>
+<p><strong>What the data subject can request:</strong> That their data not be actively processed while a dispute is resolved.</p>
+<p><strong>Library API:</strong> None. <code>patchUser</code> (<code>internal/admin/handlers.go:304-387</code>) accepts a <code>status</code> field in its request body but the handler never persists or acts on it (it currently only applies <code>roleIds</code> changes) -- there is no user-suspension state anywhere in the <code>User</code> model, the <code>users</code> table, or the <code>Storage</code> interface. The closest built-in primitive is <code>revokeSession</code> (<code>internal/admin/handlers.go:428-447</code>), which invalidates the user's active sessions but does not prevent them from signing in again.</p>
+<p><strong>Operator gap (critical):</strong> There is no built-in restriction-of-processing flag. To honor Article 18, the operator must add their own suspension state (e.g., an application-level <code>status</code> column consulted at the top of every auth flow) and revoke existing sessions via <code>revokeSession</code> when a restriction request is received. Build the review-and-lift process on top of that operator-owned state.</p>
+<hr />
+<h3 id="article-20-right-to-data-portability">Article 20 -- Right to Data Portability<a class="headerlink" href="#article-20-right-to-data-portability" title="Permanent link">&para;</a></h3>
+<p><strong>What the data subject can request:</strong> Their personal data in a structured, commonly used, machine-readable format.</p>
+<p><strong>Library APIs:</strong> Same APIs as Article 15 (right of access). The data returned is already structured (JSON).</p>
+<p><strong>Operator gap:</strong> Format and expose the export. The operator controls the response format; JSON or CSV are both acceptable under GDPR portability requirements.</p>
+<hr />
+<h3 id="article-21-right-to-object">Article 21 -- Right to Object<a class="headerlink" href="#article-21-right-to-object" title="Permanent link">&para;</a></h3>
+<p><strong>What the data subject can request:</strong> That processing stop, particularly for direct marketing or legitimate-interest grounds.</p>
+<p><strong>Library API:</strong> Session revocation is available via <code>revokeSession</code> (<code>internal/admin/handlers.go:428-447</code>), which invalidates a session immediately. This stops that session but, as noted under Article 18, there is no library-level account suspension to prevent the user from signing in again with a fresh session.</p>
+<p><strong>Operator gap:</strong> Build an objection intake form. Revoke active sessions via <code>revokeSession</code> as an immediate step, and layer an operator-owned suspension/deactivation flag on top if processing must stop entirely rather than just ending the current session. Log the objection and the action taken.</p>
+<hr />
+<h3 id="article-22-rights-related-to-automated-decision-making">Article 22 -- Rights Related to Automated Decision-Making<a class="headerlink" href="#article-22-rights-related-to-automated-decision-making" title="Permanent link">&para;</a></h3>
+<p><strong>What the data subject can request:</strong> Not to be subject to solely automated decisions with significant effects.</p>
+<p><strong>Library relevance:</strong> theauth-go does not implement any automated decision-making, profiling, or scoring logic. Authentication outcomes (success/failure) are deterministic based on credentials and configured policy; they are not ML-based inferences.</p>
+<p><strong>Operator gap:</strong> If the operator builds automated decision-making above theauth-go (e.g., fraud scoring), they must address Article 22 independently.</p>
+<hr />
+<h2 id="3-data-retention">3. Data Retention<a class="headerlink" href="#3-data-retention" title="Permanent link">&para;</a></h2>
+<h3 id="default-ttls">Default TTLs<a class="headerlink" href="#default-ttls" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Data category</th>
+<th>Default TTL</th>
+<th>Config field</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Sessions</td>
+<td>24 hours</td>
+<td><code>Config.SessionTTL</code> (<code>theauth.go:37</code>)</td>
+<td>Active sessions expire; expired rows remain until the operator runs a sweep.</td>
+</tr>
+<tr>
+<td>Magic links</td>
+<td>15 minutes</td>
+<td><code>Config.MagicLinkTTL</code> (<code>theauth.go:38</code>; <code>wiring.go:52-53</code>)</td>
+<td>Consumed or expired links are kept in storage until swept.</td>
+</tr>
+<tr>
+<td>OAuth authorization codes</td>
+<td>Short-lived (minutes)</td>
+<td>Inherent in the OAuth code flow</td>
+<td>Codes are single-use and stored as hashes.</td>
+</tr>
+<tr>
+<td>Audit events</td>
+<td>Indefinite (no default TTL)</td>
+<td>None built in</td>
+<td>See below.</td>
+</tr>
+<tr>
+<td>Refresh tokens</td>
+<td>30 days</td>
+<td><code>internal/as/config.go:45</code></td>
+<td>Rotated on every use; old tokens are revoked.</td>
+</tr>
+<tr>
+<td>Pushed Authorization Requests</td>
+<td>N/A</td>
+<td>Not yet implemented</td>
+<td>Planned; will have a short TTL when landed.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="audit-event-retention">Audit Event Retention<a class="headerlink" href="#audit-event-retention" title="Permanent link">&para;</a></h3>
+<p>Audit events are INSERT-only (the <code>Storage</code> interface exposes no update or delete path for <code>audit_events</code>) and have no built-in TTL. This is intentional for security, but it is append-only, not cryptographically tamper-evident: nothing in the library prevents a party with direct database access from rewriting rows, and no Merkle-chaining or signing is implemented (see THREAT-MODEL.md, "Audit log tampering"). The append-only design still creates a tension with GDPR data minimization.</p>
+<p><strong>Operator actions required:</strong></p>
+<ol>
+<li>Define a retention period appropriate to your legal obligations (e.g., 12 months for security logs, 7 years for financial audit trails).</li>
+<li>Implement a scheduled sweep that deletes or anonymizes <code>audit_events</code> rows older than the retention period.</li>
+<li>If you forward audit events to an external SIEM, configure the SIEM's own retention policy to match your DPN.</li>
+</ol>
+<h3 id="sweep-patterns">Sweep Patterns<a class="headerlink" href="#sweep-patterns" title="Permanent link">&para;</a></h3>
+<p>Expired rows (magic links, sessions, oauth codes) are not automatically purged by the library. The operator must run periodic SQL sweeps:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="c1">-- Example: delete expired sessions older than 7 days past expiry</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="k">DELETE</span><span class="w"> </span><span class="k">FROM</span><span class="w"> </span><span class="n">sessions</span><span class="w"> </span><span class="k">WHERE</span><span class="w"> </span><span class="n">expires_at</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">NOW</span><span class="p">()</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="nb">INTERVAL</span><span class="w"> </span><span class="s1">&#39;7 days&#39;</span><span class="p">;</span>
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="c1">-- Example: delete consumed or expired magic links older than 24 hours</span>
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="k">DELETE</span><span class="w"> </span><span class="k">FROM</span><span class="w"> </span><span class="n">magic_links</span><span class="w"> </span><span class="k">WHERE</span><span class="w"> </span><span class="n">expires_at</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">NOW</span><span class="p">()</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="nb">INTERVAL</span><span class="w"> </span><span class="s1">&#39;24 hours&#39;</span><span class="p">;</span>
+</code></pre></div>
+<p>These sweeps should run as scheduled jobs, not inline on requests.</p>
+<hr />
+<h2 id="4-data-residency-and-cross-border-transfers">4. Data Residency and Cross-Border Transfers<a class="headerlink" href="#4-data-residency-and-cross-border-transfers" title="Permanent link">&para;</a></h2>
+<h3 id="where-theauth-go-stores-data">Where theauth-go Stores Data<a class="headerlink" href="#where-theauth-go-stores-data" title="Permanent link">&para;</a></h3>
+<p>theauth-go stores data in the <strong>operator's chosen database</strong> (Postgres or the in-memory store for testing). The library does not transmit personal data to any Anthropic, GitHub, or external infrastructure.</p>
+<p>The operator controls:
+- The database server location (region/AZ).
+- Whether replication crosses borders.
+- Whether backup destinations cross borders.</p>
+<h3 id="audit-sink-cross-border-risk">Audit Sink Cross-Border Risk<a class="headerlink" href="#audit-sink-cross-border-risk" title="Permanent link">&para;</a></h3>
+<p>When the operator configures an audit sink, events containing personal data (user ID, IP, user agent) may be transmitted to the sink's endpoint. Built-in sinks:</p>
+<table>
+<thead>
+<tr>
+<th>Sink</th>
+<th>Package</th>
+<th>Cross-border risk</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>OTLP</td>
+<td><code>audit/sinks/otlp/</code></td>
+<td>Depends on operator's OTLP collector location.</td>
+</tr>
+<tr>
+<td>Splunk HEC</td>
+<td><code>audit/sinks/splunk/</code></td>
+<td>Depends on Splunk instance location.</td>
+</tr>
+<tr>
+<td>Webhook</td>
+<td><code>audit/sinks/webhook/webhook.go</code></td>
+<td>Depends on webhook receiver location.</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Operator obligation:</strong> Before enabling any sink that sends data to a third-party vendor, sign a Data Processing Agreement (DPA) with that vendor. Ensure the vendor's processing location is within your permitted data protection boundary, or implement an appropriate transfer mechanism (Standard Contractual Clauses, Adequacy Decision, etc.).</p>
+<h3 id="oauth-provider-redirects">OAuth Provider Redirects<a class="headerlink" href="#oauth-provider-redirects" title="Permanent link">&para;</a></h3>
+<p>During OAuth social login, the user's browser is redirected to the operator-configured OAuth provider (GitHub, Google, Apple, etc.). The browser interaction is between the user and the provider; theauth-go does not proxy it. The provider's own privacy policies and data transfers apply to that interaction.</p>
+<h3 id="sub-processor-list">Sub-processor List<a class="headerlink" href="#sub-processor-list" title="Permanent link">&para;</a></h3>
+<p>theauth-go is a Go library, not a SaaS service. It has <strong>no sub-processors</strong>. The library code runs entirely within the operator's process. The operator's infrastructure vendors (cloud provider, database vendor, SIEM vendor) are the operator's sub-processors, not theauth-go's.</p>
+<hr />
+<h2 id="5-privacy-by-design-defaults">5. Privacy-by-Design Defaults<a class="headerlink" href="#5-privacy-by-design-defaults" title="Permanent link">&para;</a></h2>
+<h3 id="credential-storage">Credential Storage<a class="headerlink" href="#credential-storage" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Passwords: Argon2id with <code>m=64 MiB, t=3, p=4</code> per the OWASP 2026 baseline (<code>crypto/password.go:14,26-28</code>). Parameters are embedded in the PHC string so future work-factor increases can be applied on next login without data migration.</li>
+<li>Session tokens, magic-link tokens, SCIM tokens: stored as SHA-256 hashes only; raw values are returned to clients in cookies or email links and are not persisted.</li>
+<li>TOTP secrets: AES-256-GCM encrypted before storage (<code>internal/totp/service.go:225</code>). The encryption key must be supplied by the operator via <code>Config.EncryptionKey</code> or the audit config.</li>
+</ul>
+<h3 id="secrets-never-logged">Secrets Never Logged<a class="headerlink" href="#secrets-never-logged" title="Permanent link">&para;</a></h3>
+<p>The default audit redactor strips the following keys at any JSON nesting depth before any sink receives an event (<code>audit.go:15-40</code>):</p>
+<ul>
+<li><code>password</code></li>
+<li><code>secret</code></li>
+<li><code>token</code></li>
+<li><code>code</code></li>
+<li><code>refresh_token</code></li>
+<li><code>access_token</code></li>
+</ul>
+<p>Comparison is case-insensitive. The default redactor is applied unconditionally after any custom redactor; a custom redactor cannot re-introduce a stripped key (<code>internal/audit/service.go:281-283</code>).</p>
+<h3 id="session-cookie-security">Session Cookie Security<a class="headerlink" href="#session-cookie-security" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Attribute</th>
+<th>Default Value</th>
+<th>Config</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>HttpOnly</code></td>
+<td>true</td>
+<td>Not configurable (always set).</td>
+</tr>
+<tr>
+<td><code>SameSite</code></td>
+<td>Lax</td>
+<td>Not configurable (always Lax).</td>
+</tr>
+<tr>
+<td><code>Secure</code></td>
+<td>false (dev default)</td>
+<td>Set <code>Config.SecureCookie = true</code> for production.</td>
+</tr>
+</tbody>
+</table>
+<p>A <code>slog.Warn</code> is emitted at startup when <code>SecureCookie=false</code> unless <code>SuppressSecureCookieWarning=true</code> (<code>theauth.go:41-45</code>). Production deployments must set <code>SecureCookie=true</code>.</p>
+<h3 id="ip-and-user-agent-in-sessions">IP and User Agent in Sessions<a class="headerlink" href="#ip-and-user-agent-in-sessions" title="Permanent link">&para;</a></h3>
+<p>IP address and user agent are stored on every session row for security audit purposes. There is no built-in knob to disable this collection because it is used for anomaly detection and audit tracing.</p>
+<p><strong>Operator options if collection is not permitted:</strong></p>
+<ol>
+<li>Deploy theauth-go behind a proxy that strips or replaces the real IP before it reaches the library (the library reads the IP via <code>httpx.ClientIP</code>, which respects <code>TrustedProxies</code> configuration).</li>
+<li>After session creation, run an anonymization sweep that replaces the IP column with a zeroed value.</li>
+</ol>
+<h3 id="argon2id-work-factor">Argon2id Work Factor<a class="headerlink" href="#argon2id-work-factor" title="Permanent link">&para;</a></h3>
+<p>The default work factor (<code>m=64 MiB, t=3, p=4</code>) exceeds the OWASP 2026 minimum. Operators should not lower the work factor below these values. The work factor is not exposed as a config knob for password hashing; it is a compile-time constant in <code>crypto/password.go:26-28</code> and can be increased by upgrading to a future library version.</p>
+<hr />
+<h2 id="6-operators-gdpr-checklist">6. Operator's GDPR Checklist<a class="headerlink" href="#6-operators-gdpr-checklist" title="Permanent link">&para;</a></h2>
+<p>The following is a practical checklist for operators deploying theauth-go in an EU/EEA context.</p>
+<p><strong>Before go-live:</strong></p>
+<ul>
+<li>[ ] Publish a Privacy Notice (DPN) that lists every data field in Section 1 of this document and explains the lawful basis for each.</li>
+<li>[ ] Define a data retention schedule for each data category in Section 3.</li>
+<li>[ ] Set <code>Config.SecureCookie = true</code> in all production environments.</li>
+<li>[ ] Store the TOTP encryption key (<code>Config.EncryptionKey</code>) in a secrets manager separate from the database.</li>
+<li>[ ] Identify all audit sink destinations; sign DPAs with each vendor before enabling the sink.</li>
+<li>[ ] Choose database region(s) consistent with your DPN's data residency commitments.</li>
+</ul>
+<p><strong>Export and erasure endpoints (operator-built):</strong></p>
+<ul>
+<li>[ ] Build a data export endpoint that calls: <code>UserByID</code>, session listing, <code>listOAuthAccounts</code>, WebAuthn credential listing, TOTP enrollment status, SAML identity listing, <code>QueryAuditEvents</code> filtered by user ID.</li>
+<li>[ ] Build an erasure endpoint that: deletes the user row (cascades to sessions, OAuth accounts, WebAuthn credentials, TOTP secrets, magic links), anonymizes <code>audit_events</code> rows (replace <code>actor_user_id</code>, <code>ip</code>, <code>user_agent</code> with tombstone values).</li>
+<li>[ ] Wire both endpoints to an authenticated data-subject request intake form.</li>
+</ul>
+<p><strong>Ongoing operations:</strong></p>
+<ul>
+<li>[ ] Run scheduled sweeps to purge expired sessions, magic links, and other short-TTL rows.</li>
+<li>[ ] Run a scheduled sweep to delete or anonymize <code>audit_events</code> rows beyond your retention period.</li>
+<li>[ ] Review role grants on a defined cadence (at minimum quarterly) using <code>audit_events</code> rows for <code>role.granted</code> and <code>role.revoked</code>.</li>
+<li>[ ] Update your DPN if you add new audit sinks or collect additional metadata fields.</li>
+<li>[ ] Conduct a DPIA (Data Protection Impact Assessment) if your use of theauth-go involves high-risk processing (large scale, sensitive categories, systematic monitoring).</li>
+</ul>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.tabs", "navigation.tabs.sticky", "navigation.sections", "navigation.expand", "navigation.path", "navigation.top", "search.highlight", "search.suggest", "content.code.copy", "content.code.annotate"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"default": "latest", "provider": "mike"}}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+    
+  </body>
+</html>
