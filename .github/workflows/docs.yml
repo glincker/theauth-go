@@ -59,16 +59,3 @@ jobs:
         run: |
           mike deploy latest --update-aliases --push
           mike set-default latest --push
-
-      - name: Write CNAME (optional)
-        if: secrets.DOCS_CNAME != ''
-        env:
-          DOCS_CNAME: ${{ secrets.DOCS_CNAME }}
-        run: |
-          git fetch origin gh-pages
-          git checkout gh-pages
-          echo "${DOCS_CNAME}" > CNAME
-          git add CNAME
-          git diff --cached --quiet || git commit -m "docs: update CNAME to ${DOCS_CNAME}"
-          git push origin gh-pages
-          git checkout -
