@@ -2,146 +2,146 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
     <url>
          <loc>https://go.theauth.dev/latest/</loc>
-         <lastmod>2026-07-19</lastmod>
+         <lastmod>2026-07-21</lastmod>
     </url>
     <url>
          <loc>https://go.theauth.dev/latest/changelog/</loc>
-         <lastmod>2026-07-19</lastmod>
+         <lastmod>2026-07-21</lastmod>
     </url>
     <url>
          <loc>https://go.theauth.dev/latest/concepts/authorization-server/</loc>
-         <lastmod>2026-07-19</lastmod>
+         <lastmod>2026-07-21</lastmod>
     </url>
     <url>
          <loc>https://go.theauth.dev/latest/concepts/ciba/</loc>
-         <lastmod>2026-07-19</lastmod>
+         <lastmod>2026-07-21</lastmod>
     </url>
     <url>
          <loc>https://go.theauth.dev/latest/concepts/jwt-bearer/</loc>
-         <lastmod>2026-07-19</lastmod>
+         <lastmod>2026-07-21</lastmod>
     </url>
     <url>
          <loc>https://go.theauth.dev/latest/concepts/mcp-authorization/</loc>
-         <lastmod>2026-07-19</lastmod>
+         <lastmod>2026-07-21</lastmod>
     </url>
     <url>
          <loc>https://go.theauth.dev/latest/concepts/oauth21-primer/</loc>
-         <lastmod>2026-07-19</lastmod>
+         <lastmod>2026-07-21</lastmod>
     </url>
     <url>
          <loc>https://go.theauth.dev/latest/concepts/par-jar/</loc>
-         <lastmod>2026-07-19</lastmod>
+         <lastmod>2026-07-21</lastmod>
     </url>
     <url>
          <loc>https://go.theauth.dev/latest/concepts/resource-server/</loc>
-         <lastmod>2026-07-19</lastmod>
+         <lastmod>2026-07-21</lastmod>
     </url>
     <url>
          <loc>https://go.theauth.dev/latest/getting-started/example-apps/</loc>
-         <lastmod>2026-07-19</lastmod>
+         <lastmod>2026-07-21</lastmod>
     </url>
     <url>
          <loc>https://go.theauth.dev/latest/getting-started/installation/</loc>
-         <lastmod>2026-07-19</lastmod>
+         <lastmod>2026-07-21</lastmod>
     </url>
     <url>
          <loc>https://go.theauth.dev/latest/getting-started/overview/</loc>
-         <lastmod>2026-07-19</lastmod>
+         <lastmod>2026-07-21</lastmod>
     </url>
     <url>
          <loc>https://go.theauth.dev/latest/getting-started/quick-start/</loc>
-         <lastmod>2026-07-19</lastmod>
+         <lastmod>2026-07-21</lastmod>
     </url>
     <url>
          <loc>https://go.theauth.dev/latest/getting-started/storage-backends/</loc>
-         <lastmod>2026-07-19</lastmod>
+         <lastmod>2026-07-21</lastmod>
     </url>
     <url>
          <loc>https://go.theauth.dev/latest/guides/add-oauth-provider/</loc>
-         <lastmod>2026-07-19</lastmod>
+         <lastmod>2026-07-21</lastmod>
     </url>
     <url>
          <loc>https://go.theauth.dev/latest/guides/audit-log-splunk/</loc>
-         <lastmod>2026-07-19</lastmod>
+         <lastmod>2026-07-21</lastmod>
     </url>
     <url>
          <loc>https://go.theauth.dev/latest/guides/custom-storage-backend/</loc>
-         <lastmod>2026-07-19</lastmod>
+         <lastmod>2026-07-21</lastmod>
     </url>
     <url>
          <loc>https://go.theauth.dev/latest/guides/migrate-from-auth0/</loc>
-         <lastmod>2026-07-19</lastmod>
+         <lastmod>2026-07-21</lastmod>
     </url>
     <url>
          <loc>https://go.theauth.dev/latest/guides/migrate-from-cognito/</loc>
-         <lastmod>2026-07-19</lastmod>
+         <lastmod>2026-07-21</lastmod>
     </url>
     <url>
          <loc>https://go.theauth.dev/latest/guides/opentelemetry-tracing/</loc>
-         <lastmod>2026-07-19</lastmod>
+         <lastmod>2026-07-21</lastmod>
     </url>
     <url>
          <loc>https://go.theauth.dev/latest/guides/webauthn-passkeys/</loc>
-         <lastmod>2026-07-19</lastmod>
+         <lastmod>2026-07-21</lastmod>
     </url>
     <url>
          <loc>https://go.theauth.dev/latest/migrations/v0.7-to-v1.0/</loc>
-         <lastmod>2026-07-19</lastmod>
+         <lastmod>2026-07-21</lastmod>
     </url>
     <url>
          <loc>https://go.theauth.dev/latest/migrations/v1.0-to-v2.0/</loc>
-         <lastmod>2026-07-19</lastmod>
+         <lastmod>2026-07-21</lastmod>
     </url>
     <url>
          <loc>https://go.theauth.dev/latest/migrations/v2.0-to-v2.1/</loc>
-         <lastmod>2026-07-19</lastmod>
+         <lastmod>2026-07-21</lastmod>
     </url>
     <url>
          <loc>https://go.theauth.dev/latest/migrations/v2.3-to-v2.4/</loc>
-         <lastmod>2026-07-19</lastmod>
+         <lastmod>2026-07-21</lastmod>
     </url>
     <url>
          <loc>https://go.theauth.dev/latest/reference/audit-events/</loc>
-         <lastmod>2026-07-19</lastmod>
+         <lastmod>2026-07-21</lastmod>
     </url>
     <url>
          <loc>https://go.theauth.dev/latest/reference/configuration/</loc>
-         <lastmod>2026-07-19</lastmod>
+         <lastmod>2026-07-21</lastmod>
     </url>
     <url>
          <loc>https://go.theauth.dev/latest/reference/errors/</loc>
-         <lastmod>2026-07-19</lastmod>
+         <lastmod>2026-07-21</lastmod>
     </url>
     <url>
          <loc>https://go.theauth.dev/latest/reference/metrics/</loc>
-         <lastmod>2026-07-19</lastmod>
+         <lastmod>2026-07-21</lastmod>
     </url>
     <url>
          <loc>https://go.theauth.dev/latest/reference/spans/</loc>
-         <lastmod>2026-07-19</lastmod>
+         <lastmod>2026-07-21</lastmod>
     </url>
     <url>
          <loc>https://go.theauth.dev/latest/reference/storage/</loc>
-         <lastmod>2026-07-19</lastmod>
+         <lastmod>2026-07-21</lastmod>
     </url>
     <url>
          <loc>https://go.theauth.dev/latest/security/benchmarks/</loc>
-         <lastmod>2026-07-19</lastmod>
+         <lastmod>2026-07-21</lastmod>
     </url>
     <url>
          <loc>https://go.theauth.dev/latest/security/compliance-gdpr/</loc>
-         <lastmod>2026-07-19</lastmod>
+         <lastmod>2026-07-21</lastmod>
     </url>
     <url>
          <loc>https://go.theauth.dev/latest/security/compliance-soc2/</loc>
-         <lastmod>2026-07-19</lastmod>
+         <lastmod>2026-07-21</lastmod>
     </url>
     <url>
          <loc>https://go.theauth.dev/latest/security/releases/</loc>
-         <lastmod>2026-07-19</lastmod>
+         <lastmod>2026-07-21</lastmod>
     </url>
     <url>
          <loc>https://go.theauth.dev/latest/security/threat-model/</loc>
-         <lastmod>2026-07-19</lastmod>
+         <lastmod>2026-07-21</lastmod>
     </url>
 </urlset>
