@@ -558,6 +558,9 @@ func (s *noCIBAStore) WebAuthnCredentialByCredentialID(ctx context.Context, cred
 func (s *noCIBAStore) UpdateWebAuthnSignCount(ctx context.Context, credentialID []byte, newCount uint32, usedAt time.Time) error {
 	return s.inner.UpdateWebAuthnSignCount(ctx, credentialID, newCount, usedAt)
 }
+func (s *noCIBAStore) UpdateWebAuthnBackupFlags(ctx context.Context, credentialID []byte, backupEligible, backupState bool) error {
+	return s.inner.UpdateWebAuthnBackupFlags(ctx, credentialID, backupEligible, backupState)
+}
 func (s *noCIBAStore) DeleteWebAuthnCredential(ctx context.Context, id theauth.ULID, userID theauth.ULID) error {
 	return s.inner.DeleteWebAuthnCredential(ctx, id, userID)
 }
