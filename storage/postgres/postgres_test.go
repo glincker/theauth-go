@@ -25,42 +25,38 @@ func testPool(t *testing.T) *pgxpool.Pool {
 	if err != nil {
 		t.Fatal(err)
 	}
-	mig1, err := os.ReadFile("migrations/0001_init.up.sql")
-	if err != nil {
-		t.Fatal(err)
-	}
-	mig2, err := os.ReadFile("migrations/0002_passwords.up.sql")
-	if err != nil {
-		t.Fatal(err)
-	}
-	mig3, err := os.ReadFile("migrations/0003_oauth_accounts.up.sql")
-	if err != nil {
-		t.Fatal(err)
-	}
-	mig4, err := os.ReadFile("migrations/0004_webauthn_credentials.up.sql")
-	if err != nil {
-		t.Fatal(err)
-	}
-	mig5, err := os.ReadFile("migrations/0005_totp.up.sql")
-	if err != nil {
-		t.Fatal(err)
-	}
-	mig6, err := os.ReadFile("migrations/0006_organizations.up.sql")
-	if err != nil {
-		t.Fatal(err)
-	}
-	mig7, err := os.ReadFile("migrations/0007_saml.up.sql")
-	if err != nil {
-		t.Fatal(err)
-	}
-	mig8, err := os.ReadFile("migrations/0008_scim.up.sql")
-	if err != nil {
-		t.Fatal(err)
-	}
-	// Drop + recreate for clean state. Order matters: dependent tables
-	// drop first (v0.5 + v0.7 reference users; v0.7 SAML/SCIM reference
-	// organizations).
+	// Drop + recreate for clean state, then apply every embedded migration via
+	// Migrate (storage/postgres/migrate.go), not a hand-maintained file list.
+	// This used to hardcode os.ReadFile calls for 0001 through 0008 only, so
+	// every migration added after 0008 (0009 through 0017 as of this fix) was
+	// silently never applied here even though the files existed on disk -
+	// tests exercising a newer migration's columns failed with a bogus
+	// "column does not exist" rather than a real assertion failure. Migrate
+	// walks migrations/*.up.sql directly, so this can't go stale again the
+	// same way. theauth_schema_migrations (Migrate's ledger) is dropped
+	// alongside the schema tables so Migrate always replays every migration
+	// fresh for this pool, matching the "clean state per test" contract the
+	// old code had - without also dropping the ledger, Migrate would see
+	// prior versions already recorded (from another test's pool against the
+	// same CI Postgres instance) and skip recreating the tables just dropped
+	// above. Order matters for the table drops: dependent tables drop first
+	// (v0.5 + v0.7 reference users; v0.7 SAML/SCIM reference organizations).
 	_, _ = pool.Exec(context.Background(), `
+		DROP TABLE IF EXISTS theauth_schema_migrations CASCADE;
+		DROP TABLE IF EXISTS pushed_authorization_requests CASCADE;
+		DROP TABLE IF EXISTS backchannel_requests CASCADE;
+		DROP TABLE IF EXISTS delegation_grants CASCADE;
+		DROP TABLE IF EXISTS jwks_keys CASCADE;
+		DROP TABLE IF EXISTS oauth_refresh_tokens CASCADE;
+		DROP TABLE IF EXISTS oauth_authorization_codes CASCADE;
+		DROP TABLE IF EXISTS oauth_clients CASCADE;
+		DROP TABLE IF EXISTS agent_credentials CASCADE;
+		DROP TABLE IF EXISTS agents CASCADE;
+		DROP TABLE IF EXISTS user_roles CASCADE;
+		DROP TABLE IF EXISTS role_permissions CASCADE;
+		DROP TABLE IF EXISTS roles CASCADE;
+		DROP TABLE IF EXISTS permissions CASCADE;
+		DROP TABLE IF EXISTS audit_events CASCADE;
 		DROP TABLE IF EXISTS group_members CASCADE;
 		DROP TABLE IF EXISTS groups CASCADE;
 		DROP TABLE IF EXISTS scim_tokens CASCADE;
@@ -77,10 +73,8 @@ func testPool(t *testing.T) *pgxpool.Pool {
 		DROP TABLE IF EXISTS sessions CASCADE;
 		DROP TABLE IF EXISTS users CASCADE;
 	`)
-	for _, m := range [][]byte{mig1, mig2, mig3, mig4, mig5, mig6, mig7, mig8} {
-		if _, err := pool.Exec(context.Background(), string(m)); err != nil {
-			t.Fatal(err)
-		}
+	if err := Migrate(context.Background(), pool); err != nil {
+		t.Fatal(err)
 	}
 	return pool
 }

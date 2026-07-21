@@ -76,25 +76,35 @@ func (q *Queries) UpdateSessionAuthLevel(ctx context.Context, arg UpdateSessionA
 	return err
 }
 
+// NOTE: This file is normally sqlc-generated, but sqlc cannot regenerate it
+// in this repo: sqlc.yaml lists only migrations 0001-0005 as its schema, so
+// `sqlc generate` fails against the current schema. The generated files are
+// therefore hand-maintained mirrors (repo convention). The backup_eligible /
+// backup_state columns (migration 0017) were added below by hand to match the
+// style sqlc would emit.
+
 const insertWebAuthnCredential = `-- name: InsertWebAuthnCredential :one
 INSERT INTO webauthn_credentials (
     id, user_id, credential_id, public_key, sign_count,
-    transports, aaguid, name, created_at, last_used_at
-) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-RETURNING id, user_id, credential_id, public_key, sign_count, transports, aaguid, name, created_at, last_used_at
+    transports, aaguid, name, created_at, last_used_at,
+    backup_eligible, backup_state
+) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+RETURNING id, user_id, credential_id, public_key, sign_count, transports, aaguid, name, created_at, last_used_at, backup_eligible, backup_state
 `
 
 type InsertWebAuthnCredentialParams struct {
-	ID           pgtype.UUID
-	UserID       pgtype.UUID
-	CredentialID []byte
-	PublicKey    []byte
-	SignCount    int64
-	Transports   []string
-	Aaguid       []byte
-	Name         string
-	CreatedAt    pgtype.Timestamptz
-	LastUsedAt   pgtype.Timestamptz
+	ID             pgtype.UUID
+	UserID         pgtype.UUID
+	CredentialID   []byte
+	PublicKey      []byte
+	SignCount      int64
+	Transports     []string
+	Aaguid         []byte
+	Name           string
+	CreatedAt      pgtype.Timestamptz
+	LastUsedAt     pgtype.Timestamptz
+	BackupEligible pgtype.Bool
+	BackupState    pgtype.Bool
 }
 
 func (q *Queries) InsertWebAuthnCredential(ctx context.Context, arg InsertWebAuthnCredentialParams) (WebauthnCredential, error) {
@@ -109,6 +119,8 @@ func (q *Queries) InsertWebAuthnCredential(ctx context.Context, arg InsertWebAut
 		arg.Name,
 		arg.CreatedAt,
 		arg.LastUsedAt,
+		arg.BackupEligible,
+		arg.BackupState,
 	)
 	var i WebauthnCredential
 	err := row.Scan(
@@ -122,12 +134,14 @@ func (q *Queries) InsertWebAuthnCredential(ctx context.Context, arg InsertWebAut
 		&i.Name,
 		&i.CreatedAt,
 		&i.LastUsedAt,
+		&i.BackupEligible,
+		&i.BackupState,
 	)
 	return i, err
 }
 
 const webAuthnCredentialsByUserID = `-- name: WebAuthnCredentialsByUserID :many
-SELECT id, user_id, credential_id, public_key, sign_count, transports, aaguid, name, created_at, last_used_at FROM webauthn_credentials WHERE user_id = $1 ORDER BY created_at ASC
+SELECT id, user_id, credential_id, public_key, sign_count, transports, aaguid, name, created_at, last_used_at, backup_eligible, backup_state FROM webauthn_credentials WHERE user_id = $1 ORDER BY created_at ASC
 `
 
 func (q *Queries) WebAuthnCredentialsByUserID(ctx context.Context, userID pgtype.UUID) ([]WebauthnCredential, error) {
@@ -150,6 +164,8 @@ func (q *Queries) WebAuthnCredentialsByUserID(ctx context.Context, userID pgtype
 			&i.Name,
 			&i.CreatedAt,
 			&i.LastUsedAt,
+			&i.BackupEligible,
+			&i.BackupState,
 		); err != nil {
 			return nil, err
 		}
@@ -162,7 +178,7 @@ func (q *Queries) WebAuthnCredentialsByUserID(ctx context.Context, userID pgtype
 }
 
 const webAuthnCredentialByCredentialID = `-- name: WebAuthnCredentialByCredentialID :one
-SELECT id, user_id, credential_id, public_key, sign_count, transports, aaguid, name, created_at, last_used_at FROM webauthn_credentials WHERE credential_id = $1
+SELECT id, user_id, credential_id, public_key, sign_count, transports, aaguid, name, created_at, last_used_at, backup_eligible, backup_state FROM webauthn_credentials WHERE credential_id = $1
 `
 
 func (q *Queries) WebAuthnCredentialByCredentialID(ctx context.Context, credentialID []byte) (WebauthnCredential, error) {
@@ -179,6 +195,8 @@ func (q *Queries) WebAuthnCredentialByCredentialID(ctx context.Context, credenti
 		&i.Name,
 		&i.CreatedAt,
 		&i.LastUsedAt,
+		&i.BackupEligible,
+		&i.BackupState,
 	)
 	return i, err
 }
@@ -197,6 +215,26 @@ type UpdateWebAuthnSignCountParams struct {
 
 func (q *Queries) UpdateWebAuthnSignCount(ctx context.Context, arg UpdateWebAuthnSignCountParams) (int64, error) {
 	result, err := q.db.Exec(ctx, updateWebAuthnSignCount, arg.CredentialID, arg.SignCount, arg.LastUsedAt)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const updateWebAuthnBackupFlags = `-- name: UpdateWebAuthnBackupFlags :execrows
+UPDATE webauthn_credentials
+SET backup_eligible = $2, backup_state = $3
+WHERE credential_id = $1
+`
+
+type UpdateWebAuthnBackupFlagsParams struct {
+	CredentialID   []byte
+	BackupEligible pgtype.Bool
+	BackupState    pgtype.Bool
+}
+
+func (q *Queries) UpdateWebAuthnBackupFlags(ctx context.Context, arg UpdateWebAuthnBackupFlagsParams) (int64, error) {
+	result, err := q.db.Exec(ctx, updateWebAuthnBackupFlags, arg.CredentialID, arg.BackupEligible, arg.BackupState)
 	if err != nil {
 		return 0, err
 	}

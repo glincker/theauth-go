@@ -90,6 +90,66 @@ func testWebAuthnCredentials(t *testing.T, store theauth.Storage) {
 		}
 	})
 
+	t.Run("BackupFlagsNilUntilRecorded", func(t *testing.T) {
+		// The credential above was inserted with no backup flags, so both
+		// must read back nil ("never recorded"), distinct from a stored false.
+		got, err := store.WebAuthnCredentialByCredentialID(ctx, credID)
+		if err != nil {
+			t.Fatalf("WebAuthnCredentialByCredentialID: %v", err)
+		}
+		if got.BackupEligible != nil || got.BackupState != nil {
+			t.Fatalf("unrecorded backup flags must be nil, got BE=%v BS=%v", got.BackupEligible, got.BackupState)
+		}
+	})
+
+	t.Run("ReconcileBackupFlags", func(t *testing.T) {
+		if err := store.UpdateWebAuthnBackupFlags(ctx, credID, true, true); err != nil {
+			t.Fatalf("UpdateWebAuthnBackupFlags: %v", err)
+		}
+		got, err := store.WebAuthnCredentialByCredentialID(ctx, credID)
+		if err != nil {
+			t.Fatalf("WebAuthnCredentialByCredentialID after reconcile: %v", err)
+		}
+		if got.BackupEligible == nil || !*got.BackupEligible {
+			t.Fatalf("BackupEligible: want &true, got %v", got.BackupEligible)
+		}
+		if got.BackupState == nil || !*got.BackupState {
+			t.Fatalf("BackupState: want &true, got %v", got.BackupState)
+		}
+	})
+
+	t.Run("BackupFlagsRoundTripOnInsert", func(t *testing.T) {
+		// A credential registered after the fix stores explicit flags; a
+		// genuine non-backup-eligible authenticator round-trips as false, NOT
+		// nil, so it stays distinguishable from an unrecorded legacy row.
+		be, bs := false, false
+		c := theauth.WebAuthnCredential{
+			ID:             newID(),
+			UserID:         uid,
+			CredentialID:   []byte("second-credential-id-bytes-87654321"),
+			PublicKey:      pubKey,
+			SignCount:      0,
+			Transports:     []string{"hybrid"},
+			Name:           "Non-Synced Key",
+			CreatedAt:      time.Now(),
+			BackupEligible: &be,
+			BackupState:    &bs,
+		}
+		if _, err := store.InsertWebAuthnCredential(ctx, c); err != nil {
+			t.Fatalf("InsertWebAuthnCredential (with flags): %v", err)
+		}
+		got, err := store.WebAuthnCredentialByCredentialID(ctx, c.CredentialID)
+		if err != nil {
+			t.Fatalf("WebAuthnCredentialByCredentialID (with flags): %v", err)
+		}
+		if got.BackupEligible == nil || *got.BackupEligible {
+			t.Fatalf("BackupEligible: want &false, got %v", got.BackupEligible)
+		}
+		if got.BackupState == nil || *got.BackupState {
+			t.Fatalf("BackupState: want &false, got %v", got.BackupState)
+		}
+	})
+
 	t.Run("DeleteCrossUserMiss", func(t *testing.T) {
 		otherUID := newID()
 		if _, err := store.CreateUser(ctx, theauth.User{

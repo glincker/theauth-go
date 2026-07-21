@@ -6,6 +6,32 @@ adheres to [Semantic Versioning](https://semver.org/) from v1.0 forward.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Synced-passkey login failure (backup-eligible flag).** WebAuthn login
+  failed with a generic "verification failed" for any credential whose
+  authenticator reports the backup-eligible (BE) flag, which is the
+  overwhelming majority of real-world passkeys (iCloud Keychain, Google
+  Password Manager, and every other synced passkey). The library never
+  persisted a credential's BE / BS flags at registration nor restored them at
+  login, so go-webauthn's `validateLogin` BE-equality check always compared
+  the asserted `true` against a stored `false` and rejected the assertion.
+  Registration now captures the flags, login restores them, and new nullable
+  `backup_eligible` / `backup_state` columns (migration 0017, Postgres +
+  MySQL) back the round trip. Credentials registered before this fix have no
+  recorded flags and are reconciled on their next login via trust-on-first
+  -use, then enforced strictly thereafter. A WebAuthn validation failure of
+  any kind now also logs the underlying go-webauthn error server-side (never
+  surfaced to the client) for diagnosability. Found via production log
+  analysis from a consuming application, not this repo's issue tracker.
+
+### Added
+
+- **`Storage.UpdateWebAuthnBackupFlags`.** New storage method backing the
+  login-time reconciliation write for legacy WebAuthn credentials. Implemented
+  across the Postgres, MySQL, and in-memory backends and covered by the shared
+  `storagetest` conformance suite.
+
 ## [2.5.0] - 2026-07-14
 
 Stable release graduating v2.5.0-rc.1. Completes the `Config.LifecycleHooks`

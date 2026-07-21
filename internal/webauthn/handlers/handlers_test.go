@@ -121,6 +121,19 @@ func (s *fakeWebAuthnStorage) UpdateWebAuthnSignCount(_ context.Context, credent
 	return nil
 }
 
+func (s *fakeWebAuthnStorage) UpdateWebAuthnBackupFlags(_ context.Context, credentialID []byte, backupEligible, backupState bool) error {
+	k := credKey(credentialID)
+	c, ok := s.creds[k]
+	if !ok {
+		return nil
+	}
+	be, bs := backupEligible, backupState
+	c.BackupEligible = &be
+	c.BackupState = &bs
+	s.creds[k] = c
+	return nil
+}
+
 func (s *fakeWebAuthnStorage) DeleteWebAuthnCredential(_ context.Context, id models.ULID, userID models.ULID) error {
 	for k, c := range s.creds {
 		if c.ID == id {
