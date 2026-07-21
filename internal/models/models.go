@@ -126,6 +126,17 @@ type WebAuthnCredential struct {
 	Name         string     `json:"name"`
 	CreatedAt    time.Time  `json:"createdAt"`
 	LastUsedAt   *time.Time `json:"lastUsedAt,omitempty"`
+	// BackupEligible / BackupState mirror the WebAuthn BE / BS authenticator
+	// flags (a "backup eligible" credential is a synced passkey: iCloud
+	// Keychain, Google Password Manager, etc.). go-webauthn's login
+	// validation rejects an assertion whose BE flag differs from the stored
+	// credential, so these MUST round-trip or every synced passkey login
+	// fails. They are pointers on purpose: nil means "never recorded" (a
+	// credential registered before this column existed) which the login path
+	// reconciles via trust-on-first-use, and is distinct from a non-nil
+	// false (a genuine non-backup-eligible credential recorded after the fix).
+	BackupEligible *bool `json:"backupEligible,omitempty"`
+	BackupState    *bool `json:"backupState,omitempty"`
 }
 
 // TOTPSecret stores the AES-GCM encrypted shared secret for one user. The

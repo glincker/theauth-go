@@ -85,6 +85,14 @@ type WebauthnCredential struct {
 	Name         string
 	CreatedAt    pgtype.Timestamptz
 	LastUsedAt   pgtype.Timestamptz
+	// BackupEligible / BackupState were hand-added to this generated file to
+	// match migration 0017 (webauthn backup flags). sqlc cannot regenerate
+	// here: sqlc.yaml only lists migrations 0001-0005 as its schema, so
+	// `sqlc generate` fails against the current schema and the generated files
+	// are hand-maintained mirrors (repo convention). Nullable columns ->
+	// pgtype.Bool (Valid=false means SQL NULL / "never recorded").
+	BackupEligible pgtype.Bool
+	BackupState    pgtype.Bool
 }
 
 type TotpSecret struct {

@@ -111,6 +111,14 @@ type Storage interface {
 	// canonical replay signal per WebAuthn L2 / L3). Returns
 	// ErrStorageNotFound when the credential does not exist.
 	UpdateWebAuthnSignCount(ctx context.Context, credentialID []byte, newCount uint32, usedAt time.Time) error
+	// UpdateWebAuthnBackupFlags records the WebAuthn backup-eligible / backup
+	// -state flags for a credential that had none stored (a row written before
+	// the backup_eligible / backup_state columns existed). It is the
+	// trust-on-first-use reconciliation write for legacy synced passkeys and
+	// is idempotent. Implementations should return nil when the credential is
+	// missing rather than error; the caller treats any failure as non-fatal
+	// (a failed reconciliation must never fail an already-verified login).
+	UpdateWebAuthnBackupFlags(ctx context.Context, credentialID []byte, backupEligible, backupState bool) error
 	// DeleteWebAuthnCredential removes a credential by ID, scoped to the
 	// owning user. Returns ErrStorageNotFound when the row does not exist
 	// or does not belong to the caller (no leak on cross-user lookup).

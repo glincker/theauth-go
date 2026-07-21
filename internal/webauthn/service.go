@@ -20,6 +20,7 @@
 package webauthn
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -84,6 +85,11 @@ type Storage interface {
 	WebAuthnCredentialsByUserID(ctx context.Context, userID models.ULID) ([]models.WebAuthnCredential, error)
 	WebAuthnCredentialByCredentialID(ctx context.Context, credentialID []byte) (*models.WebAuthnCredential, error)
 	UpdateWebAuthnSignCount(ctx context.Context, credentialID []byte, newCount uint32, usedAt time.Time) error
+	// UpdateWebAuthnBackupFlags records the BE / BS flags for a credential
+	// that had none stored (a pre-fix legacy row). Used by the login
+	// trust-on-first-use reconciliation path; a write failure must not fail
+	// an otherwise-successful login, so callers treat its error as non-fatal.
+	UpdateWebAuthnBackupFlags(ctx context.Context, credentialID []byte, backupEligible, backupState bool) error
 	DeleteWebAuthnCredential(ctx context.Context, id models.ULID, userID models.ULID) error
 }
 
@@ -244,7 +250,7 @@ func dbToGoWebauthnCredential(c models.WebAuthnCredential) gowebauthn.Credential
 	for _, t := range c.Transports {
 		tr = append(tr, protocol.AuthenticatorTransport(t))
 	}
-	return gowebauthn.Credential{
+	gc := gowebauthn.Credential{
 		ID:        c.CredentialID,
 		PublicKey: c.PublicKey,
 		Transport: tr,
@@ -253,6 +259,16 @@ func dbToGoWebauthnCredential(c models.WebAuthnCredential) gowebauthn.Credential
 			SignCount: c.SignCount,
 		},
 	}
+	// Restore the BE / BS flags so go-webauthn's login validation compares
+	// against the value the authenticator actually reported at registration.
+	// Only populated when both were recorded; a nil flag (legacy credential)
+	// leaves the zero value here and is handled by the login reconciliation
+	// path (see FinishLogin), never by weakening this comparison silently.
+	if c.BackupEligible != nil && c.BackupState != nil {
+		gc.Flags.BackupEligible = *c.BackupEligible
+		gc.Flags.BackupState = *c.BackupState
+	}
+	return gc
 }
 
 // newChallengeToken mints an opaque token used as the cookie value
@@ -342,16 +358,23 @@ func (s *Service) FinishRegistration(
 		transports = append(transports, string(t))
 	}
 	now := time.Now()
+	// Persist the BE / BS flags the authenticator reported so subsequent
+	// logins can enforce go-webauthn's backup-flag equality check. Recording
+	// them here is what makes synced passkeys (BE=true) log in at all.
+	backupEligible := cred.Flags.BackupEligible
+	backupState := cred.Flags.BackupState
 	row := models.WebAuthnCredential{
-		ID:           ulid.New(),
-		UserID:       userID,
-		CredentialID: cred.ID,
-		PublicKey:    cred.PublicKey,
-		SignCount:    cred.Authenticator.SignCount,
-		Transports:   transports,
-		AAGUID:       cred.Authenticator.AAGUID,
-		Name:         name,
-		CreatedAt:    now,
+		ID:             ulid.New(),
+		UserID:         userID,
+		CredentialID:   cred.ID,
+		PublicKey:      cred.PublicKey,
+		SignCount:      cred.Authenticator.SignCount,
+		Transports:     transports,
+		AAGUID:         cred.Authenticator.AAGUID,
+		Name:           name,
+		CreatedAt:      now,
+		BackupEligible: &backupEligible,
+		BackupState:    &backupState,
 	}
 	stored, err := s.storage.InsertWebAuthnCredential(ctx, row)
 	if err != nil {
@@ -411,24 +434,73 @@ func (s *Service) FinishLogin(ctx context.Context, challengeToken string, body i
 	if err != nil {
 		return "", models.Session{}, models.NewError(models.CodeWebAuthn, "invalid assertion body", err)
 	}
+	// The BE / BS flags the authenticator actually reported in this
+	// assertion. For a legacy credential with no stored flags we trust these
+	// once (see below); go-webauthn overwrites the runtime credential's flags
+	// with these same values after a successful validation anyway.
+	assertedBE := parsed.Response.AuthenticatorData.Flags.HasBackupEligible()
+	assertedBS := parsed.Response.AuthenticatorData.Flags.HasBackupState()
+	// reconcileCredID is set to the raw credential id when this login used a
+	// legacy row with no recorded backup flags; after a successful validation
+	// we persist the asserted flags so the next login enforces them strictly.
+	var reconcileCredID []byte
 	// Discoverable login: the library calls our handler with the
 	// authenticator's rawID and userHandle. We use userHandle (which is
 	// our ULID bytes) to load the owning user and their credentials.
-	handler := func(_, userHandle []byte) (gowebauthn.User, error) {
+	handler := func(rawID, userHandle []byte) (gowebauthn.User, error) {
 		if len(userHandle) != 16 {
 			return nil, errors.New("theauth: unexpected user handle length")
 		}
 		var uid models.ULID
 		copy(uid[:], userHandle)
-		wu, err := s.loadWebauthnUser(ctx, uid)
+		u, err := s.storage.UserByID(ctx, uid)
 		if err != nil {
 			return nil, err
+		}
+		creds, err := s.storage.WebAuthnCredentialsByUserID(ctx, uid)
+		if err != nil {
+			return nil, err
+		}
+		wu := &webauthnUser{u: *u, credentials: make([]gowebauthn.Credential, 0, len(creds))}
+		for _, c := range creds {
+			gc := dbToGoWebauthnCredential(c)
+			if bytes.Equal(c.CredentialID, rawID) && (c.BackupEligible == nil || c.BackupState == nil) {
+				// Trust-on-first-use for a pre-fix legacy credential: adopt
+				// the asserted flags so go-webauthn's equality check passes
+				// for this one login, then persist them afterward. This does
+				// NOT weaken the common case: a credential registered after
+				// the fix has non-nil flags and dbToGoWebauthnCredential
+				// restores them, so the strict comparison still runs.
+				gc.Flags.BackupEligible = assertedBE
+				gc.Flags.BackupState = assertedBS
+				reconcileCredID = c.CredentialID
+			}
+			wu.credentials = append(wu.credentials, gc)
 		}
 		return wu, nil
 	}
 	cred, err := s.wa.ValidateDiscoverableLogin(handler, *chal.session, parsed)
 	if err != nil {
+		// Log the underlying go-webauthn detail server-side only (never sent
+		// to the client) so any future WebAuthn login failure is diagnosable
+		// straight from logs instead of requiring another deep investigation.
+		// No new PII beyond the credential-id length already logged on success.
+		slog.Warn("theauth: webauthn login validation failed",
+			"error", err,
+			"credential_id_len", len(parsed.RawID),
+			"backup_eligible", assertedBE,
+			"backup_state", assertedBS,
+		)
 		return "", models.Session{}, models.NewError(models.CodeWebAuthn, "validate assertion failed", err)
+	}
+	// Persist the asserted backup flags for a reconciled legacy credential.
+	// Non-fatal: a write failure must not fail an already-verified login (the
+	// flags simply reconcile on a later attempt).
+	if reconcileCredID != nil {
+		if rerr := s.storage.UpdateWebAuthnBackupFlags(ctx, reconcileCredID, assertedBE, assertedBS); rerr != nil {
+			slog.Warn("theauth: webauthn backup-flag reconciliation write failed",
+				"error", rerr, "credential_id_len", len(reconcileCredID))
+		}
 	}
 	stored, err := s.storage.WebAuthnCredentialByCredentialID(ctx, cred.ID)
 	if err != nil {

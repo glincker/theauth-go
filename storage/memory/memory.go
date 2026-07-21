@@ -458,6 +458,26 @@ func (s *Store) UpdateWebAuthnSignCount(_ context.Context, credentialID []byte, 
 	return storage.ErrNotFound
 }
 
+// UpdateWebAuthnBackupFlags records the BE / BS flags for a stored credential
+// (trust-on-first-use reconciliation for legacy synced passkeys). A missing
+// credential is a no-op returning nil, mirroring the Postgres adapter: the
+// caller treats reconciliation as best-effort.
+func (s *Store) UpdateWebAuthnBackupFlags(_ context.Context, credentialID []byte, backupEligible, backupState bool) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for id, c := range s.webauthnCreds {
+		if !bytes.Equal(c.CredentialID, credentialID) {
+			continue
+		}
+		be, bs := backupEligible, backupState
+		c.BackupEligible = &be
+		c.BackupState = &bs
+		s.webauthnCreds[id] = c
+		return nil
+	}
+	return nil
+}
+
 func (s *Store) DeleteWebAuthnCredential(_ context.Context, id theauth.ULID, userID theauth.ULID) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()

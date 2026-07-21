@@ -437,18 +437,38 @@ func signCountInt64ToUint32(v int64) uint32 {
 	return uint32(v)
 }
 
+// pgBoolToPtr converts a nullable Postgres boolean into a *bool: NULL (Valid
+// false) maps to nil ("never recorded"), a present value to a heap copy.
+func pgBoolToPtr(b pgtype.Bool) *bool {
+	if !b.Valid {
+		return nil
+	}
+	v := b.Bool
+	return &v
+}
+
+// boolPtrToPg is the inverse: nil -> SQL NULL, a value -> a valid boolean.
+func boolPtrToPg(p *bool) pgtype.Bool {
+	if p == nil {
+		return pgtype.Bool{}
+	}
+	return pgtype.Bool{Bool: *p, Valid: true}
+}
+
 func rowToWebAuthnCredential(r sqlcgen.WebauthnCredential) theauth.WebAuthnCredential {
 	return theauth.WebAuthnCredential{
-		ID:           pgUUIDToULID(r.ID),
-		UserID:       pgUUIDToULID(r.UserID),
-		CredentialID: r.CredentialID,
-		PublicKey:    r.PublicKey,
-		SignCount:    signCountInt64ToUint32(r.SignCount),
-		Transports:   r.Transports,
-		AAGUID:       r.Aaguid,
-		Name:         r.Name,
-		CreatedAt:    tsToTime(r.CreatedAt),
-		LastUsedAt:   tsToTimePtr(r.LastUsedAt),
+		ID:             pgUUIDToULID(r.ID),
+		UserID:         pgUUIDToULID(r.UserID),
+		CredentialID:   r.CredentialID,
+		PublicKey:      r.PublicKey,
+		SignCount:      signCountInt64ToUint32(r.SignCount),
+		Transports:     r.Transports,
+		AAGUID:         r.Aaguid,
+		Name:           r.Name,
+		CreatedAt:      tsToTime(r.CreatedAt),
+		LastUsedAt:     tsToTimePtr(r.LastUsedAt),
+		BackupEligible: pgBoolToPtr(r.BackupEligible),
+		BackupState:    pgBoolToPtr(r.BackupState),
 	}
 }
 
@@ -461,16 +481,18 @@ func (s *Store) InsertWebAuthnCredential(ctx context.Context, c theauth.WebAuthn
 		transports = []string{}
 	}
 	row, err := s.q.InsertWebAuthnCredential(ctx, sqlcgen.InsertWebAuthnCredentialParams{
-		ID:           ulidToPgUUID(c.ID),
-		UserID:       ulidToPgUUID(c.UserID),
-		CredentialID: c.CredentialID,
-		PublicKey:    c.PublicKey,
-		SignCount:    int64(c.SignCount),
-		Transports:   transports,
-		Aaguid:       c.AAGUID,
-		Name:         c.Name,
-		CreatedAt:    timeToTs(c.CreatedAt),
-		LastUsedAt:   timePtrToTs(c.LastUsedAt),
+		ID:             ulidToPgUUID(c.ID),
+		UserID:         ulidToPgUUID(c.UserID),
+		CredentialID:   c.CredentialID,
+		PublicKey:      c.PublicKey,
+		SignCount:      int64(c.SignCount),
+		Transports:     transports,
+		Aaguid:         c.AAGUID,
+		Name:           c.Name,
+		CreatedAt:      timeToTs(c.CreatedAt),
+		LastUsedAt:     timePtrToTs(c.LastUsedAt),
+		BackupEligible: boolPtrToPg(c.BackupEligible),
+		BackupState:    boolPtrToPg(c.BackupState),
 	})
 	if err != nil {
 		return theauth.WebAuthnCredential{}, err
@@ -527,6 +549,19 @@ func (s *Store) UpdateWebAuthnSignCount(ctx context.Context, credentialID []byte
 		return storage.ErrNotFound
 	}
 	return theauth.ErrReplayDetected
+}
+
+// UpdateWebAuthnBackupFlags records the BE / BS flags for a credential that
+// had none stored (trust-on-first-use reconciliation for legacy synced
+// passkeys). A missing credential returns nil (not an error): the caller
+// treats reconciliation as best-effort and must not fail a verified login.
+func (s *Store) UpdateWebAuthnBackupFlags(ctx context.Context, credentialID []byte, backupEligible, backupState bool) error {
+	_, err := s.q.UpdateWebAuthnBackupFlags(ctx, sqlcgen.UpdateWebAuthnBackupFlagsParams{
+		CredentialID:   credentialID,
+		BackupEligible: pgtype.Bool{Bool: backupEligible, Valid: true},
+		BackupState:    pgtype.Bool{Bool: backupState, Valid: true},
+	})
+	return err
 }
 
 func (s *Store) DeleteWebAuthnCredential(ctx context.Context, id theauth.ULID, userID theauth.ULID) error {

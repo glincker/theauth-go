@@ -87,8 +87,9 @@ UPDATE sessions SET auth_level = $2 WHERE id = $1;
 -- name: InsertWebAuthnCredential :one
 INSERT INTO webauthn_credentials (
     id, user_id, credential_id, public_key, sign_count,
-    transports, aaguid, name, created_at, last_used_at
-) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+    transports, aaguid, name, created_at, last_used_at,
+    backup_eligible, backup_state
+) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
 RETURNING *;
 
 -- name: WebAuthnCredentialsByUserID :many
@@ -101,6 +102,11 @@ SELECT * FROM webauthn_credentials WHERE credential_id = $1;
 UPDATE webauthn_credentials
 SET sign_count = $2, last_used_at = $3
 WHERE credential_id = $1 AND sign_count < $2;
+
+-- name: UpdateWebAuthnBackupFlags :execrows
+UPDATE webauthn_credentials
+SET backup_eligible = $2, backup_state = $3
+WHERE credential_id = $1;
 
 -- name: DeleteWebAuthnCredential :execrows
 DELETE FROM webauthn_credentials WHERE id = $1 AND user_id = $2;

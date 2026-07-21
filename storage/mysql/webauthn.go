@@ -162,8 +162,8 @@ func (s *Store) InsertWebAuthnCredential(ctx context.Context, c theauth.WebAuthn
 	}
 	_, err = s.db.ExecContext(ctx, `
 INSERT INTO webauthn_credentials
-    (id, user_id, credential_id, public_key, sign_count, transports, aaguid, name, created_at, last_used_at)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    (id, user_id, credential_id, public_key, sign_count, transports, aaguid, name, created_at, last_used_at, backup_eligible, backup_state)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		ulidToBytes(c.ID),
 		ulidToBytes(c.UserID),
 		c.CredentialID,
@@ -174,6 +174,8 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		c.Name,
 		timeUTC(c.CreatedAt),
 		timePtrToNull(c.LastUsedAt),
+		boolPtrToNull(c.BackupEligible),
+		boolPtrToNull(c.BackupState),
 	)
 	if err != nil {
 		return theauth.WebAuthnCredential{}, err
@@ -187,7 +189,7 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 
 func (s *Store) WebAuthnCredentialsByUserID(ctx context.Context, userID theauth.ULID) ([]theauth.WebAuthnCredential, error) {
 	rows, err := s.db.QueryContext(ctx, `
-SELECT id, user_id, credential_id, public_key, sign_count, transports, aaguid, name, created_at, last_used_at
+SELECT id, user_id, credential_id, public_key, sign_count, transports, aaguid, name, created_at, last_used_at, backup_eligible, backup_state
 FROM webauthn_credentials WHERE user_id = ? ORDER BY created_at ASC`,
 		ulidToBytes(userID),
 	)
@@ -208,7 +210,7 @@ FROM webauthn_credentials WHERE user_id = ? ORDER BY created_at ASC`,
 
 func (s *Store) WebAuthnCredentialByCredentialID(ctx context.Context, credentialID []byte) (*theauth.WebAuthnCredential, error) {
 	row := s.db.QueryRowContext(ctx, `
-SELECT id, user_id, credential_id, public_key, sign_count, transports, aaguid, name, created_at, last_used_at
+SELECT id, user_id, credential_id, public_key, sign_count, transports, aaguid, name, created_at, last_used_at, backup_eligible, backup_state
 FROM webauthn_credentials WHERE credential_id = ?`,
 		credentialID,
 	)
@@ -246,6 +248,20 @@ WHERE credential_id = ? AND sign_count < ?`,
 	return theauth.ErrReplayDetected
 }
 
+// UpdateWebAuthnBackupFlags records the BE / BS flags for a credential that
+// had none stored (trust-on-first-use reconciliation for legacy synced
+// passkeys). A missing credential is a no-op returning nil, mirroring the
+// Postgres adapter: the caller treats reconciliation as best-effort.
+func (s *Store) UpdateWebAuthnBackupFlags(ctx context.Context, credentialID []byte, backupEligible, backupState bool) error {
+	_, err := s.db.ExecContext(ctx, `
+UPDATE webauthn_credentials
+SET backup_eligible = ?, backup_state = ?
+WHERE credential_id = ?`,
+		backupEligible, backupState, credentialID,
+	)
+	return err
+}
+
 func (s *Store) DeleteWebAuthnCredential(ctx context.Context, id theauth.ULID, userID theauth.ULID) error {
 	res, err := s.db.ExecContext(ctx,
 		`DELETE FROM webauthn_credentials WHERE id = ? AND user_id = ?`,
@@ -278,11 +294,14 @@ func scanWebAuthnCredential(row interface{ Scan(...interface{}) error }) (theaut
 		name                  string
 		createdAt             time.Time
 		lastUsedAt            sql.NullTime
+		backupEligible        sql.NullBool
+		backupState           sql.NullBool
 	)
 	if err := row.Scan(
 		&idB, &userIDB, &credIDB,
 		&pubKey, &signCount, &transportsJSON,
 		&aaguid, &name, &createdAt, &lastUsedAt,
+		&backupEligible, &backupState,
 	); err != nil {
 		return theauth.WebAuthnCredential{}, err
 	}
@@ -298,15 +317,35 @@ func scanWebAuthnCredential(row interface{ Scan(...interface{}) error }) (theaut
 		sc = uint32(signCount)
 	}
 	return theauth.WebAuthnCredential{
-		ID:           bytesToULID(idB),
-		UserID:       bytesToULID(userIDB),
-		CredentialID: credIDB,
-		PublicKey:    pubKey,
-		SignCount:    sc,
-		Transports:   transports,
-		AAGUID:       aaguid,
-		Name:         name,
-		CreatedAt:    createdAt.UTC(),
-		LastUsedAt:   nullTimeToPtr(lastUsedAt),
+		ID:             bytesToULID(idB),
+		UserID:         bytesToULID(userIDB),
+		CredentialID:   credIDB,
+		PublicKey:      pubKey,
+		SignCount:      sc,
+		Transports:     transports,
+		AAGUID:         aaguid,
+		Name:           name,
+		CreatedAt:      createdAt.UTC(),
+		LastUsedAt:     nullTimeToPtr(lastUsedAt),
+		BackupEligible: nullBoolToPtr(backupEligible),
+		BackupState:    nullBoolToPtr(backupState),
 	}, nil
+}
+
+// boolPtrToNull converts a *bool into a sql.NullBool for a nullable column
+// (nil -> SQL NULL).
+func boolPtrToNull(p *bool) sql.NullBool {
+	if p == nil {
+		return sql.NullBool{}
+	}
+	return sql.NullBool{Bool: *p, Valid: true}
+}
+
+// nullBoolToPtr is the inverse: an invalid (NULL) value maps to nil.
+func nullBoolToPtr(nb sql.NullBool) *bool {
+	if !nb.Valid {
+		return nil
+	}
+	v := nb.Bool
+	return &v
 }
