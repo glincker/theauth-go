@@ -25,8 +25,7 @@ require (
 	github.com/mitchellh/mapstructure v1.5.0 // indirect
 	github.com/oklog/ulid/v2 v2.1.2 // indirect
 	github.com/pquerna/otp v1.5.0 // indirect
-	github.com/russellhaering/goxmldsig v1.6.0 // indirect
-	github.com/stretchr/testify v1.11.1 // indirect
+	github.com/russellhaering/goxmldsig v1.6.1 // indirect
 	github.com/x448/float16 v0.8.4 // indirect
 	go.opentelemetry.io/otel v1.44.0 // indirect
 	golang.org/x/crypto v0.54.0 // indirect
