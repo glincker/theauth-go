@@ -14,7 +14,7 @@ require (
 	github.com/oklog/ulid/v2 v2.1.2
 	github.com/pquerna/otp v1.5.0
 	github.com/russellhaering/goxmldsig v1.6.1
-	golang.org/x/crypto v0.54.0
+	golang.org/x/crypto v0.55.0
 	golang.org/x/time v0.15.0
 )
 
@@ -35,5 +35,5 @@ require (
 	github.com/x448/float16 v0.8.4 // indirect
 	golang.org/x/sync v0.22.0 // indirect
 	golang.org/x/sys v0.47.0 // indirect
-	golang.org/x/text v0.40.0 // indirect
+	golang.org/x/text v0.41.0 // indirect
 )
