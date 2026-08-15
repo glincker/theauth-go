@@ -5,7 +5,7 @@ go 1.25.0
 require (
 	github.com/glincker/theauth-go v0.0.0
 	go.opentelemetry.io/proto/otlp v1.11.0
-	google.golang.org/protobuf v1.36.11
+	google.golang.org/protobuf v1.36.12
 )
 
 require (
