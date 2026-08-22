@@ -3,7 +3,7 @@ module github.com/glincker/theauth-go
 go 1.25.0
 
 require (
-	github.com/beevik/etree v1.7.0
+	github.com/beevik/etree v1.7.1
 	github.com/crewjam/saml v0.5.1
 	github.com/fxamacker/cbor/v2 v2.9.2
 	github.com/glincker/theauth-go/mcpresource v0.0.0-20260622181835-520da3c8360d
