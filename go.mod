@@ -8,7 +8,7 @@ require (
 	github.com/fxamacker/cbor/v2 v2.9.3
 	github.com/glincker/theauth-go/mcpresource v0.0.0-20260622181835-520da3c8360d
 	github.com/go-chi/chi/v5 v5.3.2
-	github.com/go-sql-driver/mysql v1.10.0
+	github.com/go-sql-driver/mysql v1.10.1
 	github.com/go-webauthn/webauthn v0.13.4
 	github.com/jackc/pgx/v5 v5.10.0
 	github.com/oklog/ulid/v2 v2.1.2
