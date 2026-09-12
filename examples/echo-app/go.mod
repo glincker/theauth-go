@@ -1,6 +1,6 @@
 module github.com/glincker/theauth-go/examples/echo-app
 
-go 1.25.0
+go 1.26.0
 
 replace github.com/glincker/theauth-go => ../..
 
@@ -37,5 +37,5 @@ require (
 	golang.org/x/net v0.57.0 // indirect
 	golang.org/x/sys v0.47.0 // indirect
 	golang.org/x/text v0.40.0 // indirect
-	golang.org/x/time v0.15.0 // indirect
+	golang.org/x/time v0.16.0 // indirect
 )
