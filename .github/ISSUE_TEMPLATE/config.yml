@@ -6,6 +6,9 @@ contact_links:
   - name: Q&A and ideas
     url: https://github.com/glincker/theauth-go/discussions
     about: Ask questions, share patterns, propose roadmap items.
+  - name: 💬 Ask a question on Discord
+    url: https://discord.gg/Ar5pcaZB99
+    about: Questions and help from the community in the #theauth forum.
   - name: Documentation
     url: https://theauth.dev
     about: Getting started, concepts, guides, configuration, error catalog.

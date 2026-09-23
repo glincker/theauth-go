@@ -23,6 +23,7 @@
 [![Postgres](https://img.shields.io/badge/storage-Postgres%20%7C%20MySQL%20%7C%20Memory-336791?logo=postgresql&logoColor=white)](storage/)
 [![SLSA 3](https://slsa.dev/images/gh-badge-level3.svg)](https://github.com/glincker/theauth-go/releases)
 [![SBOM](https://img.shields.io/badge/SBOM-Sigstore%20signed-blueviolet)](https://github.com/glincker/theauth-go/releases)
+[![Discord](https://img.shields.io/discord/829168897080557579?style=flat-square&logo=discord&logoColor=white&label=discord&color=5865F2)](https://discord.gg/Ar5pcaZB99)
 
 ```bash
 go get github.com/glincker/theauth-go
@@ -57,6 +58,7 @@ http.ListenAndServe(":8080", r)
 - [Storage backends](#storage-backends)
 - [Security](#security)
 - [FAQ](#faq)
+- [Community](#community)
 - [Contributing](#contributing)
 - [License](#license)
 
@@ -348,6 +350,14 @@ interface is public, so custom backends are possible.
 
 **Is it free and open source?**
 Yes, MIT licensed, no paid tier gating any feature in this repository.
+
+---
+
+## Community
+
+Join the GLINR Discord and talk to us in the `#theauth` forum channel.
+
+<a href="https://discord.gg/Ar5pcaZB99"><img src="https://discord.com/api/guilds/829168897080557579/widget.png?style=banner2" alt="Join the GLINR Discord" /></a>
 
 ---
 
