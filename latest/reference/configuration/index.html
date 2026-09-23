@@ -2628,7 +2628,7 @@
 <a id="__codelineno-2-13" name="__codelineno-2-13" href="#__codelineno-2-13"></a><span class="w">    </span><span class="c1">// Redactor optionally transforms metadata before storage; return value</span>
 <a id="__codelineno-2-14" name="__codelineno-2-14" href="#__codelineno-2-14"></a><span class="w">    </span><span class="c1">// replaces the metadata map. Defaults to DefaultRedactor (masks</span>
 <a id="__codelineno-2-15" name="__codelineno-2-15" href="#__codelineno-2-15"></a><span class="w">    </span><span class="c1">// password/secret/token/code/refresh_token/access_token fields).</span>
-<a id="__codelineno-2-16" name="__codelineno-2-16" href="#__codelineno-2-16"></a><span class="w">    </span><span class="nx">Redactor</span><span class="w"> </span><span class="kd">func</span><span class="p">(</span><span class="nx">metadata</span><span class="w"> </span><span class="kd">map</span><span class="p">[</span><span class="kt">string</span><span class="p">]</span><span class="kt">any</span><span class="p">)</span><span class="w"> </span><span class="kd">map</span><span class="p">[</span><span class="kt">string</span><span class="p">]</span><span class="kt">any</span>
+<a id="__codelineno-2-16" name="__codelineno-2-16" href="#__codelineno-2-16"></a><span class="w">    </span><span class="nx">Redactor</span><span class="w"> </span><span class="kd">func</span><span class="p">(</span><span class="nx">metadata</span><span class="w"> </span><span class="kt">map</span><span class="p">[</span><span class="kt">string</span><span class="p">]</span><span class="kt">any</span><span class="p">)</span><span class="w"> </span><span class="kt">map</span><span class="p">[</span><span class="kt">string</span><span class="p">]</span><span class="kt">any</span>
 <a id="__codelineno-2-17" name="__codelineno-2-17" href="#__codelineno-2-17"></a><span class="w">    </span><span class="c1">// Sinks is the optional list of external SIEM streaming destinations</span>
 <a id="__codelineno-2-18" name="__codelineno-2-18" href="#__codelineno-2-18"></a><span class="w">    </span><span class="c1">// (OTLP, Splunk HEC, webhook). A failing sink is logged and counted;</span>
 <a id="__codelineno-2-19" name="__codelineno-2-19" href="#__codelineno-2-19"></a><span class="w">    </span><span class="c1">// it never blocks or delays canonical storage writes.</span>
@@ -2653,7 +2653,7 @@
 </tbody>
 </table>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="kd">type</span><span class="w"> </span><span class="nx">AdminConfig</span><span class="w"> </span><span class="kd">struct</span><span class="w"> </span><span class="p">{</span>
-<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="w">    </span><span class="c1">// PathPrefix overrides &quot;/admin/v1&quot; (must start with &quot;/&quot;).</span>
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="w">    </span><span class="c1">// PathPrefix overrides "/admin/v1" (must start with "/").</span>
 <a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="w">    </span><span class="nx">PathPrefix</span><span class="w"> </span><span class="kt">string</span>
 <a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="p">}</span>
 </code></pre></div>
@@ -2739,7 +2739,7 @@
 <a id="__codelineno-4-63" name="__codelineno-4-63" href="#__codelineno-4-63"></a><span class="c1">// JARConfig controls JWT-Secured Authorization Request behaviour (v2.4).</span>
 <a id="__codelineno-4-64" name="__codelineno-4-64" href="#__codelineno-4-64"></a><span class="kd">type</span><span class="w"> </span><span class="nx">JARConfig</span><span class="w"> </span><span class="kd">struct</span><span class="w"> </span><span class="p">{</span>
 <a id="__codelineno-4-65" name="__codelineno-4-65" href="#__codelineno-4-65"></a><span class="w">    </span><span class="c1">// AcceptedAlgorithms lists the JWS algorithms accepted on request</span>
-<a id="__codelineno-4-66" name="__codelineno-4-66" href="#__codelineno-4-66"></a><span class="w">    </span><span class="c1">// objects. Default: ES256, RS256, EdDSA. HS* and &quot;none&quot; are always</span>
+<a id="__codelineno-4-66" name="__codelineno-4-66" href="#__codelineno-4-66"></a><span class="w">    </span><span class="c1">// objects. Default: ES256, RS256, EdDSA. HS* and "none" are always</span>
 <a id="__codelineno-4-67" name="__codelineno-4-67" href="#__codelineno-4-67"></a><span class="w">    </span><span class="c1">// rejected.</span>
 <a id="__codelineno-4-68" name="__codelineno-4-68" href="#__codelineno-4-68"></a><span class="w">    </span><span class="nx">AcceptedAlgorithms</span><span class="w"> </span><span class="p">[]</span><span class="kt">string</span>
 <a id="__codelineno-4-69" name="__codelineno-4-69" href="#__codelineno-4-69"></a><span class="w">    </span><span class="c1">// RequireJAR rejects /authorize and /oauth/par requests that do not</span>
@@ -2753,10 +2753,10 @@
 <a id="__codelineno-4-77" name="__codelineno-4-77" href="#__codelineno-4-77"></a><span class="w">    </span><span class="c1">// grant (RFC 7523 section 2.1).</span>
 <a id="__codelineno-4-78" name="__codelineno-4-78" href="#__codelineno-4-78"></a><span class="w">    </span><span class="nx">TrustedJWTIssuers</span><span class="w"> </span><span class="p">[]</span><span class="nx">TrustedJWTIssuer</span>
 <a id="__codelineno-4-79" name="__codelineno-4-79" href="#__codelineno-4-79"></a><span class="w">    </span><span class="c1">// ClientAssertionMaxAge bounds how far in the past a client_assertion</span>
-<a id="__codelineno-4-80" name="__codelineno-4-80" href="#__codelineno-4-80"></a><span class="w">    </span><span class="c1">// JWT&#39;s iat may be (default: 60s).</span>
+<a id="__codelineno-4-80" name="__codelineno-4-80" href="#__codelineno-4-80"></a><span class="w">    </span><span class="c1">// JWT's iat may be (default: 60s).</span>
 <a id="__codelineno-4-81" name="__codelineno-4-81" href="#__codelineno-4-81"></a><span class="w">    </span><span class="nx">ClientAssertionMaxAge</span><span class="w"> </span><span class="nx">time</span><span class="p">.</span><span class="nx">Duration</span>
 <a id="__codelineno-4-82" name="__codelineno-4-82" href="#__codelineno-4-82"></a><span class="w">    </span><span class="c1">// AssertionMaxAge bounds how far in the past a jwt-bearer grant</span>
-<a id="__codelineno-4-83" name="__codelineno-4-83" href="#__codelineno-4-83"></a><span class="w">    </span><span class="c1">// assertion&#39;s iat may be (default: 300s).</span>
+<a id="__codelineno-4-83" name="__codelineno-4-83" href="#__codelineno-4-83"></a><span class="w">    </span><span class="c1">// assertion's iat may be (default: 300s).</span>
 <a id="__codelineno-4-84" name="__codelineno-4-84" href="#__codelineno-4-84"></a><span class="w">    </span><span class="nx">AssertionMaxAge</span><span class="w"> </span><span class="nx">time</span><span class="p">.</span><span class="nx">Duration</span>
 <a id="__codelineno-4-85" name="__codelineno-4-85" href="#__codelineno-4-85"></a><span class="w">    </span><span class="c1">// ReplayCacheTTL is how long JTIs remain in the replay cache</span>
 <a id="__codelineno-4-86" name="__codelineno-4-86" href="#__codelineno-4-86"></a><span class="w">    </span><span class="c1">// (default: 600s).</span>
@@ -2768,7 +2768,7 @@
 <a id="__codelineno-4-92" name="__codelineno-4-92" href="#__codelineno-4-92"></a>
 <a id="__codelineno-4-93" name="__codelineno-4-93" href="#__codelineno-4-93"></a><span class="c1">// TrustedJWTIssuer represents one external JWT issuer for jwt-bearer grants.</span>
 <a id="__codelineno-4-94" name="__codelineno-4-94" href="#__codelineno-4-94"></a><span class="kd">type</span><span class="w"> </span><span class="nx">TrustedJWTIssuer</span><span class="w"> </span><span class="kd">struct</span><span class="w"> </span><span class="p">{</span>
-<a id="__codelineno-4-95" name="__codelineno-4-95" href="#__codelineno-4-95"></a><span class="w">    </span><span class="c1">// Issuer is the expected &quot;iss&quot; claim value.</span>
+<a id="__codelineno-4-95" name="__codelineno-4-95" href="#__codelineno-4-95"></a><span class="w">    </span><span class="c1">// Issuer is the expected "iss" claim value.</span>
 <a id="__codelineno-4-96" name="__codelineno-4-96" href="#__codelineno-4-96"></a><span class="w">    </span><span class="nx">Issuer</span><span class="w"> </span><span class="kt">string</span>
 <a id="__codelineno-4-97" name="__codelineno-4-97" href="#__codelineno-4-97"></a><span class="w">    </span><span class="c1">// JWKSURL is the JWKS endpoint URL for this issuer.</span>
 <a id="__codelineno-4-98" name="__codelineno-4-98" href="#__codelineno-4-98"></a><span class="w">    </span><span class="nx">JWKSURL</span><span class="w"> </span><span class="kt">string</span>
@@ -2776,8 +2776,8 @@
 <a id="__codelineno-4-100" name="__codelineno-4-100" href="#__codelineno-4-100"></a><span class="w">    </span><span class="c1">// Default: ES256, RS256, EdDSA.</span>
 <a id="__codelineno-4-101" name="__codelineno-4-101" href="#__codelineno-4-101"></a><span class="w">    </span><span class="nx">AllowedAlgorithms</span><span class="w"> </span><span class="p">[]</span><span class="kt">string</span>
 <a id="__codelineno-4-102" name="__codelineno-4-102" href="#__codelineno-4-102"></a><span class="w">    </span><span class="c1">// SubjectMapper resolves claims to a local user ULID. When nil, the</span>
-<a id="__codelineno-4-103" name="__codelineno-4-103" href="#__codelineno-4-103"></a><span class="w">    </span><span class="c1">// built-in SubMapper parses the &quot;sub&quot; claim directly as a ULID; use</span>
-<a id="__codelineno-4-104" name="__codelineno-4-104" href="#__codelineno-4-104"></a><span class="w">    </span><span class="c1">// EmailMapper to resolve by the &quot;email&quot; claim instead.</span>
+<a id="__codelineno-4-103" name="__codelineno-4-103" href="#__codelineno-4-103"></a><span class="w">    </span><span class="c1">// built-in SubMapper parses the "sub" claim directly as a ULID; use</span>
+<a id="__codelineno-4-104" name="__codelineno-4-104" href="#__codelineno-4-104"></a><span class="w">    </span><span class="c1">// EmailMapper to resolve by the "email" claim instead.</span>
 <a id="__codelineno-4-105" name="__codelineno-4-105" href="#__codelineno-4-105"></a><span class="w">    </span><span class="nx">SubjectMapper</span><span class="w"> </span><span class="nx">SubjectMapper</span><span class="w"> </span><span class="c1">// interface{ Resolve(claims map[string]any) (ULID, error) }</span>
 <a id="__codelineno-4-106" name="__codelineno-4-106" href="#__codelineno-4-106"></a><span class="p">}</span>
 <a id="__codelineno-4-107" name="__codelineno-4-107" href="#__codelineno-4-107"></a>

@@ -2179,7 +2179,7 @@ verifies against the client's registered public key.</p>
 <h2 id="standard-flow-before-parjar">Standard flow (before PAR/JAR)<a class="headerlink" href="#standard-flow-before-parjar" title="Permanent link">&para;</a></h2>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>User              Browser              Client App           Authorization Server
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a> |                  |                      |                        |
-<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a> | Click &quot;Sign in&quot;  |                      |                        |
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a> | Click "Sign in"  |                      |                        |
 <a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a> |-----------------&gt;|                      |                        |
 <a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a> |                  | Redirect to /oauth/authorize?response_type=code
 <a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a> |                  |  &amp;client_id=...&amp;redirect_uri=...&amp;scope=...&amp;state=...
@@ -2199,7 +2199,7 @@ the browser address bar.</p>
 <h2 id="flow-with-par">Flow with PAR<a class="headerlink" href="#flow-with-par" title="Permanent link">&para;</a></h2>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>User              Browser              Client App           Authorization Server
 <a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a> |                  |                      |                        |
-<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a> | Click &quot;Sign in&quot;  |                      |                        |
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a> | Click "Sign in"  |                      |                        |
 <a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a> |-----------------&gt;|                      |                        |
 <a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a> |                  |       POST /oauth/par (back-channel HTTPS)    |
 <a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a> |                  |                      |-----------------------&gt;|
@@ -2247,7 +2247,7 @@ baseline.</p>
 <h2 id="enabling-par">Enabling PAR<a class="headerlink" href="#enabling-par" title="Permanent link">&para;</a></h2>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="nx">cfg</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">theauth</span><span class="p">.</span><span class="nx">Config</span><span class="p">{</span>
 <a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="w">    </span><span class="nx">AuthorizationServer</span><span class="p">:</span><span class="w"> </span><span class="o">&amp;</span><span class="nx">theauth</span><span class="p">.</span><span class="nx">AuthorizationServerConfig</span><span class="p">{</span>
-<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="w">        </span><span class="nx">Issuer</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;https://auth.example.com&quot;</span><span class="p">,</span>
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="w">        </span><span class="nx">Issuer</span><span class="p">:</span><span class="w"> </span><span class="s">"https://auth.example.com"</span><span class="p">,</span>
 <a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="w">        </span><span class="nx">PAR</span><span class="p">:</span><span class="w"> </span><span class="o">&amp;</span><span class="nx">theauth</span><span class="p">.</span><span class="nx">PARConfig</span><span class="p">{</span>
 <a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="w">            </span><span class="c1">// RequirePAR = true rejects plain /authorize requests that do</span>
 <a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="w">            </span><span class="c1">// not reference a request_uri. Recommended for FAPI profiles.</span>
@@ -2263,12 +2263,12 @@ baseline.</p>
 <h2 id="enabling-jar">Enabling JAR<a class="headerlink" href="#enabling-jar" title="Permanent link">&para;</a></h2>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="nx">cfg</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">theauth</span><span class="p">.</span><span class="nx">Config</span><span class="p">{</span>
 <a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="w">    </span><span class="nx">AuthorizationServer</span><span class="p">:</span><span class="w"> </span><span class="o">&amp;</span><span class="nx">theauth</span><span class="p">.</span><span class="nx">AuthorizationServerConfig</span><span class="p">{</span>
-<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="w">        </span><span class="nx">Issuer</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;https://auth.example.com&quot;</span><span class="p">,</span>
+<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="w">        </span><span class="nx">Issuer</span><span class="p">:</span><span class="w"> </span><span class="s">"https://auth.example.com"</span><span class="p">,</span>
 <a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="w">        </span><span class="nx">JAR</span><span class="p">:</span><span class="w"> </span><span class="o">&amp;</span><span class="nx">theauth</span><span class="p">.</span><span class="nx">JARConfig</span><span class="p">{</span>
 <a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="w">            </span><span class="c1">// AcceptedAlgorithms lists the JWS algorithms the AS accepts on</span>
-<a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="w">            </span><span class="c1">// request objects. Defaults: ES256, RS256, EdDSA. HS* and &quot;none&quot;</span>
+<a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="w">            </span><span class="c1">// request objects. Defaults: ES256, RS256, EdDSA. HS* and "none"</span>
 <a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="w">            </span><span class="c1">// are always rejected regardless of this list.</span>
-<a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a><span class="w">            </span><span class="nx">AcceptedAlgorithms</span><span class="p">:</span><span class="w"> </span><span class="p">[]</span><span class="kt">string</span><span class="p">{</span><span class="s">&quot;ES256&quot;</span><span class="p">,</span><span class="w"> </span><span class="s">&quot;PS256&quot;</span><span class="p">},</span>
+<a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a><span class="w">            </span><span class="nx">AcceptedAlgorithms</span><span class="p">:</span><span class="w"> </span><span class="p">[]</span><span class="kt">string</span><span class="p">{</span><span class="s">"ES256"</span><span class="p">,</span><span class="w"> </span><span class="s">"PS256"</span><span class="p">},</span>
 <a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a><span class="w">            </span><span class="c1">// RequireJAR = true rejects plain parameter requests; all</span>
 <a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a><span class="w">            </span><span class="c1">// parameters must be inside a signed request JWT.</span>
 <a id="__codelineno-4-11" name="__codelineno-4-11" href="#__codelineno-4-11"></a><span class="w">            </span><span class="nx">RequireJAR</span><span class="p">:</span><span class="w"> </span><span class="kc">false</span><span class="p">,</span>
@@ -2313,8 +2313,8 @@ baseline.</p>
 </table>
 <p>Response (200 OK):</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="p">{</span>
-<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="w">  </span><span class="nt">&quot;request_uri&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;urn:ietf:params:oauth:request_uri:abc123xyz&quot;</span><span class="p">,</span>
-<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="w">  </span><span class="nt">&quot;expires_in&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">60</span>
+<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="w">  </span><span class="nt">"request_uri"</span><span class="p">:</span><span class="w"> </span><span class="s2">"urn:ietf:params:oauth:request_uri:abc123xyz"</span><span class="p">,</span>
+<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="w">  </span><span class="nt">"expires_in"</span><span class="p">:</span><span class="w"> </span><span class="mi">60</span>
 <a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="p">}</span>
 </code></pre></div>
 <p>Then redirect the user to:</p>
