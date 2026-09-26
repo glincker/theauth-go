@@ -1,3 +1,3 @@
 module github.com/glincker/theauth-go/mcpresource
 
-go 1.25.0
+go 1.26.0
