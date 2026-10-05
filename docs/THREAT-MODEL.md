@@ -262,7 +262,7 @@ The following are explicitly **not** mitigated by this library. They are the dep
 | Threat | Mitigation | File Reference |
 |---|---|---|
 | Token reuse / stale token | `last_used_at` is updated asynchronously on each valid request (`internal/scim/service.go:117-138`). | `internal/scim/service.go:117-138` |
-| Unauthenticated SCIM requests | `middleware_scim.go` gates all SCIM endpoints behind token validation. | `middleware_scim.go` |
+| Unauthenticated SCIM requests | `scimAuth` in `middleware.go` gates all SCIM endpoints behind token validation (`internal/scim/service.go` `Authenticate`). | `middleware.go`, `internal/scim/service.go` |
 
 ---
 
