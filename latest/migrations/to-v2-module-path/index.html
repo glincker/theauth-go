@@ -2090,6 +2090,17 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#directory-layout-changes-unreleased" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Directory layout changes (unreleased)
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -2315,6 +2326,17 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#directory-layout-changes-unreleased" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Directory layout changes (unreleased)
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -2407,6 +2429,20 @@
 </code></pre></div>
 <h2 id="pseudo-version-users">Pseudo-version users<a class="headerlink" href="#pseudo-version-users" title="Permanent link">&para;</a></h2>
 <p>If you pinned a pseudo-version of the old path (for example from a branch or commit), your <code>go.mod</code> still points at <code>github.com/glincker/theauth-go</code>. That path does not receive v2.6.0 or later. Change the imports as above and require the <code>/v2</code> path.</p>
+<h2 id="directory-layout-changes-unreleased">Directory layout changes (unreleased)<a class="headerlink" href="#directory-layout-changes-unreleased" title="Permanent link">&para;</a></h2>
+<p>The module root was reorganized before the first <code>/v2</code> release. No exported
+root name was removed or renamed: types moved behind aliases and everything you
+import from <code>github.com/glincker/theauth-go/v2</code> keeps its name and method set.</p>
+<ul>
+<li>Types such as <code>APIToken</code>, <code>Principal</code>, <code>Report</code>, <code>RevocationEvent</code> and
+  <code>AuthEvent</code> are aliases of types in <code>internal/</code> packages. Their printed type
+  names change (<code>apitokens.APIToken</code>), which only matters if you match on
+  <code>%T</code> or <code>reflect</code> output.</li>
+<li>Tests no longer live in the root package. Use <code>go test ./...</code>; the fuzz
+  targets are in <code>./integration</code>.</li>
+<li><code>sqlc.yaml</code> is now <code>storage/postgres/sqlc.yaml</code>.</li>
+</ul>
+<p>The full move map is in <a href="https://github.com/glincker/theauth-go/blob/main/docs/REPO-LAYOUT.md">Repository layout</a>.</p>
 
 
 

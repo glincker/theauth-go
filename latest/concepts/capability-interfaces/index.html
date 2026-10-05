@@ -2384,7 +2384,7 @@
 
 
 <h1 id="capability-interfaces-and-choosing-a-storage-backend">Capability Interfaces and Choosing a Storage Backend<a class="headerlink" href="#capability-interfaces-and-choosing-a-storage-backend" title="Permanent link">&para;</a></h1>
-<p>theauth-go does not require one monolithic storage interface. Persistence is split into small capability interfaces in <code>storage_caps.go</code> and a few optional extensions. A backend implements the ones it can, and <code>New</code> checks that every feature you enabled has the capability it needs. A missing one fails at startup with <code>ErrStorageMissingCapability</code>, not on the first request.</p>
+<p>theauth-go does not require one monolithic storage interface. Persistence is split into small capability interfaces in <code>storage.go</code> and a few optional extensions. A backend implements the ones it can, and <code>New</code> checks that every feature you enabled has the capability it needs. A missing one fails at startup with <code>ErrStorageMissingCapability</code>, not on the first request.</p>
 <h2 id="three-ways-to-supply-storage">Three ways to supply storage<a class="headerlink" href="#three-ways-to-supply-storage" title="Permanent link">&para;</a></h2>
 <ul>
 <li><code>Config.Storage</code> takes the full <code>theauth.Storage</code>: users, sessions, magic links, passwords, OAuth accounts, WebAuthn, TOTP, organizations, SAML, SCIM, RBAC and audit. <code>memory</code>, <code>postgres</code> and <code>mysql</code> satisfy it.</li>

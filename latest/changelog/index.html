@@ -2213,6 +2213,39 @@
 <a href="https://keepachangelog.com/en/1.1.0/">Keep a Changelog</a> and the project
 adheres to <a href="https://semver.org/">Semantic Versioning</a> from v1.0 forward.</p>
 <h2 id="unreleased"><a href="https://github.com/glincker/theauth-go/compare/v2.6.0...HEAD">Unreleased</a><a class="headerlink" href="#unreleased" title="Permanent link">&para;</a></h2>
+<h3 id="changed">Changed<a class="headerlink" href="#changed" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Repository layout: the module root now holds only the public face of the
+  library. Feature code moved into <code>internal/apitokens</code>, <code>internal/revocation</code>,
+  <code>internal/doctor</code>, <code>internal/importer</code>, <code>internal/bootstrap</code>,
+  <code>internal/ratelimit</code>, <code>internal/httpsec</code>, <code>internal/authevents</code> and
+  <code>internal/rbac</code>, and black-box tests moved to <code>integration/</code>. Root Go files
+  went from 80 to 28. See <code>docs/REPO-LAYOUT.md</code>.</li>
+</ul>
+<h3 id="breaking-directory-layout">Breaking (directory layout)<a class="headerlink" href="#breaking-directory-layout" title="Permanent link">&para;</a></h3>
+<p>Every exported root identifier keeps its name through a type alias, constant or
+function wrapper, and the exported API surface was diffed before and after with
+<code>go/types</code>: no root name, field or method was removed or renamed. What changes:</p>
+<ul>
+<li>Alias targets live in <code>internal/</code> packages. <code>%T</code>, <code>reflect</code> and compiler
+  messages now print <code>apitokens.APIToken</code>, <code>doctor.Report</code>, <code>revocation.Event</code>
+  and similar instead of <code>theauth.APIToken</code>. Code that compares type names as
+  strings must be updated; code using the root names is unaffected.</li>
+<li><code>RevocationEvent</code>, <code>RevocationKind</code>, <code>RevocationBus</code>, <code>MemoryRevocationBus</code>,
+  <code>RevocationTarget</code> and <code>WatchOptions</code> are now aliases of <code>internal/revocation</code>
+  types, as are <code>APIToken</code>, <code>DeviceCode</code>, <code>Principal</code>, <code>Report</code>, <code>Finding</code>,
+  <code>Severity</code>, <code>AuthEvent</code>, <code>BootstrapConfig</code> and <code>RoleSeed</code>. Method sets are
+  identical.</li>
+<li><code>ImportUserStorage</code>, <code>DoctorAdminLister</code>, <code>DoctorSessionCounter</code> and the
+  storage capability interfaces remain defined at the root.</li>
+<li>The <code>*ForTest</code> helpers from <code>export_test.go</code> (never importable outside the
+  module) are gone from the root; in-repo tests use <code>internal/testhooks</code>.</li>
+<li><code>go test github.com/glincker/theauth-go/v2</code> no longer runs the integration
+  suite: run <code>go test ./...</code> or <code>go test ./integration/...</code>. The fuzz targets
+  and the <code>testdata/</code> golden files moved with it.</li>
+<li><code>sqlc.yaml</code> moved to <code>storage/postgres/sqlc.yaml</code>; run <code>sqlc generate</code> from
+  <code>storage/postgres</code>.</li>
+</ul>
 <h2 id="260-2026-10-05"><a href="https://github.com/glincker/theauth-go/compare/v2.5.0...v2.6.0">2.6.0</a> - 2026-10-05<a class="headerlink" href="#260-2026-10-05" title="Permanent link">&para;</a></h2>
 <h3 id="upgrade-notes">Upgrade notes<a class="headerlink" href="#upgrade-notes" title="Permanent link">&para;</a></h3>
 <p>Read these before upgrading from v2.5.x. None changes the Go API of an
@@ -2466,7 +2499,7 @@ existing call, but each changes runtime behavior.</p>
 <li>Plaintext TOTP secrets are encrypted on import like enrollment; recovery codes
   must be regenerated. See the SQLite guide.</li>
 </ul>
-<h3 id="changed">Changed<a class="headerlink" href="#changed" title="Permanent link">&para;</a></h3>
+<h3 id="changed_1">Changed<a class="headerlink" href="#changed_1" title="Permanent link">&para;</a></h3>
 <ul>
 <li><strong>Module path</strong> is now <code>github.com/glincker/theauth-go/v2</code> (see Upgrade
   notes).</li>
@@ -2787,7 +2820,7 @@ unchanged.</p>
   window closes.</p>
 </li>
 </ul>
-<h3 id="changed_1">Changed<a class="headerlink" href="#changed_1" title="Permanent link">&para;</a></h3>
+<h3 id="changed_2">Changed<a class="headerlink" href="#changed_2" title="Permanent link">&para;</a></h3>
 <ul>
 <li>
 <p><strong><code>AuthorizationServerConfig</code> extended with new optional sub-configs (additive).</strong>
@@ -2937,7 +2970,7 @@ shipping. Public API stays additive; downstream code compiles unchanged.</p>
     option for per-sink PII stripping (stricter than the default).</li>
 <li>New stats field: <code>Stats.AuditSinkFailed uint64</code>.</li>
 </ul>
-<h3 id="changed_2">Changed<a class="headerlink" href="#changed_2" title="Permanent link">&para;</a></h3>
+<h3 id="changed_3">Changed<a class="headerlink" href="#changed_3" title="Permanent link">&para;</a></h3>
 <ul>
 <li><strong>Stats counters expanded.</strong> <code>Stats.AuditSinkFailed</code> added; existing
   counters unchanged. Per the additive-fields contract, downstream code
@@ -3022,7 +3055,7 @@ and an architectural cleanup that brings <code>theauth.go</code> from 1,171 LOC 
   <code>errors.Is(err, theauth.ErrAuthorizationServerNotConfigured)</code>.</p>
 </li>
 </ul>
-<h3 id="changed_3">Changed<a class="headerlink" href="#changed_3" title="Permanent link">&para;</a></h3>
+<h3 id="changed_4">Changed<a class="headerlink" href="#changed_4" title="Permanent link">&para;</a></h3>
 <ul>
 <li>
 <p><strong><code>theauth.go</code> LOC: 1,171 -&gt; 383 (#50).</strong> Wiring extracted to <code>wiring.go</code>,
