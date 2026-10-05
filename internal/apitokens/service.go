@@ -1,4 +1,4 @@
-package theauth
+package apitokens
 
 import (
 	"context"
@@ -12,6 +12,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/glincker/theauth-go/v2/internal/models"
+	"github.com/glincker/theauth-go/v2/internal/revocation"
 	"github.com/glincker/theauth-go/v2/internal/ulid"
 )
 
@@ -24,9 +26,9 @@ var (
 	ErrTokenTTLInvalid   = errors.New("theauth: token lifetime is out of range")
 )
 
-// APITokensConfig enables scoped API tokens (and, via Device, the RFC 8628
+// Config enables scoped API tokens (and, via Device, the RFC 8628
 // device grant). Every field is optional.
-type APITokensConfig struct {
+type Config struct {
 	// Prefix is prepended to every token secret. Defaults to "tk".
 	Prefix string
 	// AcceptUnprefixed also accepts bearer secrets that lack the prefix,
@@ -69,24 +71,38 @@ type APITokensConfig struct {
 
 var abilityNameRE = regexp.MustCompile(`^[a-z0-9][a-z0-9:_.\-]{0,63}$`)
 
-type apiTokenService struct {
-	a     *TheAuth
-	cfg   APITokensConfig
+// UserLookup is the user capability the service needs.
+type UserLookup interface {
+	UserByID(ctx context.Context, id ULID) (*User, error)
+}
+
+// RoleLister is the optional RBAC capability behind the default admin check.
+type RoleLister interface {
+	RolesForUser(ctx context.Context, userID ULID, orgID *ULID) ([]models.Role, error)
+}
+
+// Service is the API token service.
+type Service struct {
+	host  Host
+	cfg   Config
 	store APITokenStorage
 	dev   DeviceCodeStorage
-	rbac  RBACStorage
-	users UserStorage
+	rbac  RoleLister
+	users UserLookup
 	now   func() time.Time
 	fails *attemptLimiter
 }
 
-func newAPITokenService(a *TheAuth, cfg *APITokensConfig, raw any) (*apiTokenService, error) {
+// New builds the service from cfg and the raw storage, which must implement
+// APITokenStorage (and DeviceCodeStorage when cfg.Device is set). It returns
+// nil, nil for a nil cfg.
+func New(host Host, cfg *Config, raw any, users UserLookup, baseURL string) (*Service, error) {
 	if cfg == nil {
 		return nil, nil
 	}
 	ts, ok := raw.(APITokenStorage)
 	if !ok {
-		return nil, fmt.Errorf("%w: Config.APITokens requires APITokenStorage", ErrStorageMissingCapability)
+		return nil, fmt.Errorf("%w: Config.APITokens requires APITokenStorage", models.ErrStorageMissingCapability)
 	}
 	c := *cfg
 	if c.Prefix == "" {
@@ -109,15 +125,15 @@ func newAPITokenService(a *TheAuth, cfg *APITokensConfig, raw any) (*apiTokenSer
 			return nil, fmt.Errorf("%w: Config.APITokens.Abilities entry %q", ErrAbilityInvalid, name)
 		}
 	}
-	s := &apiTokenService{a: a, cfg: c, store: ts, users: a.storage, now: time.Now, fails: newAttemptLimiter(5, 15*time.Minute)}
-	s.rbac, _ = raw.(RBACStorage)
+	s := &Service{host: host, cfg: c, store: ts, users: users, now: time.Now, fails: newAttemptLimiter(5, 15*time.Minute)}
+	s.rbac, _ = raw.(RoleLister)
 	if c.Device != nil {
 		ds, ok := raw.(DeviceCodeStorage)
 		if !ok {
-			return nil, fmt.Errorf("%w: Config.APITokens.Device requires DeviceCodeStorage", ErrStorageMissingCapability)
+			return nil, fmt.Errorf("%w: Config.APITokens.Device requires DeviceCodeStorage", models.ErrStorageMissingCapability)
 		}
 		s.dev = ds
-		dc := c.Device.withDefaults(a.baseURL)
+		dc := c.Device.withDefaults(baseURL)
 		s.cfg.Device = &dc
 		if err := s.validateAbilities(dc.DefaultAbilities, true); err != nil {
 			return nil, fmt.Errorf("Config.APITokens.Device.DefaultAbilities: %w", err)
@@ -153,7 +169,7 @@ func clampAbilities(requested, held []string) []string {
 	return out
 }
 
-func (s *apiTokenService) validateAbilities(abilities []string, allowEmpty bool) error {
+func (s *Service) validateAbilities(abilities []string, allowEmpty bool) error {
 	if len(abilities) == 0 {
 		if allowEmpty {
 			return nil
@@ -182,7 +198,7 @@ func (s *apiTokenService) validateAbilities(abilities []string, allowEmpty bool)
 	return nil
 }
 
-func (s *apiTokenService) isAdmin(ctx context.Context, u *User) (bool, error) {
+func (s *Service) IsAdmin(ctx context.Context, u *User) (bool, error) {
 	if s.cfg.IsAdmin != nil {
 		return s.cfg.IsAdmin(ctx, u)
 	}
@@ -194,29 +210,29 @@ func (s *apiTokenService) isAdmin(ctx context.Context, u *User) (bool, error) {
 		return false, fmt.Errorf("theauth: load roles for admin check: %w", err)
 	}
 	for _, r := range roles {
-		if r.Name == SystemRoleSuperAdmin {
+		if r.Name == models.SystemRoleSuperAdmin {
 			return true, nil
 		}
 	}
 	return false, nil
 }
 
-func (s *apiTokenService) userAbilities(ctx context.Context, u *User) ([]string, error) {
+func (s *Service) UserAbilities(ctx context.Context, u *User) ([]string, error) {
 	if s.cfg.UserAbilities != nil {
 		return s.cfg.UserAbilities(ctx, u)
 	}
-	admin, err := s.isAdmin(ctx, u)
+	admin, err := s.IsAdmin(ctx, u)
 	if err != nil || !admin {
 		return nil, err
 	}
 	return []string{AbilityRoot}, nil
 }
 
-func (s *apiTokenService) ownerActive(ctx context.Context, kind string, ownerID ULID) (*User, bool, error) {
+func (s *Service) ownerActive(ctx context.Context, kind string, ownerID ULID) (*User, bool, error) {
 	var user *User
 	if kind == OwnerKindUser {
 		u, err := s.users.UserByID(ctx, ownerID)
-		if errors.Is(err, ErrStorageNotFound) {
+		if errors.Is(err, models.ErrStorageNotFound) {
 			return nil, false, nil
 		}
 		if err != nil {
@@ -254,7 +270,7 @@ type MintAPITokenInput struct {
 	DelegatedBy *ULID
 }
 
-func (s *apiTokenService) mint(ctx context.Context, in MintAPITokenInput) (string, APIToken, error) {
+func (s *Service) Mint(ctx context.Context, in MintAPITokenInput) (string, APIToken, error) {
 	if in.OwnerKind != OwnerKindUser && in.OwnerKind != OwnerKindServiceAccount {
 		return "", APIToken{}, fmt.Errorf("theauth: unknown owner kind %q", in.OwnerKind)
 	}
@@ -336,18 +352,14 @@ type ImportedToken struct {
 	LastUsedAt *time.Time
 }
 
-// ImportAPIToken inserts an existing token by its SHA-256 hash. The hash must
+// Import inserts an existing token by its SHA-256 hash. The hash must
 // cover the full raw secret as presented by clients; tokens lacking the
-// configured prefix authenticate only when Config.APITokens.AcceptUnprefixed is set.
-func (a *TheAuth) ImportAPIToken(ctx context.Context, in ImportedToken) (APIToken, error) {
-	s, err := a.apiSvc()
-	if err != nil {
-		return APIToken{}, err
-	}
+// configured prefix authenticate only when Config.AcceptUnprefixed is set.
+func (s *Service) Import(ctx context.Context, in ImportedToken) (APIToken, error) {
 	return importAPIToken(ctx, s.store, s, in, s.now())
 }
 
-func importAPIToken(ctx context.Context, store APITokenStorage, v *apiTokenService, in ImportedToken, now time.Time) (APIToken, error) {
+func importAPIToken(ctx context.Context, store APITokenStorage, v *Service, in ImportedToken, now time.Time) (APIToken, error) {
 	if in.OwnerKind == "" {
 		in.OwnerKind = OwnerKindUser
 	}
@@ -365,8 +377,8 @@ func importAPIToken(ctx context.Context, store APITokenStorage, v *apiTokenServi
 		return APIToken{}, err
 	}
 	if _, err := store.APITokenByHash(ctx, in.TokenHash); err == nil {
-		return APIToken{}, fmt.Errorf("theauth: import API token: %w", ErrImportDuplicate)
-	} else if !errors.Is(err, ErrStorageNotFound) {
+		return APIToken{}, fmt.Errorf("theauth: import API token: %w", models.ErrImportDuplicate)
+	} else if !errors.Is(err, models.ErrStorageNotFound) {
 		return APIToken{}, fmt.Errorf("theauth: import API token: look up hash: %w", err)
 	}
 	id := in.ID
@@ -390,25 +402,25 @@ func importAPIToken(ctx context.Context, store APITokenStorage, v *apiTokenServi
 	return saved, nil
 }
 
-// ImportAPITokenTo inserts an existing token by hash straight into store, with no TheAuth instance.
+// ImportTo inserts an existing token by hash straight into store, with no TheAuth instance.
 //
 // Abilities are checked for syntax only, since there is no configured allowlist.
-func ImportAPITokenTo(ctx context.Context, store APITokenStorage, in ImportedToken) (APIToken, error) {
+func ImportTo(ctx context.Context, store APITokenStorage, in ImportedToken) (APIToken, error) {
 	if store == nil {
 		return APIToken{}, errors.New("theauth: nil storage")
 	}
-	return importAPIToken(ctx, store, &apiTokenService{}, in, time.Now())
+	return importAPIToken(ctx, store, &Service{}, in, time.Now())
 }
 
 // touchInterval bounds last_used_at writes to one per token per interval.
 const touchInterval = time.Minute
 
-func (s *apiTokenService) authenticate(ctx context.Context, raw string) (*Principal, error) {
+func (s *Service) Authenticate(ctx context.Context, raw string) (*Principal, error) {
 	if raw == "" || (!s.cfg.AcceptUnprefixed && !strings.HasPrefix(raw, s.cfg.Prefix+"_")) {
 		return nil, ErrAPITokenInvalid
 	}
 	tok, err := s.store.APITokenByHash(ctx, hashToken(raw))
-	if errors.Is(err, ErrStorageNotFound) {
+	if errors.Is(err, models.ErrStorageNotFound) {
 		return nil, ErrAPITokenInvalid
 	}
 	if err != nil {
@@ -427,7 +439,7 @@ func (s *apiTokenService) authenticate(ctx context.Context, raw string) (*Princi
 	}
 	abilities := tok.Abilities
 	if user != nil {
-		held, err := s.userAbilities(ctx, user)
+		held, err := s.UserAbilities(ctx, user)
 		if err != nil {
 			return nil, fmt.Errorf("theauth: resolve owner abilities: %w", err)
 		}
@@ -443,78 +455,42 @@ func (s *apiTokenService) authenticate(ctx context.Context, raw string) (*Princi
 	}, nil
 }
 
-func (a *TheAuth) apiSvc() (*apiTokenService, error) {
-	if a.apiTokens == nil {
-		return nil, ErrAPITokensDisabled
-	}
-	return a.apiTokens, nil
-}
-
-// MintAPIToken creates a token and returns the secret, which is never retrievable again.
-func (a *TheAuth) MintAPIToken(ctx context.Context, in MintAPITokenInput) (string, APIToken, error) {
-	s, err := a.apiSvc()
-	if err != nil {
-		return "", APIToken{}, err
-	}
-	return s.mint(ctx, in)
-}
-
-// AuthenticateAPIToken resolves a raw bearer secret to a Principal, re-checking
-// expiry, revocation, owner status and the owner's current abilities.
-func (a *TheAuth) AuthenticateAPIToken(ctx context.Context, raw string) (*Principal, error) {
-	s, err := a.apiSvc()
-	if err != nil {
-		return nil, err
-	}
-	return s.authenticate(ctx, raw)
-}
-
-// ListAPITokens returns the owner's tokens, newest first.
-func (a *TheAuth) ListAPITokens(ctx context.Context, ownerID ULID) ([]APIToken, error) {
-	s, err := a.apiSvc()
-	if err != nil {
-		return nil, err
-	}
+// List returns the owner's tokens, newest first.
+func (s *Service) List(ctx context.Context, ownerID ULID) ([]APIToken, error) {
 	return s.store.APITokensByOwner(ctx, ownerID)
 }
 
-// ListAllAPITokens returns every token. Intended for admin tooling.
-func (a *TheAuth) ListAllAPITokens(ctx context.Context) ([]APIToken, error) {
-	s, err := a.apiSvc()
-	if err != nil {
-		return nil, err
-	}
+// ListAll returns every token. Intended for admin tooling.
+func (s *Service) ListAll(ctx context.Context) ([]APIToken, error) {
 	return s.store.ListAPITokens(ctx)
 }
 
-// RevokeAPIToken revokes one token by ID without an ownership check.
-func (a *TheAuth) RevokeAPIToken(ctx context.Context, id ULID) error {
-	s, err := a.apiSvc()
-	if err != nil {
-		return err
-	}
+// Revoke revokes one token by ID without an ownership check.
+func (s *Service) Revoke(ctx context.Context, id ULID) error {
 	if err := s.store.RevokeAPIToken(ctx, id, s.now().UTC()); err != nil {
 		return err
 	}
-	ev := RevocationEvent{Kind: RevocationAPIToken, ID: id.String(), Reason: "revoked"}
+	ev := revocation.Event{Kind: revocation.APIToken, ID: id.String(), Reason: "revoked"}
 	if tok, err := s.store.APITokenByID(ctx, id); err == nil {
 		ev.UserID = tok.OwnerID.String()
 	}
-	a.publishRevocation(ctx, ev)
+	s.host.PublishRevocation(ctx, ev)
 	return nil
 }
 
-// RevokeOwnerAPITokens revokes every live token of an owner. Call it when a
+// RevokeOwner revokes every live token of an owner. Call it when a
 // user is deleted or a service account is retired.
-func (a *TheAuth) RevokeOwnerAPITokens(ctx context.Context, ownerID ULID) (int, error) {
-	s, err := a.apiSvc()
-	if err != nil {
-		return 0, err
-	}
+func (s *Service) RevokeOwner(ctx context.Context, ownerID ULID) (int, error) {
 	n, err := s.store.RevokeAPITokensByOwner(ctx, ownerID, s.now().UTC())
 	if err != nil {
 		return n, err
 	}
-	a.publishRevocation(ctx, RevocationEvent{Kind: RevocationAPIToken, UserID: ownerID.String(), Reason: "owner tokens revoked"})
+	s.host.PublishRevocation(ctx, revocation.Event{Kind: revocation.APIToken, UserID: ownerID.String(), Reason: "owner tokens revoked"})
 	return n, nil
 }
+
+// SetClock replaces the clock the service reads.
+func (s *Service) SetClock(now func() time.Time) { s.now = now }
+
+// DeviceEnabled reports whether the device grant is configured.
+func (s *Service) DeviceEnabled() bool { return s.dev != nil }

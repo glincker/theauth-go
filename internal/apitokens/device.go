@@ -1,4 +1,4 @@
-package theauth
+package apitokens
 
 import (
 	"context"
@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"github.com/glincker/theauth-go/v2/internal/models"
 	"slices"
 	"strings"
 	"time"
@@ -112,18 +113,10 @@ type StartDeviceAuthInput struct {
 	UserAgent  string
 }
 
-func (a *TheAuth) deviceSvc() (*apiTokenService, error) {
-	if a.apiTokens == nil || a.apiTokens.dev == nil {
-		return nil, ErrDeviceDisabled
-	}
-	return a.apiTokens, nil
-}
-
 // StartDeviceAuth opens a device authorization request.
-func (a *TheAuth) StartDeviceAuth(ctx context.Context, in StartDeviceAuthInput) (DeviceAuthStart, error) {
-	s, err := a.deviceSvc()
-	if err != nil {
-		return DeviceAuthStart{}, err
+func (s *Service) StartDeviceAuth(ctx context.Context, in StartDeviceAuthInput) (DeviceAuthStart, error) {
+	if s.dev == nil {
+		return DeviceAuthStart{}, ErrDeviceDisabled
 	}
 	dc := s.cfg.Device
 	abilities := in.Abilities
@@ -181,10 +174,9 @@ type DeviceRequestInfo struct {
 // LookupDeviceRequest returns the pending request behind a user code so the
 // approver can review it. Failed lookups count against a per-approver budget
 // (ErrDeviceAttemptsExceeded once spent).
-func (a *TheAuth) LookupDeviceRequest(ctx context.Context, approver *User, ip, userCode string) (*DeviceRequestInfo, error) {
-	s, err := a.deviceSvc()
-	if err != nil {
-		return nil, err
+func (s *Service) LookupDeviceRequest(ctx context.Context, approver *User, ip, userCode string) (*DeviceRequestInfo, error) {
+	if s.dev == nil {
+		return nil, ErrDeviceDisabled
 	}
 	rec, err := s.lookupPending(ctx, approver, ip, userCode)
 	if err != nil {
@@ -193,7 +185,7 @@ func (a *TheAuth) LookupDeviceRequest(ctx context.Context, approver *User, ip, u
 	return &DeviceRequestInfo{rec.ClientName, slices.Clone(rec.RequestedAbilities), rec.RequesterIP, rec.RequesterUA, rec.ExpiresAt}, nil
 }
 
-func (s *apiTokenService) lookupPending(ctx context.Context, approver *User, ip, userCode string) (*DeviceCode, error) {
+func (s *Service) lookupPending(ctx context.Context, approver *User, ip, userCode string) (*DeviceCode, error) {
 	now := s.now()
 	keys := []string{"u:" + approver.ID.String(), "ip:" + ip}
 	for _, k := range keys {
@@ -202,7 +194,7 @@ func (s *apiTokenService) lookupPending(ctx context.Context, approver *User, ip,
 		}
 	}
 	rec, err := s.dev.DeviceCodeByUserCode(ctx, normalizeUserCode(userCode))
-	if errors.Is(err, ErrStorageNotFound) {
+	if errors.Is(err, models.ErrStorageNotFound) {
 		for _, k := range keys {
 			s.fails.fail(k, now)
 		}
@@ -224,10 +216,9 @@ func (s *apiTokenService) lookupPending(ctx context.Context, approver *User, ip,
 // approval the abilities are the requested set (or the narrower subset in
 // abilities) capped to what the approver holds now. Root is granted only when
 // requested and the approver holds root; it is never downgraded silently.
-func (a *TheAuth) DecideDeviceRequest(ctx context.Context, approver *User, ip, userCode string, approve bool, abilities []string) error {
-	s, err := a.deviceSvc()
-	if err != nil {
-		return err
+func (s *Service) DecideDeviceRequest(ctx context.Context, approver *User, ip, userCode string, approve bool, abilities []string) error {
+	if s.dev == nil {
+		return ErrDeviceDisabled
 	}
 	rec, err := s.lookupPending(ctx, approver, ip, userCode)
 	if err != nil {
@@ -236,7 +227,7 @@ func (a *TheAuth) DecideDeviceRequest(ctx context.Context, approver *User, ip, u
 	return s.decideRecord(ctx, approver, rec, approve, abilities)
 }
 
-func (s *apiTokenService) decideRecord(ctx context.Context, approver *User, rec *DeviceCode, approve bool, abilities []string) error {
+func (s *Service) decideRecord(ctx context.Context, approver *User, rec *DeviceCode, approve bool, abilities []string) error {
 	d := DeviceDecision{Approve: approve, ApproverID: approver.ID}
 	if approve {
 		chosen := rec.RequestedAbilities
@@ -248,7 +239,7 @@ func (s *apiTokenService) decideRecord(ctx context.Context, approver *User, rec 
 			}
 			chosen = abilities
 		}
-		held, err := s.userAbilities(ctx, approver)
+		held, err := s.UserAbilities(ctx, approver)
 		if err != nil {
 			return fmt.Errorf("theauth: resolve approver abilities: %w", err)
 		}
@@ -261,7 +252,7 @@ func (s *apiTokenService) decideRecord(ctx context.Context, approver *User, rec 
 		}
 	}
 	err := s.dev.DecideDeviceCode(ctx, rec.UserCode, d, s.now().UTC())
-	if errors.Is(err, ErrStorageNotFound) {
+	if errors.Is(err, models.ErrStorageNotFound) {
 		return ErrDeviceExpired
 	}
 	if err != nil {
@@ -281,14 +272,13 @@ type DeviceToken struct {
 // approved to redeemed transition is one atomic claim, so concurrent polls
 // mint at most one token. Polling faster than the interval returns
 // ErrDeviceSlowDown and widens the interval.
-func (a *TheAuth) RedeemDeviceCode(ctx context.Context, deviceCode string) (DeviceToken, error) {
-	s, err := a.deviceSvc()
-	if err != nil {
-		return DeviceToken{}, err
+func (s *Service) RedeemDeviceCode(ctx context.Context, deviceCode string) (DeviceToken, error) {
+	if s.dev == nil {
+		return DeviceToken{}, ErrDeviceDisabled
 	}
 	hash := hashToken(deviceCode)
 	rec, err := s.dev.DeviceCodeByHash(ctx, hash)
-	if errors.Is(err, ErrStorageNotFound) {
+	if errors.Is(err, models.ErrStorageNotFound) {
 		return DeviceToken{}, ErrDeviceInvalid
 	}
 	if err != nil {
@@ -317,7 +307,7 @@ func (a *TheAuth) RedeemDeviceCode(ctx context.Context, deviceCode string) (Devi
 		return DeviceToken{}, ErrDeviceInvalid
 	}
 	claimed, err := s.dev.ClaimDeviceCode(ctx, hash, now)
-	if errors.Is(err, ErrStorageNotFound) {
+	if errors.Is(err, models.ErrStorageNotFound) {
 		return DeviceToken{}, ErrDeviceInvalid
 	}
 	if err != nil {
@@ -336,7 +326,7 @@ func (a *TheAuth) RedeemDeviceCode(ctx context.Context, deviceCode string) (Devi
 	if claimed.ClientName != "" {
 		name = "device: " + claimed.ClientName
 	}
-	raw, tok, err := s.mint(ctx, MintAPITokenInput{
+	raw, tok, err := s.Mint(ctx, MintAPITokenInput{
 		OwnerID: *claimed.ApproverID, OwnerKind: OwnerKindUser, Name: name,
 		Abilities: claimed.ApprovedAbilities, TTL: s.cfg.Device.TokenTTL,
 	})
@@ -347,10 +337,9 @@ func (a *TheAuth) RedeemDeviceCode(ctx context.Context, deviceCode string) (Devi
 }
 
 // PurgeExpiredDeviceCodes deletes requests that expired before the cutoff.
-func (a *TheAuth) PurgeExpiredDeviceCodes(ctx context.Context, before time.Time) (int, error) {
-	s, err := a.deviceSvc()
-	if err != nil {
-		return 0, err
+func (s *Service) PurgeExpiredDeviceCodes(ctx context.Context, before time.Time) (int, error) {
+	if s.dev == nil {
+		return 0, ErrDeviceDisabled
 	}
 	return s.dev.DeleteExpiredDeviceCodes(ctx, before)
 }
@@ -370,7 +359,7 @@ type DeviceRequestSummary struct {
 // ErrDeviceListUnsupported is returned when the storage lacks DeviceCodeLister.
 var ErrDeviceListUnsupported = errors.New("theauth: storage does not implement DeviceCodeLister")
 
-func (s *apiTokenService) listPending(ctx context.Context) ([]DeviceCode, error) {
+func (s *Service) listPending(ctx context.Context) ([]DeviceCode, error) {
 	l, ok := s.dev.(DeviceCodeLister)
 	if !ok {
 		return nil, ErrDeviceListUnsupported
@@ -384,10 +373,9 @@ func (s *apiTokenService) listPending(ctx context.Context) ([]DeviceCode, error)
 
 // ListDeviceRequests returns the pending, unexpired device requests, newest
 // first, without any device or user code.
-func (a *TheAuth) ListDeviceRequests(ctx context.Context) ([]DeviceRequestSummary, error) {
-	s, err := a.deviceSvc()
-	if err != nil {
-		return nil, err
+func (s *Service) ListDeviceRequests(ctx context.Context) ([]DeviceRequestSummary, error) {
+	if s.dev == nil {
+		return nil, ErrDeviceDisabled
 	}
 	recs, err := s.listPending(ctx)
 	if err != nil {
@@ -406,10 +394,9 @@ func (a *TheAuth) ListDeviceRequests(ctx context.Context) ([]DeviceRequestSummar
 // DecideDeviceRequestByID approves or denies a pending request by its ID with
 // the same rules as DecideDeviceRequest. An unknown, expired or already
 // decided ID returns ErrDeviceInvalid or ErrDeviceExpired.
-func (a *TheAuth) DecideDeviceRequestByID(ctx context.Context, approver *User, id ULID, approve bool, abilities []string) error {
-	s, err := a.deviceSvc()
-	if err != nil {
-		return err
+func (s *Service) DecideDeviceRequestByID(ctx context.Context, approver *User, id ULID, approve bool, abilities []string) error {
+	if s.dev == nil {
+		return ErrDeviceDisabled
 	}
 	recs, err := s.listPending(ctx)
 	if err != nil {
@@ -426,6 +413,6 @@ func (a *TheAuth) DecideDeviceRequestByID(ctx context.Context, approver *User, i
 	if approve {
 		action = "device.approved"
 	}
-	a.EmitAudit(ctx, action, TargetRef{Type: "device_request", ID: id.String()}, map[string]any{"approver": approver.ID.String()})
+	s.host.EmitAudit(ctx, action, models.TargetRef{Type: "device_request", ID: id.String()}, map[string]any{"approver": approver.ID.String()})
 	return nil
 }

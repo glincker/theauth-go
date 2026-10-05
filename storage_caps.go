@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"time"
+
+	"github.com/glincker/theauth-go/v2/internal/models"
 )
 
 // UserStorage covers user records and email verification.
@@ -247,7 +249,7 @@ type CoreStorage interface {
 // ErrStorageMissingCapability is returned by New when an enabled feature needs
 // a capability interface the configured storage lacks, and by the stub methods
 // of a storage assembled from Config.CoreStorage.
-var ErrStorageMissingCapability = errors.New("theauth: storage does not implement a required capability")
+var ErrStorageMissingCapability = models.ErrStorageMissingCapability
 
 func missingCapability(name string) error {
 	return fmt.Errorf("%w: %s", ErrStorageMissingCapability, name)

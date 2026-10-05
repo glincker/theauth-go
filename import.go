@@ -10,11 +10,12 @@ import (
 	"time"
 
 	"github.com/glincker/theauth-go/v2/crypto"
+	"github.com/glincker/theauth-go/v2/internal/models"
 	"github.com/glincker/theauth-go/v2/internal/ulid"
 )
 
 // ErrImportDuplicate is returned by the Import helpers when the record already exists; callers may treat it as already imported.
-var ErrImportDuplicate = errors.New("theauth: import: record already exists")
+var ErrImportDuplicate = models.ErrImportDuplicate
 
 // ErrImportInvalid wraps every Import helper validation failure.
 var ErrImportInvalid = errors.New("theauth: import: invalid record")

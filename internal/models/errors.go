@@ -309,3 +309,11 @@ func (e *TheAuthError) Is(target error) bool {
 	}
 	return e.Code == t.Code
 }
+
+// Sentinels shared by the import helpers and the capability checks.
+var (
+	// ErrStorageMissingCapability is returned by New when an enabled feature needs a capability the storage lacks.
+	ErrStorageMissingCapability = errors.New("theauth: storage does not implement a required capability")
+	// ErrImportDuplicate is returned by the import helpers when the record already exists.
+	ErrImportDuplicate = errors.New("theauth: import: record already exists")
+)

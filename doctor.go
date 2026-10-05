@@ -248,7 +248,7 @@ func (a *TheAuth) gatherStorageFacts(ctx context.Context, in *doctorInput) {
 		}
 	}
 	if a.apiTokens != nil {
-		if toks, err := a.apiTokens.store.ListAPITokens(ctx); err == nil {
+		if toks, err := a.apiTokens.ListAll(ctx); err == nil {
 			in.TokensKnown = true
 			tallyTokens(in, toks)
 		} else {

@@ -1,4 +1,4 @@
-package theauth
+package apitokens
 
 import (
 	"encoding/json"
@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/glincker/theauth-go/v2/internal/httpx"
 	"github.com/go-chi/chi/v5"
 	oulid "github.com/oklog/ulid/v2"
 )
@@ -15,15 +16,15 @@ const deviceGrantType = "urn:ietf:params:oauth:grant-type:device_code"
 
 // mountDevice registers /auth/device/code, /token and /approve. The first two
 // are unauthenticated by design (RFC 8628); approve needs a full session.
-func (a *TheAuth) mountDevice(r chi.Router, ipLimit func(http.Handler) http.Handler) {
-	pollLimit := a.RateLimitByIP(120)
+func (s *Service) MountDevice(r chi.Router, ipLimit func(http.Handler) http.Handler) {
+	pollLimit := s.host.RateLimitByIP(120)
 	r.Route("/device", func(r chi.Router) {
-		r.With(ipLimit).Post("/code", a.handleDeviceCode)
-		r.With(pollLimit).Post("/token", a.handleDeviceToken)
-		r.With(a.RequireAuth(), ipLimit).Post("/approve", a.handleDeviceApprove)
-		r.With(a.RequireAuth(), a.requireDeviceReviewer(), ipLimit).Get("/requests", a.handleDeviceRequests)
-		r.With(a.RequireAuth(), a.requireDeviceReviewer(), ipLimit).Post("/requests/{id}/approve", a.handleDeviceRequestDecide(true))
-		r.With(a.RequireAuth(), a.requireDeviceReviewer(), ipLimit).Post("/requests/{id}/deny", a.handleDeviceRequestDecide(false))
+		r.With(ipLimit).Post("/code", s.handleDeviceCode)
+		r.With(pollLimit).Post("/token", s.handleDeviceToken)
+		r.With(s.host.RequireAuth(), ipLimit).Post("/approve", s.handleDeviceApprove)
+		r.With(s.host.RequireAuth(), s.requireDeviceReviewer(), ipLimit).Get("/requests", s.handleDeviceRequests)
+		r.With(s.host.RequireAuth(), s.requireDeviceReviewer(), ipLimit).Post("/requests/{id}/approve", s.handleDeviceRequestDecide(true))
+		r.With(s.host.RequireAuth(), s.requireDeviceReviewer(), ipLimit).Post("/requests/{id}/deny", s.handleDeviceRequestDecide(false))
 	})
 }
 
@@ -73,8 +74,8 @@ func abilitiesParam(m map[string]any) []string {
 	return out
 }
 
-func (a *TheAuth) handleDeviceCode(w http.ResponseWriter, r *http.Request) {
-	if a.apiTokens == nil || a.apiTokens.dev == nil {
+func (s *Service) handleDeviceCode(w http.ResponseWriter, r *http.Request) {
+	if s.dev == nil {
 		writeDeviceError(w, http.StatusNotFound, "unsupported", "device authorization is not enabled")
 		return
 	}
@@ -83,9 +84,9 @@ func (a *TheAuth) handleDeviceCode(w http.ResponseWriter, r *http.Request) {
 		writeDeviceError(w, http.StatusBadRequest, "invalid_request", "invalid request body")
 		return
 	}
-	res, err := a.StartDeviceAuth(r.Context(), StartDeviceAuthInput{
+	res, err := s.StartDeviceAuth(r.Context(), StartDeviceAuthInput{
 		ClientName: str(p, "client_name"), Abilities: abilitiesParam(p),
-		IP: extractClientIPTrusting(r, a.trustedProxies), UserAgent: r.UserAgent(),
+		IP: s.host.ClientIP(r), UserAgent: r.UserAgent(),
 	})
 	if errors.Is(err, ErrAbilityInvalid) {
 		writeDeviceError(w, http.StatusBadRequest, "invalid_scope", err.Error())
@@ -103,8 +104,8 @@ func (a *TheAuth) handleDeviceCode(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (a *TheAuth) handleDeviceToken(w http.ResponseWriter, r *http.Request) {
-	if a.apiTokens == nil || a.apiTokens.dev == nil {
+func (s *Service) handleDeviceToken(w http.ResponseWriter, r *http.Request) {
+	if s.dev == nil {
 		writeDeviceError(w, http.StatusNotFound, "unsupported", "device authorization is not enabled")
 		return
 	}
@@ -113,7 +114,7 @@ func (a *TheAuth) handleDeviceToken(w http.ResponseWriter, r *http.Request) {
 		writeDeviceError(w, http.StatusBadRequest, "invalid_request", "grant_type and device_code are required")
 		return
 	}
-	res, err := a.RedeemDeviceCode(r.Context(), str(p, "device_code"))
+	res, err := s.RedeemDeviceCode(r.Context(), str(p, "device_code"))
 	switch {
 	case err == nil:
 		writeTokenJSON(w, http.StatusOK, map[string]any{
@@ -136,22 +137,22 @@ func (a *TheAuth) handleDeviceToken(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (a *TheAuth) handleDeviceApprove(w http.ResponseWriter, r *http.Request) {
-	if a.apiTokens == nil || a.apiTokens.dev == nil {
+func (s *Service) handleDeviceApprove(w http.ResponseWriter, r *http.Request) {
+	if s.dev == nil {
 		writeDeviceError(w, http.StatusNotFound, "unsupported", "device authorization is not enabled")
 		return
 	}
-	user, _ := UserFromContext(r.Context())
+	user, _ := s.host.UserFromContext(r.Context())
 	p, ok := readParams(w, r)
 	if !ok {
 		writeDeviceError(w, http.StatusBadRequest, "invalid_request", "invalid request body")
 		return
 	}
-	ip := extractClientIPTrusting(r, a.trustedProxies)
+	ip := s.host.ClientIP(r)
 	code := str(p, "user_code")
 	if str(p, "action") == "info" {
-		info, err := a.LookupDeviceRequest(r.Context(), user, ip, code)
-		if a.writeDeviceDecideError(w, err) {
+		info, err := s.LookupDeviceRequest(r.Context(), user, ip, code)
+		if s.writeDeviceDecideError(w, err) {
 			return
 		}
 		writeTokenJSON(w, http.StatusOK, map[string]any{
@@ -161,14 +162,14 @@ func (a *TheAuth) handleDeviceApprove(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	approve := str(p, "action") != "deny"
-	err := a.DecideDeviceRequest(r.Context(), user, ip, code, approve, abilitiesParam(p))
-	if a.writeDeviceDecideError(w, err) {
+	err := s.DecideDeviceRequest(r.Context(), user, ip, code, approve, abilitiesParam(p))
+	if s.writeDeviceDecideError(w, err) {
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
 
-func (a *TheAuth) writeDeviceDecideError(w http.ResponseWriter, err error) bool {
+func (s *Service) writeDeviceDecideError(w http.ResponseWriter, err error) bool {
 	switch {
 	case err == nil:
 		return false
@@ -190,12 +191,12 @@ func (a *TheAuth) writeDeviceDecideError(w http.ResponseWriter, err error) bool 
 	return true
 }
 
-func (a *TheAuth) handleDeviceRequests(w http.ResponseWriter, r *http.Request) {
-	if a.apiTokens == nil || a.apiTokens.dev == nil {
+func (s *Service) handleDeviceRequests(w http.ResponseWriter, r *http.Request) {
+	if s.dev == nil {
 		writeDeviceError(w, http.StatusNotFound, "unsupported", "device authorization is not enabled")
 		return
 	}
-	list, err := a.ListDeviceRequests(r.Context())
+	list, err := s.ListDeviceRequests(r.Context())
 	if errors.Is(err, ErrDeviceListUnsupported) {
 		writeDeviceError(w, http.StatusNotFound, "unsupported", "pending request listing is not supported by this storage")
 		return
@@ -208,9 +209,9 @@ func (a *TheAuth) handleDeviceRequests(w http.ResponseWriter, r *http.Request) {
 	writeTokenJSON(w, http.StatusOK, map[string]any{"requests": list})
 }
 
-func (a *TheAuth) handleDeviceRequestDecide(approve bool) http.HandlerFunc {
+func (s *Service) handleDeviceRequestDecide(approve bool) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if a.apiTokens == nil || a.apiTokens.dev == nil {
+		if s.dev == nil {
 			writeDeviceError(w, http.StatusNotFound, "unsupported", "device authorization is not enabled")
 			return
 		}
@@ -219,7 +220,7 @@ func (a *TheAuth) handleDeviceRequestDecide(approve bool) http.HandlerFunc {
 			writeDeviceError(w, http.StatusNotFound, "invalid_request_id", "unknown request")
 			return
 		}
-		user, _ := UserFromContext(r.Context())
+		user, _ := s.host.UserFromContext(r.Context())
 		var abilities []string
 		if approve && r.ContentLength != 0 {
 			p, ok := readParams(w, r)
@@ -229,42 +230,42 @@ func (a *TheAuth) handleDeviceRequestDecide(approve bool) http.HandlerFunc {
 			}
 			abilities = abilitiesParam(p)
 		}
-		err = a.DecideDeviceRequestByID(r.Context(), user, id, approve, abilities)
+		err = s.DecideDeviceRequestByID(r.Context(), user, id, approve, abilities)
 		if errors.Is(err, ErrDeviceListUnsupported) {
 			writeDeviceError(w, http.StatusNotFound, "unsupported", "pending request listing is not supported by this storage")
 			return
 		}
-		if a.writeDeviceDecideError(w, err) {
+		if s.writeDeviceDecideError(w, err) {
 			return
 		}
 		w.WriteHeader(http.StatusNoContent)
 	}
 }
 
-func (a *TheAuth) requireDeviceReviewer() func(http.Handler) http.Handler {
+func (s *Service) requireDeviceReviewer() func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if a.apiTokens == nil || a.apiTokens.cfg.DeviceRequestsAnySignedInUser {
+			if s.cfg.DeviceRequestsAnySignedInUser {
 				next.ServeHTTP(w, r)
 				return
 			}
-			user, ok := UserFromContext(r.Context())
+			user, ok := s.host.UserFromContext(r.Context())
 			if !ok {
-				writeUnauthenticated(w, "auth.unauthenticated", "Missing or invalid session")
+				httpx.WriteUnauthenticated(w, "auth.unauthenticated", "Missing or invalid session")
 				return
 			}
-			held, err := a.apiTokens.userAbilities(r.Context(), user)
+			held, err := s.UserAbilities(r.Context(), user)
 			if err != nil {
 				slog.Error("theauth: resolve device reviewer abilities failed", "err", err.Error())
-				writeProblemJSON(w, http.StatusInternalServerError, "auth.internal_error", "Authentication failed", "")
+				httpx.WriteProblemJSON(w, http.StatusInternalServerError, "auth.internal_error", "Authentication failed", "")
 				return
 			}
-			need := a.apiTokens.cfg.DeviceRequestsAbility
+			need := s.cfg.DeviceRequestsAbility
 			if need == "" {
 				need = AbilityRoot
 			}
 			if !holdsAbility(held, need) {
-				writeProblemJSON(w, http.StatusForbidden, "auth.forbidden", "Missing required ability: "+need, "")
+				httpx.WriteProblemJSON(w, http.StatusForbidden, "auth.forbidden", "Missing required ability: "+need, "")
 				return
 			}
 			next.ServeHTTP(w, r)

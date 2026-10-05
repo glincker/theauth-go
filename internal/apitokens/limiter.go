@@ -1,4 +1,4 @@
-package theauth
+package apitokens
 
 import (
 	"sync"

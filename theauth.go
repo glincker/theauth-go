@@ -7,6 +7,7 @@ import (
 
 	"github.com/glincker/theauth-go/v2/email"
 	"github.com/glincker/theauth-go/v2/internal/agent"
+	"github.com/glincker/theauth-go/v2/internal/apitokens"
 	internalas "github.com/glincker/theauth-go/v2/internal/as"
 	internalaudit "github.com/glincker/theauth-go/v2/internal/audit"
 	"github.com/glincker/theauth-go/v2/internal/delegation"
@@ -316,7 +317,7 @@ type TheAuth struct {
 	trustedProxies    []netip.Prefix
 	trustedOrigins    []string
 	csrfDisabled      bool
-	apiTokens         *apiTokenService
+	apiTokens         *apitokens.Service
 	revocations       RevocationBus
 
 	storageRaw any
@@ -522,7 +523,7 @@ func New(cfg Config) (*TheAuth, error) {
 	if err := wireServices(a, cfg, providers, sp); err != nil {
 		return nil, err
 	}
-	if a.apiTokens, err = newAPITokenService(a, cfg.APITokens, cfg.storageRaw); err != nil {
+	if a.apiTokens, err = apitokens.New(tokenHost{a}, cfg.APITokens, cfg.storageRaw, a.storage, a.baseURL); err != nil {
 		return nil, err
 	}
 	return a, nil

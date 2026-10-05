@@ -1,9 +1,23 @@
-package theauth
+// Package apitokens implements scoped API tokens, the RFC 8628 device grant,
+// agent tokens and the HTTP routes and middleware around them.
+package apitokens
 
 import (
 	"context"
 	"errors"
 	"time"
+
+	"github.com/glincker/theauth-go/v2/internal/models"
+)
+
+// Model aliases so this package reads like the root it was extracted from.
+type (
+	// ULID is the canonical ID type.
+	ULID = models.ULID
+	// User is the account record.
+	User = models.User
+	// Session is the session record.
+	Session = models.Session
 )
 
 // AbilityRoot is the reserved ability that implies every other ability.

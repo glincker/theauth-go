@@ -20,6 +20,7 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/glincker/theauth-go/v2/internal/apitokens"
 	internalas "github.com/glincker/theauth-go/v2/internal/as"
 	"github.com/glincker/theauth-go/v2/internal/audit"
 	"github.com/glincker/theauth-go/v2/internal/password"
@@ -457,7 +458,7 @@ func (a *TheAuth) EmitAudit(ctx context.Context, action string, target TargetRef
 	if a.auditSvc == nil {
 		return
 	}
-	metadata = withActorChain(ctx, metadata)
+	metadata = apitokens.WithActorChain(ctx, metadata)
 	var actorUser *ULID
 	if u, ok := UserFromContext(ctx); ok && u != nil {
 		id := u.ID

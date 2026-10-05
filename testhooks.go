@@ -61,5 +61,5 @@ func init() {
 	testhooks.UnlinkOAuth = func(a any, ctx context.Context, sessionToken, provider string) error {
 		return a.(*TheAuth).identityLinkSvc.UnlinkOAuthProvider(ctx, sessionToken, provider)
 	}
-	testhooks.SetAPITokenClock = func(a any, now func() time.Time) { a.(*TheAuth).apiTokens.now = now }
+	testhooks.SetAPITokenClock = func(a any, now func() time.Time) { a.(*TheAuth).apiTokens.SetClock(now) }
 }

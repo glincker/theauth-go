@@ -1,8 +1,10 @@
-package theauth
+package apitokens
 
 import (
 	"context"
 	"errors"
+	"github.com/glincker/theauth-go/v2/internal/httpx"
+	"github.com/glincker/theauth-go/v2/internal/models"
 	"net/http"
 	"time"
 )
@@ -12,19 +14,14 @@ type principalOnlyKey struct{}
 // requireBearerToken admits only a request authenticated by an API bearer
 // token. A session cookie is refused with 403 so sessions keep using the
 // session routes, and an invalid, expired, revoked or orphaned token gets 401.
-func (a *TheAuth) requireBearerToken(next http.Handler) http.Handler {
+func (s *Service) requireBearerToken(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		s, err := a.apiSvc()
-		if err != nil {
-			writeProblemJSON(w, http.StatusNotFound, "apitokens.disabled", "API tokens are not enabled in Config", "")
-			return
-		}
-		if _, ok := bearerToken(r); !ok {
-			if c, err := r.Cookie(a.cookieName); err == nil && c.Value != "" {
-				writeProblemJSON(w, http.StatusForbidden, "auth.bearer_required", "This route accepts an API bearer token only; sessions use "+a.pathPrefix+"/tokens and "+a.pathPrefix+"/me", "")
+		if _, ok := BearerToken(r); !ok {
+			if c, err := r.Cookie(s.host.CookieName()); err == nil && c.Value != "" {
+				httpx.WriteProblemJSON(w, http.StatusForbidden, "auth.bearer_required", "This route accepts an API bearer token only; sessions use "+s.host.PathPrefix()+"/tokens and "+s.host.PathPrefix()+"/me", "")
 				return
 			}
-			writeUnauthenticated(w, "auth.unauthenticated", "Missing credentials")
+			httpx.WriteUnauthenticated(w, "auth.unauthenticated", "Missing credentials")
 			return
 		}
 		p, ok := s.principalFromRequest(w, r)
@@ -50,19 +47,19 @@ type currentTokenResponse struct {
 	LastUsedAt *time.Time `json:"lastUsedAt,omitempty"`
 }
 
-func (a *TheAuth) handleTokenCurrent(w http.ResponseWriter, r *http.Request) {
+func (s *Service) handleTokenCurrent(w http.ResponseWriter, r *http.Request) {
 	p, _ := r.Context().Value(principalOnlyKey{}).(*Principal)
 	if p == nil || p.TokenID == nil {
-		writeJSONError(w, http.StatusUnauthorized, "unauthenticated", "missing credentials")
+		httpx.WriteJSONError(w, http.StatusUnauthorized, "unauthenticated", "missing credentials")
 		return
 	}
-	tok, err := a.apiTokens.store.APITokenByID(r.Context(), *p.TokenID)
-	if errors.Is(err, ErrStorageNotFound) {
-		writeJSONError(w, http.StatusUnauthorized, "unauthenticated", "invalid token")
+	tok, err := s.store.APITokenByID(r.Context(), *p.TokenID)
+	if errors.Is(err, models.ErrStorageNotFound) {
+		httpx.WriteJSONError(w, http.StatusUnauthorized, "unauthenticated", "invalid token")
 		return
 	}
 	if err != nil {
-		a.tokenInternalError(w, "load current token", err)
+		s.tokenInternalError(w, "load current token", err)
 		return
 	}
 	abilities := p.Abilities
@@ -78,16 +75,16 @@ func (a *TheAuth) handleTokenCurrent(w http.ResponseWriter, r *http.Request) {
 
 // handleTokenCurrentRevoke revokes the presented token and returns 204. The
 // token is dead afterwards, so a repeat call fails authentication with 401.
-func (a *TheAuth) handleTokenCurrentRevoke(w http.ResponseWriter, r *http.Request) {
+func (s *Service) handleTokenCurrentRevoke(w http.ResponseWriter, r *http.Request) {
 	p, _ := r.Context().Value(principalOnlyKey{}).(*Principal)
 	if p == nil || p.TokenID == nil {
-		writeJSONError(w, http.StatusUnauthorized, "unauthenticated", "missing credentials")
+		httpx.WriteJSONError(w, http.StatusUnauthorized, "unauthenticated", "missing credentials")
 		return
 	}
-	if err := a.RevokeAPIToken(r.Context(), *p.TokenID); err != nil {
-		a.tokenInternalError(w, "revoke current token", err)
+	if err := s.Revoke(r.Context(), *p.TokenID); err != nil {
+		s.tokenInternalError(w, "revoke current token", err)
 		return
 	}
-	a.RecordTokenRevoked(r.Context(), p.UserID, "api")
+	s.host.RecordTokenRevoked(r.Context(), p.UserID, "api")
 	w.WriteHeader(http.StatusNoContent)
 }

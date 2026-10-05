@@ -102,10 +102,10 @@ func (a *TheAuth) mountRoutes(r chi.Router) {
 		}
 
 		if a.apiTokens != nil {
-			a.mountAPITokens(r, ipLimit)
+			a.apiTokens.MountTokens(r, ipLimit)
 			a.mountDoctor(r, ipLimit)
-			if a.apiTokens.dev != nil {
-				a.mountDevice(r, ipLimit)
+			if a.apiTokens.DeviceEnabled() {
+				a.apiTokens.MountDevice(r, ipLimit)
 			}
 		}
 
