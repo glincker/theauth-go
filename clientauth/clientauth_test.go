@@ -265,6 +265,76 @@ func selfServer(t *testing.T, revokeStatus int) (*httptest.Server, *int) {
 	return srv, &revoked
 }
 
+func (e *env) login(t *testing.T) (*clientauth.Client, clientauth.TokenStore) {
+	t.Helper()
+	store := clientauth.NewFileStoreAt(filepath.Join(t.TempDir(), "creds.json"))
+	sl := &sleeper{}
+	var prompt clientauth.DevicePrompt
+	sl.hook = func(int) { e.decide(t, prompt.UserCode, true) }
+	if _, err := clientauth.DeviceLogin(context.Background(), clientauth.DeviceOptions{
+		ServerURL: e.url, ClientName: "testcli", Store: store, Sleep: sl.sleep, Out: &strings.Builder{},
+		Prompt: func(p clientauth.DevicePrompt) { prompt = p },
+	}); err != nil {
+		t.Fatal(err)
+	}
+	c, err := clientauth.NewClient(e.url, store)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return c, store
+}
+
+func TestWhoamiAndLogoutAgainstRealServer(t *testing.T) {
+	ctx := context.Background()
+	dev := theauth.DeviceConfig{Interval: time.Second, DefaultAbilities: []string{"read"}}
+
+	t.Run("whoami returns the token metadata", func(t *testing.T) {
+		e := newEnv(t, dev)
+		c, _ := e.login(t)
+		id, err := c.Whoami(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if id.ID == "" || id.OwnerID != e.user.ID.String() || id.OwnerKind != theauth.OwnerKindUser ||
+			id.Kind != theauth.APITokenKindPersonal || len(id.Abilities) != 1 || id.Abilities[0] != "read" ||
+			id.ExpiresAt == nil || id.CreatedAt.IsZero() || !strings.Contains(id.Name, "testcli") {
+			t.Fatalf("whoami: %+v", id)
+		}
+	})
+	t.Run("logout revokes server side", func(t *testing.T) {
+		e := newEnv(t, dev)
+		c, store := e.login(t)
+		cred, err := store.Load(ctx, e.url)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := c.Logout(ctx); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := store.Load(ctx, e.url); !errors.Is(err, clientauth.ErrNotLoggedIn) {
+			t.Fatalf("credential should be gone: %v", err)
+		}
+		if _, err := e.a.AuthenticateAPIToken(ctx, cred.AccessToken); !errors.Is(err, theauth.ErrAPITokenInvalid) {
+			t.Fatalf("token still valid after logout: %v", err)
+		}
+		_ = store.Save(ctx, cred)
+		if _, err := c.Whoami(ctx); !errors.Is(err, clientauth.ErrReloginRequired) {
+			t.Fatalf("whoami after revoke = %v, want ErrReloginRequired", err)
+		}
+		if err := c.Logout(ctx); err != nil {
+			t.Fatalf("logout with an already revoked token must still succeed: %v", err)
+		}
+	})
+	t.Run("custom SelfPath", func(t *testing.T) {
+		e := newEnv(t, dev)
+		c, _ := e.login(t)
+		c.SelfPath = "/tokens/nope"
+		if _, err := c.Whoami(ctx); err == nil || errors.Is(err, clientauth.ErrReloginRequired) {
+			t.Fatalf("err = %v", err)
+		}
+	})
+}
+
 func TestWhoamiAndLogoutAgainstStub(t *testing.T) {
 	ctx := context.Background()
 	t.Run("whoami", func(t *testing.T) {

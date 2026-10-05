@@ -42,7 +42,6 @@ if errors.Is(err, clientauth.ErrReloginRequired) { /* run login again */ }
 
 `Client.Whoami` and `Client.Logout` call a bearer-authenticated route (`/auth/tokens/current` by default, change it with `Client.SelfPath`), then `Logout` deletes the local credential even if revocation fails.
 
-!!! note
-    The server shipped in this version authenticates `DELETE /auth/tokens/{id}` with a session cookie only, and does not expose the minted token ID to the device client, so a bearer token cannot yet revoke or describe itself. Until the server adds a self-service route, `Logout` clears the local credential and returns the server error.
+`GET /auth/tokens/current` returns the token's own metadata (id, name, kind, agent name, effective abilities, owner, created, expires, last used) and never the secret. `DELETE /auth/tokens/current` revokes exactly that token and returns 204, after which any further use of it gets 401. Both routes are bearer-only: a session cookie gets 403, and a bearer token still cannot list, mint or revoke any other token.
 
 A complete CLI is in `examples/cli-login`.
