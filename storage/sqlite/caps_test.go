@@ -9,8 +9,6 @@ import (
 
 	sqlitestore "github.com/glincker/theauth-go/storage/sqlite"
 	"github.com/glincker/theauth-go/v2"
-	"github.com/glincker/theauth-go/v2/internal/throttle"
-	"github.com/glincker/theauth-go/v2/internal/ulid"
 	"github.com/glincker/theauth-go/v2/storagetest"
 )
 
@@ -95,7 +93,7 @@ func TestSessionPersistsManagementFields(t *testing.T) {
 	u := mkUser(t, s, "fields@example.com")
 	seen := time.Now().Add(-time.Minute).Truncate(time.Microsecond)
 	created, err := s.CreateSession(ctx, theauth.Session{
-		ID: ulid.New(), UserID: u.ID, TokenHash: []byte("h"), ExpiresAt: time.Now().Add(time.Hour),
+		ID: newID(), UserID: u.ID, TokenHash: []byte("h"), ExpiresAt: time.Now().Add(time.Hour),
 		LastSeenAt: seen, CredentialID: "cred-1",
 	})
 	if err != nil {
@@ -104,7 +102,7 @@ func TestSessionPersistsManagementFields(t *testing.T) {
 	if !created.LastSeenAt.Equal(seen) || created.CredentialID != "cred-1" {
 		t.Fatalf("created = %+v", created)
 	}
-	bare, err := s.CreateSession(ctx, theauth.Session{ID: ulid.New(), UserID: u.ID, TokenHash: []byte("h2"), ExpiresAt: time.Now().Add(time.Hour)})
+	bare, err := s.CreateSession(ctx, theauth.Session{ID: newID(), UserID: u.ID, TokenHash: []byte("h2"), ExpiresAt: time.Now().Add(time.Hour)})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -167,29 +165,41 @@ func TestThrottleConcurrentLimitersLoseNoFailures(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
 	s := newStore(t)
-	cfg := throttle.Config{MFAMaxFailures: 1_000_000}
-	limiters := []*throttle.Limiter{throttle.New(s.ThrottleStore(), cfg), throttle.New(s.ThrottleStore(), cfg)}
+	ts := s.ThrottleStore()
+	bump := func() error {
+		for {
+			prev, ok, err := ts.Get(ctx, "mfa:user-1")
+			if err != nil {
+				return err
+			}
+			next := prev
+			next.Failures++
+			swapped, err := ts.CompareAndSwap(ctx, "mfa:user-1", prev, ok, next)
+			if err != nil || swapped {
+				return err
+			}
+		}
+	}
 
 	const perLimiter = 6
+	const limiters = 2
 	var wg sync.WaitGroup
-	for _, l := range limiters {
-		for i := 0; i < perLimiter; i++ {
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
-				if err := l.RecordMFAFailure(ctx, "user-1"); err != nil {
-					t.Errorf("RecordMFAFailure: %v", err)
-				}
-			}()
-		}
+	for i := 0; i < perLimiter*limiters; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if err := bump(); err != nil {
+				t.Errorf("CompareAndSwap bump: %v", err)
+			}
+		}()
 	}
 	wg.Wait()
 	e, ok, err := s.ThrottleStore().Get(ctx, "mfa:user-1")
 	if err != nil || !ok {
 		t.Fatalf("Get = %v, %v", ok, err)
 	}
-	if e.Failures != perLimiter*len(limiters) {
-		t.Fatalf("Failures = %d, want %d (lost updates)", e.Failures, perLimiter*len(limiters))
+	if e.Failures != perLimiter*limiters {
+		t.Fatalf("Failures = %d, want %d (lost updates)", e.Failures, perLimiter*limiters)
 	}
 }
 

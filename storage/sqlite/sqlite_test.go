@@ -16,7 +16,6 @@ import (
 
 	sqlitestore "github.com/glincker/theauth-go/storage/sqlite"
 	"github.com/glincker/theauth-go/v2"
-	"github.com/glincker/theauth-go/v2/internal/ulid"
 	"github.com/glincker/theauth-go/v2/storagetest"
 	_ "modernc.org/sqlite"
 )
@@ -74,7 +73,7 @@ func newStore(t *testing.T, opts ...sqlitestore.Option) *sqlitestore.Store {
 
 func mkUser(t *testing.T, s *sqlitestore.Store, email string) theauth.User {
 	t.Helper()
-	u, err := s.CreateUser(context.Background(), theauth.User{ID: ulid.New(), Email: email, CreatedAt: time.Now()})
+	u, err := s.CreateUser(context.Background(), theauth.User{ID: newID(), Email: email, CreatedAt: time.Now()})
 	if err != nil {
 		t.Fatalf("CreateUser(%s): %v", email, err)
 	}
@@ -121,7 +120,7 @@ func TestEmailCaseInsensitive(t *testing.T) {
 	if got, _ := s.UserByEmail(ctx, "x"); got != nil {
 		t.Fatal("unexpected user")
 	}
-	if _, err := s.CreateUser(ctx, theauth.User{ID: ulid.New(), Email: "MIXED.case@example.COM"}); err == nil {
+	if _, err := s.CreateUser(ctx, theauth.User{ID: newID(), Email: "MIXED.case@example.COM"}); err == nil {
 		t.Fatal("duplicate email differing only by case was accepted")
 	}
 }
@@ -135,14 +134,14 @@ func TestOAuthAccounts(t *testing.T) {
 	exp := time.Now().Add(time.Hour)
 
 	a, err := s.UpsertOAuthAccount(ctx, theauth.OAuthAccount{
-		ID: ulid.New(), UserID: u1.ID, Provider: "github", ProviderUserID: "42",
+		ID: newID(), UserID: u1.ID, Provider: "github", ProviderUserID: "42",
 		AccessTokenEnc: []byte("a1"), RefreshTokenEnc: []byte("r1"), ExpiresAt: &exp, Scope: "read",
 	})
 	if err != nil {
 		t.Fatalf("upsert: %v", err)
 	}
 	b, err := s.UpsertOAuthAccount(ctx, theauth.OAuthAccount{
-		ID: ulid.New(), UserID: u1.ID, Provider: "github", ProviderUserID: "42",
+		ID: newID(), UserID: u1.ID, Provider: "github", ProviderUserID: "42",
 		AccessTokenEnc: []byte("a2"), Scope: "write",
 	})
 	if err != nil {
@@ -188,12 +187,12 @@ func TestForeignKeysCascadeAndGuard(t *testing.T) {
 	}
 	u := mkUser(t, s, "cascade@example.com")
 	sess, err := s.CreateSession(ctx, theauth.Session{
-		ID: ulid.New(), UserID: u.ID, TokenHash: []byte("th"), ExpiresAt: time.Now().Add(time.Hour),
+		ID: newID(), UserID: u.ID, TokenHash: []byte("th"), ExpiresAt: time.Now().Add(time.Hour),
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.CreateSession(ctx, theauth.Session{ID: ulid.New(), UserID: ulid.New(), TokenHash: []byte("x"), ExpiresAt: time.Now()}); err == nil {
+	if _, err := s.CreateSession(ctx, theauth.Session{ID: newID(), UserID: newID(), TokenHash: []byte("x"), ExpiresAt: time.Now()}); err == nil {
 		t.Fatal("session for unknown user was accepted")
 	}
 	if _, err := db.Exec(`DELETE FROM theauth_users WHERE id = ?`, u.ID.String()); err != nil {
@@ -224,7 +223,7 @@ func TestConcurrentAccess(t *testing.T) {
 	t.Run("ConsumeMagicLinkOnce", func(t *testing.T) {
 		hash := []byte("race-magic-link")
 		if err := s.CreateMagicLink(ctx, theauth.MagicLink{
-			ID: ulid.New(), Email: "m@example.com", TokenHash: hash, ExpiresAt: time.Now().Add(time.Hour),
+			ID: newID(), Email: "m@example.com", TokenHash: hash, ExpiresAt: time.Now().Add(time.Hour),
 		}); err != nil {
 			t.Fatal(err)
 		}
@@ -263,7 +262,7 @@ func TestConcurrentAccess(t *testing.T) {
 				if i%2 == 0 {
 					email = "race@EXAMPLE.com"
 				}
-				if _, err := s.CreateUser(ctx, theauth.User{ID: ulid.New(), Email: email}); err == nil {
+				if _, err := s.CreateUser(ctx, theauth.User{ID: newID(), Email: email}); err == nil {
 					ok.Add(1)
 				}
 			}()
@@ -280,20 +279,20 @@ func TestConcurrentAccess(t *testing.T) {
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
-				u, err := s.CreateUser(ctx, theauth.User{ID: ulid.New(), Email: fmt.Sprintf("mix%d@example.com", i)})
+				u, err := s.CreateUser(ctx, theauth.User{ID: newID(), Email: fmt.Sprintf("mix%d@example.com", i)})
 				if err != nil {
 					t.Errorf("CreateUser: %v", err)
 					return
 				}
 				if _, err := s.CreateSession(ctx, theauth.Session{
-					ID: ulid.New(), UserID: u.ID, TokenHash: []byte(fmt.Sprintf("tok%d", i)), ExpiresAt: time.Now().Add(time.Hour),
+					ID: newID(), UserID: u.ID, TokenHash: []byte(fmt.Sprintf("tok%d", i)), ExpiresAt: time.Now().Add(time.Hour),
 				}); err != nil {
 					t.Errorf("CreateSession: %v", err)
 				}
 				if err := s.SetUserPassword(ctx, u.ID, "phc"); err != nil {
 					t.Errorf("SetUserPassword: %v", err)
 				}
-				if err := s.InsertAuditEvents(ctx, []theauth.AuditEvent{{ID: ulid.New(), ActorUserID: &u.ID, Action: "mix", CreatedAt: time.Now()}}); err != nil {
+				if err := s.InsertAuditEvents(ctx, []theauth.AuditEvent{{ID: newID(), ActorUserID: &u.ID, Action: "mix", CreatedAt: time.Now()}}); err != nil {
 					t.Errorf("InsertAuditEvents: %v", err)
 				}
 			}()
@@ -315,17 +314,17 @@ func TestSweepExpired(t *testing.T) {
 
 	for i, exp := range []time.Duration{-time.Hour, time.Hour} {
 		if _, err := s.CreateSession(ctx, theauth.Session{
-			ID: ulid.New(), UserID: u.ID, TokenHash: []byte{byte(i)}, ExpiresAt: now.Add(exp),
+			ID: newID(), UserID: u.ID, TokenHash: []byte{byte(i)}, ExpiresAt: now.Add(exp),
 		}); err != nil {
 			t.Fatal(err)
 		}
 		if err := s.CreateMagicLink(ctx, theauth.MagicLink{
-			ID: ulid.New(), Email: "sweep@example.com", TokenHash: []byte{byte(i)}, ExpiresAt: now.Add(exp),
+			ID: newID(), Email: "sweep@example.com", TokenHash: []byte{byte(i)}, ExpiresAt: now.Add(exp),
 		}); err != nil {
 			t.Fatal(err)
 		}
 		if err := s.CreatePasswordResetToken(ctx, theauth.PasswordResetToken{
-			ID: ulid.New(), UserID: u.ID, TokenHash: []byte{byte(i)}, ExpiresAt: now.Add(exp),
+			ID: newID(), UserID: u.ID, TokenHash: []byte{byte(i)}, ExpiresAt: now.Add(exp),
 		}); err != nil {
 			t.Fatal(err)
 		}
