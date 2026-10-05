@@ -1248,6 +1248,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#custom-oauth-redirect-uri" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Custom OAuth redirect URI
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#dynamic-providers" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2491,6 +2502,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#custom-oauth-redirect-uri" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Custom OAuth redirect URI
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#dynamic-providers" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2628,23 +2650,59 @@ prefix. They default to <code>clientauth.DefaultAuthPath</code> (<code>/auth</co
 <a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="w">    </span><span class="nx">AuthPath</span><span class="p">:</span><span class="w">  </span><span class="s">"/api/v1/auth"</span><span class="p">,</span>
 <a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="p">})</span>
 </code></pre></div>
+<h2 id="custom-oauth-redirect-uri">Custom OAuth redirect URI<a class="headerlink" href="#custom-oauth-redirect-uri" title="Permanent link">&para;</a></h2>
+<p>By default the redirect URI sent to a provider is
+<code>BaseURL + prefix + /providers/{name}/callback</code>. An app migrating from another
+auth stack often has different callback URLs already registered at Google,
+GitHub, Microsoft or an OIDC issuer. <code>OAuthConfig.RedirectURI</code> overrides the
+value without touching the registered URLs.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="nx">a</span><span class="p">,</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">theauth</span><span class="p">.</span><span class="nx">New</span><span class="p">(</span><span class="nx">theauth</span><span class="p">.</span><span class="nx">Config</span><span class="p">{</span>
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="w">    </span><span class="c1">// ...</span>
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="w">    </span><span class="nx">OAuth</span><span class="p">:</span><span class="w"> </span><span class="o">&amp;</span><span class="nx">theauth</span><span class="p">.</span><span class="nx">OAuthConfig</span><span class="p">{</span>
+<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="w">        </span><span class="nx">RedirectURIAllowedHosts</span><span class="p">:</span><span class="w"> </span><span class="p">[]</span><span class="kt">string</span><span class="p">{</span><span class="s">"app.example.com"</span><span class="p">},</span>
+<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="w">        </span><span class="nx">RedirectURI</span><span class="p">:</span><span class="w"> </span><span class="kd">func</span><span class="p">(</span><span class="nx">r</span><span class="w"> </span><span class="o">*</span><span class="nx">http</span><span class="p">.</span><span class="nx">Request</span><span class="p">,</span><span class="w"> </span><span class="nx">provider</span><span class="w"> </span><span class="kt">string</span><span class="p">)</span><span class="w"> </span><span class="p">(</span><span class="kt">string</span><span class="p">,</span><span class="w"> </span><span class="kt">error</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="w">            </span><span class="k">return</span><span class="w"> </span><span class="s">"https://app.example.com/api/v1/auth/oauth/"</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="nx">provider</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="s">"/callback"</span><span class="p">,</span><span class="w"> </span><span class="kc">nil</span>
+<a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="w">        </span><span class="p">},</span>
+<a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="w">    </span><span class="p">},</span>
+<a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a><span class="p">})</span>
+</code></pre></div>
+<p>The hook takes the request so an app can derive the URI per request, and runs
+once at start. The result is stored with the flow state and reused verbatim at
+code exchange, so concurrent flows never share a value. With the hook unset,
+behavior is unchanged.</p>
+<p>The result must be an absolute URL with no fragment or userinfo. <code>https</code> is
+required, except <code>http</code> on a loopback host or when
+<code>OAuthConfig.AllowInsecureRedirectURI</code> is set (development only). Any hook
+error or invalid value fails the start with a 500: no redirect, no state.</p>
+<div class="admonition warning">
+<p class="admonition-title">Do not trust the Host header</p>
+<p>Building the URI from <code>r.Host</code> or <code>X-Forwarded-Host</code> lets a spoofed header
+steer the authorization code to another host. Prefer a fixed URI, and set
+<code>RedirectURIAllowedHosts</code> (matched case-insensitively against the host or
+host:port) so any other host fails closed.</p>
+</div>
+<p>If your app serves its own callback route at a different path, call
+<code>(*TheAuth).OAuthStart(r, provider, returnTo)</code> and
+<code>(*TheAuth).OAuthCallback(r, provider, code, state, binding)</code>. You set the
+binding cookie from <code>OAuthStartResult.Binding</code> and the session cookie from
+<code>OAuthCallbackResult.SessionToken</code>. The built-in routes keep working.</p>
 <h2 id="dynamic-providers">Dynamic providers<a class="headerlink" href="#dynamic-providers" title="Permanent link">&para;</a></h2>
 <p><code>Config.ProviderResolver</code> supplies providers that are not known at startup.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="kd">type</span><span class="w"> </span><span class="nx">ProviderResolver</span><span class="w"> </span><span class="kd">interface</span><span class="w"> </span><span class="p">{</span>
-<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="w">    </span><span class="nx">Resolve</span><span class="p">(</span><span class="nx">ctx</span><span class="w"> </span><span class="nx">context</span><span class="p">.</span><span class="nx">Context</span><span class="p">,</span><span class="w"> </span><span class="nx">name</span><span class="w"> </span><span class="kt">string</span><span class="p">)</span><span class="w"> </span><span class="p">(</span><span class="nx">Provider</span><span class="p">,</span><span class="w"> </span><span class="kt">bool</span><span class="p">,</span><span class="w"> </span><span class="kt">error</span><span class="p">)</span>
-<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="p">}</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="kd">type</span><span class="w"> </span><span class="nx">ProviderResolver</span><span class="w"> </span><span class="kd">interface</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="w">    </span><span class="nx">Resolve</span><span class="p">(</span><span class="nx">ctx</span><span class="w"> </span><span class="nx">context</span><span class="p">.</span><span class="nx">Context</span><span class="p">,</span><span class="w"> </span><span class="nx">name</span><span class="w"> </span><span class="kt">string</span><span class="p">)</span><span class="w"> </span><span class="p">(</span><span class="nx">Provider</span><span class="p">,</span><span class="w"> </span><span class="kt">bool</span><span class="p">,</span><span class="w"> </span><span class="kt">error</span><span class="p">)</span>
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="p">}</span>
 </code></pre></div>
 <p>Return <code>(nil, false, nil)</code> for an unknown name. A resolver may also implement
 <code>List(ctx) ([]Provider, error)</code>, which <code>(*TheAuth).ListProviders</code> includes.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="nx">a</span><span class="p">,</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">theauth</span><span class="p">.</span><span class="nx">New</span><span class="p">(</span><span class="nx">theauth</span><span class="p">.</span><span class="nx">Config</span><span class="p">{</span>
-<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="w">    </span><span class="c1">// ...</span>
-<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="w">    </span><span class="nx">EncryptionKey</span><span class="p">:</span><span class="w">       </span><span class="nx">key</span><span class="p">,</span><span class="w">            </span><span class="c1">// required with a resolver</span>
-<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="w">    </span><span class="nx">ProviderResolver</span><span class="p">:</span><span class="w">    </span><span class="nx">dbResolver</span><span class="p">,</span>
-<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="w">    </span><span class="nx">ProviderResolverTTL</span><span class="p">:</span><span class="w"> </span><span class="mi">30</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="nx">time</span><span class="p">.</span><span class="nx">Second</span><span class="p">,</span>
-<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="p">})</span>
-<a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a>
-<a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a><span class="c1">// After an admin edits or removes a provider:</span>
-<a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a><span class="nx">a</span><span class="p">.</span><span class="nx">InvalidateProvider</span><span class="p">(</span><span class="s">"corp-sso"</span><span class="p">)</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="nx">a</span><span class="p">,</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">theauth</span><span class="p">.</span><span class="nx">New</span><span class="p">(</span><span class="nx">theauth</span><span class="p">.</span><span class="nx">Config</span><span class="p">{</span>
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="w">    </span><span class="c1">// ...</span>
+<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="w">    </span><span class="nx">EncryptionKey</span><span class="p">:</span><span class="w">       </span><span class="nx">key</span><span class="p">,</span><span class="w">            </span><span class="c1">// required with a resolver</span>
+<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="w">    </span><span class="nx">ProviderResolver</span><span class="p">:</span><span class="w">    </span><span class="nx">dbResolver</span><span class="p">,</span>
+<a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="w">    </span><span class="nx">ProviderResolverTTL</span><span class="p">:</span><span class="w"> </span><span class="mi">30</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="nx">time</span><span class="p">.</span><span class="nx">Second</span><span class="p">,</span>
+<a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="p">})</span>
+<a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a>
+<a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a><span class="c1">// After an admin edits or removes a provider:</span>
+<a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a><span class="nx">a</span><span class="p">.</span><span class="nx">InvalidateProvider</span><span class="p">(</span><span class="s">"corp-sso"</span><span class="p">)</span>
 </code></pre></div>
 <p>Behavior:</p>
 <ul>

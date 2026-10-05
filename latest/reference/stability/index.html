@@ -2478,6 +2478,13 @@ covered by the same SemVer guarantees from this point forward.</p>
   zero-dependency Go module: a consumer pulling this package does NOT
   transitively pull theauth core or the storage adapters).</li>
 </ul>
+<h2 id="experimental-fields">Experimental fields<a class="headerlink" href="#experimental-fields" title="Permanent link">&para;</a></h2>
+<ul>
+<li><code>OAuthConfig.RedirectURI</code>, <code>OAuthConfig.RedirectURIAllowedHosts</code>,
+  <code>OAuthConfig.AllowInsecureRedirectURI</code>, <code>(*TheAuth).OAuthStart</code>,
+  <code>(*TheAuth).OAuthCallback</code>, <code>OAuthStartResult</code> and <code>OAuthCallbackResult</code>
+  may change in a minor release.</li>
+</ul>
 <h2 id="experimental-packages">Experimental packages<a class="headerlink" href="#experimental-packages" title="Permanent link">&para;</a></h2>
 <ul>
 <li><code>github.com/glincker/theauth-go/storage/sqlite</code>: separate Go module backed
