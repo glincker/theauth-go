@@ -1,0 +1,3997 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Go auth library covering OAuth 2.1, MCP authorization, agent identities, WebAuthn, SAML, SCIM, and more.">
+      
+      
+      
+        <link rel="canonical" href="https://go.theauth.dev/latest/security/threat-model/">
+      
+      
+        <link rel="prev" href="../../reference/audit-events/">
+      
+      
+        <link rel="next" href="../http-security/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>Threat Model - theauth-go</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.ec1eaa64.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  
+<meta property="og:type" content="website" />
+<meta property="og:title" content="Threat Model - theauth-go" />
+<meta property="og:description" content="Go auth library covering OAuth 2.1, MCP authorization, agent identities, WebAuthn, SAML, SCIM, and more." />
+<meta property="og:image" content="https://go.theauth.dev/latest/assets/images/social/security/threat-model.png" />
+<meta property="og:image:type" content="image/png" />
+<meta property="og:image:width" content="1200" />
+<meta property="og:image:height" content="630" />
+<meta property="og:url" content="https://go.theauth.dev/latest/security/threat-model/" />
+<meta property="twitter:card" content="summary_large_image" />
+<meta property="twitter:title" content="Threat Model - theauth-go" />
+<meta property="twitter:description" content="Go auth library covering OAuth 2.1, MCP authorization, agent identities, WebAuthn, SAML, SCIM, and more." />
+<meta property="twitter:image" content="https://go.theauth.dev/latest/assets/images/social/security/threat-model.png" />
+</head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#threat-model" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+      <div data-md-color-scheme="default" data-md-component="outdated" hidden>
+        
+      </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow md-header--lifted" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="theauth-go" class="md-header__button md-logo" aria-label="theauth-go" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            theauth-go
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Threat Model
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/glincker/theauth-go" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    glincker/theauth-go
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+    
+      
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../.." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../getting-started/overview/" class="md-tabs__link">
+          
+  
+  
+  Getting Started
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../concepts/capability-interfaces/" class="md-tabs__link">
+          
+  
+  
+  Concepts
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../guides/add-oauth-provider/" class="md-tabs__link">
+          
+  
+  
+  Guides
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../reference/configuration/" class="md-tabs__link">
+          
+  
+  
+  Reference
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+    
+  
+  
+    
+    
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="./" class="md-tabs__link">
+          
+  
+  
+  Security
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../migrations/migration-guide/" class="md-tabs__link">
+          
+  
+  
+  Migrations
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../changelog/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Changelog
+
+      </a>
+    </li>
+  
+
+      
+    </ul>
+  </div>
+</nav>
+    
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="theauth-go" class="md-nav__button md-logo" aria-label="theauth-go" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    theauth-go
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/glincker/theauth-go" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    glincker/theauth-go
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting Started
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Getting Started
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/overview/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/installation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Installation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/quick-start/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Quick Start
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/storage-backends/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Storage Backends
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/example-apps/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Example Apps
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Concepts
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Concepts
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../concepts/capability-interfaces/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Capability Interfaces and Storage
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../concepts/oauth21-primer/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    OAuth 2.1 Primer
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../concepts/mcp-authorization/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MCP Authorization
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../concepts/authorization-server/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Authorization Server
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../concepts/resource-server/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Resource Server (mcpresource)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../concepts/agent-identity/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Agent Identity and Revocation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../concepts/par-jar/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    PAR + JAR (FAPI 2.0)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../concepts/jwt-bearer/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    JWT-Bearer Client Auth
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../concepts/ciba/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CIBA Backchannel Auth
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Guides
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Guides
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guides/add-oauth-provider/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Add an OAuth Provider
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guides/webauthn-passkeys/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Enable WebAuthn Passkeys
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guides/api-tokens/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API Tokens and Device Login
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guides/cli-login/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CLI Login
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guides/path-prefix-and-dynamic-providers/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Path Prefix and Dynamic Providers
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guides/policy-engine/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Policy Engine
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guides/sessions/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Session Management
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guides/auth-hardening/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Auth Hardening
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guides/observability/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Observability
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guides/security-doctor/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Security Doctor
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guides/single-binary-go-app/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Auth for a Single-Binary Go App
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guides/migrate-from-hand-rolled-sessions/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Migrate from Hand-Rolled Sessions
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guides/oauth-hardening-and-auth-events/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    OAuth Hardening and Auth Events
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guides/opentelemetry-tracing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Wire OpenTelemetry Tracing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guides/audit-log-splunk/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Stream Audit Logs to Splunk
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guides/sqlite-storage/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Use the SQLite Backend
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guides/postgres-mysql-storage/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Use the Postgres or MySQL Backend
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guides/custom-storage-backend/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Write a Custom Storage Backend
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guides/migrate-from-cognito/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Migrate from Cognito
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guides/migrate-from-auth0/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Migrate from Auth0
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/configuration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/stability/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API Stability
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/storage/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Storage Interface
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/errors/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Errors
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/metrics/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Metrics
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/spans/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Spans
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/audit-events/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Audit Events
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Security
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Security
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Threat Model
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Threat Model
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#trust-boundaries" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Trust boundaries
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#session-tokens" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Session tokens
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#password-handling" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Password handling
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#rate-limiting" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Rate limiting
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#oauth-21-as" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        OAuth 2.1 AS
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#agent-and-delegation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Agent and delegation
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#webauthn-passkeys" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        WebAuthn / passkeys
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#totp" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        TOTP
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#saml" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        SAML
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#scim" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        SCIM
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#out-of-scope" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Out of scope
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#reporting-security-issues" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Reporting security issues
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#full-stride-threat-analysis" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Full STRIDE threat analysis
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../http-security/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    HTTP Security
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../releases/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Releases and Verification
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../benchmarks/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Benchmarks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../compliance-soc2/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SOC 2 Mapping
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../compliance-gdpr/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    GDPR Reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Migrations
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Migrations
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../migrations/migration-guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Migration guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../migrations/to-v2-module-path/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Migrating to /v2
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../migrations/v2.3-to-v2.4/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v2.3 to v2.4
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../migrations/v2.0-to-v2.1/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v2.0 to v2.1
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../migrations/v1.0-to-v2.0/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v1.0 to v2.0
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../migrations/v0.7-to-v1.0/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v0.7 to v1.0
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../changelog/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Changelog
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#trust-boundaries" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Trust boundaries
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#session-tokens" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Session tokens
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#password-handling" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Password handling
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#rate-limiting" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Rate limiting
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#oauth-21-as" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        OAuth 2.1 AS
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#agent-and-delegation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Agent and delegation
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#webauthn-passkeys" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        WebAuthn / passkeys
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#totp" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        TOTP
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#saml" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        SAML
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#scim" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        SCIM
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#out-of-scope" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Out of scope
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#reporting-security-issues" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Reporting security issues
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#full-stride-threat-analysis" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Full STRIDE threat analysis
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+                
+
+
+
+  
+
+
+  <nav class="md-path" aria-label="Navigation" >
+    <ol class="md-path__list">
+      
+        
+  
+  
+    <li class="md-path__item">
+      <a href="../.." class="md-path__link">
+        
+  <span class="md-ellipsis">
+    Home
+  </span>
+
+      </a>
+    </li>
+  
+
+      
+      
+        
+  
+  
+    
+    
+      <li class="md-path__item">
+        <a href="./" class="md-path__link">
+          
+  <span class="md-ellipsis">
+    Security
+  </span>
+
+        </a>
+      </li>
+    
+  
+
+      
+    </ol>
+  </nav>
+
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="threat-model">Threat Model<a class="headerlink" href="#threat-model" title="Permanent link">&para;</a></h1>
+<p>This page summarizes the security design decisions in theauth-go and the threats
+it is built to resist. It also documents what is explicitly out of scope.</p>
+<div class="admonition note">
+<p class="admonition-title">Full STRIDE analysis</p>
+<p>A detailed STRIDE (Spoofing, Tampering, Repudiation, Information Disclosure,
+Denial of Service, Elevation of Privilege) threat catalog is maintained in
+<a href="https://github.com/glincker/theauth-go/blob/main/docs/THREAT-MODEL.md"><code>docs/THREAT-MODEL.md</code></a>
+in the repository. The page you are reading is the operational quick-reference
+summary. Refer to the full document for per-subsystem threat tables and
+mitigating control details.</p>
+</div>
+<h2 id="trust-boundaries">Trust boundaries<a class="headerlink" href="#trust-boundaries" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>Internet            -&gt;   Reverse proxy (operator-managed)
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>                              |
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>                    -&gt;   theauth-go HTTP handlers
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>                              |
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>                    -&gt;   Storage (Postgres or memory, operator-managed)
+</code></pre></div>
+<p>theauth-go trusts the reverse proxy layer only when <code>Config.TrustedProxies</code> is explicitly set. By default, <code>X-Forwarded-For</code> is ignored and <code>r.RemoteAddr</code> is used for all rate-limiting and audit IP capture.</p>
+<h2 id="session-tokens">Session tokens<a class="headerlink" href="#session-tokens" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Raw session tokens are opaque (cryptographically random, <code>crypto/rand</code>).</li>
+<li>Only a SHA-256 hash is stored in the database. A full database dump does not yield usable session tokens.</li>
+<li>Cookies are set with <code>HttpOnly</code>, <code>Secure</code> (when <code>Config.SecureCookie</code> is true), and <code>SameSite=Lax</code>.</li>
+<li>Revocation is a single <code>UPDATE</code> that marks the session hash as invalid. The raw token in the cookie becomes useless immediately.</li>
+</ul>
+<h2 id="password-handling">Password handling<a class="headerlink" href="#password-handling" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Argon2id with OWASP 2026 recommended parameters.</li>
+<li>Minimum 12-character enforcement at sign-up.</li>
+<li>Anti-enumeration: unknown-email and empty-password branches pay the full Argon2id verify cost against a dummy hash synthesized once at <code>New</code> time. Timing side-channel is closed.</li>
+<li>Password reset tokens are single-use and short-lived (<code>PasswordResetTTL</code>, default 1 hour). Consuming a reset token revokes all sessions for the user.</li>
+</ul>
+<h2 id="rate-limiting">Rate limiting<a class="headerlink" href="#rate-limiting" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Per-IP and per-email rate limits on every credential endpoint.</li>
+<li>Rate limit buckets use <code>r.RemoteAddr</code> by default; <code>X-Forwarded-For</code> is only consulted when the proxy is in <code>Config.TrustedProxies</code>.</li>
+<li>POST <code>/oauth/register</code> has a separate per-IP rate limit: 1 req/min in anonymous mode, 5 req/min in bearer-gated mode.</li>
+</ul>
+<h2 id="oauth-21-as">OAuth 2.1 AS<a class="headerlink" href="#oauth-21-as" title="Permanent link">&para;</a></h2>
+<ul>
+<li>PKCE S256 is mandatory. Requests without <code>code_challenge</code> are rejected.</li>
+<li>Audience binding (RFC 8707) is mandatory. Tokens are bound to a specific resource URI at mint time and verified at introspection.</li>
+<li>Refresh token family revocation: if a used (rotated) refresh token is presented again, the entire family is invalidated (RFC 9700).</li>
+<li>DCR bearer tokens are compared with <code>crypto/subtle.ConstantTimeCompare</code> against pre-hashed SHA-256 digests. Timing oracle on token presence is closed.</li>
+<li>Signing keys are AES-256-GCM encrypted at rest (requires <code>Config.EncryptionKey</code>).</li>
+</ul>
+<h2 id="agent-and-delegation">Agent and delegation<a class="headerlink" href="#agent-and-delegation" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Agent status transitions are audited. Suspended and revoked agents fail authentication immediately after the <code>clientauthcache</code> TTL (default 5 minutes) expires. The cache is busted synchronously on <code>SuspendAgent</code> and <code>RevokeAgent</code> (introduced in v2.1.0 PR #33).</li>
+<li>Delegation grants verify <code>body.userId</code> is a member of the admin's organization before creation (cross-org grant attack closed, audit H3 2026-06-20).</li>
+<li>Actor chain depth is capped at 3 at both the mint path and the config validation path (<code>ErrAgentChainDepthTooHigh</code>).</li>
+</ul>
+<h2 id="webauthn-passkeys">WebAuthn / passkeys<a class="headerlink" href="#webauthn-passkeys" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Sign-count replay protection: a new sign count must be strictly greater than the stored value. Clone-attempt returns <code>ErrReplayDetected</code>.</li>
+<li>Challenge storage is ephemeral and GC'd after <code>ChallengeTTL</code>.</li>
+</ul>
+<h2 id="totp">TOTP<a class="headerlink" href="#totp" title="Permanent link">&para;</a></h2>
+<ul>
+<li>TOTP secrets are AES-256-GCM encrypted at rest.</li>
+<li>Recovery codes are SHA-256 hashed.</li>
+<li>10 single-use recovery codes per user.</li>
+</ul>
+<h2 id="saml">SAML<a class="headerlink" href="#saml" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Only signed assertions are accepted (<code>ErrSAMLUnsignedAssertion</code> on unsigned).</li>
+<li>AuthnRequest replay tracking with a configurable TTL.</li>
+</ul>
+<h2 id="scim">SCIM<a class="headerlink" href="#scim" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Bearer tokens are SHA-256 hashed. Full token never stored.</li>
+<li>Per-organization isolation enforced at every CRUD endpoint.</li>
+</ul>
+<h2 id="out-of-scope">Out of scope<a class="headerlink" href="#out-of-scope" title="Permanent link">&para;</a></h2>
+<p>The following are explicitly not covered by theauth-go:</p>
+<ul>
+<li><strong>TLS termination.</strong> Run a TLS-terminating reverse proxy (nginx, Caddy, AWS ALB) in front.</li>
+<li><strong>DDoS and volumetric flood protection.</strong> Use a WAF or CDN-level rate limiter for sustained volumetric attacks.</li>
+<li><strong>Physical security of the host running Postgres.</strong></li>
+<li><strong>Audit tamper-evidence.</strong> The <code>audit_events</code> table is append-only (no <code>UPDATE</code>/<code>DELETE</code> in the <code>Storage</code> interface) but not cryptographically tamper-evident: it is not Merkle-chained or signed. This is not currently on <a href="https://github.com/glincker/theauth-go/blob/main/docs/ROADMAP.md"><code>docs/ROADMAP.md</code></a>; operators who need tamper-evidence should layer Merkle signing or stream to an append-only SIEM sink themselves.</li>
+<li><strong>ABAC and hierarchical roles.</strong> RBAC is a closed permission catalog with flat roles. Time-bound and attribute-based access control are deferred.</li>
+<li><strong>Hardware-attested agent credentials.</strong> <code>AgentCredentialKindJWK</code> and <code>AgentCredentialKindX509</code> paths exist but return <code>ErrNotImplemented</code>. TPM-backed signing is a planned future feature.</li>
+</ul>
+<h2 id="reporting-security-issues">Reporting security issues<a class="headerlink" href="#reporting-security-issues" title="Permanent link">&para;</a></h2>
+<p>See <a href="https://github.com/glincker/theauth-go/blob/main/.github/SECURITY.md">SECURITY.md</a>. Report security vulnerabilities to <code>security@glincker.com</code>. Do not open public issues for security findings.</p>
+<hr />
+<h2 id="full-stride-threat-analysis">Full STRIDE threat analysis<a class="headerlink" href="#full-stride-threat-analysis" title="Permanent link">&para;</a></h2>
+<h1 id="threat-model_1">Threat Model<a class="headerlink" href="#threat-model_1" title="Permanent link">&para;</a></h1>
+<p><strong>Scope:</strong> theauth-go library, as deployed by an operator in a Go HTTP application.
+<strong>Method:</strong> STRIDE (Spoofing, Tampering, Repudiation, Information Disclosure, Denial of Service, Elevation of Privilege).
+<strong>Last reviewed:</strong> 2026-06-22</p>
+<hr />
+<h2 id="table-of-contents">Table of Contents<a class="headerlink" href="#table-of-contents" title="Permanent link">&para;</a></h2>
+<ol>
+<li><a href="#trust-boundaries">Trust Boundaries</a></li>
+<li><a href="#components-in-scope">Components in Scope</a></li>
+<li><a href="#out-of-scope">Out of Scope</a></li>
+<li><a href="#authorization-server-as">Authorization Server (AS)</a></li>
+<li><a href="#resource-server-mcpresource">Resource Server / mcpresource</a></li>
+<li><a href="#storage-backend">Storage Backend</a></li>
+<li><a href="#authentication-flows">Authentication Flows</a></li>
+<li><a href="#grant-types">Grant Types</a></li>
+<li><a href="#audit-subsystem">Audit Subsystem</a></li>
+<li><a href="#session-subsystem">Session Subsystem</a></li>
+<li><a href="#agent-identity-flow">Agent Identity Flow</a></li>
+<li><a href="#delegation-chains">Delegation Chains</a></li>
+<li><a href="#threat-catalog">Threat Catalog</a></li>
+</ol>
+<hr />
+<h2 id="trust-boundaries_1">Trust Boundaries<a class="headerlink" href="#trust-boundaries_1" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Boundary</th>
+<th>What Crosses It</th>
+<th>Direction</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>HTTP network</td>
+<td>OAuth/OIDC protocol messages (authorize, token, introspect, JWKS)</td>
+<td>Inbound from clients/browsers</td>
+</tr>
+<tr>
+<td>HTTP network</td>
+<td>Provider OAuth callbacks (GitHub, Google, Apple, etc.)</td>
+<td>Inbound from IdP</td>
+</tr>
+<tr>
+<td>Process/DB</td>
+<td>SQL queries and responses</td>
+<td>Bidirectional</td>
+</tr>
+<tr>
+<td>Process/SIEM</td>
+<td>Audit events forwarded to sinks (OTLP, Splunk, webhook)</td>
+<td>Outbound</td>
+</tr>
+<tr>
+<td>Process/email</td>
+<td>Magic link and password reset emails</td>
+<td>Outbound</td>
+</tr>
+<tr>
+<td>HTTPS/IdP</td>
+<td>CIMD metadata document fetches</td>
+<td>Outbound, HTTPS only</td>
+</tr>
+<tr>
+<td>Process memory</td>
+<td>Signing keys (Ed25519 private keys)</td>
+<td>In-process only</td>
+</tr>
+</tbody>
+</table>
+<p>The library does <strong>not</strong> control what crosses the operator's TLS terminator, the operator's secret store, or the operator's hosting environment. Those are explicitly out of scope.</p>
+<hr />
+<h2 id="components-in-scope">Components in Scope<a class="headerlink" href="#components-in-scope" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>Authorization Server (AS):</strong> issues JWTs (authorization_code, refresh_token, client_credentials, token_exchange grants). Lives in <code>internal/as/</code>.</li>
+<li><strong>Resource Server / mcpresource:</strong> validates inbound JWTs at protected API endpoints. Lives in <code>mcpresource/</code>.</li>
+<li><strong>Storage backend:</strong> memory store (<code>storage/memory/</code>) and Postgres store (<code>storage/postgres/</code>). Pluggable via the <code>Storage</code> interface in <code>storage.go</code>.</li>
+<li><strong>Authentication flows:</strong> password, OAuth social login, magic link, WebAuthn, TOTP, SAML, SCIM.</li>
+<li><strong>Audit subsystem:</strong> event emission, redaction, sinks. Lives in <code>internal/audit/</code>, <code>audit/</code>.</li>
+<li><strong>Session subsystem:</strong> session minting, lookup, expiry, revocation. Lives in <code>internal/session/</code>.</li>
+<li><strong>Agent identity flow:</strong> machine credential issuance and revocation. Lives in <code>internal/agent/</code>.</li>
+<li><strong>Delegation chains:</strong> scoped delegation grants. Lives in <code>internal/delegation/</code>.</li>
+<li><strong>CIMD (Client Identity Metadata Document):</strong> fetches and caches machine-client metadata. Lives in <code>internal/cimd/</code>.</li>
+<li><strong>RBAC:</strong> role and permission enforcement. Lives in <code>internal/rbac/</code>.</li>
+</ul>
+<hr />
+<h2 id="out-of-scope_1">Out of Scope<a class="headerlink" href="#out-of-scope_1" title="Permanent link">&para;</a></h2>
+<p>The following are explicitly <strong>not</strong> mitigated by this library. They are the deploying operator's responsibility.</p>
+<ul>
+<li><strong>TLS termination and certificate management.</strong> The library emits a <code>slog.Warn</code> when <code>SecureCookie=false</code> (see <code>theauth.go:41-45</code>) but cannot enforce TLS on the transport layer itself.</li>
+<li><strong>Secret management at rest.</strong> Encryption keys (<code>AuditConfig.EncryptionKey</code>, TOTP key, etc.) must be supplied by the operator; the library does not manage a secret store.</li>
+<li><strong>Container/VM/Kubernetes pod isolation.</strong> Network policies, pod security admission, and kernel security modules are outside library scope.</li>
+<li><strong>Operator's authentication device security.</strong> TOTP app compromise, WebAuthn key theft, or phone compromise for CIBA-style flows are not addressable at the library layer.</li>
+<li><strong>DDoS at the network layer.</strong> The library provides application-layer rate limits (<code>RateLimitByIP</code>, <code>RateLimitByEmail</code> in <code>middleware.go</code> and <code>internal/ratelimit</code>) but not TCP/UDP-layer flood protection.</li>
+<li><strong>Side channels in Go runtime or <code>crypto/subtle</code>.</strong> The library uses <code>crypto/subtle</code> for all sensitive comparisons but cannot guarantee the Go runtime's memory allocator or garbage collector do not introduce timing channels.</li>
+</ul>
+<hr />
+<h2 id="authorization-server-as">Authorization Server (AS)<a class="headerlink" href="#authorization-server-as" title="Permanent link">&para;</a></h2>
+<h3 id="trust-boundaries_2">Trust Boundaries<a class="headerlink" href="#trust-boundaries_2" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Receives <code>client_id</code>, <code>client_secret</code>, <code>code_verifier</code>, and <code>DPoP</code> header values over HTTP.</li>
+<li>Reads client rows and authorization code rows from storage.</li>
+<li>Holds Ed25519 private keys in process memory (<code>internal/as/service.go:69</code>).</li>
+<li>Writes access tokens and refresh tokens to storage.</li>
+</ul>
+<h3 id="stride-analysis">STRIDE Analysis<a class="headerlink" href="#stride-analysis" title="Permanent link">&para;</a></h3>
+<p><strong>Spoofing</strong></p>
+<table>
+<thead>
+<tr>
+<th>Threat</th>
+<th>Mitigation</th>
+<th>Residual Risk</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Client impersonation via stolen <code>client_secret</code></td>
+<td><code>client_secret_hash</code> stored as Argon2id PHC; verified with <code>subtle.ConstantTimeCompare</code> (<code>internal/clientauthcache/cache.go:118</code>). Cache invalidated on suspend/revoke (<code>internal/clientauthcache/cache.go:165</code>).</td>
+<td>Operator must protect secret in transit (HTTPS) and at rest (secret store).</td>
+</tr>
+<tr>
+<td>Authorization code interception (open-redirect)</td>
+<td><code>redirect_uri</code> must match the registered URI exactly (<code>internal/as/token.go:92-93</code>). Registration enforces HTTPS or localhost-only (<code>internal/as/dcr.go:206-228</code>).</td>
+<td>Operator must not register wildcard redirect URIs.</td>
+</tr>
+<tr>
+<td>Authorization code injection (inline param tampering)</td>
+<td>PKCE S256 enforced on every code exchange (<code>internal/as/token.go:99-103</code>). RFC 9126 Pushed Authorization Requests (PAR) is implemented (<code>internal/as/par.go</code>) and available via <code>AuthorizationServerConfig.PAR</code>; see the PAR section below.</td>
+<td>PAR is opt-in (<code>AuthorizationServerConfig.PAR</code> is nil by default) and additionally requires the storage backend to implement <code>PARStorage</code>. Deployments that have not enabled it should combine <code>RequireState=true</code> (<code>internal/as/config.go:102-107</code>) with PKCE S256 as the interim mitigation.</td>
+</tr>
+<tr>
+<td>Token replay after bearer theft</td>
+<td>DPoP (RFC 9449) binding embeds <code>cnf.jkt</code> in the access token (<code>internal/as/token.go:234-245</code>), tying the token to the proof key. Resource servers must require a matching DPoP proof on each request.</td>
+<td>Operator must enable <code>DPoP</code> in AS config and configure resource servers to require it. Bearer tokens remain exchangeable without DPoP when the operator has not enabled it.</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Tampering</strong></p>
+<table>
+<thead>
+<tr>
+<th>Threat</th>
+<th>Mitigation</th>
+<th>Residual Risk</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>JWT claim forgery</td>
+<td>Tokens are Ed25519-signed; signature is verified by the resource server against the JWKS endpoint.</td>
+<td>Signing keys in process memory. Compromise of the process compromises all issued tokens until key rotation.</td>
+</tr>
+<tr>
+<td>PKCE downgrade (plain method)</td>
+<td>S256 is the only accepted method; <code>plain</code> is not implemented (<code>crypto/pkce.go</code>).</td>
+<td>None within the library.</td>
+</tr>
+<tr>
+<td>JWKS rotation race</td>
+<td><code>AtomicRotateJWKS</code> issues all state transitions in a single database transaction when the storage adapter implements <code>JWKSAtomicRotator</code> (<code>internal/as/jwks.go:295-338</code>). Previous key is retained so tokens signed by it remain valid during the overlap window.</td>
+<td>Operators using a custom storage adapter that does not implement <code>JWKSAtomicRotator</code> fall back to a non-atomic rotation path (<code>internal/as/jwks.go:339</code>). They should implement the interface.</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Repudiation</strong></p>
+<table>
+<thead>
+<tr>
+<th>Threat</th>
+<th>Mitigation</th>
+<th>Residual Risk</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Deny issuing a token</td>
+<td>Every token issuance emits an audit event (<code>internal/as/token.go</code> audit calls).</td>
+<td>Operator must stream audit events to an external SIEM to maintain tamper-evident logs.</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Information Disclosure</strong></p>
+<table>
+<thead>
+<tr>
+<th>Threat</th>
+<th>Mitigation</th>
+<th>Residual Risk</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Client secret exposure</td>
+<td>Never stored in plaintext; stored as Argon2id PHC hash.</td>
+<td>Operator must not log request bodies containing <code>client_secret</code>.</td>
+</tr>
+<tr>
+<td>Authorization code in server logs</td>
+<td>The code is stored as a hash; the raw value is returned to the client only over the redirect response.</td>
+<td>Operator must not log full redirect URLs.</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Denial of Service</strong></p>
+<table>
+<thead>
+<tr>
+<th>Threat</th>
+<th>Mitigation</th>
+<th>Residual Risk</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Credential stuffing on token endpoint</td>
+<td><code>RateLimitByIP</code> and <code>RateLimitByEmail</code> middlewares (<code>middleware.go</code> and <code>internal/ratelimit</code>).</td>
+<td>Rate limit budgets are configurable; operator must tune to production traffic patterns.</td>
+</tr>
+<tr>
+<td>Argon2 CPU exhaustion</td>
+<td>Password verification pays the full Argon2id cost even on user-not-found to prevent timing-based user enumeration (<code>internal/password/service.go:240</code>).</td>
+<td>At default <code>m=64MiB, t=3, p=4</code> this is intentionally expensive; operators must size compute accordingly.</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Elevation of Privilege</strong></p>
+<table>
+<thead>
+<tr>
+<th>Threat</th>
+<th>Mitigation</th>
+<th>Residual Risk</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>CSRF on /authorize</td>
+<td><code>state</code> parameter required when <code>RequireState=true</code> (<code>internal/as/config.go:107</code>).</td>
+<td>Operator must set <code>RequireState=true</code> in production. Default is <code>false</code> for backward compatibility.</td>
+</tr>
+<tr>
+<td>Open redirect via malformed <code>redirect_uri</code></td>
+<td>Fragment, non-HTTPS, and non-localhost HTTP URIs are rejected at registration time (<code>internal/as/dcr.go:206-228</code>).</td>
+<td>Custom native-app URI schemes (e.g., <code>myapp://</code>) are permitted as registered; operator must audit registered URIs.</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="resource-server-mcpresource">Resource Server / mcpresource<a class="headerlink" href="#resource-server-mcpresource" title="Permanent link">&para;</a></h2>
+<h3 id="trust-boundaries_3">Trust Boundaries<a class="headerlink" href="#trust-boundaries_3" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Receives HTTP requests with <code>Authorization: Bearer &lt;token&gt;</code> or <code>Authorization: DPoP &lt;token&gt;</code> plus optional <code>DPoP:</code> proof header.</li>
+<li>Fetches public keys from the JWKS endpoint (operator-configured URL, cached in process).</li>
+<li>No storage writes.</li>
+</ul>
+<h3 id="stride-analysis_1">STRIDE Analysis<a class="headerlink" href="#stride-analysis_1" title="Permanent link">&para;</a></h3>
+<p><strong>Spoofing</strong></p>
+<table>
+<thead>
+<tr>
+<th>Threat</th>
+<th>Mitigation</th>
+<th>Residual Risk</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Token replay across resources</td>
+<td><code>cnf.jkt</code> claim in DPoP-bound tokens ties the token to the proof key; <code>aud</code> claim restricts to the intended resource server.</td>
+<td>Operator must configure audience validation (<code>mcpresource/validator.go</code>) and enforce DPoP when required.</td>
+</tr>
+<tr>
+<td>Bearer token presented as DPoP token</td>
+<td>Token type <code>DPoP</code> vs <code>Bearer</code> is checked; mismatched type is rejected (<code>mcpresource/dpop.go</code>).</td>
+<td>None within the library.</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Tampering</strong></p>
+<table>
+<thead>
+<tr>
+<th>Threat</th>
+<th>Mitigation</th>
+<th>Residual Risk</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>JWT claim alteration</td>
+<td>Ed25519 signature covers the full JWT header + payload; any modification invalidates it.</td>
+<td>None.</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Information Disclosure</strong></p>
+<table>
+<thead>
+<tr>
+<th>Threat</th>
+<th>Mitigation</th>
+<th>Residual Risk</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Key material in JWKS cache</td>
+<td>Only public keys are cached. Private keys never leave the AS process.</td>
+<td>Operator must serve the JWKS endpoint over HTTPS.</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Denial of Service</strong></p>
+<table>
+<thead>
+<tr>
+<th>Threat</th>
+<th>Mitigation</th>
+<th>Residual Risk</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>JWKS endpoint unavailability</td>
+<td>Keys are cached in process; a short outage does not immediately block validation.</td>
+<td>Operator must size JWKS cache TTL against acceptable key-stale window.</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="storage-backend">Storage Backend<a class="headerlink" href="#storage-backend" title="Permanent link">&para;</a></h2>
+<h3 id="trust-boundaries_4">Trust Boundaries<a class="headerlink" href="#trust-boundaries_4" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Library code speaks to storage via the <code>Storage</code> interface (defined in <code>storage.go</code>).</li>
+<li>Postgres store uses parameterized queries (sqlc-generated); no string concatenation in SQL.</li>
+<li>Memory store is in-process only; no network trust boundary.</li>
+</ul>
+<h3 id="stride-analysis_2">STRIDE Analysis<a class="headerlink" href="#stride-analysis_2" title="Permanent link">&para;</a></h3>
+<p><strong>Tampering</strong></p>
+<table>
+<thead>
+<tr>
+<th>Threat</th>
+<th>Mitigation</th>
+<th>Residual Risk</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Direct database writes bypassing application logic</td>
+<td>The <code>Storage</code> interface is the only sanctioned path; the library does not grant the application DB user DDL rights.</td>
+<td>Operator must restrict the DB user to DML only on theauth tables.</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Information Disclosure</strong></p>
+<table>
+<thead>
+<tr>
+<th>Threat</th>
+<th>Mitigation</th>
+<th>Residual Risk</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>SQL injection</td>
+<td>All queries use sqlc-generated parameterized statements.</td>
+<td>Operator must not hand-write raw SQL against the same connection pool.</td>
+</tr>
+<tr>
+<td>Password hash leak from DB dump</td>
+<td>Passwords stored as Argon2id PHC strings only; no plaintext.</td>
+<td>A database dump exposes hashes; offline cracking is bounded by Argon2id cost.</td>
+</tr>
+<tr>
+<td>TOTP secret leak from DB dump</td>
+<td>TOTP secrets encrypted with AES-256-GCM before storage (<code>internal/totp/service.go:225</code>).</td>
+<td>Leak of both the DB dump and the encryption key compromises TOTP secrets. Operator must store the encryption key separately.</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Denial of Service</strong></p>
+<table>
+<thead>
+<tr>
+<th>Threat</th>
+<th>Mitigation</th>
+<th>Residual Risk</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Connection pool exhaustion</td>
+<td>Not addressed within the library; the library uses whatever <code>*sql.DB</code> the operator passes.</td>
+<td>Operator must configure <code>MaxOpenConns</code> and <code>MaxIdleConns</code>.</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="authentication-flows">Authentication Flows<a class="headerlink" href="#authentication-flows" title="Permanent link">&para;</a></h2>
+<h3 id="password">Password<a class="headerlink" href="#password" title="Permanent link">&para;</a></h3>
+<p><strong>Trust Boundaries:</strong> Receives plaintext password over HTTP (must be HTTPS at operator's transport layer). Reads password hash from storage.</p>
+<table>
+<thead>
+<tr>
+<th>Threat</th>
+<th>Mitigation</th>
+<th>File Reference</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Password enumeration via timing</td>
+<td>Argon2id cost paid even for non-existent users (<code>internal/password/service.go:240</code>).</td>
+<td><code>internal/password/service.go:240</code></td>
+</tr>
+<tr>
+<td>Weak hash algorithm</td>
+<td>Argon2id with <code>m=64MiB, t=3, p=4</code> per OWASP 2026 baseline (<code>crypto/password.go:14,26-28</code>).</td>
+<td><code>crypto/password.go:26-28</code></td>
+</tr>
+<tr>
+<td>Work-factor downgrade</td>
+<td>Hash params are embedded in the PHC string; <code>VerifyPassword</code> reads them back (<code>crypto/password.go:62-84</code>). A stored hash with weaker params can still be verified; the operator may re-hash on next login.</td>
+<td>Operator must define a minimum work-factor upgrade policy.</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Residual risk:</strong> Operator must enforce HTTPS to prevent plaintext password capture.</p>
+<h3 id="oauth-social-login">OAuth Social Login<a class="headerlink" href="#oauth-social-login" title="Permanent link">&para;</a></h3>
+<p><strong>Trust Boundaries:</strong> Operator's app redirects user to provider; provider redirects back with <code>code</code> + <code>state</code>. The <code>state</code> is a crypto/rand token stored in an HttpOnly cookie for CSRF protection.</p>
+<table>
+<thead>
+<tr>
+<th>Threat</th>
+<th>Mitigation</th>
+<th>File Reference</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Provider CSRF via forged state</td>
+<td><code>state</code> is <code>crypto.NewToken()</code> (32 bytes, base64url) stored in HttpOnly cookie; callback verifies cookie value matches query param (<code>internal/oauth/handlers/handlers.go:73-108</code>).</td>
+<td><code>internal/oauth/handlers/handlers.go:101-109</code></td>
+</tr>
+<tr>
+<td>Apple .p8 key leak</td>
+<td>Documented operator responsibility in <code>provider/apple/apple.go:8-18</code>. Library does not store the key; operator must supply it.</td>
+<td><code>provider/apple/apple.go:8-18</code></td>
+</tr>
+<tr>
+<td>Provider token replay</td>
+<td><code>oauthStateTTL</code> (10 min) expires the state cookie (<code>internal/oauth/handlers/handlers.go:25-26</code>).</td>
+<td><code>internal/oauth/handlers/handlers.go:24-26</code></td>
+</tr>
+</tbody>
+</table>
+<h3 id="magic-link">Magic Link<a class="headerlink" href="#magic-link" title="Permanent link">&para;</a></h3>
+<p><strong>Trust Boundaries:</strong> Token emailed to user; operator's email delivery path is outside library scope.</p>
+<table>
+<thead>
+<tr>
+<th>Threat</th>
+<th>Mitigation</th>
+<th>File Reference</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Token brute-force</td>
+<td>Tokens are 32-byte crypto/rand values stored as SHA-256 hashes; brute-force infeasible.</td>
+<td><code>crypto/tokens.go</code>, <code>internal/magiclink/service.go:118</code></td>
+</tr>
+<tr>
+<td>Token reuse</td>
+<td><code>ConsumeMagicLink</code> is an atomic consume; a second use returns <code>ErrMagicLinkExpired</code> or <code>ErrMagicLinkAlreadyUsed</code>.</td>
+<td><code>internal/magiclink/service.go:113-126</code></td>
+</tr>
+<tr>
+<td>Token lifetime</td>
+<td>Default TTL is 15 minutes (operator-configurable via <code>MagicLinkTTL</code>; <code>wiring.go:52-53</code>).</td>
+<td><code>wiring.go:52-53</code></td>
+</tr>
+</tbody>
+</table>
+<h3 id="webauthn">WebAuthn<a class="headerlink" href="#webauthn" title="Permanent link">&para;</a></h3>
+<p><strong>Trust Boundaries:</strong> Browser generates a cryptographic assertion over the challenge; assertion verified against stored public key.</p>
+<table>
+<thead>
+<tr>
+<th>Threat</th>
+<th>Mitigation</th>
+<th>File Reference</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Credential replay (cloned authenticator)</td>
+<td>Sign counter monotonic check: if <code>newCount &lt;= stored.SignCount</code> the library returns <code>ErrReplayDetected</code> (<code>internal/webauthn/service.go:431-436</code>; sentinel defined at <code>internal/webauthn/service.go:108</code>).</td>
+<td><code>internal/webauthn/service.go:108,431-436</code></td>
+</tr>
+<tr>
+<td>Phishing (wrong origin)</td>
+<td>WebAuthn RP ID and origin are enforced by the <code>go-webauthn/webauthn</code> library; challenge is per-registration/authentication.</td>
+<td>Operator must configure <code>RPID</code> and <code>RPOrigins</code> correctly.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="totp_1">TOTP<a class="headerlink" href="#totp_1" title="Permanent link">&para;</a></h3>
+<p><strong>Trust Boundaries:</strong> User supplies 6-digit code generated by an authenticator app.</p>
+<table>
+<thead>
+<tr>
+<th>Threat</th>
+<th>Mitigation</th>
+<th>File Reference</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>TOTP secret at rest</td>
+<td>Encrypted with AES-256-GCM before insertion (<code>internal/totp/service.go:225</code>).</td>
+<td><code>internal/totp/service.go:225</code></td>
+</tr>
+<tr>
+<td>Code replay within window</td>
+<td>Standard TOTP: each code is valid for one 30-second window. Time skew tolerance is governed by the underlying library.</td>
+<td>Operator must ensure server clock is NTP-synced.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="saml_1">SAML<a class="headerlink" href="#saml_1" title="Permanent link">&para;</a></h3>
+<p><strong>Trust Boundaries:</strong> IdP posts a signed XML assertion to the library's SP assertion consumer service.</p>
+<table>
+<thead>
+<tr>
+<th>Threat</th>
+<th>Mitigation</th>
+<th>File Reference</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>XML signature wrapping (XSW)</td>
+<td>SAML assertions are processed via <code>crewjam/saml</code> (v0.5.1) and <code>russellhaering/goxmldsig</code> (v1.4.0), which validate that the XML signature covers the full assertion including the <code>&lt;Issuer&gt;</code> and <code>&lt;Conditions&gt;</code> elements.</td>
+<td><code>go.mod:7,14</code>; <code>internal/saml/service.go:41</code></td>
+</tr>
+<tr>
+<td>Unauthorized IdP</td>
+<td>Each SAML connection stores the IdP certificate; assertions are only accepted when signed by the registered certificate.</td>
+<td>Operator must use genuine IdP metadata when creating a SAML connection.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="scim_1">SCIM<a class="headerlink" href="#scim_1" title="Permanent link">&para;</a></h3>
+<p><strong>Trust Boundaries:</strong> SCIM client presents a bearer token; library validates it against a stored hash.</p>
+<table>
+<thead>
+<tr>
+<th>Threat</th>
+<th>Mitigation</th>
+<th>File Reference</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Token reuse / stale token</td>
+<td><code>last_used_at</code> is updated asynchronously on each valid request (<code>internal/scim/service.go:117-138</code>).</td>
+<td><code>internal/scim/service.go:117-138</code></td>
+</tr>
+<tr>
+<td>Unauthenticated SCIM requests</td>
+<td><code>scimAuth</code> in <code>middleware.go</code> gates all SCIM endpoints behind token validation (<code>internal/scim/service.go</code> <code>Authenticate</code>).</td>
+<td><code>middleware.go</code>, <code>internal/scim/service.go</code></td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="grant-types">Grant Types<a class="headerlink" href="#grant-types" title="Permanent link">&para;</a></h2>
+<h3 id="authorization-code-pkce">Authorization Code + PKCE<a class="headerlink" href="#authorization-code-pkce" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Threat</th>
+<th>Mitigation</th>
+<th>File Reference</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>PKCE downgrade</td>
+<td><code>plain</code> method not implemented; S256 enforced. <code>CodeChallenge()</code> computes <code>base64url(sha256(verifier))</code> (<code>crypto/pkce.go:33-37</code>).</td>
+<td><code>crypto/pkce.go:33-37</code></td>
+</tr>
+<tr>
+<td>Code interception</td>
+<td><code>subtle.ConstantTimeCompare</code> used when comparing computed challenge against stored challenge (<code>internal/as/token.go:99-103</code>).</td>
+<td><code>internal/as/token.go:99-103</code></td>
+</tr>
+</tbody>
+</table>
+<h3 id="refresh-token">Refresh Token<a class="headerlink" href="#refresh-token" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Threat</th>
+<th>Mitigation</th>
+<th>File Reference</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Stolen refresh token reuse</td>
+<td>Every use rotates the token; presenting an already-rotated token triggers family-wide revocation per RFC 9700 section 4.14 (<code>internal/as/token.go:122-176</code>; documented in <code>internal/as/config.go:45-47</code>).</td>
+<td><code>internal/as/token.go:122-176</code></td>
+</tr>
+</tbody>
+</table>
+<h3 id="client-credentials">Client Credentials<a class="headerlink" href="#client-credentials" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Threat</th>
+<th>Mitigation</th>
+<th>File Reference</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Credential stuffing</td>
+<td><code>subtle.ConstantTimeCompare</code> on <code>client_secret</code> via the auth cache (<code>internal/clientauthcache/cache.go:118</code>). Rate limits apply at the network layer.</td>
+<td><code>internal/clientauthcache/cache.go:118</code></td>
+</tr>
+</tbody>
+</table>
+<h3 id="token-exchange-rfc-8693">Token Exchange (RFC 8693)<a class="headerlink" href="#token-exchange-rfc-8693" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Threat</th>
+<th>Mitigation</th>
+<th>File Reference</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Scope escalation via exchange</td>
+<td>Delegation scope is always narrowed to the intersection of requested, subject, and grant scopes (<code>internal/delegation/service.go:263-291</code>).</td>
+<td><code>internal/delegation/service.go:263-291</code></td>
+</tr>
+<tr>
+<td>Exchange using suspended/revoked agent token</td>
+<td>Introspection path re-walks the chain on every exchange; suspended/revoked agent in the chain causes rejection (<code>internal/as/introspect.go:161-192</code>).</td>
+<td><code>internal/as/introspect.go:161-192</code></td>
+</tr>
+</tbody>
+</table>
+<h3 id="dpop-bound-tokens-rfc-9449">DPoP-Bound Tokens (RFC 9449)<a class="headerlink" href="#dpop-bound-tokens-rfc-9449" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Threat</th>
+<th>Mitigation</th>
+<th>File Reference</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Bearer token replay</td>
+<td><code>cnf.jkt</code> thumbprint embedded in the token ties it to the specific key pair (<code>internal/as/token.go:201-245</code>). Resource server validates the inbound DPoP proof carries the same <code>jkt</code> (<code>mcpresource/dpop.go</code>).</td>
+<td><code>internal/as/token.go:234-245</code></td>
+</tr>
+<tr>
+<td>DPoP nonce replay</td>
+<td>Nonce is HMAC-verified at each use; nonces are short-lived (<code>internal/dpop/nonce.go:71</code>).</td>
+<td><code>internal/dpop/nonce.go:71</code></td>
+</tr>
+</tbody>
+</table>
+<h3 id="par-pushed-authorization-request">PAR (Pushed Authorization Request)<a class="headerlink" href="#par-pushed-authorization-request" title="Permanent link">&para;</a></h3>
+<p>PAR (RFC 9126) is implemented (<code>internal/as/par.go</code>). When <code>AuthorizationServerConfig.PAR</code> is set and the configured storage backend implements the optional <code>PARStorage</code> interface, <code>POST /oauth/par</code> accepts the full set of authorization parameters over a back-channel POST and returns a <code>request_uri</code> reference; <code>GET /oauth/authorize</code> then accepts that <code>request_uri</code> in place of inline query parameters. <code>PARConfig.RequirePAR</code> (default <code>false</code>) can be set to reject any <code>/oauth/authorize</code> request that still passes inline parameters, forcing every client through PAR.</p>
+<p><strong>Residual risk:</strong> PAR is opt-in and not mounted at all unless the storage backend satisfies <code>PARStorage</code> (both in-tree adapters do). Deployments that have not enabled <code>AuthorizationServerConfig.PAR</code> still pass authorization parameters as query string values on the redirect; an attacker who can intercept the redirect URL can observe but not forge them (PKCE protects the exchange). Those deployments should combine <code>RequireState=true</code> with PKCE S256 as an interim mitigation.</p>
+<hr />
+<h2 id="audit-subsystem">Audit Subsystem<a class="headerlink" href="#audit-subsystem" title="Permanent link">&para;</a></h2>
+<h3 id="trust-boundaries_5">Trust Boundaries<a class="headerlink" href="#trust-boundaries_5" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Events are emitted in-process; sink goroutines forward them out-of-process to OTLP, Splunk, or webhook endpoints.</li>
+<li>The webhook sink signs each request body with HMAC-SHA256 (<code>audit/sinks/webhook/webhook.go:4-5,131</code>).</li>
+</ul>
+<h3 id="stride-analysis_3">STRIDE Analysis<a class="headerlink" href="#stride-analysis_3" title="Permanent link">&para;</a></h3>
+<p><strong>Repudiation</strong></p>
+<table>
+<thead>
+<tr>
+<th>Threat</th>
+<th>Mitigation</th>
+<th>File Reference</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Audit log tampering</td>
+<td>Events are INSERT-only; no UPDATE or DELETE path exists in the library. Rows carry a <code>created_at</code> timestamp set by the storage layer. A second copy is pushed to the operator-configured SIEM sink.</td>
+<td><code>internal/audit/service.go:400</code></td>
+</tr>
+<tr>
+<td>Webhook body forgery</td>
+<td>HMAC-SHA256 signature in <code>X-CloudEvents-Signature</code> header; recipient should verify with <code>hmac.Equal</code> (constant-time).</td>
+<td><code>audit/sinks/webhook/webhook.go:131</code></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Information Disclosure</strong></p>
+<table>
+<thead>
+<tr>
+<th>Threat</th>
+<th>Mitigation</th>
+<th>File Reference</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Secrets in audit metadata</td>
+<td>Default redactor strips <code>password</code>, <code>secret</code>, <code>token</code>, <code>code</code>, <code>refresh_token</code>, <code>access_token</code> (case-insensitive) at any nesting depth before emission (<code>audit.go:15-40</code>). Custom redactor is applied first, then the default redactor, so a custom redactor cannot re-introduce secrets (<code>internal/audit/service.go:281-283</code>).</td>
+<td><code>audit.go:15-40</code>; <code>internal/audit/service.go:281-283</code></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Denial of Service</strong></p>
+<table>
+<thead>
+<tr>
+<th>Threat</th>
+<th>Mitigation</th>
+<th>File Reference</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Slow sink blocks event processing</td>
+<td>Sinks run in separate goroutines; a slow or unavailable sink does not block the application's hot path. Flush errors are logged but do not propagate to the caller.</td>
+<td><code>internal/audit/service.go:400</code></td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="session-subsystem">Session Subsystem<a class="headerlink" href="#session-subsystem" title="Permanent link">&para;</a></h2>
+<h3 id="trust-boundaries_6">Trust Boundaries<a class="headerlink" href="#trust-boundaries_6" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Session token is a <code>crypto/rand</code> opaque value stored as SHA-256 hash in the database.</li>
+<li>Token is transmitted as an HttpOnly cookie.</li>
+</ul>
+<h3 id="stride-analysis_4">STRIDE Analysis<a class="headerlink" href="#stride-analysis_4" title="Permanent link">&para;</a></h3>
+<p><strong>Spoofing</strong></p>
+<table>
+<thead>
+<tr>
+<th>Threat</th>
+<th>Mitigation</th>
+<th>File Reference</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Session token brute-force</td>
+<td>Tokens are 32-byte crypto/rand values; SHA-256 stored. Brute-force infeasible.</td>
+<td><code>crypto/tokens.go</code></td>
+</tr>
+<tr>
+<td>Session fixation</td>
+<td>A new session token is minted on every authentication level promotion (password login, MFA completion, OAuth callback). The previous token is not reused.</td>
+<td><code>internal/session/service.go</code>; <code>internal/oauth/handlers/handlers.go:122</code></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Information Disclosure</strong></p>
+<table>
+<thead>
+<tr>
+<th>Threat</th>
+<th>Mitigation</th>
+<th>File Reference</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Cookie theft via XSS</td>
+<td>All session cookies are <code>HttpOnly</code> and <code>SameSite=Lax</code> (<code>handlers.go:147,183</code>). <code>Secure</code> flag is set when <code>SecureCookie=true</code> (<code>theauth.go:40</code>). A runtime warning is emitted when <code>SecureCookie=false</code> (<code>theauth.go:41-45</code>).</td>
+<td><code>handlers.go:147,183</code>; <code>theauth.go:40-45</code></td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="agent-identity-flow">Agent Identity Flow<a class="headerlink" href="#agent-identity-flow" title="Permanent link">&para;</a></h2>
+<h3 id="trust-boundaries_7">Trust Boundaries<a class="headerlink" href="#trust-boundaries_7" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Machine clients authenticate with <code>client_id</code> + <code>client_secret</code>; secret is Argon2id-hashed.</li>
+<li>Agents issue tokens via the <code>client_credentials</code> grant.</li>
+</ul>
+<h3 id="stride-analysis_5">STRIDE Analysis<a class="headerlink" href="#stride-analysis_5" title="Permanent link">&para;</a></h3>
+<p><strong>Spoofing</strong></p>
+<table>
+<thead>
+<tr>
+<th>Threat</th>
+<th>Mitigation</th>
+<th>File Reference</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Stolen agent secret</td>
+<td>Secret stored as Argon2id PHC; verified with <code>subtle.ConstantTimeCompare</code> via the <code>clientauthcache</code>. Cache is invalidated when agent is suspended or revoked (<code>internal/agent/service.go:444</code>).</td>
+<td><code>internal/agent/service.go:444</code>; <code>internal/clientauthcache/cache.go:165</code></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Elevation of Privilege</strong></p>
+<table>
+<thead>
+<tr>
+<th>Threat</th>
+<th>Mitigation</th>
+<th>File Reference</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Agent issuing tokens beyond its permitted scope</td>
+<td><code>client_credentials</code> token scope is bounded to the agent's registered scope list (<code>internal/as/token_v34.go:44-124</code>).</td>
+<td><code>internal/as/token_v34.go:44-124</code></td>
+</tr>
+<tr>
+<td>Suspended/revoked agent token still valid</td>
+<td>Introspection re-walks the agent status on every call; <code>InvalidateChainCache</code> is called on suspend/revoke so cached validation results are dropped (<code>internal/as/service.go:138,310</code>).</td>
+<td><code>internal/as/service.go:138,310</code></td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="delegation-chains">Delegation Chains<a class="headerlink" href="#delegation-chains" title="Permanent link">&para;</a></h2>
+<h3 id="trust-boundaries_8">Trust Boundaries<a class="headerlink" href="#trust-boundaries_8" title="Permanent link">&para;</a></h3>
+<ul>
+<li>An agent acting on behalf of a user (RFC 8693 token exchange) carries a delegation grant that specifies the permitted scope.</li>
+</ul>
+<h3 id="stride-analysis_6">STRIDE Analysis<a class="headerlink" href="#stride-analysis_6" title="Permanent link">&para;</a></h3>
+<p><strong>Elevation of Privilege</strong></p>
+<table>
+<thead>
+<tr>
+<th>Threat</th>
+<th>Mitigation</th>
+<th>File Reference</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Scope escalation through delegation</td>
+<td><code>NarrowScope</code> computes the strict intersection of requested scope, subject scope, and grant scope (<code>internal/delegation/service.go:263-291</code>). An empty result is treated as <code>invalid_scope</code>.</td>
+<td><code>internal/delegation/service.go:263-291</code></td>
+</tr>
+<tr>
+<td>Revoked delegation grant still usable</td>
+<td>Introspection checks the grant's revocation status; a revoked grant causes token rejection (<code>internal/as/introspect.go:161</code>).</td>
+<td><code>internal/as/introspect.go:161</code></td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="cimd-client-identity-metadata-document">CIMD (Client Identity Metadata Document)<a class="headerlink" href="#cimd-client-identity-metadata-document" title="Permanent link">&para;</a></h2>
+<h3 id="trust-boundaries_9">Trust Boundaries<a class="headerlink" href="#trust-boundaries_9" title="Permanent link">&para;</a></h3>
+<ul>
+<li>The AS fetches a JSON document from an HTTPS URL supplied as the <code>client_id</code>.</li>
+<li>The document is cached in process memory for the configured <code>CacheTTL</code>.</li>
+</ul>
+<h3 id="stride-analysis_7">STRIDE Analysis<a class="headerlink" href="#stride-analysis_7" title="Permanent link">&para;</a></h3>
+<p><strong>Spoofing</strong></p>
+<table>
+<thead>
+<tr>
+<th>Threat</th>
+<th>Mitigation</th>
+<th>File Reference</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Attacker-controlled metadata document</td>
+<td><code>TrustPolicy</code> gates every fetch; default is <code>DenyAll</code> (fail-closed) (<code>internal/cimd/service.go:114-115</code>). Operator must explicitly configure <code>AllowAnyHTTPS()</code> or <code>AllowHTTPSHost(...)</code> to permit fetches.</td>
+<td><code>internal/cimd/service.go:114-115</code></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Server-Side Request Forgery</strong></p>
+<table>
+<thead>
+<tr>
+<th>Threat</th>
+<th>Mitigation</th>
+<th>File Reference</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>CIMD URL points to internal metadata service</td>
+<td><code>LooksLikeCIMD</code> requires scheme <code>https</code> and a non-empty host (<code>internal/cimd/service.go:224-245</code>). HTTP and non-HTTPS schemes are rejected outright. <code>TrustPolicy</code> provides a second gate for allowlisting specific hosts.</td>
+<td><code>internal/cimd/service.go:224-245</code></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Residual risk:</strong> The library does not enumerate and block all RFC 1918 private address ranges. Operators using <code>AllowAnyHTTPS()</code> in environments where internal HTTPS services exist should additionally configure a host allowlist (<code>AllowHTTPSHost</code>).</p>
+<hr />
+<h2 id="threat-catalog">Threat Catalog<a class="headerlink" href="#threat-catalog" title="Permanent link">&para;</a></h2>
+<p>The following threats are referenced in the summary above. For procurement, this table maps each named threat to its mitigation status.</p>
+<table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Threat</th>
+<th>Status</th>
+<th>Key Code Reference</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>T-01</td>
+<td>Token theft / bearer replay</td>
+<td>Mitigated (DPoP)</td>
+<td><code>internal/as/token.go:234-245</code></td>
+</tr>
+<tr>
+<td>T-02</td>
+<td>Token replay across resources</td>
+<td>Mitigated (cnf.jkt + aud)</td>
+<td><code>internal/as/token.go:234-245</code>; <code>mcpresource/validator.go</code></td>
+</tr>
+<tr>
+<td>T-03</td>
+<td>PKCE downgrade</td>
+<td>Mitigated (S256 only)</td>
+<td><code>crypto/pkce.go</code>; <code>internal/as/token.go:99-103</code></td>
+</tr>
+<tr>
+<td>T-04</td>
+<td>Authorization code injection</td>
+<td>Mitigated when PAR is enabled (opt-in); partially mitigated (PKCE + state) otherwise</td>
+<td><code>internal/as/par.go</code>; <code>internal/as/token.go:99-103</code>; <code>internal/as/config.go:102-107</code></td>
+</tr>
+<tr>
+<td>T-05</td>
+<td>Open redirect on /authorize</td>
+<td>Mitigated (redirect_uri whitelist)</td>
+<td><code>internal/as/dcr.go:206-228</code>; <code>internal/as/token.go:92-93</code></td>
+</tr>
+<tr>
+<td>T-06</td>
+<td>CSRF on /authorize</td>
+<td>Mitigated when <code>RequireState=true</code></td>
+<td><code>internal/as/config.go:102-107</code></td>
+</tr>
+<tr>
+<td>T-07</td>
+<td>Session fixation</td>
+<td>Mitigated (new token on level promotion)</td>
+<td><code>internal/session/service.go</code>; <code>internal/oauth/handlers/handlers.go:122</code></td>
+</tr>
+<tr>
+<td>T-08</td>
+<td>Refresh token replay</td>
+<td>Mitigated (family revocation per RFC 9700)</td>
+<td><code>internal/as/token.go:122-176</code></td>
+</tr>
+<tr>
+<td>T-09</td>
+<td>Argon2 work-factor downgrade</td>
+<td>Mitigated (params in PHC string; configurable)</td>
+<td><code>crypto/password.go:23,62-84</code></td>
+</tr>
+<tr>
+<td>T-10</td>
+<td>JWKS rotation race</td>
+<td>Mitigated (atomic rotation when adapter supports it)</td>
+<td><code>internal/as/jwks.go:295-338</code></td>
+</tr>
+<tr>
+<td>T-11</td>
+<td>Audit log tampering</td>
+<td>Partially mitigated (INSERT-only + SIEM sink)</td>
+<td><code>internal/audit/service.go:400</code></td>
+</tr>
+<tr>
+<td>T-12</td>
+<td>clientauthcache poisoning</td>
+<td>Mitigated (invalidated on suspend/revoke)</td>
+<td><code>internal/clientauthcache/cache.go:165</code></td>
+</tr>
+<tr>
+<td>T-13</td>
+<td>SCIM token reuse</td>
+<td>Partially mitigated (last_used_at tracking)</td>
+<td><code>internal/scim/service.go:117-138</code></td>
+</tr>
+<tr>
+<td>T-14</td>
+<td>Webhook signature forgery</td>
+<td>Mitigated (HMAC-SHA256)</td>
+<td><code>audit/sinks/webhook/webhook.go:131</code></td>
+</tr>
+<tr>
+<td>T-15</td>
+<td>Cookie theft</td>
+<td>Mitigated (HttpOnly, SameSite=Lax, Secure flag)</td>
+<td><code>handlers.go:147,183</code>; <code>theauth.go:40-45</code></td>
+</tr>
+<tr>
+<td>T-16</td>
+<td>SAML signature wrapping</td>
+<td>Mitigated (crewjam/saml + goxmldsig)</td>
+<td><code>go.mod:7,14</code>; <code>internal/saml/service.go:41</code></td>
+</tr>
+<tr>
+<td>T-17</td>
+<td>WebAuthn replay</td>
+<td>Mitigated (sign counter monotonic check)</td>
+<td><code>internal/webauthn/service.go:108,431-436</code></td>
+</tr>
+<tr>
+<td>T-18</td>
+<td>MFA bypass on identity merge</td>
+<td>Mitigated (step-up required)</td>
+<td><code>internal/identitylink/service.go:72-84</code>; <code>internal/models/errors.go:177-181</code></td>
+</tr>
+<tr>
+<td>T-19</td>
+<td>Provider OAuth state CSRF</td>
+<td>Mitigated (state cookie + comparison)</td>
+<td><code>internal/oauth/handlers/handlers.go:101-109</code></td>
+</tr>
+<tr>
+<td>T-20</td>
+<td>CIMD trust policy bypass</td>
+<td>Mitigated (DenyAll default)</td>
+<td><code>internal/cimd/service.go:114-115</code></td>
+</tr>
+<tr>
+<td>T-21</td>
+<td>Apple .p8 key leak</td>
+<td>Operator responsibility (documented)</td>
+<td><code>provider/apple/apple.go:8-18</code></td>
+</tr>
+<tr>
+<td>T-22</td>
+<td>SSRF via CIMD metadata URL</td>
+<td>Partially mitigated (HTTPS-only; host allowlist recommended)</td>
+<td><code>internal/cimd/service.go:224-245</code></td>
+</tr>
+<tr>
+<td>T-23</td>
+<td>Delegation scope escalation</td>
+<td>Mitigated (scope intersection)</td>
+<td><code>internal/delegation/service.go:263-291</code></td>
+</tr>
+</tbody>
+</table>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.tabs", "navigation.tabs.sticky", "navigation.sections", "navigation.expand", "navigation.path", "navigation.top", "search.highlight", "search.suggest", "content.code.copy", "content.code.annotate"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"default": "latest", "provider": "mike"}}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+    
+  </body>
+</html>
