@@ -12,6 +12,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/glincker/theauth-go/v2/internal/bootstrap"
+
 	"github.com/glincker/theauth-go/v2/crypto"
 	"github.com/glincker/theauth-go/v2/email"
 	"github.com/glincker/theauth-go/v2/internal/agent"
@@ -354,13 +356,13 @@ func wireServices(a *TheAuth, cfg Config, providers map[string]Provider, sp saml
 	// High-complexity services: TOTP before password (password depends on
 	// totpSvc as its PendingTOTPIssuer).
 	a.throttle = cfg.LoginThrottle.limiter()
-	var gate *bootstrapGate
+	var gate *bootstrap.Gate
 	if cfg.Bootstrap != nil {
 		counter, ok := cfg.storageRaw.(UserCountStorage)
 		if !ok {
 			return missingCapability("UserCountStorage (required by Config.Bootstrap)")
 		}
-		g, gerr := newBootstrapGate(cfg.Bootstrap, counter, a.throttle)
+		g, gerr := bootstrap.New(cfg.Bootstrap, counter, a.throttle)
 		if gerr != nil {
 			return gerr
 		}
@@ -615,9 +617,5 @@ func rbacConfigFromValidated(cfg *RBACConfig, catalog []Permission, index map[st
 	if cfg == nil {
 		return nil
 	}
-	internalSeeds := make([]rbac.RoleSeed, len(seeds))
-	for i, s := range seeds {
-		internalSeeds[i] = rbac.RoleSeed{Name: s.Name, Description: s.Description, Permissions: s.Permissions}
-	}
-	return &rbac.Config{PermCatalog: catalog, PermIndex: index, DefaultRoleSeeds: internalSeeds}
+	return &rbac.Config{PermCatalog: catalog, PermIndex: index, DefaultRoleSeeds: seeds}
 }

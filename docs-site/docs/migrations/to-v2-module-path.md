@@ -38,3 +38,20 @@ go get github.com/glincker/theauth-go/mcpresource      # optional
 ## Pseudo-version users
 
 If you pinned a pseudo-version of the old path (for example from a branch or commit), your `go.mod` still points at `github.com/glincker/theauth-go`. That path does not receive v2.6.0 or later. Change the imports as above and require the `/v2` path.
+
+## Directory layout changes (unreleased)
+
+The module root was reorganized before the first `/v2` release. No exported
+root name was removed or renamed: types moved behind aliases and everything you
+import from `github.com/glincker/theauth-go/v2` keeps its name and method set.
+
+- Types such as `APIToken`, `Principal`, `Report`, `RevocationEvent` and
+  `AuthEvent` are aliases of types in `internal/` packages. Their printed type
+  names change (`apitokens.APIToken`), which only matters if you match on
+  `%T` or `reflect` output.
+- Tests no longer live in the root package. Use `go test ./...`; the fuzz
+  targets are in `./integration`.
+- `sqlc.yaml` is now `storage/postgres/sqlc.yaml`.
+
+The full move map is in [Repository layout](https://github.com/glincker/theauth-go/blob/main/docs/REPO-LAYOUT.md).
+

@@ -102,10 +102,10 @@ func (a *TheAuth) mountRoutes(r chi.Router) {
 		}
 
 		if a.apiTokens != nil {
-			a.mountAPITokens(r, ipLimit)
+			a.apiTokens.MountTokens(r, ipLimit)
 			a.mountDoctor(r, ipLimit)
-			if a.apiTokens.dev != nil {
-				a.mountDevice(r, ipLimit)
+			if a.apiTokens.DeviceEnabled() {
+				a.apiTokens.MountDevice(r, ipLimit)
 			}
 		}
 
@@ -278,19 +278,6 @@ func writeJSONError(w http.ResponseWriter, status int, code, message string) {
 		Message string `json:"message"`
 	}{Code: code, Message: message})
 }
-
-// mounts_extracted.go consolidates the five thinnest PR-E / PR-F mount
-// forwarders: password, TOTP, WebAuthn, OAuth provider (the
-// /auth/providers/* tree), and the OAuth 2.1 authorization server
-// (.well-known + /oauth/*). PR G (2026-06-21) merged the previous
-// handlers_password.go, handlers_totp.go, handlers_webauthn.go,
-// handlers_oauth.go, and handlers_oauth_server.go files here so the root
-// package presents one place for the small chi.Router wiring shims that
-// instantiate the extracted internal/<flow>/handlers packages. No
-// behaviour change; route paths and middleware chains are byte-stable
-// with v2.0. Larger mount files that carry substantive service adapters
-// (account, admin, admin_agents, organizations, saml, scim) stay in
-// their own files.
 
 // oauthServiceAdapter implements internal/oauth/handlers.Service on top
 // of the root *TheAuth, exposing only the three methods the extracted

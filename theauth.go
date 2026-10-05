@@ -1,26 +1,32 @@
 package theauth
 
 import (
+	"context"
 	"crypto/ed25519"
 	"net/netip"
 	"time"
 
 	"github.com/glincker/theauth-go/v2/email"
 	"github.com/glincker/theauth-go/v2/internal/agent"
+	"github.com/glincker/theauth-go/v2/internal/apitokens"
 	internalas "github.com/glincker/theauth-go/v2/internal/as"
 	internalaudit "github.com/glincker/theauth-go/v2/internal/audit"
+	"github.com/glincker/theauth-go/v2/internal/bootstrap"
 	"github.com/glincker/theauth-go/v2/internal/delegation"
 	"github.com/glincker/theauth-go/v2/internal/emailnorm"
+	"github.com/glincker/theauth-go/v2/internal/httpsec"
 	"github.com/glincker/theauth-go/v2/internal/identitylink"
 	"github.com/glincker/theauth-go/v2/internal/magiclink"
 	internaloauth "github.com/glincker/theauth-go/v2/internal/oauth"
 	"github.com/glincker/theauth-go/v2/internal/organizations"
 	"github.com/glincker/theauth-go/v2/internal/password"
 	"github.com/glincker/theauth-go/v2/internal/pathprefix"
+	"github.com/glincker/theauth-go/v2/internal/ratelimit"
 	"github.com/glincker/theauth-go/v2/internal/rbac"
 	internalsaml "github.com/glincker/theauth-go/v2/internal/saml"
 	internalscim "github.com/glincker/theauth-go/v2/internal/scim"
 	"github.com/glincker/theauth-go/v2/internal/session"
+	"github.com/glincker/theauth-go/v2/internal/testhooks"
 	"github.com/glincker/theauth-go/v2/internal/throttle"
 	internaltotp "github.com/glincker/theauth-go/v2/internal/totp"
 	internalwebauthn "github.com/glincker/theauth-go/v2/internal/webauthn"
@@ -316,14 +322,14 @@ type TheAuth struct {
 	trustedProxies    []netip.Prefix
 	trustedOrigins    []string
 	csrfDisabled      bool
-	apiTokens         *apiTokenService
+	apiTokens         *apitokens.Service
 	revocations       RevocationBus
 
 	storageRaw any
 	doctorCfg  Config
 	emailNorm  emailnorm.Normalizer
 	throttle   *throttle.Limiter
-	bootstrap  *bootstrapGate
+	bootstrap  *bootstrap.Gate
 
 	// dcrRegistrationTokenHashes is the sha256-hashed set of operator
 	// initial access tokens accepted by POST /oauth/register when DCR is
@@ -467,7 +473,7 @@ func New(cfg Config) (*TheAuth, error) {
 		return nil, err
 	}
 
-	trustedOrigins, err := normalizeOrigins(cfg.TrustedOrigins)
+	trustedOrigins, err := httpsec.NormalizeOrigins(cfg.TrustedOrigins)
 	if err != nil {
 		return nil, err
 	}
@@ -522,7 +528,7 @@ func New(cfg Config) (*TheAuth, error) {
 	if err := wireServices(a, cfg, providers, sp); err != nil {
 		return nil, err
 	}
-	if a.apiTokens, err = newAPITokenService(a, cfg.APITokens, cfg.storageRaw); err != nil {
+	if a.apiTokens, err = apitokens.New(tokenHost{a}, cfg.APITokens, cfg.storageRaw, a.storage, a.baseURL); err != nil {
 		return nil, err
 	}
 	return a, nil
@@ -582,4 +588,50 @@ func (a *TheAuth) Stats() Stats {
 		AuditFailed:     c.Failed,
 		AuditSinkFailed: c.SinkFailed,
 	}
+}
+
+func init() {
+	testhooks.ValidateEmail = validateEmail
+	testhooks.IssueSession = func(a any, ctx context.Context, u User, ua, ip string) (string, Session, error) {
+		return a.(*TheAuth).issueSession(ctx, u, ua, ip)
+	}
+	testhooks.ValidateSession = func(a any, ctx context.Context, token string) (*Session, *User, error) {
+		return a.(*TheAuth).validateSession(ctx, token)
+	}
+	testhooks.RequestMagicLink = func(a any, ctx context.Context, email string) (string, error) {
+		return a.(*TheAuth).requestMagicLinkForTest(ctx, email)
+	}
+	testhooks.ConsumeMagicLink = func(a any, ctx context.Context, token string) (string, *User, error) {
+		return a.(*TheAuth).consumeMagicLink(ctx, token)
+	}
+	testhooks.SetBaseURL = func(a any, url string) { a.(*TheAuth).baseURL = url }
+	testhooks.SignupWithPassword = func(a any, ctx context.Context, email, pw string) (*User, string, error) {
+		return a.(*TheAuth).signupWithPassword(ctx, email, pw)
+	}
+	testhooks.SigninWithPassword = func(a any, ctx context.Context, email, pw, ua, ip string) (string, *User, error) {
+		tok, u, _, err := a.(*TheAuth).signinWithPassword(ctx, email, pw, ua, ip)
+		return tok, u, err
+	}
+	testhooks.RequestPasswordReset = func(a any, ctx context.Context, email string) (string, error) {
+		return a.(*TheAuth).requestPasswordResetForTest(ctx, email)
+	}
+	testhooks.ResetPassword = func(a any, ctx context.Context, token, pw string) error {
+		return a.(*TheAuth).resetPassword(ctx, token, pw)
+	}
+	testhooks.NewKeyedLimiter = func(perMinute int, evictAfter, tick time.Duration) testhooks.Limiter {
+		return ratelimit.NewWith(perMinute, evictAfter, tick)
+	}
+	testhooks.LinkOAuth = func(a any, ctx context.Context, sessionToken, provider, pid string) error {
+		return a.(*TheAuth).identityLinkSvc.LinkOAuthToCurrentUser(ctx, sessionToken, provider, pid, nil, nil, nil, "")
+	}
+	testhooks.LinkPassword = func(a any, ctx context.Context, sessionToken, pw string) error {
+		return a.(*TheAuth).identityLinkSvc.LinkPasswordToCurrentUser(ctx, sessionToken, pw)
+	}
+	testhooks.MergeAccounts = func(a any, ctx context.Context, sessionToken string, secondary ULID) error {
+		return a.(*TheAuth).identityLinkSvc.MergeAccounts(ctx, sessionToken, secondary, identitylink.MergeInput{})
+	}
+	testhooks.UnlinkOAuth = func(a any, ctx context.Context, sessionToken, provider string) error {
+		return a.(*TheAuth).identityLinkSvc.UnlinkOAuthProvider(ctx, sessionToken, provider)
+	}
+	testhooks.SetAPITokenClock = func(a any, now func() time.Time) { a.(*TheAuth).apiTokens.SetClock(now) }
 }

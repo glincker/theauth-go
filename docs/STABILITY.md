@@ -207,8 +207,8 @@ actions will keep their name and target shape through every minor release.
   for completeness.
 - Anything under `examples/`. Examples may be rewritten or removed at any
   time.
-- Test helpers in `*_test.go` files including `export_test.go` symbols.
-  Those exist for our own tests and are not importable outside the module.
+- Test helpers in `*_test.go` files and `internal/testhooks`. Those exist for
+  our own tests and are not importable outside the module.
 - The audit writer internals (channel sizing strategy, goroutine
   scheduling, batch SQL shape). Only the contract described under
   `Stats` and `EmitAudit` semantics is stable.
@@ -223,12 +223,12 @@ library uses a type assertion to detect support at runtime. The base
 `Storage` interface only grows in a v2.0 release.
 
 `Storage` is the embedding of the capability interfaces declared in
-`storage_caps.go`. Its method set is frozen by a test; a new method goes
+`storage.go`. Its method set is frozen by a test; a new method goes
 into the capability it belongs to only in a major release, otherwise behind
 a new optional interface.
 
 Session management follows this rule: `SessionManagementStorage` and
-`SessionLinkStorage` (storage_sessions.go) are optional capabilities outside
+`SessionLinkStorage` (storage.go) are optional capabilities outside
 `Storage`; see `docs/SESSIONS.md`. The new `Session` fields `LastSeenAt`,
 `ElevatedUntil` and `CredentialID` are additive.
 

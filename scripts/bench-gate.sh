@@ -136,7 +136,7 @@ packages=(
     "./crypto/..."
     "./internal/bench/..."
     "./internal/jwt/..."
-    "."
+    "./integration/..."
 )
 
 echo "bench-gate: running ${#included[@]} curated benchmarks (skipping ${#skipped[@]})" >&2

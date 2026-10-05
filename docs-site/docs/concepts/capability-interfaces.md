@@ -1,6 +1,6 @@
 # Capability Interfaces and Choosing a Storage Backend
 
-theauth-go does not require one monolithic storage interface. Persistence is split into small capability interfaces in `storage_caps.go` and a few optional extensions. A backend implements the ones it can, and `New` checks that every feature you enabled has the capability it needs. A missing one fails at startup with `ErrStorageMissingCapability`, not on the first request.
+theauth-go does not require one monolithic storage interface. Persistence is split into small capability interfaces in `storage.go` and a few optional extensions. A backend implements the ones it can, and `New` checks that every feature you enabled has the capability it needs. A missing one fails at startup with `ErrStorageMissingCapability`, not on the first request.
 
 ## Three ways to supply storage
 

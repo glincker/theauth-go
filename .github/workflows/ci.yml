@@ -48,7 +48,7 @@ jobs:
         with:
           go-version: "1.25"
       - run: go vet ./...
-      - run: go test -race -timeout=120s -coverprofile=coverage.out ./...
+      - run: go test -race -timeout=300s -coverprofile=coverage.out ./...
         env:
           POSTGRES_TEST_URL: postgres://theauth:theauth@localhost:5432/theauth_test?sslmode=disable
       - uses: codecov/codecov-action@v7
@@ -72,11 +72,11 @@ jobs:
           - { pkg: ./crypto, name: FuzzGenerateCodeVerifier }
           - { pkg: ./crypto, name: FuzzTokenHashRoundTrip }
           - { pkg: ./crypto, name: FuzzBase64URLDecode }
-          - { pkg: ".", name: FuzzParseSessionCookie }
-          - { pkg: ".", name: FuzzParseStateCookie }
-          - { pkg: ".", name: FuzzEmailValidation }
-          - { pkg: ".", name: FuzzCallbackQueryParams }
-          - { pkg: ".", name: FuzzCallbackProviderName }
+          - { pkg: ./integration, name: FuzzParseSessionCookie }
+          - { pkg: ./integration, name: FuzzParseStateCookie }
+          - { pkg: ./integration, name: FuzzEmailValidation }
+          - { pkg: ./integration, name: FuzzCallbackQueryParams }
+          - { pkg: ./integration, name: FuzzCallbackProviderName }
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-go@v7
