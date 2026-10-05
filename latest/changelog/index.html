@@ -2213,6 +2213,11 @@
 <a href="https://keepachangelog.com/en/1.1.0/">Keep a Changelog</a> and the project
 adheres to <a href="https://semver.org/">Semantic Versioning</a> from v1.0 forward.</p>
 <h2 id="unreleased">[Unreleased]<a class="headerlink" href="#unreleased" title="Permanent link">&para;</a></h2>
+<h3 id="security">Security<a class="headerlink" href="#security" title="Permanent link">&para;</a></h3>
+<ul>
+<li>CIMD fetches refuse non-public addresses at dial time, no redirects or proxy; <code>CIMDConfig.AllowPrivateNetworks</code> (dev) and <code>DenyHost</code> added.</li>
+<li>Authorization error responses redirect only to a registered <code>redirect_uri</code>; SAML <code>RelayState</code> is restricted to same-site paths or <code>SAMLConfig.AllowedRelayStates</code>.</li>
+</ul>
 <h3 id="changed">Changed<a class="headerlink" href="#changed" title="Permanent link">&para;</a></h3>
 <ul>
 <li><strong>Module path is now <code>github.com/glincker/theauth-go/v2</code>; update imports.</strong>
@@ -2318,7 +2323,7 @@ adheres to <a href="https://semver.org/">Semantic Versioning</a> from v1.0 forwa
   requests within seconds of a session, token, agent, credential or
   delegation revoke. Reuses <code>WatchSession</code> for session polling.</li>
 </ul>
-<h3 id="security">Security<a class="headerlink" href="#security" title="Permanent link">&para;</a></h3>
+<h3 id="security_1">Security<a class="headerlink" href="#security_1" title="Permanent link">&para;</a></h3>
 <ul>
 <li><strong>Login throttle.</strong> Password signin is now gated before any credential work
   by per (client IP, normalized email) exponential backoff after a grace
@@ -2809,7 +2814,7 @@ unchanged.</p>
   on every push to <code>main</code>. Build locally: <code>cd docs-site &amp;&amp; mkdocs build --strict</code>.</p>
 </li>
 </ul>
-<h3 id="security_1">Security<a class="headerlink" href="#security_1" title="Permanent link">&para;</a></h3>
+<h3 id="security_2">Security<a class="headerlink" href="#security_2" title="Permanent link">&para;</a></h3>
 <ul>
 <li>
 <p><strong>Supply chain: goreleaser + cosign + SLSA (#57).</strong> Every release artifact
@@ -3105,7 +3110,7 @@ and an architectural cleanup that brings <code>theauth.go</code> from 1,171 LOC 
   <code>stdlib-app</code>, <code>observability-otel</code>, <code>observability-prom</code>.</p>
 </li>
 </ul>
-<h3 id="security_2">Security<a class="headerlink" href="#security_2" title="Permanent link">&para;</a></h3>
+<h3 id="security_3">Security<a class="headerlink" href="#security_3" title="Permanent link">&para;</a></h3>
 <ul>
 <li>
 <p><strong>N1 (security re-audit).</strong> Cache invalidation gap: revoked / suspended
