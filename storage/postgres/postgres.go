@@ -564,6 +564,20 @@ func (s *Store) UpdateWebAuthnBackupFlags(ctx context.Context, credentialID []by
 	return err
 }
 
+// RenameWebAuthnCredential implements theauth.WebAuthnRenameStorage.
+func (s *Store) RenameWebAuthnCredential(ctx context.Context, id, userID theauth.ULID, name string) error {
+	tag, err := s.pool.Exec(ctx,
+		`UPDATE webauthn_credentials SET name = $1 WHERE id = $2 AND user_id = $3`,
+		name, ulidToPgUUID(id), ulidToPgUUID(userID))
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return storage.ErrNotFound
+	}
+	return nil
+}
+
 func (s *Store) DeleteWebAuthnCredential(ctx context.Context, id theauth.ULID, userID theauth.ULID) error {
 	affected, err := s.q.DeleteWebAuthnCredential(ctx, sqlcgen.DeleteWebAuthnCredentialParams{
 		ID:     ulidToPgUUID(id),
@@ -653,6 +667,35 @@ func (s *Store) InsertRecoveryCodes(ctx context.Context, codes []theauth.Recover
 		}
 	}
 	return nil
+}
+
+// CountUnusedRecoveryCodes implements theauth.RecoveryCodeStorage.
+func (s *Store) CountUnusedRecoveryCodes(ctx context.Context, userID theauth.ULID) (int, error) {
+	var n int
+	err := s.pool.QueryRow(ctx,
+		`SELECT count(*) FROM totp_recovery_codes WHERE user_id = $1 AND used_at IS NULL`,
+		ulidToPgUUID(userID)).Scan(&n)
+	return n, err
+}
+
+// ReplaceRecoveryCodes implements theauth.RecoveryCodeStorage.
+func (s *Store) ReplaceRecoveryCodes(ctx context.Context, userID theauth.ULID, codes []theauth.RecoveryCode) error {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	if _, err := tx.Exec(ctx, `DELETE FROM totp_recovery_codes WHERE user_id = $1`, ulidToPgUUID(userID)); err != nil {
+		return err
+	}
+	for _, c := range codes {
+		if _, err := tx.Exec(ctx,
+			`INSERT INTO totp_recovery_codes (id, user_id, code_hash, created_at) VALUES ($1, $2, $3, $4)`,
+			ulidToPgUUID(c.ID), ulidToPgUUID(c.UserID), c.CodeHash, timeToTs(c.CreatedAt)); err != nil {
+			return err
+		}
+	}
+	return tx.Commit(ctx)
 }
 
 func (s *Store) ConsumeRecoveryCode(ctx context.Context, userID theauth.ULID, code string, at time.Time) error {

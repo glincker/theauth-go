@@ -262,6 +262,21 @@ WHERE credential_id = ?`,
 	return err
 }
 
+// RenameWebAuthnCredential implements theauth.WebAuthnRenameStorage.
+func (s *Store) RenameWebAuthnCredential(ctx context.Context, id, userID theauth.ULID, name string) error {
+	res, err := s.db.ExecContext(ctx,
+		`UPDATE webauthn_credentials SET name = ? WHERE id = ? AND user_id = ?`,
+		name, ulidToBytes(id), ulidToBytes(userID))
+	if err != nil {
+		return err
+	}
+	n, _ := res.RowsAffected()
+	if n == 0 {
+		return storage.ErrNotFound
+	}
+	return nil
+}
+
 func (s *Store) DeleteWebAuthnCredential(ctx context.Context, id theauth.ULID, userID theauth.ULID) error {
 	res, err := s.db.ExecContext(ctx,
 		`DELETE FROM webauthn_credentials WHERE id = ? AND user_id = ?`,

@@ -495,6 +495,19 @@ func (s *Store) DeleteWebAuthnCredential(_ context.Context, id theauth.ULID, use
 	return nil
 }
 
+// RenameWebAuthnCredential implements theauth.WebAuthnRenameStorage.
+func (s *Store) RenameWebAuthnCredential(_ context.Context, id, userID theauth.ULID, name string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	c, ok := s.webauthnCreds[id]
+	if !ok || c.UserID != userID {
+		return storage.ErrNotFound
+	}
+	c.Name = name
+	s.webauthnCreds[id] = c
+	return nil
+}
+
 // ---------- TOTP secrets (v0.5) ----------
 
 func (s *Store) UpsertPendingTOTPSecret(_ context.Context, sec theauth.TOTPSecret) error {
@@ -556,6 +569,34 @@ func (s *Store) DeleteTOTPSecret(_ context.Context, userID theauth.ULID) error {
 func (s *Store) InsertRecoveryCodes(_ context.Context, codes []theauth.RecoveryCode) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	for _, c := range codes {
+		s.recoveryCodes[c.ID] = c
+	}
+	return nil
+}
+
+// CountUnusedRecoveryCodes implements theauth.RecoveryCodeStorage.
+func (s *Store) CountUnusedRecoveryCodes(_ context.Context, userID theauth.ULID) (int, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	n := 0
+	for _, rc := range s.recoveryCodes {
+		if rc.UserID == userID && rc.UsedAt == nil {
+			n++
+		}
+	}
+	return n, nil
+}
+
+// ReplaceRecoveryCodes implements theauth.RecoveryCodeStorage.
+func (s *Store) ReplaceRecoveryCodes(_ context.Context, userID theauth.ULID, codes []theauth.RecoveryCode) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for id, rc := range s.recoveryCodes {
+		if rc.UserID == userID {
+			delete(s.recoveryCodes, id)
+		}
+	}
 	for _, c := range codes {
 		s.recoveryCodes[c.ID] = c
 	}

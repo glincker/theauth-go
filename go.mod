@@ -10,6 +10,7 @@ require (
 	github.com/go-chi/chi/v5 v5.3.2
 	github.com/go-sql-driver/mysql v1.10.1
 	github.com/go-webauthn/webauthn v0.13.4
+	github.com/golang-jwt/jwt/v5 v5.3.1
 	github.com/jackc/pgx/v5 v5.11.0
 	github.com/oklog/ulid/v2 v2.1.2
 	github.com/pquerna/otp v1.5.0
@@ -23,7 +24,6 @@ require (
 	filippo.io/edwards25519 v1.2.0 // indirect
 	github.com/boombuler/barcode v1.0.1-0.20190219062509-6c824513bacc // indirect
 	github.com/go-webauthn/x v0.1.23 // indirect
-	github.com/golang-jwt/jwt/v5 v5.3.1 // indirect
 	github.com/google/go-cmp v0.7.0 // indirect
 	github.com/google/go-tpm v0.9.5 // indirect
 	github.com/google/uuid v1.6.0 // indirect

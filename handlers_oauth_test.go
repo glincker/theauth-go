@@ -142,8 +142,8 @@ func TestOAuthGitHubEndToEnd(t *testing.T) {
 			stateCookie = c
 		}
 	}
-	if stateCookie == nil || stateCookie.Value != state {
-		t.Fatalf("/start: state cookie missing or mismatched (cookie=%+v state=%q)", stateCookie, state)
+	if stateCookie == nil || stateCookie.Value == "" || stateCookie.Value == state {
+		t.Fatalf("/start: binding cookie missing or equal to state (cookie=%+v state=%q)", stateCookie, state)
 	}
 
 	// 2) Drive the callback as if the user just bounced back from GitHub
@@ -362,8 +362,8 @@ func TestOAuthMultiProviderMountAndStart(t *testing.T) {
 					cookieValue = c.Value
 				}
 			}
-			if cookieValue != state {
-				t.Fatalf("/start: state cookie %q, want match for %q", cookieValue, state)
+			if cookieValue == "" || cookieValue == state {
+				t.Fatalf("/start: binding cookie %q must be set and distinct from state %q", cookieValue, state)
 			}
 			// Confirm the redirect URI we send to the provider contains
 			// the provider name so the callback lands on the right route.

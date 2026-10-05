@@ -363,6 +363,9 @@ func wireServices(a *TheAuth, cfg Config, providers map[string]Provider, sp saml
 	a.totpSvc = internaltotp.NewService(cfg.Storage, a.sessionSvc, a, totpConfigFromRoot(cfg.TOTP), cfg.EncryptionKey)
 	replay, _ := cfg.storageRaw.(internaltotp.ReplayStore)
 	a.totpSvc.SetHardening(a.throttle, replay)
+	if rc, ok := cfg.storageRaw.(RecoveryCodeStorage); ok {
+		a.totpSvc.SetRecoveryStore(rc)
+	}
 	pwCfg := password.Config{
 		BaseURL:     cfg.BaseURL,
 		TOTPEnabled: cfg.TOTP != nil,
@@ -383,6 +386,9 @@ func wireServices(a *TheAuth, cfg Config, providers map[string]Provider, sp saml
 	waSvc, err := internalwebauthn.NewService(cfg.Storage, a.sessionSvc, a, webauthnConfigFromRoot(cfg.WebAuthn))
 	if err != nil {
 		return err
+	}
+	if rn, ok := cfg.storageRaw.(WebAuthnRenameStorage); ok {
+		waSvc.SetRenamer(rn)
 	}
 	a.webauthnSvc = waSvc
 	samlCfg := samlConfigFromRoot(cfg.SAML, sp.cert, sp.key)
@@ -420,6 +426,7 @@ func wireServices(a *TheAuth, cfg Config, providers map[string]Provider, sp saml
 			oauthSessionAdapter{svc: a.sessionSvc},
 			a,
 			onConflict,
+			oauthConfigFromRoot(cfg.OAuth),
 		)
 	}
 
@@ -496,6 +503,9 @@ func webauthnConfigFromRoot(c *WebAuthnConfig) *internalwebauthn.Config {
 		RPDisplayName: c.RPDisplayName,
 		RPOrigins:     append([]string(nil), c.RPOrigins...),
 		ChallengeTTL:  c.ChallengeTTL,
+
+		RequireUserVerification: c.RequireUserVerification,
+		CloneWarning:            string(c.CloneWarning),
 	}
 }
 

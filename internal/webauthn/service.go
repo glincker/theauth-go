@@ -26,6 +26,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"strings"
 	"sync"
 	"time"
 
@@ -106,6 +107,25 @@ type Config struct {
 	RPDisplayName string
 	RPOrigins     []string
 	ChallengeTTL  time.Duration
+	// RequireUserVerification demands UV on registration and login.
+	RequireUserVerification bool
+	// CloneWarning is CloneWarningReject (default) or CloneWarningFlag.
+	CloneWarning string
+}
+
+// Clone-warning policies for a sign count that fails to advance.
+const (
+	CloneWarningReject = "reject"
+	CloneWarningFlag   = "flag"
+)
+
+// ErrRenameUnsupported is returned by RenameCredential when the storage
+// adapter does not implement the rename capability.
+var ErrRenameUnsupported = errors.New("theauth: storage does not support renaming passkeys")
+
+// Renamer is the optional storage capability behind RenameCredential.
+type Renamer interface {
+	RenameWebAuthnCredential(ctx context.Context, id, userID models.ULID, name string) error
 }
 
 // ErrReplayDetected is returned when a sign-count update receives a value
@@ -120,6 +140,7 @@ type Service struct {
 	auditEm  audit.Emitter
 	wa       *gowebauthn.WebAuthn
 	cfg      *Config
+	renamer  Renamer
 
 	// challenges is the in-memory map of in-flight challenges keyed by
 	// the opaque token returned from BeginRegistration / BeginLogin.
@@ -157,18 +178,27 @@ func NewService(storage Storage, sessions SessionIssuer, em audit.Emitter, cfg *
 	if display == "" {
 		display = cfg.RPID
 	}
-	wa, err := gowebauthn.New(&gowebauthn.Config{
+	waCfg := &gowebauthn.Config{
 		RPID:                  cfg.RPID,
 		RPDisplayName:         display,
 		RPOrigins:             cfg.RPOrigins,
 		AttestationPreference: "none",
-	})
+	}
+	if cfg.RequireUserVerification {
+		waCfg.AuthenticatorSelection = protocol.AuthenticatorSelection{
+			UserVerification: protocol.VerificationRequired,
+		}
+	}
+	wa, err := gowebauthn.New(waCfg)
 	if err != nil {
 		return nil, fmt.Errorf("theauth: webauthn config: %w", err)
 	}
 	s.wa = wa
 	return s, nil
 }
+
+// SetRenamer installs the optional rename capability.
+func (s *Service) SetRenamer(r Renamer) { s.renamer = r }
 
 // Start spawns the challenge GC goroutine. Idempotent: a second call is a
 // no-op. No-op when cfg is nil.
@@ -381,7 +411,8 @@ func (s *Service) FinishRegistration(
 		return models.WebAuthnCredential{}, false, fmt.Errorf("theauth: insert webauthn credential: %w", err)
 	}
 	s.auditEm.EmitAudit(ctx, "passkey.registered", models.TargetRef{Type: "webauthn_credential", ID: stored.ID.String()}, map[string]any{
-		"aaguid": fmt.Sprintf("%x", stored.AAGUID),
+		"aaguid":  fmt.Sprintf("%x", stored.AAGUID),
+		"user_id": userID.String(),
 	})
 	slog.Info("theauth: webauthn registered", "user_id", userID.String(), "credential_id_len", len(stored.CredentialID))
 	return stored, isFirstCredential, nil
@@ -491,6 +522,10 @@ func (s *Service) FinishLogin(ctx context.Context, challengeToken string, body i
 			"backup_eligible", assertedBE,
 			"backup_state", assertedBS,
 		)
+		s.auditEm.EmitAudit(ctx, "login.failed", models.TargetRef{}, map[string]any{
+			"auth_method": "passkey",
+			"reason":      "assertion_invalid",
+		})
 		return "", models.Session{}, models.NewError(models.CodeWebAuthn, "validate assertion failed", err)
 	}
 	// Persist the asserted backup flags for a reconciled legacy credential.
@@ -514,18 +549,34 @@ func (s *Service) FinishLogin(ctx context.Context, challengeToken string, body i
 	// 0-stays-0 carve-out the WebAuthn spec mandates for authenticators
 	// that do not implement counters.
 	newCount := cred.Authenticator.SignCount
+	clone := cred.Authenticator.CloneWarning
 	if newCount > stored.SignCount {
 		if err := s.storage.UpdateWebAuthnSignCount(ctx, stored.CredentialID, newCount, time.Now()); err != nil {
 			return "", models.Session{}, fmt.Errorf("theauth: update sign count: %w", err)
 		}
 	} else if newCount != 0 || stored.SignCount != 0 {
-		// Equal-non-zero or lower: clone warning per spec.
-		return "", models.Session{}, ErrReplayDetected
+		clone = true
+	}
+	if clone {
+		s.auditEm.EmitAudit(ctx, "passkey.clone_warning", models.TargetRef{Type: "webauthn_credential", ID: stored.ID.String()}, map[string]any{
+			"user_id": user.ID.String(),
+			"policy":  s.clonePolicy(),
+		})
+		if s.clonePolicy() != CloneWarningFlag {
+			s.auditEm.EmitAudit(ctx, "login.failed", models.TargetRef{Type: "user", ID: user.ID.String()}, map[string]any{
+				"auth_method": "passkey",
+				"reason":      "clone_warning",
+			})
+			return "", models.Session{}, ErrReplayDetected
+		}
 	}
 	sessTok, sess, err := s.sessions.Issue(ctx, *user, ua, ip)
 	if err != nil {
 		return "", models.Session{}, err
 	}
+	s.auditEm.EmitAudit(ctx, "user.login", models.TargetRef{Type: "user", ID: user.ID.String()}, map[string]any{
+		"auth_method": "passkey",
+	})
 	slog.Info("theauth: passkey login", "user_id", user.ID.String(), "credential_id_len", len(stored.CredentialID))
 	return sessTok, sess, nil
 }
@@ -545,6 +596,34 @@ func (s *Service) DeleteCredential(ctx context.Context, id models.ULID, userID m
 	if err := s.storage.DeleteWebAuthnCredential(ctx, id, userID); err != nil {
 		return err
 	}
-	s.auditEm.EmitAudit(ctx, "passkey.deleted", models.TargetRef{Type: "webauthn_credential", ID: id.String()}, nil)
+	s.auditEm.EmitAudit(ctx, "passkey.deleted", models.TargetRef{Type: "webauthn_credential", ID: id.String()}, map[string]any{
+		"user_id": userID.String(),
+	})
 	return nil
+}
+
+// RenameCredential changes the display name of one of the user's passkeys.
+// The name is trimmed and must be 1 to 64 characters.
+func (s *Service) RenameCredential(ctx context.Context, id, userID models.ULID, name string) error {
+	name = strings.TrimSpace(name)
+	if name == "" || len(name) > 64 {
+		return models.NewError(models.CodeWebAuthn, "name must be 1 to 64 characters", nil)
+	}
+	if s.renamer == nil {
+		return ErrRenameUnsupported
+	}
+	if err := s.renamer.RenameWebAuthnCredential(ctx, id, userID, name); err != nil {
+		return fmt.Errorf("theauth: rename passkey: %w", err)
+	}
+	s.auditEm.EmitAudit(ctx, "passkey.renamed", models.TargetRef{Type: "webauthn_credential", ID: id.String()}, map[string]any{
+		"user_id": userID.String(),
+	})
+	return nil
+}
+
+func (s *Service) clonePolicy() string {
+	if s.cfg != nil && s.cfg.CloneWarning == CloneWarningFlag {
+		return CloneWarningFlag
+	}
+	return CloneWarningReject
 }

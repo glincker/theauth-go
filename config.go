@@ -157,7 +157,26 @@ type WebAuthnConfig struct {
 	// ChallengeTTL caps how long the in-memory challenge session is valid.
 	// Defaults to 5 minutes; challenges are single-use regardless.
 	ChallengeTTL time.Duration
+	// RequireUserVerification makes registration and login demand user
+	// verification (PIN or biometric), so a passkey is never a bare
+	// possession factor. Defaults to false (v2 behavior: UV "preferred").
+	RequireUserVerification bool
+	// CloneWarning selects what happens when an assertion's sign count
+	// fails to advance, the signal of a cloned authenticator. The default,
+	// CloneWarningReject, refuses the login; CloneWarningFlag lets it
+	// through and emits a passkey.clone_warning audit event.
+	CloneWarning CloneWarningPolicy
 }
+
+// CloneWarningPolicy selects the response to a sign count regression.
+type CloneWarningPolicy string
+
+const (
+	// CloneWarningReject refuses a login whose sign count did not advance.
+	CloneWarningReject CloneWarningPolicy = "reject"
+	// CloneWarningFlag allows the login and records an audit event.
+	CloneWarningFlag CloneWarningPolicy = "flag"
+)
 
 // LifecycleHooks lets consumers react to authentication-lifecycle events
 // without forking handlers or wrapping every endpoint at the HTTP boundary.

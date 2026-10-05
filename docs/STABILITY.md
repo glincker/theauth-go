@@ -65,6 +65,17 @@ point forward.
 - `Stats.AuditSinkFailed uint64`: monotonically non-decreasing counter
   incremented once per failing sink per batch. Existing fields are unchanged.
 
+## Additive surface (auth hardening)
+
+New, non-breaking: `Config.OAuth`, `Config.AuthEventSink`, `OAuthConfig`,
+`OAuthStateStore`, `OAuthState`, `OAuthSignupPolicy`, `NonceProvider`,
+`AuthEvent`, `AuthEventType`, `AuthEventSink`, `AuthEventChannelSink`,
+`WebAuthnConfig.RequireUserVerification`, `WebAuthnConfig.CloneWarning`,
+`WebAuthnRenameStorage`, `RecoveryCodeStorage`,
+`(*TheAuth).RecordTokenMinted`, `RecordTokenRevoked`, `TOTPStatus`,
+`RegenerateRecoveryCodes`, `RenamePasskey`, and the package
+`github.com/glincker/theauth-go/provider/oidc`.
+
 ## Stable surface
 
 ### Root package: `github.com/glincker/theauth-go`

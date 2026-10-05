@@ -116,6 +116,7 @@ type Service struct {
 	auditEm       audit.Emitter
 	cfg           *Config
 	encryptionKey []byte
+	recovery      RecoveryStore
 
 	// enrollments is the in-memory map of in-flight enrollments keyed by
 	// the EnrollmentID returned from BeginEnrollment.
@@ -482,6 +483,7 @@ func (s *Service) Verify(ctx context.Context, pendingSessionToken, code string) 
 	}
 	if !valid {
 		s.mfaFailed(ctx, sess.UserID)
+		s.emitMFA(ctx, sess.UserID, "totp", false)
 		s.recordPendingFailure(ctx, sess.ID, sess.UserID)
 		return "", models.Session{}, models.NewError(models.CodeInvalidTOTP, "invalid code", nil)
 	}
@@ -490,6 +492,7 @@ func (s *Service) Verify(ctx context.Context, pendingSessionToken, code string) 
 	if err := s.storage.UpdateSessionAuthLevel(ctx, sess.ID, models.AuthLevelFull); err != nil {
 		return "", models.Session{}, err
 	}
+	s.emitMFA(ctx, sess.UserID, "totp", true)
 	updated := *sess
 	updated.AuthLevel = models.AuthLevelFull
 	return pendingSessionToken, updated, nil
@@ -511,6 +514,7 @@ func (s *Service) ConsumeRecoveryCode(ctx context.Context, pendingSessionToken, 
 	if err := s.storage.ConsumeRecoveryCode(ctx, sess.UserID, code, time.Now()); err != nil {
 		if errors.Is(err, models.ErrStorageNotFound) {
 			s.mfaFailed(ctx, sess.UserID)
+			s.emitMFA(ctx, sess.UserID, "recovery_code", false)
 			s.recordPendingFailure(ctx, sess.ID, sess.UserID)
 			return "", models.Session{}, models.NewError(models.CodeInvalidTOTP, "invalid recovery code", nil)
 		}
@@ -521,6 +525,7 @@ func (s *Service) ConsumeRecoveryCode(ctx context.Context, pendingSessionToken, 
 	if err := s.storage.UpdateSessionAuthLevel(ctx, sess.ID, models.AuthLevelFull); err != nil {
 		return "", models.Session{}, err
 	}
+	s.emitMFA(ctx, sess.UserID, "recovery_code", true)
 	updated := *sess
 	updated.AuthLevel = models.AuthLevelFull
 	return pendingSessionToken, updated, nil
