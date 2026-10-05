@@ -8,6 +8,13 @@ adheres to [Semantic Versioning](https://semver.org/) from v1.0 forward.
 
 ### Added
 
+- **Postgres and MySQL capability parity.** Both adapters now implement
+  `APITokenStorage`, `DeviceCodeStorage`, `SessionManagementStorage`,
+  `SessionLinkStorage`, `TOTPReplayStorage`, `UserCountStorage` and a shared
+  `Store.ThrottleStore` (`LoginThrottleCASStore`), so tokens, device login,
+  session management and closed signup work on them. Migration 0018 in each
+  adapter; atomic single-use claims. MySQL `CreateUser` now defaults zero
+  `CreatedAt` and `UpdatedAt` instead of failing.
 - **Token self-service routes.** `GET /auth/tokens/current` describes the
   presented API bearer token and `DELETE /auth/tokens/current` revokes it, so
   `clientauth` `Whoami` and `Logout` work against a real server. Bearer-only,
