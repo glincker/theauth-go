@@ -72,11 +72,11 @@ jobs:
           - { pkg: ./crypto, name: FuzzGenerateCodeVerifier }
           - { pkg: ./crypto, name: FuzzTokenHashRoundTrip }
           - { pkg: ./crypto, name: FuzzBase64URLDecode }
-          - { pkg: ".", name: FuzzParseSessionCookie }
-          - { pkg: ".", name: FuzzParseStateCookie }
-          - { pkg: ".", name: FuzzEmailValidation }
-          - { pkg: ".", name: FuzzCallbackQueryParams }
-          - { pkg: ".", name: FuzzCallbackProviderName }
+          - { pkg: ./integration, name: FuzzParseSessionCookie }
+          - { pkg: ./integration, name: FuzzParseStateCookie }
+          - { pkg: ./integration, name: FuzzEmailValidation }
+          - { pkg: ./integration, name: FuzzCallbackQueryParams }
+          - { pkg: ./integration, name: FuzzCallbackProviderName }
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-go@v7
