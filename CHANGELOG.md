@@ -27,7 +27,6 @@ adheres to [Semantic Versioning](https://semver.org/) from v1.0 forward.
 
 ### Added
 
-<<<<<<< HEAD
 - **Storage capability interfaces and `Config.CoreStorage`.** `Storage` is now
   the embedding of small capability interfaces (`UserStorage`,
   `SessionStorage`, `MagicLinkStorage`, `PasswordStorage`,
@@ -40,7 +39,7 @@ adheres to [Semantic Versioning](https://semver.org/) from v1.0 forward.
   when an enabled feature needs more. `storagetest` gains `RunCore`,
   `RunWebAuthn`, `RunTOTP`, `RunAudit`, `RunRBAC` and `RunOAuthServer`;
   `storagetest.Run` still runs everything.
-=======
+
 - **`(*TheAuth).Handler()`.** Returns an `http.Handler` serving every route
   `Mount` registers, so `net/http` ServeMux users need no chi import.
   `examples/stdlib-app` now uses it.
@@ -58,7 +57,6 @@ adheres to [Semantic Versioning](https://semver.org/) from v1.0 forward.
   (silence with `Config.SuppressTrustedProxiesWarning`); behind a proxy an
   empty list collapses the per-IP rate-limit bucket. See the new HTTP security
   doc.
->>>>>>> feat/http-handler-csrf
 
 - **`Storage.UpdateWebAuthnBackupFlags`.** New storage method backing the
   login-time reconciliation write for legacy WebAuthn credentials. Implemented
