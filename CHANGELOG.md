@@ -27,6 +27,24 @@ adheres to [Semantic Versioning](https://semver.org/) from v1.0 forward.
 
 ### Added
 
+- **`(*TheAuth).Handler()`.** Returns an `http.Handler` serving every route
+  `Mount` registers, so `net/http` ServeMux users need no chi import.
+  `examples/stdlib-app` now uses it.
+- **CSRF / Origin protection.** Cookie-authenticated POST/PUT/PATCH/DELETE
+  requests whose `Origin` (or `Referer`) is not the `BaseURL` origin or in the
+  new `Config.TrustedOrigins` get 403, closing the sibling-subdomain gap that
+  `SameSite=Lax` leaves. Bearer requests and GET/HEAD/OPTIONS are exempt.
+  Opt out with `Config.DisableCSRFProtection`.
+- **Automatic `Secure` cookies.** `Secure` is now set per request when
+  `BaseURL` is https, the connection is TLS, or a `TrustedProxies` peer sent
+  `X-Forwarded-Proto: https`. `Config.SecureCookie: true` still forces it.
+  Behavior change: an https `BaseURL` with `SecureCookie: false` now yields
+  Secure cookies.
+- **`TrustedProxies` startup warning.** A WARN is logged when it is empty
+  (silence with `Config.SuppressTrustedProxiesWarning`); behind a proxy an
+  empty list collapses the per-IP rate-limit bucket. See the new HTTP security
+  doc.
+
 - **`Storage.UpdateWebAuthnBackupFlags`.** New storage method backing the
   login-time reconciliation write for legacy WebAuthn credentials. Implemented
   across the Postgres, MySQL, and in-memory backends and covered by the shared

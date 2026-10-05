@@ -3,9 +3,9 @@
 ## What this shows
 
 theauth-go runs behind a plain `net/http.ServeMux` with Go 1.22+
-pattern routing. Chi is only used to provide the `chi.Router` value
-that `theauth.TheAuth.Mount` expects; the rest of the server is
-framework-free. Proves the library is router agnostic.
+pattern routing via `theauth.TheAuth.Handler()`, which returns a plain
+`http.Handler`. No router import is needed. Proves the library is router
+agnostic.
 
 ## Prerequisites
 

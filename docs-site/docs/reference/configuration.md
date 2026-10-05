@@ -16,8 +16,8 @@ The `theauth.Config` struct is the single wiring point for a theauth-go instance
 | `SessionTTL` | `time.Duration` | 24h | How long sessions remain valid. |
 | `MagicLinkTTL` | `time.Duration` | 15m | How long magic-link tokens are valid. |
 | `CookieName` | `string` | `"theauth_session"` | Session cookie name. |
-| `SecureCookie` | `bool` | `false` | Set to `true` in production (requires HTTPS). |
-| `SuppressSecureCookieWarning` | `bool` | `false` | Silence the startup warning when `SecureCookie` is false (useful in local dev). |
+| `SecureCookie` | `bool` | `false` | Forces `Secure` on every cookie. When false, `Secure` is still set per request if `BaseURL` is https, the connection is TLS, or a `TrustedProxies` peer sent `X-Forwarded-Proto: https`. |
+| `SuppressSecureCookieWarning` | `bool` | `false` | Silence the startup warning when `SecureCookie` is false and `BaseURL` is not https (useful in local dev). |
 
 ## Rate limiting
 
@@ -25,7 +25,10 @@ The `theauth.Config` struct is the single wiring point for a theauth-go instance
 |---|---|---|---|
 | `RateLimitPerIP` | `int` | 5 | Per-IP per-minute budget on credential endpoints. |
 | `RateLimitPerEmail` | `int` | 3 | Per-email per-minute budget on signin and forgot. |
-| `TrustedProxies` | `[]netip.Prefix` | `nil` | Reverse-proxy networks whose `X-Forwarded-For` is trusted. Default: no XFF trust. |
+| `TrustedProxies` | `[]netip.Prefix` | `nil` | Reverse-proxy networks whose `X-Forwarded-For` is trusted. Default: no XFF trust. Also gates `X-Forwarded-Proto`. See [HTTP security](../security/http-security.md). |
+| `SuppressTrustedProxiesWarning` | `bool` | `false` | Silence the startup warning logged when `TrustedProxies` is empty. |
+| `TrustedOrigins` | `[]string` | `nil` | Extra origins allowed to send cookie-authenticated state-changing requests. The `BaseURL` origin is always trusted. |
+| `DisableCSRFProtection` | `bool` | `false` | Turn off the Origin/Referer check. |
 
 ## Email
 

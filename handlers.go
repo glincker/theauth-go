@@ -37,6 +37,13 @@ import (
 // 3/min per email on signin + forgot (most attack-surface). All limits are
 // in-memory + per-process; replace at the LB layer for multi-instance deploys.
 func (a *TheAuth) Mount(r chi.Router) {
+	r.Group(func(r chi.Router) {
+		r.Use(a.securityMiddleware)
+		a.mountRoutes(r)
+	})
+}
+
+func (a *TheAuth) mountRoutes(r chi.Router) {
 	// Build limiter middlewares once so the same buckets persist across all
 	// routes mounted at this point. Re-mounting builds a fresh set.
 	ipLimit := a.RateLimitByIP(a.rateLimitPerIP)
