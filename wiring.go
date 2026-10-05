@@ -617,9 +617,5 @@ func rbacConfigFromValidated(cfg *RBACConfig, catalog []Permission, index map[st
 	if cfg == nil {
 		return nil
 	}
-	internalSeeds := make([]rbac.RoleSeed, len(seeds))
-	for i, s := range seeds {
-		internalSeeds[i] = rbac.RoleSeed{Name: s.Name, Description: s.Description, Permissions: s.Permissions}
-	}
-	return &rbac.Config{PermCatalog: catalog, PermIndex: index, DefaultRoleSeeds: internalSeeds}
+	return &rbac.Config{PermCatalog: catalog, PermIndex: index, DefaultRoleSeeds: seeds}
 }

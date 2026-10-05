@@ -1,22 +1,13 @@
 package theauth
 
-// handlers_domains.go consolidates the per-domain HTTP forwarder shims
-// (account, organizations, SAML, SCIM) into a single file. PR I
-// (2026-06-22) merged handlers_account.go, handlers_organizations.go,
-// handlers_saml.go, and handlers_scim.go here so the repository root
-// has fewer files and the README renders above the fold on GitHub.
-// Every wiring function below is a thin coordinator that instantiates
-// an extracted internal/<domain>/handlers package and mounts it onto
-// the supplied chi router; substantive logic lives in those internal
-// packages. No behaviour change; route paths and middleware chains are
-// byte-stable.
-
 import (
 	"context"
 	"net/http"
 	"time"
 
 	accounthandlers "github.com/glincker/theauth-go/v2/internal/account"
+	adminhandlers "github.com/glincker/theauth-go/v2/internal/admin"
+	agenthandlers "github.com/glincker/theauth-go/v2/internal/agent/handlers"
 	"github.com/glincker/theauth-go/v2/internal/httpx"
 	"github.com/glincker/theauth-go/v2/internal/identitylink"
 	"github.com/glincker/theauth-go/v2/internal/models"
@@ -25,6 +16,181 @@ import (
 	scimhandlers "github.com/glincker/theauth-go/v2/internal/scim/handlers"
 	"github.com/go-chi/chi/v5"
 )
+
+// handlers_admin.go: thin forwarder around the extracted
+// internal/admin/handlers package. PR F architecture reorg
+// (2026-06-20) moved the 12 /admin/v1 endpoints plus the
+// requireOrgMatch middleware there. The agent + delegation admin
+// subtree (PR F's other extraction at internal/agent/handlers) is
+// wired in via the MountAgents callback supplied below.
+
+// adminRBACAdapter implements adminhandlers.RBACService on top of
+// root *TheAuth.
+type adminRBACAdapter struct{ a *TheAuth }
+
+func (s adminRBACAdapter) GrantRole(ctx context.Context, actorID, userID, roleID models.ULID) error {
+	return s.a.GrantRole(ctx, actorID, userID, roleID)
+}
+
+func (s adminRBACAdapter) RevokeRole(ctx context.Context, actorID, userID, roleID models.ULID) error {
+	return s.a.RevokeRole(ctx, actorID, userID, roleID)
+}
+
+func (s adminRBACAdapter) CreateRole(ctx context.Context, orgID models.ULID, name, description string, permissions []string) (models.Role, error) {
+	return s.a.CreateRole(ctx, orgID, name, description, permissions)
+}
+
+func (s adminRBACAdapter) UpdateRole(ctx context.Context, roleID models.ULID, name, description string, permissions []string) (models.Role, error) {
+	return s.a.UpdateRole(ctx, roleID, name, description, permissions)
+}
+
+func (s adminRBACAdapter) DeleteRole(ctx context.Context, roleID models.ULID) error {
+	return s.a.DeleteRole(ctx, roleID)
+}
+
+// adminAuditAdapter implements adminhandlers.AuditService on top of
+// root *TheAuth.
+type adminAuditAdapter struct{ a *TheAuth }
+
+func (s adminAuditAdapter) QueryAudit(ctx context.Context, q models.AuditQuery) ([]models.AuditEvent, string, error) {
+	return s.a.QueryAudit(ctx, q)
+}
+
+func (s adminAuditAdapter) EmitAudit(ctx context.Context, action string, target models.TargetRef, meta map[string]any) {
+	s.a.EmitAudit(ctx, action, target, meta)
+}
+
+func (s adminAuditAdapter) HashEmailForAudit(email string) string {
+	return HashEmailForAudit(email)
+}
+
+// mountAdmin wires the /admin/v1 routes via the extracted
+// internal/admin/handlers package. Called from Mount when
+// Config.Admin is non-nil.
+func (a *TheAuth) mountAdmin(r chi.Router) {
+	pathPrefix := ""
+	if a.adminCfg != nil {
+		pathPrefix = a.adminCfg.PathPrefix
+	}
+	h := adminhandlers.New(
+		adminSessionStorage{Storage: a.storage, mgmt: a.sx.mgmt},
+		adminRBACAdapter{a: a},
+		adminAuditAdapter{a: a},
+		pathPrefix,
+		userFromRequest,
+		sessionFromRequest,
+	)
+	h.Mount(
+		r,
+		a.RequireAuth(),
+		func(permission string) func(http.Handler) http.Handler {
+			return a.RequirePermission(permission)
+		},
+		a.mountAdminAgents,
+	)
+}
+
+// handlers_admin_agents.go: thin forwarder around the extracted
+// internal/agent/handlers package. PR F architecture reorg
+// (2026-06-20) moved the seven /admin/v1/.../{agents,delegations}
+// endpoints there.
+
+// adminAgentAdapter implements agenthandlers.AgentService on top of
+// root *TheAuth.
+type adminAgentAdapter struct{ a *TheAuth }
+
+func (s adminAgentAdapter) ListAgentsByOwner(ctx context.Context, owner models.AgentOwner) ([]models.Agent, error) {
+	return s.a.ListAgentsByOwner(ctx, owner)
+}
+
+func (s adminAgentAdapter) CreateAgent(ctx context.Context, in models.CreateAgentInput) (models.Agent, models.AgentSecret, error) {
+	return s.a.CreateAgent(ctx, in)
+}
+
+func (s adminAgentAdapter) AgentByID(ctx context.Context, id models.ULID) (*models.Agent, error) {
+	return s.a.agentSvc.AgentByID(ctx, id)
+}
+
+func (s adminAgentAdapter) GetAgent(ctx context.Context, id models.ULID) (*models.Agent, error) {
+	return s.a.GetAgent(ctx, id)
+}
+
+func (s adminAgentAdapter) SuspendAgent(ctx context.Context, agentID models.ULID, reason string) error {
+	return s.a.SuspendAgent(ctx, agentID, reason)
+}
+
+func (s adminAgentAdapter) ResumeAgent(ctx context.Context, agentID models.ULID) error {
+	return s.a.ResumeAgent(ctx, agentID)
+}
+
+func (s adminAgentAdapter) RevokeAgent(ctx context.Context, agentID models.ULID, reason string) error {
+	return s.a.RevokeAgent(ctx, agentID, reason)
+}
+
+// adminDelegationAdapter implements
+// agenthandlers.DelegationService on top of root *TheAuth.
+type adminDelegationAdapter struct{ a *TheAuth }
+
+func (s adminDelegationAdapter) ListDelegationsForUser(ctx context.Context, userID models.ULID) ([]models.DelegationGrant, error) {
+	return s.a.ListDelegationsForUser(ctx, userID)
+}
+
+func (s adminDelegationAdapter) ListDelegationsForAgent(ctx context.Context, agentID models.ULID) ([]models.DelegationGrant, error) {
+	return s.a.ListDelegationsForAgent(ctx, agentID)
+}
+
+func (s adminDelegationAdapter) GrantDelegation(ctx context.Context, in models.GrantDelegationInput) (models.DelegationGrant, error) {
+	return s.a.GrantDelegation(ctx, in)
+}
+
+func (s adminDelegationAdapter) GrantByID(ctx context.Context, grantID models.ULID) (*models.DelegationGrant, error) {
+	return s.a.delegationSvc.GrantByID(ctx, grantID)
+}
+
+func (s adminDelegationAdapter) RevokeDelegation(ctx context.Context, grantID models.ULID, reason string) error {
+	return s.a.RevokeDelegation(ctx, grantID, reason)
+}
+
+// adminOrgAdapter implements agenthandlers.OrganizationLookup on top
+// of the root storage.
+type adminOrgAdapter struct{ a *TheAuth }
+
+func (s adminOrgAdapter) OrganizationMemberRole(ctx context.Context, orgID, userID models.ULID) (string, error) {
+	return s.a.storage.OrganizationMemberRole(ctx, orgID, userID)
+}
+
+// mountAdminAgents wires the agent + delegation routes via the
+// extracted internal/agent/handlers package. Called from mountAdmin
+// when the agent identity service is configured.
+func (a *TheAuth) mountAdminAgents(r chi.Router) {
+	if a.agentCfg == nil || a.as == nil {
+		return
+	}
+	h := agenthandlers.New(
+		adminAgentAdapter{a: a},
+		adminDelegationAdapter{a: a},
+		adminOrgAdapter{a: a},
+	)
+	h.Mount(r, func(permission string) func(http.Handler) http.Handler {
+		return a.RequirePermission(permission)
+	})
+}
+
+// adminSessionStorage layers the optional session list onto the full Storage,
+// which assembled storages would otherwise hide from a type assertion.
+type adminSessionStorage struct {
+	Storage
+	mgmt SessionManagementStorage
+}
+
+// ListUserSessions returns the user's live sessions, or nil when the storage
+// has no SessionManagementStorage.
+func (s adminSessionStorage) ListUserSessions(ctx context.Context, userID models.ULID) ([]models.Session, error) {
+	if s.mgmt == nil {
+		return nil, nil
+	}
+	return s.mgmt.ListUserSessions(ctx, userID)
+}
 
 // ---------- /account end-user self-service ----------
 

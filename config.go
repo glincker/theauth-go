@@ -3,6 +3,8 @@ package theauth
 import (
 	"context"
 	"time"
+
+	"github.com/glincker/theauth-go/v2/internal/rbac"
 )
 
 // config.go holds the concrete sub-config types that hang off Config.
@@ -56,11 +58,7 @@ type RBACConfig struct {
 // SeedOrganizationRoles time. Permissions are permission names; unknown
 // names cause New to return a validation error so typos surface at startup
 // instead of on the first permission check.
-type RoleSeed struct {
-	Name        string
-	Description string
-	Permissions []string
-}
+type RoleSeed = rbac.RoleSeed
 
 // AuditConfig configures the async audit writer. All fields have safe
 // defaults; the zero value AuditConfig{} is valid.
