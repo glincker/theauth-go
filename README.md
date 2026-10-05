@@ -1,427 +1,143 @@
-<!-- keywords: oauth2 oauth-server oidc mcp mcp-authorization go golang authorization-server pkce jwt saml scim webauthn totp rbac ed25519 postgres agent-identity delegation fapi dpop ciba par jar token-exchange -->
+# theauth-go
 
-<div align="center">
+**Authentication and authorization library for Go.** Mount it into your own `net/http` or `chi` server for password, magic link, OAuth 2.1 / OIDC login providers, passkeys (WebAuthn), TOTP, SAML SSO, SCIM, scoped API tokens, RFC 8628 device login for CLIs, agent identity, MCP authorization and a policy engine. Your data stays in your own database: memory, SQLite, Postgres or MySQL. MIT licensed, no hosted service.
 
-```
-████████╗██╗  ██╗███████╗ █████╗ ██╗   ██╗████████╗██╗  ██╗     ██████╗  ██████╗
-╚══██╔══╝██║  ██║██╔════╝██╔══██╗██║   ██║╚══██╔══╝██║  ██║    ██╔════╝ ██╔═══██╗
-   ██║   ███████║█████╗  ███████║██║   ██║   ██║   ███████║    ██║  ███╗██║   ██║
-   ██║   ██╔══██║██╔══╝  ██╔══██║██║   ██║   ██║   ██╔══██║    ██║   ██║██║   ██║
-   ██║   ██║  ██║███████╗██║  ██║╚██████╔╝   ██║   ██║  ██║    ╚██████╔╝╚██████╔╝
-   ╚═╝   ╚═╝  ╚═╝╚══════╝╚═╝  ╚═╝ ╚═════╝    ╚═╝   ╚═╝  ╚═╝     ╚═════╝  ╚═════╝
-```
-
-***OAuth 2.1 + MCP authorization for Go. Type-safe, dependency-light, FAPI-adjacent.***
-
-[![Go Reference](https://pkg.go.dev/badge/github.com/glincker/theauth-go.svg)](https://pkg.go.dev/github.com/glincker/theauth-go/v2)
+[![Go Reference](https://pkg.go.dev/badge/github.com/glincker/theauth-go/v2.svg)](https://pkg.go.dev/github.com/glincker/theauth-go/v2)
 [![Go Report Card](https://goreportcard.com/badge/github.com/glincker/theauth-go/v2)](https://goreportcard.com/report/github.com/glincker/theauth-go/v2)
 [![Release](https://img.shields.io/github/v/release/glincker/theauth-go?label=latest)](https://github.com/glincker/theauth-go/releases)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![CI](https://github.com/glincker/theauth-go/actions/workflows/ci.yml/badge.svg)](https://github.com/glincker/theauth-go/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/glincker/theauth-go/branch/main/graph/badge.svg)](https://codecov.io/gh/glincker/theauth-go)
-[![Go](https://img.shields.io/badge/built%20with-Go-00ADD8?logo=go&logoColor=white)](https://go.dev)
-[![Postgres](https://img.shields.io/badge/storage-Postgres%20%7C%20MySQL%20%7C%20Memory-336791?logo=postgresql&logoColor=white)](storage/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![SLSA 3](https://slsa.dev/images/gh-badge-level3.svg)](https://github.com/glincker/theauth-go/releases)
-[![SBOM](https://img.shields.io/badge/SBOM-Sigstore%20signed-blueviolet)](https://github.com/glincker/theauth-go/releases)
 [![Discord](https://img.shields.io/discord/829168897080557579?style=flat-square&logo=discord&logoColor=white&label=discord&color=5865F2)](https://discord.gg/Ar5pcaZB99)
 
-```bash
-go get github.com/glincker/theauth-go/v2
-```
+Documentation: **[go.theauth.dev](https://go.theauth.dev/)**
 
-</div>
-
-theauth-go is a Go library, not a hosted service. You mount it into your own `net/http` or `chi` server and it handles sign-in, sessions, API tokens, CLI login and an OAuth 2.1 / MCP authorization server, with your data in your own database. It runs as a single static binary with embedded SQLite, or against Postgres or MySQL.
-
-### 30 second quickstart: net/http and SQLite
-
-Needs Go 1.26 for `storage/sqlite` (its pure Go driver declares 1.26). The root module builds on Go 1.25.
-
-```bash
-go get github.com/glincker/theauth-go/v2 github.com/glincker/theauth-go/storage/sqlite
-```
-
-```go
-db, _ := sql.Open("sqlite", "file:app.db?_pragma=foreign_keys(1)&_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)&_txlock=immediate")
-_ = sqlitestore.Migrate(ctx, db)
-store, _ := sqlitestore.New(db)
-
-a, _ := theauth.New(theauth.Config{CoreStorage: store, BaseURL: "http://localhost:8080"})
-defer a.Close()
-
-mux := http.NewServeMux()
-mux.Handle("/auth/", a.Handler()) // signup, signin, magic link, sessions; passkeys and TOTP when configured
-mux.Handle("GET /me", a.RequireAuth()(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-    user, _ := theauth.UserFromContext(r.Context())
-    w.Write([]byte("hello " + user.Email))
-})))
-http.ListenAndServe(":8080", mux)
-```
-
-Import `sqlitestore "github.com/glincker/theauth-go/storage/sqlite"` and `_ "modernc.org/sqlite"`. Check errors in real code. For Postgres or chi, see [Quick start](#quick-start).
-
-### What it does
-
-- Email and password (Argon2id), magic links, 12 OAuth login providers, WebAuthn passkeys, TOTP with recovery codes.
-- Opaque server-side sessions with step-up (`RequireRecentAuth`), session list and revoke, idle timeout.
-- Scoped API tokens with `RequireAbility`, and RFC 8628 device login for CLIs via the `clientauth` package (`DeviceLogin`, `Whoami`, `Logout`).
-- Agent tokens (`MintAgentToken`) and a revocation bus that long-lived connections can watch.
-- First-run bootstrap: a setup token gates creation of the first admin.
-- OAuth 2.1 authorization server, MCP authorization, agent identities with delegation, SAML, SCIM, RBAC, audit log.
-- Storage: memory, SQLite, Postgres, MySQL. Not every backend implements every capability, see the [matrix](https://go.theauth.dev/concepts/capability-interfaces/).
-
-### Links
-
-- Full example with a CLI and a smoke test: [`examples/single-binary-sqlite`](./examples/single-binary-sqlite)
-- Guides: [Auth for a single-binary Go app](https://go.theauth.dev/guides/single-binary-go-app/), [Capability interfaces and storage backends](https://go.theauth.dev/concepts/capability-interfaces/), [Migrating from hand-rolled sessions](https://go.theauth.dev/guides/migrate-from-hand-rolled-sessions/)
-- [API tokens and device login](https://go.theauth.dev/guides/api-tokens/), [CLI login](https://go.theauth.dev/guides/cli-login/), [docs home](https://go.theauth.dev/)
-
----
-
-## Contents
-
-- [Why theauth-go](#why-theauth-go)
-- [Features at a glance](#features-at-a-glance)
-- [Quick start](#quick-start)
-- [MCP resource server](#mcp-resource-server)
-- [Documentation](#documentation)
-- [Examples](#examples)
-- [Storage backends](#storage-backends)
-- [Security](#security)
-- [FAQ](#faq)
-- [Community](#community)
-- [Contributing](#contributing)
-- [License](#license)
-
----
-
-## Why theauth-go
-
-| | theauth-go | Auth0 | better-auth | Goth | Hydra |
-|---|---|---|---|---|---|
-| License | MIT | Proprietary | MIT | MIT | Apache 2.0 |
-| Self-hosted | Yes | No | Yes | Yes | Yes |
-| MCP authorization | Yes | No | No | No | No |
-| FAPI 2.0 adjacent (PAR+JAR+DPoP) | Yes | Partial | No | No | Partial |
-| DPoP-bound tokens | Yes | No | No | No | No |
-| SBOM + Sigstore signed | Yes | No | No | No | No |
-| Pluggable storage | Yes | No | Partial | No | Yes |
-| Go-native, single import | Yes | No | No | Yes | No |
-
-theauth-go is the first Go auth library where **OAuth 2.1**, **MCP authorization**, **agent identities**, and **revocable delegation chains** ship in a single `go get`. It drops into a `chi` or `net/http` server in under twenty lines.
-
----
-
-## Features at a glance
-
-<details>
-<summary><strong>Expand full feature list</strong></summary>
-
-### OAuth 2.1 grants
-
-- Authorization code + PKCE S256 (mandatory)
-- Refresh token with rotation + family revocation on replay
-- `client_credentials` for service accounts and agents
-- RFC 8693 token exchange: scope narrowing, duration tightening, actor chain capped at 3
-- JWT bearer (RFC 7523)
-- CIBA: RFC 9509 backchannel authentication (Poll + Ping modes)
-- DPoP-bound access tokens (RFC 9449)
-- PAR: Pushed Authorization Requests (RFC 9126)
-- JAR: JWT-Secured Authorization Requests (RFC 9101)
-
-### MCP authorization
-
-- CIMD per MCP spec 2025-11-25
-- `/.well-known/oauth-protected-resource` (RFC 9728)
-- `mcpresource` SDK: zero-dependency module for MCP resource servers
-- Actor-chain walking via AS introspection
-- 401 with `WWW-Authenticate: Bearer` per RFC 6750 on failure
-
-### Authentication
-
-- Magic link sign-in
-- Email + password with Argon2id (OWASP 2026 defaults, 12-char minimum)
-- 12 OAuth providers: GitHub, Google, Microsoft, Discord, Facebook, Slack, GitLab, Bitbucket, Twitch, LinkedIn, X/Twitter, Apple
-- WebAuthn passkeys: discoverable login, sign-count replay protection, NIST SP 800-63B single-factor-strong
-- TOTP second factor with 10 single-use recovery codes and `pending_2fa` step-up state machine
-- SAML 2.0 Service Provider (per-organization IdP binding, signed assertions only)
-
-### Enterprise
-
-- SCIM 2.0: Users and Groups CRUD, RFC 7644 PATCH, per-org isolation
-- RBAC with closed permission catalog, seeded roles, `RequirePermission` middleware
-- Organization multi-tenancy with `active_organization_id` session scope
-- Audit logging: append-only, async, keyset pagination, pluggable SIEM sinks
-
-### Storage
-
-- **[storage/memory](storage/memory/)**: zero dependencies, for development and tests
-- **[storage/sqlite](storage/sqlite/)**: pure Go, single binary and single host (separate module, Go 1.26)
-- **[storage/postgres](storage/postgres/)**: production default, `pgx/v5` + `sqlc`
-- **[storage/mysql](storage/mysql/)**: MySQL 8.x alternative
-- **[storagetest](storagetest/)**: public contract test suite for custom backends
-
-### Observability
-
-- 10 OpenTelemetry spans across hot paths
-- 10 Prometheus metrics (requests, errors, token issuances, latency histograms)
-- Pluggable adapters: bring your own OTel exporter or Prometheus registry
-
-### Security profile
-
-- FAPI 2.0-adjacent: PAR + JAR + JWT-Bearer + DPoP
-- Ed25519 JWT signing with 30-day JWKS rotation
-- RFC 8707 audience binding (mandatory)
-- RFC 9700 refresh-token rotation with replay detection
-- RFC 7591 dynamic client registration with bearer-gated initial access tokens
-- Per-IP and per-email rate limiting on every credential endpoint
-- `HttpOnly`, `Secure`, `SameSite=Lax` cookies; only SHA-256 hash persisted
-
-### Supply chain
-
-- SBOM generated on every release
-- Sigstore keyless signing via `cosign`
-- SLSA-3 provenance attestation
-- Verify with: `cosign verify-blob --certificate-identity-regexp=".*" --certificate-oidc-issuer="https://token.actions.githubusercontent.com" <artifact>`
-
-</details>
-
----
-
-## Quick start
-
-**Requirements:** Go 1.25+
+## Install
 
 ```bash
 go get github.com/glincker/theauth-go/v2
+go get github.com/glincker/theauth-go/storage/sqlite   # optional, embedded SQLite backend
 ```
 
-**Step 1 -- Create an auth instance with in-memory storage:**
+The module path ends in `/v2`. The first resolvable v2 tag is `v2.6.0`, and the old path without `/v2` is frozen at `v1.0.0`. See [Migrating to /v2](https://go.theauth.dev/migrations/to-v2-module-path/).
+
+## Quick start: net/http and SQLite
+
+A complete server with sign-up, sign-in, magic links, sessions and one protected route, stored in a single SQLite file. Errors are checked; paste it into a `main` package. The `storage/sqlite` module needs Go 1.26.
 
 ```go
+package main
+
 import (
-    "github.com/glincker/theauth-go/v2"
-    "github.com/glincker/theauth-go/v2/storage/memory"
+	"context"
+	"database/sql"
+	"log"
+	"net/http"
+
+	"github.com/glincker/theauth-go/v2"
+	sqlitestore "github.com/glincker/theauth-go/storage/sqlite"
+	_ "modernc.org/sqlite"
 )
 
-a, err := theauth.New(theauth.Config{
-    Storage: memory.New(),
-    BaseURL: "http://localhost:8080", // used in magic-link emails
-})
+func main() {
+	ctx := context.Background()
+	db, err := sql.Open("sqlite", "file:app.db?_pragma=foreign_keys(1)&_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)&_txlock=immediate")
+	if err != nil {
+		log.Fatal(err)
+	}
+	if err := sqlitestore.Migrate(ctx, db); err != nil {
+		log.Fatal(err)
+	}
+	store, err := sqlitestore.New(db)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	a, err := theauth.New(theauth.Config{CoreStorage: store, BaseURL: "http://localhost:8080"})
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer a.Close()
+
+	mux := http.NewServeMux()
+	mux.Handle("/auth/", a.Handler()) // sign-up, sign-in, magic link, sessions
+	mux.Handle("GET /me", a.RequireAuth()(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		user, _ := theauth.UserFromContext(r.Context())
+		w.Write([]byte("hello " + user.Email))
+	})))
+	log.Fatal(http.ListenAndServe(":8080", mux))
+}
 ```
 
-**Step 2 -- Mount routes and protect your API:**
+For Postgres, chi or a runnable CLI with API tokens and device login, see [`examples/single-binary-sqlite`](./examples/single-binary-sqlite) and the [Quick Start](https://go.theauth.dev/getting-started/quick-start/).
 
-```go
-import "github.com/go-chi/chi/v5"
+## Features
 
-r := chi.NewRouter()
-a.Mount(r) // wires /auth/* (magic-link, email-password, OAuth, passkeys, TOTP, SAML, MCP)
-
-r.With(a.RequireAuth()).Get("/dashboard", func(w http.ResponseWriter, r *http.Request) {
-    user, _ := theauth.UserFromContext(r.Context())
-    fmt.Fprintf(w, "Welcome %s", user.Email)
-})
-```
-
-**Step 3 -- Switch to Postgres for production:**
-
-```go
-import (
-    "github.com/jackc/pgx/v5/pgxpool"
-    "github.com/glincker/theauth-go/v2/storage/postgres"
-)
-
-pool, _ := pgxpool.New(ctx, os.Getenv("DATABASE_URL"))
-a, _ := theauth.New(theauth.Config{
-    Storage: postgres.New(pool), // automatic schema migration on first run
-    BaseURL: "https://myapp.com",
-})
-```
-
-Full runnable example: [`examples/chi-app/`](./examples/chi-app)
-
----
-
-## MCP resource server
-
-The `mcpresource` module is a **zero-dependency** Go module for MCP resource servers. It does not pull in theauth core or any storage adapter.
-
-```bash
-go get github.com/glincker/theauth-go/mcpresource
-```
-
-```go
-v := mcpresource.New(
-    "https://mcp.example.com",
-    mcpresource.WithJWKS("https://as.example.com/oauth/jwks"),
-    mcpresource.WithIntrospection(
-        "https://as.example.com/oauth/introspect",
-        "mcp-client-id", "mcp-client-secret",
-    ),
-)
-
-r := chi.NewRouter()
-r.Use(v.Middleware) // JWT validation, audience check, actor-chain walk, revocation
-r.Get("/tools/run", func(w http.ResponseWriter, r *http.Request) {
-    p, _ := v.Principal(r.Context())
-    // p.Subject (user), p.Actor (final agent), p.ActorChain (delegation path)
-})
-```
-
-Full runnable example: [`examples/mcp-server/`](./examples/mcp-server)
-
----
-
-## Documentation
-
-| | |
-|---|---|
-| **[Getting Started](https://go.theauth.dev/getting-started/)** | Installation, quick start, choosing a storage backend |
-| **[Concepts](https://go.theauth.dev/concepts/)** | OAuth 2.1, MCP, PAR/JAR, JWT-Bearer, CIBA, DPoP |
-| **[Guides](https://go.theauth.dev/guides/)** | Add an OAuth provider, enable passkeys, OTel tracing, SIEM audit streaming |
-| **[Reference](https://go.theauth.dev/reference/)** | Config, Storage, Errors, Metrics, Spans |
-| **[Security](https://go.theauth.dev/security/)** | Threat model, SOC 2 mapping, GDPR data handling |
-| **[Migrations](https://go.theauth.dev/migrations/)** | Version upgrade guides |
-| **[Releases and verification](https://github.com/glincker/theauth-go/releases)** | `cosign verify-blob` command for SBOM and signed artifacts |
-
-In-repo references:
-
-| Document | Description |
-|---|---|
-| [AGENTS.md](docs/AGENTS.md) | Concise reference for AI coding assistants: patterns, anti-patterns, file map |
-| [STABILITY.md](docs/STABILITY.md) | Public API surface, SemVer rules, Storage interface special rules |
-| [CHANGELOG.md](CHANGELOG.md) | Per-release notable changes following Keep a Changelog |
-| [ROADMAP.md](docs/ROADMAP.md) | In-flight work and known gaps |
-| [SECURITY.md](.github/SECURITY.md) | Vulnerability disclosure policy and contact |
-| [CONTRIBUTING.md](.github/CONTRIBUTING.md) | Dev setup, test commands, commit convention, PR process |
-| [MIGRATION.md](docs/MIGRATION.md) | Step-by-step upgrade guides between major versions |
-
----
-
-## Examples
-
-| Example | What it shows |
-|---|---|
-| [`examples/chi-app/`](./examples/chi-app) | Magic links and email/password with chi |
-| [`examples/echo-app/`](./examples/echo-app) | Drop-in with Echo |
-| [`examples/gin-app/`](./examples/gin-app) | Drop-in with Gin |
-| [`examples/stdlib-app/`](./examples/stdlib-app) | Pure `net/http`, no framework |
-| [`examples/single-binary-sqlite/`](./examples/single-binary-sqlite) | One static binary, SQLite, setup token, API tokens, device-login CLI (Go 1.26) |
-| [`examples/mcp-server/`](./examples/mcp-server) | MCP resource server using `mcpresource` middleware |
-| [`examples/oauth-multi-provider/`](./examples/oauth-multi-provider) | GitHub + Google + Microsoft + Discord in one app |
-| [`examples/observability-otel/`](./examples/observability-otel) | OTel tracing and span export |
-| [`examples/observability-prom/`](./examples/observability-prom) | Prometheus metrics scrape |
-| [`examples/webauthn-passkey/`](./examples/webauthn-passkey) | Passkey register and discoverable login |
-| [`examples/totp-stepup/`](./examples/totp-stepup) | Password + TOTP step-up flow |
-| [`examples/oauth-apple/`](./examples/oauth-apple) | Sign in with Apple (JWT client secret) |
-| [`examples/oauth-gitlab/`](./examples/oauth-gitlab) | Sign in with GitLab (self-hosted or gitlab.com) |
-
-Each example includes a `README`, `main.go`, `go.mod`, `docker-compose.yml`, `.env.example`, and `Makefile`.
-
----
+| Area | What you get | Docs |
+|---|---|---|
+| Sign-in | Email and password (Argon2id, 12 character minimum), magic links, 12 OAuth login providers, generic OIDC | [Add an OAuth provider](https://go.theauth.dev/guides/add-oauth-provider/) |
+| Second factors | WebAuthn passkeys with discoverable login, TOTP with recovery codes, step-up with `RequireRecentAuth` | [Enable passkeys](https://go.theauth.dev/guides/webauthn-passkeys/) |
+| Sessions | Opaque server-side sessions, session list and revoke, idle timeout | [Configuration](https://go.theauth.dev/reference/configuration/) |
+| API tokens and CLIs | Scoped tokens with `RequireAbility`, RFC 8628 device login via the `clientauth` package | [API tokens](https://go.theauth.dev/guides/api-tokens/), [CLI login](https://go.theauth.dev/guides/cli-login/) |
+| OAuth 2.1 server | Authorization code with PKCE, refresh rotation, `client_credentials`, token exchange, CIBA, PAR, JAR, DPoP | [OAuth 2.1 primer](https://go.theauth.dev/concepts/oauth21-primer/), [Authorization server](https://go.theauth.dev/concepts/authorization-server/) |
+| MCP and agents | MCP authorization (protected resource metadata, CIMD), agent identities with delegation, `mcpresource` SDK module | [MCP authorization](https://go.theauth.dev/concepts/mcp-authorization/), [Resource server](https://go.theauth.dev/concepts/resource-server/) |
+| Enterprise | SAML 2.0 SSO, SCIM 2.0, organizations, RBAC, append-only audit log with SIEM sinks | [Splunk audit streaming](https://go.theauth.dev/guides/audit-log-splunk/), [Threat model](https://go.theauth.dev/security/threat-model/) |
+| Policy | Authorization policy engine | [Policy engine](https://go.theauth.dev/guides/policy-engine/) |
+| Observability | OpenTelemetry spans, Prometheus metrics | [OpenTelemetry tracing](https://go.theauth.dev/guides/opentelemetry-tracing/), [Metrics](https://go.theauth.dev/reference/metrics/) |
+| Supply chain | SBOM and Sigstore signed release artifacts, SLSA 3 provenance | [Releases and verification](https://go.theauth.dev/security/releases/) |
 
 ## Storage backends
 
-| Backend | Path | Use case |
-|---|---|---|
-| Memory | [storage/memory](storage/memory/) | Development, unit tests, zero deps |
-| SQLite | [storage/sqlite](storage/sqlite/) | Single binary and single host, pure Go, own module (Go 1.26), no organizations, SAML, SCIM, RBAC or OAuth server |
-| Postgres | [storage/postgres](storage/postgres/) | Production default, `pgx/v5` + `sqlc` |
-| MySQL | [storage/mysql](storage/mysql/) | MySQL 8.x alternative |
-| Contract suite | [storagetest](storagetest/) | Verify your own custom backend |
+Persistence is split into small capability interfaces, and `New` fails at startup if a feature you enabled has no matching capability. Full matrix: [Capability interfaces](https://go.theauth.dev/concepts/capability-interfaces/).
 
-Bring your own storage backend by implementing the `Storage` interface and running the `storagetest` contract suite against it.
+| Capability | memory | sqlite | postgres | mysql |
+|---|---|---|---|---|
+| Users, sessions, magic links, passwords | Yes | Yes | Yes | Yes |
+| OAuth accounts, passkeys, TOTP, audit log | Yes | Yes | Yes | Yes |
+| Scoped API tokens, device grant, session management | Yes | Yes | Yes | Yes |
+| Organizations, SAML, SCIM, RBAC | Yes | No | Yes | Yes |
+| OAuth 2.1 authorization server, agent identity | Yes | No | Yes | Yes |
+| CIBA backchannel auth | Yes | No | Yes | No |
+| Durable JWT-bearer `jti` replay, policy engine storage | Yes | No | No | No |
 
----
+Postgres and MySQL implement the newer token, device, session and throttle capabilities and pass the new `storagetest` suites against live PostgreSQL 16 and MySQL 8. The older shared contract gate for those two adapters is still off in CI because some older subtests fail, so treat their support for the newer features as newly added. You can write your own backend and verify it with the public [`storagetest`](./storagetest) suite.
 
-## Security
+## Stability
 
-Please **do not** open a public GitHub issue for security vulnerabilities.
-
-Report to **security@glincker.com** or use [GitHub Security Advisories](https://github.com/glincker/theauth-go/security/advisories/new).
-
-See [SECURITY.md](.github/SECURITY.md) for supported versions, disclosure policy, scope, and SLA targets.
-
-### Password policy
-
-- **Minimum length: 12 characters**, enforced at the library level
-  (`internal/password.MinPasswordLength`, NIST 2024 baseline). Signup and
-  password-change requests below this length return `weak_password`.
-- **Hashing:** Argon2id, using the parameter defaults from
-  `golang.org/x/crypto/argon2`.
-- **Anti-enumeration:** a fixed-cost dummy Argon2id verify runs on
-  user-not-found, so login timing doesn't reveal whether an email is
-  registered.
-- The 12-character minimum is currently fixed at the package level; there
-  is no `Config` field to override it yet.
-
----
+Packages and APIs that were Stable before v2.6 keep their SemVer guarantees. Among the additions in v2.6, only the storage capability split, `Handler()` and `Config.PathPrefix` are Stable. Experimental: `storage/sqlite`, `clientauth`, `policy`, the agent identity and revocation APIs, `Doctor`, `Config.ProviderResolver` and the new optional storage capabilities. Experimental APIs may change in a minor release. The SemVer rules and the list of stable packages are in [STABILITY.md](docs/STABILITY.md).
 
 ## FAQ
 
-**Is this production ready?**
-Yes for v1.0+ surfaces (session auth, OAuth providers, RBAC, audit log),
-covered by [STABILITY.md](docs/STABILITY.md)'s SemVer contract. v2.0's
-OAuth 2.1 authorization server and agent-identity primitives are feature
-complete as of v2.0.0. Check [CHANGELOG.md](CHANGELOG.md) for the
-current release.
+**Does theauth-go work without Postgres?**
+Yes. Use `storage/sqlite` for a single static binary with one database file, `storage/memory` for tests, or MySQL. SQLite has no organizations, SAML, SCIM, RBAC or OAuth authorization server.
 
-**How does it compare to Auth0, better-auth, or Ory Hydra?**
-See the [comparison table](#why-theauth-go) above. The short version:
-theauth-go is self-hosted like better-auth/Hydra but also ships MCP
-authorization and FAPI 2.0-adjacent features (PAR+JAR+DPoP) that none of
-the alternatives have.
+**How do I add passkeys to a Go app?**
+Set `Config.WebAuthn` and use a storage backend that implements `WebAuthnStorage` (all four built in backends do). Register and login routes are then mounted under your auth handler. See the [passkeys guide](https://go.theauth.dev/guides/webauthn-passkeys/) and [`examples/webauthn-passkey`](./examples/webauthn-passkey).
 
-**Does it support AI agent / MCP use cases specifically?**
-Yes, this is one of the two things that differentiate it from every
-other Go auth library. See the [MCP resource server](#mcp-resource-server)
-section, and the agent-identity and delegation-chain docs.
+**Does it support MCP authorization?**
+Yes. The library can act as the OAuth 2.1 authorization server and publishes protected resource metadata. The separate zero dependency `mcpresource` module validates tokens inside an MCP resource server. See [MCP authorization](https://go.theauth.dev/concepts/mcp-authorization/) and [`examples/mcp-server`](./examples/mcp-server).
 
-**What databases are supported?**
-Postgres and MySQL, plus an in-memory backend for tests. The `Storage`
-interface is public, so custom backends are possible.
+**How do I migrate from Auth0 or Cognito?**
+Follow [Migrate from Auth0](https://go.theauth.dev/guides/migrate-from-auth0/) or [Migrate from Cognito](https://go.theauth.dev/guides/migrate-from-cognito/). Coming from hand-rolled sessions: [Migrate from hand-rolled sessions](https://go.theauth.dev/guides/migrate-from-hand-rolled-sessions/).
 
-**Is it free and open source?**
-Yes, MIT licensed, no paid tier gating any feature in this repository.
+**Which Go versions are supported?**
+The root module declares Go 1.25. `storage/sqlite` is a separate module and needs Go 1.26.
 
----
+**Is it a hosted service?**
+No. It is a library you run inside your own process, under the MIT license.
 
-## Community
+## Examples
 
-Join the GLINR Discord and talk to us in the `#theauth` forum channel.
+Runnable apps live in [`examples/`](./examples): [`single-binary-sqlite`](./examples/single-binary-sqlite), [`chi-app`](./examples/chi-app), [`gin-app`](./examples/gin-app), [`echo-app`](./examples/echo-app), [`stdlib-app`](./examples/stdlib-app), [`webauthn-passkey`](./examples/webauthn-passkey), [`totp-stepup`](./examples/totp-stepup), [`oauth-multi-provider`](./examples/oauth-multi-provider), [`mcp-server`](./examples/mcp-server), [`cli-login`](./examples/cli-login), [`observability-otel`](./examples/observability-otel) and [`observability-prom`](./examples/observability-prom). More in the [example apps guide](https://go.theauth.dev/getting-started/example-apps/).
 
-<a href="https://discord.gg/Ar5pcaZB99"><img src="https://discord.com/api/guilds/829168897080557579/widget.png?style=banner2" alt="Join the GLINR Discord" /></a>
+## Links
 
----
+- [Documentation](https://go.theauth.dev/) and [API reference on pkg.go.dev](https://pkg.go.dev/github.com/glincker/theauth-go/v2)
+- [CHANGELOG](CHANGELOG.md), [STABILITY](docs/STABILITY.md), [ROADMAP](docs/ROADMAP.md)
+- [Security policy](.github/SECURITY.md): report vulnerabilities privately, not in public issues
+- [Contributing](.github/CONTRIBUTING.md), [Discussions](https://github.com/glincker/theauth-go/discussions), [Discord](https://discord.gg/Ar5pcaZB99)
+- [AGENTS.md](docs/AGENTS.md) and [llms.txt](llms.txt) for AI coding assistants
+- [License: MIT](LICENSE)
 
-## Contributing
-
-See [CONTRIBUTING.md](.github/CONTRIBUTING.md) for dev setup, test commands, commit convention, and PR process.
-
-Short version:
-
-```bash
-git clone https://github.com/glincker/theauth-go.git
-cd theauth-go
-go test -race ./...
-go vet ./...
-```
-
-Open an issue first for anything beyond a typo or one-file fix.
-
----
-
-## License
-
-[MIT](LICENSE)
-
----
-
-<div align="center">
-
-*Built by the founder of [theSVG.org](https://thesvg.org).*
-
-*A Product of **GLINR STUDIOS***
-
-</div>
+Built by the founder of [theSVG.org](https://thesvg.org). A product of GLINR STUDIOS.
