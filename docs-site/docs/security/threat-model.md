@@ -92,3 +92,9 @@ The following are explicitly not covered by theauth-go:
 ## Reporting security issues
 
 See [SECURITY.md](https://github.com/glincker/theauth-go/blob/main/.github/SECURITY.md). Report security vulnerabilities to `security@glincker.com`. Do not open public issues for security findings.
+
+---
+
+## Full STRIDE threat analysis
+
+--8<-- "docs/THREAT-MODEL.md"
