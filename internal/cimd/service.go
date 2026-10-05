@@ -60,9 +60,20 @@ type Config struct {
 	MaxDocumentBytes int64
 
 	// HTTPClient is the http.Client used for outbound fetches. Nil
-	// constructs a default client honoring FetchTimeout. Tests inject a
+	// constructs a default SSRF-guarded client (no redirects, no proxy,
+	// non-public addresses refused at dial time). A supplied client is
+	// used as-is, so it must provide equivalent protection. Tests inject a
 	// custom client backed by httptest.NewTLSServer.
 	HTTPClient *http.Client
+
+	// AllowPrivateNetworks disables the dial-time block on loopback,
+	// private, link-local and other non-public addresses in the default
+	// client. Development only: it re-opens SSRF to internal hosts.
+	AllowPrivateNetworks bool
+
+	// DenyHost, when set, is consulted before any network IO; returning
+	// true rejects the URL's hostname. It runs in addition to TrustPolicy.
+	DenyHost func(host string) bool
 }
 
 // audit action names emitted by the Service. Named constants so the
@@ -125,7 +136,7 @@ func NewService(cfg Config, emitter audit.Emitter) *Service {
 	}
 	client := cfg.HTTPClient
 	if client == nil {
-		client = &http.Client{Timeout: cfg.FetchTimeout}
+		client = newSafeClient(cfg.FetchTimeout, cfg.AllowPrivateNetworks)
 	}
 	if emitter == nil {
 		emitter = audit.NoopEmitter{}
@@ -281,6 +292,14 @@ func (s *Service) Resolve(ctx context.Context, rawURL string) (*models.OAuthClie
 			map[string]any{"url": rawURL, "reason": "policy_denied"})
 		return nil, ErrPolicyDenied
 	}
+	if s.cfg.DenyHost != nil {
+		if u, err := url.Parse(rawURL); err != nil || s.cfg.DenyHost(u.Hostname()) {
+			s.emitter.EmitAudit(ctx, AuditRejectedPolicy,
+				models.TargetRef{Type: "cimd", ID: rawURL},
+				map[string]any{"url": rawURL, "reason": "host_denied"})
+			return nil, ErrPolicyDenied
+		}
+	}
 	key := cacheKey(rawURL)
 	now := time.Now()
 	if cached, ok := s.cache.Load(key); ok {
@@ -322,7 +341,7 @@ func (s *Service) fetch(ctx context.Context, rawURL string) (Document, error) {
 	resp, err := s.client.Do(req)
 	if err != nil {
 		s.auditInvalid(ctx, rawURL, "transport_error")
-		return Document{}, fmt.Errorf("%w: %v", ErrFetchFailed, err)
+		return Document{}, fmt.Errorf("%w: %w", ErrFetchFailed, err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {

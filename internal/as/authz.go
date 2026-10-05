@@ -134,6 +134,16 @@ func (s *Service) StartAuthorize(ctx context.Context, req AuthorizeRequest, user
 	return AuthorizeResult{RedirectURL: redirectURL}, nil
 }
 
+// RedirectURIRegisteredFor reports whether uri exactly matches a redirect URI
+// registered for clientID. Callers must not redirect to uri otherwise.
+func (s *Service) RedirectURIRegisteredFor(ctx context.Context, clientID, uri string) bool {
+	client, err := s.ResolveClient(ctx, clientID)
+	if err != nil || client == nil {
+		return false
+	}
+	return redirectURIRegistered(client.RedirectURIs, uri)
+}
+
 // redirectURIRegistered returns true when the supplied URI exactly
 // matches one of the registered URIs. OAuth 2.1 mandates exact match (no
 // path substring matching).

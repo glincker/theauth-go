@@ -6,6 +6,11 @@ adheres to [Semantic Versioning](https://semver.org/) from v1.0 forward.
 
 ## [Unreleased]
 
+### Security
+
+- CIMD fetches refuse non-public addresses at dial time, no redirects or proxy; `CIMDConfig.AllowPrivateNetworks` (dev) and `DenyHost` added.
+- Authorization error responses redirect only to a registered `redirect_uri`; SAML `RelayState` is restricted to same-site paths or `SAMLConfig.AllowedRelayStates`.
+
 ### Changed
 
 - **Module path is now `github.com/glincker/theauth-go/v2`; update imports.**
