@@ -17,6 +17,7 @@ import (
 var (
 	_ theauth.APITokenStorage   = (*Store)(nil)
 	_ theauth.DeviceCodeStorage = (*Store)(nil)
+	_ theauth.DeviceCodeLister  = (*Store)(nil)
 )
 
 const apiTokenCols = `id, owner_id, owner_kind, name, abilities, token_hash, hint, created_at, expires_at, last_used_at, revoked_at, kind, agent_name, delegated_by`
@@ -323,4 +324,32 @@ func (s *Store) DeleteExpiredDeviceCodes(ctx context.Context, before time.Time) 
 		return 0, fmt.Errorf("postgres: delete expired device codes: %w", err)
 	}
 	return int(tag.RowsAffected()), nil
+}
+
+// ListPendingDeviceCodes returns pending, unexpired requests newest first without device code hashes.
+func (s *Store) ListPendingDeviceCodes(ctx context.Context, f theauth.DevicePendingFilter) ([]theauth.DeviceCode, error) {
+	limit := f.Limit
+	if limit <= 0 {
+		limit = 100
+	}
+	rows, err := s.pool.Query(ctx, `SELECT `+deviceCols+` FROM device_codes
+WHERE status = $1 AND expires_at > $2 ORDER BY created_at DESC, id DESC LIMIT $3`,
+		theauth.DeviceStatusPending, f.Now, int32(limit))
+	if err != nil {
+		return nil, fmt.Errorf("postgres: list pending device codes: %w", err)
+	}
+	defer rows.Close()
+	var out []theauth.DeviceCode
+	for rows.Next() {
+		d, err := scanDevice(rows)
+		if err != nil {
+			return nil, fmt.Errorf("postgres: scan pending device code: %w", err)
+		}
+		d.DeviceCodeHash = nil
+		out = append(out, d)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("postgres: list pending device codes: %w", err)
+	}
+	return out, nil
 }

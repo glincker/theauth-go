@@ -8,6 +8,13 @@ adheres to [Semantic Versioning](https://semver.org/) from v1.0 forward.
 
 ### Added
 
+- **Device pending list.** `GET /auth/device/requests` lists pending device
+  requests (no codes or hashes) and `POST /auth/device/requests/{id}/approve|deny`
+  decides one by ID, session only, with the same capping and atomicity as the
+  user code route. New optional `DeviceCodeLister` storage extension for memory,
+  SQLite, Postgres and MySQL, plus `ListDeviceRequests` and
+  `DecideDeviceRequestByID`.
+
 - **Security doctor.** `(*TheAuth).Doctor` reports posture findings (open signup,
   bootstrap gate, proxies, cookies, CSRF, throttle, password and session policy,
   token hygiene, encryption key, audit, WebAuthn RP ID) with stable IDs and

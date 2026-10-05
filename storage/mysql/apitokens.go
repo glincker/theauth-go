@@ -16,6 +16,7 @@ import (
 var (
 	_ theauth.APITokenStorage   = (*Store)(nil)
 	_ theauth.DeviceCodeStorage = (*Store)(nil)
+	_ theauth.DeviceCodeLister  = (*Store)(nil)
 )
 
 const apiTokenCols = `id, owner_id, owner_kind, name, abilities, token_hash, hint, created_at, expires_at, last_used_at, revoked_at, kind, agent_name, delegated_by`
@@ -314,4 +315,32 @@ func (s *Store) RecordDevicePoll(ctx context.Context, hash []byte, at time.Time,
 func (s *Store) DeleteExpiredDeviceCodes(ctx context.Context, before time.Time) (int, error) {
 	res, err := s.db.ExecContext(ctx, `DELETE FROM device_codes WHERE expires_at < ?`, timeUTC(before))
 	return rowsCount("delete expired device codes", res, err)
+}
+
+// ListPendingDeviceCodes returns pending, unexpired requests newest first without device code hashes.
+func (s *Store) ListPendingDeviceCodes(ctx context.Context, f theauth.DevicePendingFilter) ([]theauth.DeviceCode, error) {
+	limit := f.Limit
+	if limit <= 0 {
+		limit = 100
+	}
+	rows, err := s.db.QueryContext(ctx, `SELECT `+deviceCols+` FROM device_codes
+WHERE status = ? AND expires_at > ? ORDER BY created_at DESC, id DESC LIMIT ?`,
+		theauth.DeviceStatusPending, timeUTC(f.Now), limit)
+	if err != nil {
+		return nil, fmt.Errorf("mysql: list pending device codes: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	var out []theauth.DeviceCode
+	for rows.Next() {
+		d, err := scanDevice(rows)
+		if err != nil {
+			return nil, fmt.Errorf("mysql: scan pending device code: %w", err)
+		}
+		d.DeviceCodeHash = nil
+		out = append(out, d)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("mysql: list pending device codes: %w", err)
+	}
+	return out, nil
 }

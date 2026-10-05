@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/go-chi/chi/v5"
+	oulid "github.com/oklog/ulid/v2"
 )
 
 const deviceGrantType = "urn:ietf:params:oauth:grant-type:device_code"
@@ -20,6 +21,9 @@ func (a *TheAuth) mountDevice(r chi.Router, ipLimit func(http.Handler) http.Hand
 		r.With(ipLimit).Post("/code", a.handleDeviceCode)
 		r.With(pollLimit).Post("/token", a.handleDeviceToken)
 		r.With(a.RequireAuth(), ipLimit).Post("/approve", a.handleDeviceApprove)
+		r.With(a.RequireAuth(), ipLimit).Get("/requests", a.handleDeviceRequests)
+		r.With(a.RequireAuth(), ipLimit).Post("/requests/{id}/approve", a.handleDeviceRequestDecide(true))
+		r.With(a.RequireAuth(), ipLimit).Post("/requests/{id}/deny", a.handleDeviceRequestDecide(false))
 	})
 }
 
@@ -184,4 +188,55 @@ func (a *TheAuth) writeDeviceDecideError(w http.ResponseWriter, err error) bool 
 		writeDeviceError(w, http.StatusInternalServerError, "server_error", "internal error")
 	}
 	return true
+}
+
+func (a *TheAuth) handleDeviceRequests(w http.ResponseWriter, r *http.Request) {
+	if a.apiTokens == nil || a.apiTokens.dev == nil {
+		writeDeviceError(w, http.StatusNotFound, "unsupported", "device authorization is not enabled")
+		return
+	}
+	list, err := a.ListDeviceRequests(r.Context())
+	if errors.Is(err, ErrDeviceListUnsupported) {
+		writeDeviceError(w, http.StatusNotFound, "unsupported", "pending request listing is not supported by this storage")
+		return
+	}
+	if err != nil {
+		slog.Error("theauth: device request list failed", "err", err.Error())
+		writeDeviceError(w, http.StatusInternalServerError, "server_error", "internal error")
+		return
+	}
+	writeTokenJSON(w, http.StatusOK, map[string]any{"requests": list})
+}
+
+func (a *TheAuth) handleDeviceRequestDecide(approve bool) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if a.apiTokens == nil || a.apiTokens.dev == nil {
+			writeDeviceError(w, http.StatusNotFound, "unsupported", "device authorization is not enabled")
+			return
+		}
+		id, err := oulid.ParseStrict(chi.URLParam(r, "id"))
+		if err != nil {
+			writeDeviceError(w, http.StatusNotFound, "invalid_request_id", "unknown request")
+			return
+		}
+		user, _ := UserFromContext(r.Context())
+		var abilities []string
+		if approve && r.ContentLength != 0 {
+			p, ok := readParams(w, r)
+			if !ok {
+				writeDeviceError(w, http.StatusBadRequest, "invalid_request", "invalid request body")
+				return
+			}
+			abilities = abilitiesParam(p)
+		}
+		err = a.DecideDeviceRequestByID(r.Context(), user, id, approve, abilities)
+		if errors.Is(err, ErrDeviceListUnsupported) {
+			writeDeviceError(w, http.StatusNotFound, "unsupported", "pending request listing is not supported by this storage")
+			return
+		}
+		if a.writeDeviceDecideError(w, err) {
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}
 }

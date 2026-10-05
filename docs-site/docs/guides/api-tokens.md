@@ -68,8 +68,17 @@ Behavior worth knowing:
 - Wrong user codes count against a per-approver and per-IP budget (5 per 15 minutes), after which approval returns 429.
 - Show the requester IP and user agent from `action: info` on your approval page.
 
-Go callers can skip HTTP: `StartDeviceAuth`, `LookupDeviceRequest`, `DecideDeviceRequest`, `RedeemDeviceCode`, `MintAPIToken`, `AuthenticateAPIToken`, `ListAPITokens`, `RevokeAPIToken`.
+### Approve from a pending list
+
+A dashboard can show pending requests so a signed-in user approves or denies one without typing the code. These routes need a session (bearer tokens get 401) and use the same rate limit as `/auth/device/approve`:
+
+- `GET /auth/device/requests` returns `{"requests": [...]}` with `id`, `clientName`, `requestedAbilities`, `requesterIp`, `requesterUserAgent`, `createdAt` and `expiresAt` for each pending, unexpired request, newest first. It never includes the device code, its hash, or the user code. Show the IP and user agent so people recognize their own request.
+- `POST /auth/device/requests/{id}/approve` and `POST /auth/device/requests/{id}/deny` decide by request ID with the same rules as the code route: atomic, abilities capped to the approver's, `root` only when requested and held. Approve accepts an optional `abilities` list to narrow. A `device.approved` or `device.denied` audit event is recorded.
+
+Requests carry no owner, so every signed-in user who may approve by code sees the same list. The list needs the optional `DeviceCodeLister` storage extension (memory, SQLite, Postgres and MySQL implement it); without it the routes return 404.
+
+Go callers can skip HTTP: `StartDeviceAuth`, `LookupDeviceRequest`, `DecideDeviceRequest`, `ListDeviceRequests`, `DecideDeviceRequestByID`, `RedeemDeviceCode`, `MintAPIToken`, `AuthenticateAPIToken`, `ListAPITokens`, `RevokeAPIToken`.
 
 ## Custom storage
 
-Implement `APITokenStorage` and `DeviceCodeStorage` and run `storagetest.RunAPITokens` and `storagetest.RunDeviceCodes`. `ClaimDeviceCode` and `DecideDeviceCode` must be single compare-and-set statements. Do not add a foreign key from the token owner to users: service account owners have no user row.
+Implement `APITokenStorage` and `DeviceCodeStorage` and optionally `DeviceCodeLister` for the pending list, and run `storagetest.RunAPITokens` and `storagetest.RunDeviceCodes`. `ClaimDeviceCode` and `DecideDeviceCode` must be single compare-and-set statements. Do not add a foreign key from the token owner to users: service account owners have no user row.
