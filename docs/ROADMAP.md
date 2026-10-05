@@ -4,9 +4,9 @@ This is the living, human-readable version of what's in flight. The
 authoritative record of what's shipped is [CHANGELOG.md](CHANGELOG.md);
 this file is forward-looking and gets pruned as items land.
 
-## Now (v2.5.x)
+## Now (v2.6.x)
 
-v2.5.0 is shipped (see [CHANGELOG.md](CHANGELOG.md)): the full
+v2.5.0 shipped earlier and v2.6.0 is the next release (see [CHANGELOG.md](CHANGELOG.md)): the full
 `Config.LifecycleHooks` surface, the `Mount()` hook-bypass fix, and a batch
 of storage-layer correctness fixes across Postgres and MySQL.
 

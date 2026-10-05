@@ -400,3 +400,32 @@ interfaces, `RequireAbility`, and the `/auth/tokens` (including the
 bearer-only `GET` and `DELETE /auth/tokens/current`) and `/auth/device/*`
 routes are additive and covered by the same SemVer guarantees. The `Storage`
 method set is unchanged.
+
+## v2.6 additions
+
+All additive; the `Storage` method set is unchanged.
+
+Stable (same SemVer guarantees as the root package):
+
+- Storage capability interfaces (`UserStorage`, `SessionStorage`,
+  `MagicLinkStorage`, `PasswordStorage`, `OAuthAccountStorage`,
+  `WebAuthnStorage`, `TOTPStorage`, `OrganizationStorage`, `SAMLStorage`,
+  `SCIMStorage`, `RBACStorage`, `AuditStorage`), the optional capabilities
+  `SessionManagementStorage`, `SessionLinkStorage`, `DeviceCodeLister`,
+  `LoginThrottleCASStore`, `Config.CoreStorage` and `ErrStorageMissingCapability`.
+- Root additions: `Config.PathPrefix`, `Config.ProviderResolver` with
+  `InvalidateProvider` and `ListProviders`, `(*TheAuth).Handler`,
+  `(*TheAuth).Doctor`, `MintAgentToken`, `RegisterAgent`, `APIToken.Kind`,
+  `AgentName`, `DelegatedBy`, `Principal.ActorChain`, `ImportAPIToken`,
+  `RevocationBus` and the revocation watcher helpers.
+
+Experimental (may change in a minor release):
+
+- `github.com/glincker/theauth-go/storage/sqlite` (now with capability parity;
+  still no organizations, SAML, SCIM or RBAC).
+- `github.com/glincker/theauth-go/v2/clientauth`
+- `github.com/glincker/theauth-go/v2/policy` and `policy.Storage`
+- `cmd/theauth-doctor` and the `GET /auth/admin/doctor` finding IDs
+- Agent identity APIs (`docs/AGENT-IDENTITY.md`) until one release cycle of
+  feedback has passed.
+
