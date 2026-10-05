@@ -31,19 +31,50 @@ go get github.com/glincker/theauth-go
 
 </div>
 
+theauth-go is a Go library, not a hosted service. You mount it into your own `net/http` or `chi` server and it handles sign-in, sessions, API tokens, CLI login and an OAuth 2.1 / MCP authorization server, with your data in your own database. It runs as a single static binary with embedded SQLite, or against Postgres or MySQL.
+
+### 30 second quickstart: net/http and SQLite
+
+Needs Go 1.26 for `storage/sqlite` (its pure Go driver declares 1.26). The root module builds on Go 1.25.
+
+```bash
+go get github.com/glincker/theauth-go github.com/glincker/theauth-go/storage/sqlite
+```
+
 ```go
-a, _ := theauth.New(theauth.Config{
-    Storage: memory.New(),
-    BaseURL: "http://localhost:8080",
-})
-r := chi.NewRouter()
-a.Mount(r) // /auth/* magic-link, email-password, OAuth, passkeys, TOTP, SAML
-r.With(a.RequireAuth()).Get("/me", func(w http.ResponseWriter, r *http.Request) {
+db, _ := sql.Open("sqlite", "file:app.db?_pragma=foreign_keys(1)&_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)&_txlock=immediate")
+_ = sqlitestore.Migrate(ctx, db)
+store, _ := sqlitestore.New(db)
+
+a, _ := theauth.New(theauth.Config{CoreStorage: store, BaseURL: "http://localhost:8080"})
+defer a.Close()
+
+mux := http.NewServeMux()
+mux.Handle("/auth/", a.Handler()) // signup, signin, magic link, sessions; passkeys and TOTP when configured
+mux.Handle("GET /me", a.RequireAuth()(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
     user, _ := theauth.UserFromContext(r.Context())
     w.Write([]byte("hello " + user.Email))
-})
-http.ListenAndServe(":8080", r)
+})))
+http.ListenAndServe(":8080", mux)
 ```
+
+Import `sqlitestore "github.com/glincker/theauth-go/storage/sqlite"` and `_ "modernc.org/sqlite"`. Check errors in real code. For Postgres or chi, see [Quick start](#quick-start).
+
+### What it does
+
+- Email and password (Argon2id), magic links, 12 OAuth login providers, WebAuthn passkeys, TOTP with recovery codes.
+- Opaque server-side sessions with step-up (`RequireRecentAuth`), session list and revoke, idle timeout.
+- Scoped API tokens with `RequireAbility`, and RFC 8628 device login for CLIs via the `clientauth` package (`DeviceLogin`, `Whoami`, `Logout`).
+- Agent tokens (`MintAgentToken`) and a revocation bus that long-lived connections can watch.
+- First-run bootstrap: a setup token gates creation of the first admin.
+- OAuth 2.1 authorization server, MCP authorization, agent identities with delegation, SAML, SCIM, RBAC, audit log.
+- Storage: memory, SQLite, Postgres, MySQL. Not every backend implements every capability, see the [matrix](https://go.theauth.dev/concepts/capability-interfaces/).
+
+### Links
+
+- Full example with a CLI and a smoke test: [`examples/single-binary-sqlite`](./examples/single-binary-sqlite)
+- Guides: [Auth for a single-binary Go app](https://go.theauth.dev/guides/single-binary-go-app/), [Capability interfaces and storage backends](https://go.theauth.dev/concepts/capability-interfaces/), [Migrating from hand-rolled sessions](https://go.theauth.dev/guides/migrate-from-hand-rolled-sessions/)
+- [API tokens and device login](https://go.theauth.dev/guides/api-tokens/), [CLI login](https://go.theauth.dev/guides/cli-login/), [docs home](https://go.theauth.dev/)
 
 ---
 
@@ -125,6 +156,7 @@ theauth-go is the first Go auth library where **OAuth 2.1**, **MCP authorization
 ### Storage
 
 - **[storage/memory](storage/memory/)**: zero dependencies, for development and tests
+- **[storage/sqlite](storage/sqlite/)**: pure Go, single binary and single host (separate module, Go 1.26)
 - **[storage/postgres](storage/postgres/)**: production default, `pgx/v5` + `sqlc`
 - **[storage/mysql](storage/mysql/)**: MySQL 8.x alternative
 - **[storagetest](storagetest/)**: public contract test suite for custom backends
@@ -275,6 +307,7 @@ In-repo references:
 | [`examples/echo-app/`](./examples/echo-app) | Drop-in with Echo |
 | [`examples/gin-app/`](./examples/gin-app) | Drop-in with Gin |
 | [`examples/stdlib-app/`](./examples/stdlib-app) | Pure `net/http`, no framework |
+| [`examples/single-binary-sqlite/`](./examples/single-binary-sqlite) | One static binary, SQLite, setup token, API tokens, device-login CLI (Go 1.26) |
 | [`examples/mcp-server/`](./examples/mcp-server) | MCP resource server using `mcpresource` middleware |
 | [`examples/oauth-multi-provider/`](./examples/oauth-multi-provider) | GitHub + Google + Microsoft + Discord in one app |
 | [`examples/observability-otel/`](./examples/observability-otel) | OTel tracing and span export |
@@ -293,6 +326,7 @@ Each example includes a `README`, `main.go`, `go.mod`, `docker-compose.yml`, `.e
 | Backend | Path | Use case |
 |---|---|---|
 | Memory | [storage/memory](storage/memory/) | Development, unit tests, zero deps |
+| SQLite | [storage/sqlite](storage/sqlite/) | Single binary and single host, pure Go, own module (Go 1.26), no organizations, SAML, SCIM, RBAC or OAuth server |
 | Postgres | [storage/postgres](storage/postgres/) | Production default, `pgx/v5` + `sqlc` |
 | MySQL | [storage/mysql](storage/mysql/) | MySQL 8.x alternative |
 | Contract suite | [storagetest](storagetest/) | Verify your own custom backend |
