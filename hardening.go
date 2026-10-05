@@ -17,6 +17,10 @@ type LoginThrottleStore = throttle.Store
 // LoginThrottleEntry is one record held by a LoginThrottleStore.
 type LoginThrottleEntry = throttle.Entry
 
+// LoginThrottleCASStore is the optional LoginThrottleStore capability that
+// lets several processes share counters without losing updates.
+type LoginThrottleCASStore = throttle.CASStore
+
 // BreachChecker reports whether a password appears in a known breach corpus.
 type BreachChecker = password.BreachChecker
 

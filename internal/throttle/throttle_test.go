@@ -167,3 +167,27 @@ func TestMemoryStoreSweepsExpiredAndCaps(t *testing.T) {
 		t.Fatalf("cap exceeded, len=%d", got)
 	}
 }
+
+func TestMemoryStoreCompareAndSwap(t *testing.T) {
+	ctx := context.Background()
+	st := NewMemoryStore(0)
+	e1, e2 := Entry{Failures: 1}, Entry{Failures: 2}
+	tests := []struct {
+		name       string
+		prev       Entry
+		prevExists bool
+		next       Entry
+		want       bool
+	}{
+		{"insert when absent", Entry{}, false, e1, true},
+		{"insert loses when present", Entry{}, false, e2, false},
+		{"stale prev loses", e2, true, e2, false},
+		{"matching prev wins", e1, true, e2, true},
+	}
+	for _, tc := range tests {
+		got, err := st.CompareAndSwap(ctx, "k", tc.prev, tc.prevExists, tc.next)
+		if err != nil || got != tc.want {
+			t.Fatalf("%s: = %v, %v; want %v", tc.name, got, err, tc.want)
+		}
+	}
+}

@@ -83,3 +83,15 @@ func (m *MemoryStore) sweepLocked(now time.Time) {
 	}
 	m.lastSweep = now
 }
+
+// CompareAndSwap implements CASStore.
+func (m *MemoryStore) CompareAndSwap(_ context.Context, key string, prev Entry, prevExists bool, next Entry) (bool, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	cur, ok := m.entries[key]
+	if ok != prevExists || (ok && cur != prev) {
+		return false, nil
+	}
+	m.entries[key] = next
+	return true, nil
+}

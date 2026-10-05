@@ -30,6 +30,15 @@ type Store interface {
 	Delete(ctx context.Context, key string) error
 }
 
+// CASStore is an optional Store capability for stores shared across
+// processes. CompareAndSwap writes next only when the stored entry still
+// equals prev (or is absent when prevExists is false) and reports whether it
+// did, so concurrent writers retry instead of overwriting each other.
+type CASStore interface {
+	Store
+	CompareAndSwap(ctx context.Context, key string, prev Entry, prevExists bool, next Entry) (bool, error)
+}
+
 // Config holds every threshold. Zero values are replaced by defaults in
 // WithDefaults.
 type Config struct {
@@ -86,6 +95,8 @@ func (e *BlockedError) Error() string {
 	}
 	return fmt.Sprintf("throttle: %s active, retry in %s", kind, e.RetryAfter.Round(time.Second))
 }
+
+const casAttempts = 64
 
 // Limiter applies Config over a Store.
 type Limiter struct {
@@ -229,24 +240,38 @@ func (l *Limiter) blocked(ctx context.Context, key string, now time.Time, locked
 // bump increments the failure counter, restarting it when the previous
 // window or lockout has lapsed, then lets apply set BlockedUntil.
 func (l *Limiter) bump(ctx context.Context, key string, now time.Time, restartAfterLock bool, apply func(*Entry)) error {
-	e, ok, err := l.store.Get(ctx, key)
-	if err != nil {
-		return fmt.Errorf("throttle: read %s: %w", kindOf(key), err)
+	for attempt := 0; attempt < casAttempts; attempt++ {
+		prev, ok, err := l.store.Get(ctx, key)
+		if err != nil {
+			return fmt.Errorf("throttle: read %s: %w", kindOf(key), err)
+		}
+		e := prev
+		if !ok || !e.ExpiresAt.After(now) || (restartAfterLock && lapsed(e, now)) {
+			e = Entry{}
+		}
+		e.Failures++
+		e.LastFailure = now
+		apply(&e)
+		e.ExpiresAt = e.LastFailure.Add(l.cfg.ResetAfter)
+		if e.BlockedUntil.After(e.ExpiresAt) {
+			e.ExpiresAt = e.BlockedUntil.Add(l.cfg.ResetAfter)
+		}
+		cas, isCAS := l.store.(CASStore)
+		if !isCAS {
+			if err := l.store.Set(ctx, key, e); err != nil {
+				return fmt.Errorf("throttle: write %s: %w", kindOf(key), err)
+			}
+			return nil
+		}
+		swapped, err := cas.CompareAndSwap(ctx, key, prev, ok, e)
+		if err != nil {
+			return fmt.Errorf("throttle: write %s: %w", kindOf(key), err)
+		}
+		if swapped {
+			return nil
+		}
 	}
-	if !ok || !e.ExpiresAt.After(now) || (restartAfterLock && lapsed(e, now)) {
-		e = Entry{}
-	}
-	e.Failures++
-	e.LastFailure = now
-	apply(&e)
-	e.ExpiresAt = e.LastFailure.Add(l.cfg.ResetAfter)
-	if e.BlockedUntil.After(e.ExpiresAt) {
-		e.ExpiresAt = e.BlockedUntil.Add(l.cfg.ResetAfter)
-	}
-	if err := l.store.Set(ctx, key, e); err != nil {
-		return fmt.Errorf("throttle: write %s: %w", kindOf(key), err)
-	}
-	return nil
+	return fmt.Errorf("throttle: write %s: too much contention", kindOf(key))
 }
 
 // lapsed reports a lockout that has fully expired, so the next failure

@@ -8,16 +8,16 @@ import (
 	"github.com/glincker/theauth-go"
 )
 
-const sessionCols = `id, user_id, token_hash, user_agent, ip, created_at, expires_at, revoked_at, auth_level`
+const sessionCols = `id, user_id, token_hash, user_agent, ip, created_at, expires_at, revoked_at, auth_level, last_seen_at, elevated_until, credential_id`
 
 func scanSession(r scanner) (theauth.Session, error) {
 	var (
-		id, userID, ua, ip, level string
-		hash                      []byte
-		created, expires          int64
-		revoked                   sql.NullInt64
+		id, userID, ua, ip, level, cred string
+		hash                            []byte
+		created, expires, seen          int64
+		revoked, elevated               sql.NullInt64
 	)
-	if err := r.Scan(&id, &userID, &hash, &ua, &ip, &created, &expires, &revoked, &level); err != nil {
+	if err := r.Scan(&id, &userID, &hash, &ua, &ip, &created, &expires, &revoked, &level, &seen, &elevated, &cred); err != nil {
 		return theauth.Session{}, err
 	}
 	sid, err := parseID(id)
@@ -28,16 +28,23 @@ func scanSession(r scanner) (theauth.Session, error) {
 	if err != nil {
 		return theauth.Session{}, err
 	}
+	var lastSeen time.Time
+	if seen != 0 {
+		lastSeen = fromMicro(seen)
+	}
 	return theauth.Session{
-		ID:        sid,
-		UserID:    uid,
-		TokenHash: hash,
-		UserAgent: ua,
-		IP:        ip,
-		CreatedAt: fromMicro(created),
-		ExpiresAt: fromMicro(expires),
-		RevokedAt: fromNullMicro(revoked),
-		AuthLevel: level,
+		ID:            sid,
+		UserID:        uid,
+		TokenHash:     hash,
+		UserAgent:     ua,
+		IP:            ip,
+		CreatedAt:     fromMicro(created),
+		ExpiresAt:     fromMicro(expires),
+		RevokedAt:     fromNullMicro(revoked),
+		AuthLevel:     level,
+		ElevatedUntil: fromNullMicro(elevated),
+		CredentialID:  cred,
+		LastSeenAt:    lastSeen,
 	}, nil
 }
 
@@ -48,11 +55,11 @@ func (s *Store) CreateSession(ctx context.Context, sess theauth.Session) (theaut
 		level = theauth.AuthLevelFull
 	}
 	row := s.db.QueryRowContext(ctx, s.q(`
-INSERT INTO theauth_sessions (id, user_id, token_hash, user_agent, ip, created_at, expires_at, auth_level)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+INSERT INTO theauth_sessions (id, user_id, token_hash, user_agent, ip, created_at, expires_at, auth_level, last_seen_at, credential_id)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 RETURNING `+sessionCols),
 		idStr(sess.ID), idStr(sess.UserID), sess.TokenHash, sess.UserAgent, sess.IP,
-		toMicro(orNow(sess.CreatedAt)), toMicro(sess.ExpiresAt), level,
+		toMicro(orNow(sess.CreatedAt)), toMicro(sess.ExpiresAt), level, lastSeenMicro(sess.LastSeenAt), sess.CredentialID,
 	)
 	out, err := scanSession(row)
 	if err != nil {
@@ -113,4 +120,11 @@ func (s *Store) UpdateSessionAuthLevel(ctx context.Context, id theauth.ULID, lev
 		return wrap("update session auth level", err)
 	}
 	return requireRows("update session auth level", res)
+}
+
+func lastSeenMicro(t time.Time) int64 {
+	if t.IsZero() {
+		return 0
+	}
+	return toMicro(t)
 }

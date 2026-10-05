@@ -6,6 +6,17 @@ adheres to [Semantic Versioning](https://semver.org/) from v1.0 forward.
 
 ## [Unreleased]
 
+### Added
+
+- **SQLite capability parity.** `storage/sqlite` now implements
+  `APITokenStorage`, `DeviceCodeStorage`, `SessionManagementStorage`,
+  `SessionLinkStorage`, `TOTPReplayStorage`, `UserCountStorage`,
+  `WebAuthnRenameStorage` and `RecoveryCodeStorage`, with atomic single-use
+  claims for device codes and session links. Migrations 0006 to 0008.
+- **Shared login throttle for SQLite.** `Store.ThrottleStore` persists
+  throttle counters. New optional `LoginThrottleCASStore` lets the limiter
+  retry on conflict across processes instead of last-writer-wins.
+
 ### Security
 
 - **Login throttle.** Password signin is now gated before any credential work

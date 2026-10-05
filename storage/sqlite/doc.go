@@ -2,7 +2,9 @@
 // caller-owned *sql.DB using the pure Go modernc.org/sqlite driver.
 //
 // It covers CoreStorage (users, sessions, magic links, passwords) plus the
-// OAuthAccount, WebAuthn, TOTP and Audit capabilities. Organizations, SAML,
+// OAuthAccount, WebAuthn, TOTP and Audit capabilities, session management and
+// links, API tokens, device codes, TOTP replay, user count, passkey rename,
+// recovery codes and a shared login throttle store. Organizations, SAML,
 // SCIM and RBAC are not implemented, so a Config that enables them fails
 // with theauth.ErrStorageMissingCapability.
 //

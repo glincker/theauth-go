@@ -12,6 +12,10 @@ go get github.com/glincker/theauth-go/storage/sqlite
 | --- | --- |
 | Users, sessions, magic links, passwords (`CoreStorage`) | Implemented |
 | OAuth accounts, WebAuthn, TOTP, audit log | Implemented |
+| Session list, last seen, step-up, session links (`SessionManagementStorage`, `SessionLinkStorage`) | Implemented |
+| API tokens and RFC 8628 device codes (`APITokenStorage`, `DeviceCodeStorage`) | Implemented |
+| TOTP replay, user count, passkey rename, recovery codes (`TOTPReplayStorage`, `UserCountStorage`, `WebAuthnRenameStorage`, `RecoveryCodeStorage`) | Implemented |
+| Shared login throttle (`Store.ThrottleStore`) | Implemented |
 | Organizations, SAML, SCIM, RBAC | Not implemented, returns `ErrStorageMissingCapability` |
 | OAuth authorization server storage | Not implemented |
 
@@ -69,10 +73,22 @@ go func() {
 
 It deletes sessions, magic links and password reset tokens whose expiry has passed, in one transaction, and reports the counts.
 
+## Shared login throttle
+
+`store.ThrottleStore()` returns a `LoginThrottleStore` backed by the same database, so several processes share failure counters. It also implements `LoginThrottleCASStore`: the limiter re-reads and retries when another process changed an entry first, instead of overwriting it, so no failure is lost. Entries are not removed on read; call `ThrottleStore().SweepExpired(ctx, time.Now())` from the same ticker as `SweepExpired`.
+
+```go
+Config.LoginThrottle = &theauth.LoginThrottleConfig{Store: store.ThrottleStore()}
+```
+
+## Upgrading
+
+Migrations `0006` to `0008` add session columns and tables (`last_seen_at`, `elevated_until`, `credential_id`, session links), API tokens, device codes, the TOTP step table and the throttle table. Existing sessions read back with a zero `LastSeenAt`. Run `Migrate` (or fold the new files into your migrator) before deploying.
+
 ## Behavior notes
 
 - Email uniqueness is case-insensitive (`COLLATE NOCASE`, ASCII folding). A duplicate returns the driver's constraint error wrapped with context.
 - IDs are stored as 26 character ULID text, timestamps as UTC unix microseconds.
-- Consuming a magic link or reset token is one `UPDATE ... RETURNING`, so concurrent consumers produce exactly one winner.
+- Consuming a magic link, reset token or session link, and claiming a device code, is one `UPDATE ... RETURNING`, so concurrent consumers produce exactly one winner. `AdvanceTOTPStep` is one conditional upsert.
 - Audit rows carry no foreign keys: the log is append-only and survives deletion of the user it describes.
 - `UpdateWebAuthnSignCount` returns `ErrReplayDetected` for a non-increasing count.
