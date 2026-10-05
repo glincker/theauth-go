@@ -6,40 +6,6 @@ adheres to [Semantic Versioning](https://semver.org/) from v1.0 forward.
 
 ## [Unreleased]
 
-### Changed
-
-- Repository layout: the module root now holds only the public face of the
-  library. Feature code moved into `internal/apitokens`, `internal/revocation`,
-  `internal/doctor`, `internal/importer`, `internal/bootstrap`,
-  `internal/ratelimit`, `internal/httpsec`, `internal/authevents` and
-  `internal/rbac`, and black-box tests moved to `integration/`. Root Go files
-  went from 80 to 28. See `docs/REPO-LAYOUT.md`.
-
-### Breaking (directory layout)
-
-Every exported root identifier keeps its name through a type alias, constant or
-function wrapper, and the exported API surface was diffed before and after with
-`go/types`: no root name, field or method was removed or renamed. What changes:
-
-- Alias targets live in `internal/` packages. `%T`, `reflect` and compiler
-  messages now print `apitokens.APIToken`, `doctor.Report`, `revocation.Event`
-  and similar instead of `theauth.APIToken`. Code that compares type names as
-  strings must be updated; code using the root names is unaffected.
-- `RevocationEvent`, `RevocationKind`, `RevocationBus`, `MemoryRevocationBus`,
-  `RevocationTarget` and `WatchOptions` are now aliases of `internal/revocation`
-  types, as are `APIToken`, `DeviceCode`, `Principal`, `Report`, `Finding`,
-  `Severity`, `AuthEvent`, `BootstrapConfig` and `RoleSeed`. Method sets are
-  identical.
-- `ImportUserStorage`, `DoctorAdminLister`, `DoctorSessionCounter` and the
-  storage capability interfaces remain defined at the root.
-- The `*ForTest` helpers from `export_test.go` (never importable outside the
-  module) are gone from the root; in-repo tests use `internal/testhooks`.
-- `go test github.com/glincker/theauth-go/v2` no longer runs the integration
-  suite: run `go test ./...` or `go test ./integration/...`. The fuzz targets
-  and the `testdata/` golden files moved with it.
-- `sqlc.yaml` moved to `storage/postgres/sqlc.yaml`; run `sqlc generate` from
-  `storage/postgres`.
-
 ## [2.6.0] - 2026-10-05
 
 ### Upgrade notes
@@ -96,6 +62,13 @@ existing call, but each changes runtime behavior.
   registered URI. SAML `RelayState` must be a same-site path, the configured
   post-login URL or an entry in `SAMLConfig.AllowedRelayStates`; anything else
   falls back to the default.
+- **The repository layout changed; no exported name was removed.** The module
+  root now holds 15 Go files (it held 80), feature code lives in `internal/`
+  packages and black-box tests live in `integration/`. Exported root names are
+  kept through aliases, so imports and calls are unaffected, but `%T` and
+  `reflect` print the aliased type, `go test` on the root package no longer
+  runs the integration suite (use `./...`), and `sqlc.yaml` moved. Details under
+  Changed.
 - Other changes worth a look: cookie-authenticated mutating requests with a
   foreign `Origin` now get 403 (`Config.TrustedOrigins`,
   `Config.DisableCSRFProtection`); passwords over `MaxBytes` (default 72) return
@@ -297,6 +270,34 @@ Importing existing data
   must be regenerated. See the SQLite guide.
 
 ### Changed
+
+- **Repository layout.** The module root now holds only the public face of the
+  library. Feature code moved into `internal/apitokens`, `internal/revocation`,
+  `internal/doctor`, `internal/importer`, `internal/bootstrap`,
+  `internal/ratelimit`, `internal/httpsec`, `internal/authevents` and
+  `internal/rbac`, and black-box tests moved to `integration/`. Root Go files
+  went from 80 to 15. See `docs/REPO-LAYOUT.md`. Every exported root identifier
+  keeps its name through a type alias, constant or function wrapper, and the
+  exported API surface was diffed before and after with `go/types`: no root
+  name, field or method was removed or renamed. What changes:
+  - Alias targets live in `internal/` packages. `%T`, `reflect` and compiler
+    messages now print `apitokens.APIToken`, `doctor.Report`, `revocation.Event`
+    and similar instead of `theauth.APIToken`. Code that compares type names as
+    strings must be updated; code using the root names is unaffected.
+  - `RevocationEvent`, `RevocationKind`, `RevocationBus`, `MemoryRevocationBus`,
+    `RevocationTarget` and `WatchOptions` are now aliases of `internal/revocation`
+    types, as are `APIToken`, `DeviceCode`, `Principal`, `Report`, `Finding`,
+    `Severity`, `AuthEvent`, `BootstrapConfig` and `RoleSeed`. Method sets are
+    identical.
+  - `ImportUserStorage`, `DoctorAdminLister`, `DoctorSessionCounter` and the
+    storage capability interfaces remain defined at the root.
+  - The `*ForTest` helpers from `export_test.go` (never importable outside the
+    module) are gone from the root; in-repo tests use `internal/testhooks`.
+  - `go test github.com/glincker/theauth-go/v2` no longer runs the integration
+    suite: run `go test ./...` or `go test ./integration/...`. The fuzz targets
+    and the `testdata/` golden files moved with it.
+  - `sqlc.yaml` moved to `storage/postgres/sqlc.yaml`; run `sqlc generate` from
+    `storage/postgres`.
 
 - **Module path** is now `github.com/glincker/theauth-go/v2` (see Upgrade
   notes).

@@ -15,6 +15,7 @@ Docs: https://go.theauth.dev/ . Full list: [CHANGELOG.md](../CHANGELOG.md).
 - **Device-request routes need the root ability by default** (`DeviceRequestsAbility`, or `DeviceRequestsAnySignedInUser`).
 - **Closed signup and `Config.Bootstrap` need `UserCountStorage`.**
 - **`PasswordPolicy.AllowLegacyBcrypt` is now honored.**
+- **The repository layout changed; no exported name was removed.** The module root holds 15 Go files (it held 80), feature code is in `internal/` packages and black-box tests are in `integration/`. Imports and calls are unaffected; `%T` and `reflect` print the aliased type, and `go test` on the root package no longer runs the integration suite (use `./...`).
 - **CIMD fetches refuse non-public addresses** (a localhost CIMD setup needs `CIMDConfig.AllowPrivateNetworks`).
 - **Authorization errors redirect only to a registered `redirect_uri`, and SAML `RelayState` is restricted** (`SAMLConfig.AllowedRelayStates`).
 - Also: CSRF/Origin checks on cookie-authenticated writes (`TrustedOrigins`), 72 byte password cap, new migrations (Postgres and MySQL 0017 and 0018, SQLite 0006 to 0008).
