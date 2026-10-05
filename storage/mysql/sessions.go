@@ -22,26 +22,34 @@ func scanSession(row interface {
 		revokedAt            sql.NullTime
 		authLevel            string
 		activeOrgIDB         []byte
+		lastSeen, elevated   sql.NullTime
+		credentialID         string
 	)
 	err := row.Scan(
 		&idB, &userIDB, &tokenHash,
 		&userAgent, &ip,
 		&createdAt, &expiresAt, &revokedAt,
 		&authLevel, &activeOrgIDB,
+		&lastSeen, &elevated, &credentialID,
 	)
 	if err != nil {
 		return theauth.Session{}, err
 	}
 	sess := theauth.Session{
-		ID:        bytesToULID(idB),
-		UserID:    bytesToULID(userIDB),
-		TokenHash: tokenHash,
-		UserAgent: userAgent,
-		IP:        nullStringScan(ip),
-		CreatedAt: createdAt.UTC(),
-		ExpiresAt: expiresAt.UTC(),
-		RevokedAt: nullTimeToPtr(revokedAt),
-		AuthLevel: authLevel,
+		ID:            bytesToULID(idB),
+		UserID:        bytesToULID(userIDB),
+		TokenHash:     tokenHash,
+		UserAgent:     userAgent,
+		IP:            nullStringScan(ip),
+		CreatedAt:     createdAt.UTC(),
+		ExpiresAt:     expiresAt.UTC(),
+		RevokedAt:     nullTimeToPtr(revokedAt),
+		AuthLevel:     authLevel,
+		ElevatedUntil: nullTimeToPtr(elevated),
+		CredentialID:  credentialID,
+	}
+	if lastSeen.Valid {
+		sess.LastSeenAt = lastSeen.Time.UTC()
 	}
 	if len(activeOrgIDB) > 0 {
 		id := bytesToULID(activeOrgIDB)
@@ -52,7 +60,7 @@ func scanSession(row interface {
 
 const selectSessionColumns = `
 SELECT id, user_id, token_hash, user_agent, ip, created_at, expires_at,
-       revoked_at, auth_level, active_organization_id
+       revoked_at, auth_level, active_organization_id, last_seen_at, elevated_until, credential_id
 FROM sessions`
 
 func (s *Store) CreateSession(ctx context.Context, sess theauth.Session) (theauth.Session, error) {
@@ -60,9 +68,13 @@ func (s *Store) CreateSession(ctx context.Context, sess theauth.Session) (theaut
 	if level == "" {
 		level = theauth.AuthLevelFull
 	}
+	var lastSeen sql.NullTime
+	if !sess.LastSeenAt.IsZero() {
+		lastSeen = sql.NullTime{Time: timeUTC(sess.LastSeenAt), Valid: true}
+	}
 	_, err := s.db.ExecContext(ctx, `
-INSERT INTO sessions (id, user_id, token_hash, user_agent, ip, created_at, expires_at, auth_level)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+INSERT INTO sessions (id, user_id, token_hash, user_agent, ip, created_at, expires_at, auth_level, last_seen_at, credential_id)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		ulidToBytes(sess.ID),
 		ulidToBytes(sess.UserID),
 		sess.TokenHash,
@@ -71,6 +83,8 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
 		timeUTC(sess.CreatedAt),
 		timeUTC(sess.ExpiresAt),
 		level,
+		lastSeen,
+		sess.CredentialID,
 	)
 	if err != nil {
 		return theauth.Session{}, err

@@ -232,9 +232,16 @@ Session management follows this rule: `SessionManagementStorage` and
 `Storage`; see `docs/SESSIONS.md`. The new `Session` fields `LastSeenAt`,
 `ElevatedUntil` and `CredentialID` are additive.
 
+The Postgres and MySQL adapters implement `APITokenStorage`,
+`DeviceCodeStorage`, `SessionManagementStorage`, `SessionLinkStorage`,
+`TOTPReplayStorage`, `UserCountStorage`, `WebAuthnRenameStorage`,
+`RecoveryCodeStorage` and an optional `LoginThrottleCASStore` through
+`Store.ThrottleStore`, added by migration 0018 in each adapter.
+
 ## Special rule: database migrations
 
-Postgres migrations under `storage/postgres/migrations/` are append-only.
+Postgres and MySQL migrations under `storage/postgres/migrations/` and
+`storage/mysql/migrations/` are append-only.
 A renamed column ships as a new migration that adds the new column and (in
 a later release) removes the old one. This protects deployments that run
 migrations on rolling restarts.
