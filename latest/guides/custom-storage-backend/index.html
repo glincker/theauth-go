@@ -361,7 +361,7 @@
     
     
       <li class="md-tabs__item">
-        <a href="../../migrations/v2.3-to-v2.4/" class="md-tabs__link">
+        <a href="../../migrations/to-v2-module-path/" class="md-tabs__link">
           
   
   
@@ -2100,6 +2100,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../../migrations/to-v2-module-path/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Migrating to /v2
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../migrations/v2.3-to-v2.4/" class="md-nav__link">
         
   
@@ -2402,16 +2430,16 @@
 <h1 id="write-a-custom-storage-backend">Write a Custom Storage Backend<a class="headerlink" href="#write-a-custom-storage-backend" title="Permanent link">&para;</a></h1>
 <p>theauth-go's persistence layer is pluggable via the <code>Storage</code> interface. You can implement it for any database: MySQL, SQLite, DynamoDB, or any custom store.</p>
 <h2 id="the-storage-interface">The <code>Storage</code> interface<a class="headerlink" href="#the-storage-interface" title="Permanent link">&para;</a></h2>
-<p>The <code>Storage</code> interface is defined in the root package (<code>github.com/glincker/theauth-go</code>). It covers sessions, users, magic links, password reset tokens, WebAuthn credentials, TOTP secrets, OAuth accounts, and more.</p>
-<p>Browse the interface in the <a href="../../reference/storage/">Storage Reference</a> or on <a href="https://pkg.go.dev/github.com/glincker/theauth-go#Storage">pkg.go.dev</a>.</p>
+<p>The <code>Storage</code> interface is defined in the root package (<code>github.com/glincker/theauth-go/v2</code>). It covers sessions, users, magic links, password reset tokens, WebAuthn credentials, TOTP secrets, OAuth accounts, and more.</p>
+<p>Browse the interface in the <a href="../../reference/storage/">Storage Reference</a> or on <a href="https://pkg.go.dev/github.com/glincker/theauth-go/v2#Storage">pkg.go.dev</a>.</p>
 <h2 id="the-storagetest-package">The <code>storagetest</code> package<a class="headerlink" href="#the-storagetest-package" title="Permanent link">&para;</a></h2>
-<p>The repository ships <code>github.com/glincker/theauth-go/storagetest</code>: a conformance test suite that verifies a storage implementation satisfies the full contract. Run it against your implementation before using it in production:</p>
+<p>The repository ships <code>github.com/glincker/theauth-go/v2/storagetest</code>: a conformance test suite that verifies a storage implementation satisfies the full contract. Run it against your implementation before using it in production:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">package</span><span class="w"> </span><span class="nx">mystorage_test</span>
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>
 <a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="kn">import</span><span class="w"> </span><span class="p">(</span>
 <a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="w">    </span><span class="s">"testing"</span>
 <a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>
-<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="w">    </span><span class="s">"github.com/glincker/theauth-go/storagetest"</span>
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="w">    </span><span class="s">"github.com/glincker/theauth-go/v2/storagetest"</span>
 <a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="w">    </span><span class="s">"myapp/mystorage"</span>
 <a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="p">)</span>
 <a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>

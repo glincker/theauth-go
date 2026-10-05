@@ -361,7 +361,7 @@
     
     
       <li class="md-tabs__item md-tabs__item--active">
-        <a href="../v2.3-to-v2.4/" class="md-tabs__link">
+        <a href="../to-v2-module-path/" class="md-tabs__link">
           
   
   
@@ -1987,6 +1987,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../to-v2-module-path/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Migrating to /v2
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../v2.3-to-v2.4/" class="md-nav__link">
         
   
@@ -2552,7 +2580,7 @@
     
     
       <li class="md-path__item">
-        <a href="../v2.3-to-v2.4/" class="md-path__link">
+        <a href="../to-v2-module-path/" class="md-path__link">
           
   <span class="md-ellipsis">
     Migrations
@@ -2581,7 +2609,7 @@
 <p><strong>Summary:</strong> Internal architecture reorganization. The public API is byte-stable: every exported type, function, method, error sentinel, and constant keeps its identifier, signature, and method set. Downstream consumers compile unchanged after a <code>go get -u</code>.</p>
 <h2 id="what-you-need-to-do">What you need to do<a class="headerlink" href="#what-you-need-to-do" title="Permanent link">&para;</a></h2>
 <p>In the typical case: nothing.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>go<span class="w"> </span>get<span class="w"> </span>github.com/glincker/theauth-go@v2.1.0
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>go<span class="w"> </span>get<span class="w"> </span>github.com/glincker/theauth-go/v2@latest
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>go<span class="w"> </span>mod<span class="w"> </span>tidy
 <a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>go<span class="w"> </span>build<span class="w"> </span>./...
 </code></pre></div>
@@ -2614,7 +2642,7 @@
 </ul>
 <h2 id="edge-cases">Edge cases<a class="headerlink" href="#edge-cases" title="Permanent link">&para;</a></h2>
 <h3 id="go-doc-output-formatting"><code>go doc</code> output formatting<a class="headerlink" href="#go-doc-output-formatting" title="Permanent link">&para;</a></h3>
-<p><code>go doc github.com/glincker/theauth-go</code> now renders some v2.0 types as type aliases (e.g., <code>type User = models.User</code>). Identity, fields, methods, and JSON tags are unchanged. pkg.go.dev still renders the full struct.</p>
+<p><code>go doc github.com/glincker/theauth-go/v2</code> now renders some v2.0 types as type aliases (e.g., <code>type User = models.User</code>). Identity, fields, methods, and JSON tags are unchanged. pkg.go.dev still renders the full struct.</p>
 <h3 id="unexported-root-methods-removed">Unexported root methods removed<a class="headerlink" href="#unexported-root-methods-removed" title="Permanent link">&para;</a></h3>
 <p>PR G deleted seven unused unexported methods on <code>*TheAuth</code>. If your code reaches any of them via <code>//go:linkname</code> or <code>reflect</code>, it will fail to build:</p>
 <ul>

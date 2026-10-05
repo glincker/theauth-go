@@ -125,6 +125,10 @@
          <lastmod>2026-10-05</lastmod>
     </url>
     <url>
+         <loc>https://go.theauth.dev/latest/migrations/to-v2-module-path/</loc>
+         <lastmod>2026-10-05</lastmod>
+    </url>
+    <url>
          <loc>https://go.theauth.dev/latest/migrations/v0.7-to-v1.0/</loc>
          <lastmod>2026-10-05</lastmod>
     </url>

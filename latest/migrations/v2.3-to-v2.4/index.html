@@ -13,7 +13,7 @@
         <link rel="canonical" href="https://go.theauth.dev/latest/migrations/v2.3-to-v2.4/">
       
       
-        <link rel="prev" href="../../security/compliance-gdpr/">
+        <link rel="prev" href="../to-v2-module-path/">
       
       
         <link rel="next" href="../v2.0-to-v2.1/">
@@ -361,7 +361,7 @@
     
     
       <li class="md-tabs__item md-tabs__item--active">
-        <a href="./" class="md-tabs__link">
+        <a href="../to-v2-module-path/" class="md-tabs__link">
           
   
   
@@ -1984,6 +1984,34 @@
                 
   
   
+  
+  
+    <li class="md-nav__item">
+      <a href="../to-v2-module-path/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Migrating to /v2
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
     
   
   
@@ -2518,7 +2546,7 @@
     
     
       <li class="md-path__item">
-        <a href="./" class="md-path__link">
+        <a href="../to-v2-module-path/" class="md-path__link">
           
   <span class="md-ellipsis">
     Migrations
@@ -2550,7 +2578,7 @@ keeps its identifier, signature, and method set. Downstream consumers compile
 unchanged after a <code>go get -u</code>.</p>
 <h2 id="what-you-need-to-do">What you need to do<a class="headerlink" href="#what-you-need-to-do" title="Permanent link">&para;</a></h2>
 <p>In the typical case: nothing.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>go<span class="w"> </span>get<span class="w"> </span>github.com/glincker/theauth-go@v2.4.0
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>go<span class="w"> </span>get<span class="w"> </span>github.com/glincker/theauth-go/v2@latest
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>go<span class="w"> </span>mod<span class="w"> </span>tidy
 <a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>go<span class="w"> </span>build<span class="w"> </span>./...
 </code></pre></div>
@@ -2560,9 +2588,9 @@ unchanged after a <code>go get -u</code>.</p>
 no behaviour change unless they add the new config knobs.</p>
 <h3 id="mysql-storage-backend">MySQL storage backend<a class="headerlink" href="#mysql-storage-backend" title="Permanent link">&para;</a></h3>
 <p>If you want to run on MySQL 8.x, add the new adapter:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>go<span class="w"> </span>get<span class="w"> </span>github.com/glincker/theauth-go/storage/mysql
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>go<span class="w"> </span>get<span class="w"> </span>github.com/glincker/theauth-go/v2/storage/mysql
 </code></pre></div>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="kn">import</span><span class="w"> </span><span class="s">"github.com/glincker/theauth-go/storage/mysql"</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="kn">import</span><span class="w"> </span><span class="s">"github.com/glincker/theauth-go/v2/storage/mysql"</span>
 <a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>
 <a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="nx">db</span><span class="p">,</span><span class="w"> </span><span class="nx">_</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">sql</span><span class="p">.</span><span class="nx">Open</span><span class="p">(</span><span class="s">"mysql"</span><span class="p">,</span><span class="w"> </span><span class="nx">os</span><span class="p">.</span><span class="nx">Getenv</span><span class="p">(</span><span class="s">"MYSQL_DSN"</span><span class="p">))</span>
 <a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="nx">store</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">mysql</span><span class="p">.</span><span class="nx">New</span><span class="p">(</span><span class="nx">db</span><span class="p">)</span>
@@ -2640,7 +2668,7 @@ migration playbook.</p>
 <h3 id="storagetest-contract-suite">storagetest contract suite<a class="headerlink" href="#storagetest-contract-suite" title="Permanent link">&para;</a></h3>
 <p>If you maintain a custom storage adapter, add the contract suite to your
 test file:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="kn">import</span><span class="w"> </span><span class="s">"github.com/glincker/theauth-go/storagetest"</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="kn">import</span><span class="w"> </span><span class="s">"github.com/glincker/theauth-go/v2/storagetest"</span>
 <a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>
 <a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="kd">func</span><span class="w"> </span><span class="nx">TestConformance</span><span class="p">(</span><span class="nx">t</span><span class="w"> </span><span class="o">*</span><span class="nx">testing</span><span class="p">.</span><span class="nx">T</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
 <a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="w">    </span><span class="nx">storagetest</span><span class="p">.</span><span class="nx">Run</span><span class="p">(</span><span class="nx">t</span><span class="p">,</span><span class="w"> </span><span class="kd">func</span><span class="p">()</span><span class="w"> </span><span class="nx">theauth</span><span class="p">.</span><span class="nx">Storage</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">return</span><span class="w"> </span><span class="nx">mystore</span><span class="p">.</span><span class="nx">New</span><span class="p">()</span><span class="w"> </span><span class="p">})</span>

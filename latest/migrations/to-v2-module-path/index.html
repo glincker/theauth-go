@@ -10,29 +10,31 @@
       
       
       
-        <link rel="canonical" href="https://go.theauth.dev/latest/">
+        <link rel="canonical" href="https://go.theauth.dev/latest/migrations/to-v2-module-path/">
       
       
+        <link rel="prev" href="../../security/compliance-gdpr/">
       
-        <link rel="next" href="getting-started/overview/">
+      
+        <link rel="next" href="../v2.3-to-v2.4/">
       
       
         
       
       
-      <link rel="icon" href="assets/images/favicon.png">
+      <link rel="icon" href="../../assets/images/favicon.png">
       <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
     
     
       
-        <title>theauth-go</title>
+        <title>Migrating to /v2 - theauth-go</title>
       
     
     
-      <link rel="stylesheet" href="assets/stylesheets/main.ec1eaa64.min.css">
+      <link rel="stylesheet" href="../../assets/stylesheets/main.ec1eaa64.min.css">
       
         
-        <link rel="stylesheet" href="assets/stylesheets/palette.ab4e12ef.min.css">
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
       
       
 
@@ -51,7 +53,7 @@
       
     
     
-    <script>__md_scope=new URL(".",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
     
       
 
@@ -59,17 +61,17 @@
     
   
 <meta property="og:type" content="website" />
-<meta property="og:title" content="theauth-go" />
+<meta property="og:title" content="Migrating to /v2 - theauth-go" />
 <meta property="og:description" content="Go auth library covering OAuth 2.1, MCP authorization, agent identities, WebAuthn, SAML, SCIM, and more." />
-<meta property="og:image" content="https://go.theauth.dev/latest/assets/images/social/index.png" />
+<meta property="og:image" content="https://go.theauth.dev/latest/assets/images/social/migrations/to-v2-module-path.png" />
 <meta property="og:image:type" content="image/png" />
 <meta property="og:image:width" content="1200" />
 <meta property="og:image:height" content="630" />
-<meta property="og:url" content="https://go.theauth.dev/latest/" />
+<meta property="og:url" content="https://go.theauth.dev/latest/migrations/to-v2-module-path/" />
 <meta property="twitter:card" content="summary_large_image" />
-<meta property="twitter:title" content="theauth-go" />
+<meta property="twitter:title" content="Migrating to /v2 - theauth-go" />
 <meta property="twitter:description" content="Go auth library covering OAuth 2.1, MCP authorization, agent identities, WebAuthn, SAML, SCIM, and more." />
-<meta property="twitter:image" content="https://go.theauth.dev/latest/assets/images/social/index.png" />
+<meta property="twitter:image" content="https://go.theauth.dev/latest/assets/images/social/migrations/to-v2-module-path.png" />
 </head>
   
   
@@ -89,7 +91,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#theauth-go" class="md-skip">
+        <a href="#migrating-to-v2" class="md-skip">
           Skip to content
         </a>
       
@@ -109,7 +111,7 @@
 
 <header class="md-header md-header--shadow md-header--lifted" data-md-component="header">
   <nav class="md-header__inner md-grid" aria-label="Header">
-    <a href="." title="theauth-go" class="md-header__button md-logo" aria-label="theauth-go" data-md-component="logo">
+    <a href="../.." title="theauth-go" class="md-header__button md-logo" aria-label="theauth-go" data-md-component="logo">
       
   
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
@@ -129,7 +131,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Home
+              Migrating to /v2
             
           </span>
         </div>
@@ -234,11 +236,9 @@
   
   
   
-    
   
-  
-    <li class="md-tabs__item md-tabs__item--active">
-      <a href="." class="md-tabs__link">
+    <li class="md-tabs__item">
+      <a href="../.." class="md-tabs__link">
         
   
   
@@ -259,7 +259,7 @@
     
     
       <li class="md-tabs__item">
-        <a href="getting-started/overview/" class="md-tabs__link">
+        <a href="../../getting-started/overview/" class="md-tabs__link">
           
   
   
@@ -279,7 +279,7 @@
     
     
       <li class="md-tabs__item">
-        <a href="concepts/capability-interfaces/" class="md-tabs__link">
+        <a href="../../concepts/capability-interfaces/" class="md-tabs__link">
           
   
   
@@ -299,7 +299,7 @@
     
     
       <li class="md-tabs__item">
-        <a href="guides/add-oauth-provider/" class="md-tabs__link">
+        <a href="../../guides/add-oauth-provider/" class="md-tabs__link">
           
   
   
@@ -319,7 +319,7 @@
     
     
       <li class="md-tabs__item">
-        <a href="reference/configuration/" class="md-tabs__link">
+        <a href="../../reference/configuration/" class="md-tabs__link">
           
   
   
@@ -339,7 +339,7 @@
     
     
       <li class="md-tabs__item">
-        <a href="security/threat-model/" class="md-tabs__link">
+        <a href="../../security/threat-model/" class="md-tabs__link">
           
   
   
@@ -355,11 +355,13 @@
   
   
   
+    
+  
   
     
     
-      <li class="md-tabs__item">
-        <a href="migrations/to-v2-module-path/" class="md-tabs__link">
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="./" class="md-tabs__link">
           
   
   
@@ -377,7 +379,7 @@
   
   
     <li class="md-tabs__item">
-      <a href="changelog/" class="md-tabs__link">
+      <a href="../../changelog/" class="md-tabs__link">
         
   
   
@@ -418,7 +420,7 @@
 
 <nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
   <label class="md-nav__title" for="__drawer">
-    <a href="." title="theauth-go" class="md-nav__button md-logo" aria-label="theauth-go" data-md-component="logo">
+    <a href="../.." title="theauth-go" class="md-nav__button md-logo" aria-label="theauth-go" data-md-component="logo">
       
   
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
@@ -445,37 +447,10 @@
       
   
   
-    
   
   
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
-      
-      
-        
-      
-      
-        <label class="md-nav__link md-nav__link--active" for="__toc">
-          
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Home
-  
-
-    
-  </span>
-  
-  
-
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
-      <a href="." class="md-nav__link md-nav__link--active">
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
         
   
   
@@ -491,81 +466,6 @@
   
 
       </a>
-      
-        
-
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-    
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#install" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Install
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#quick-start" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Quick Start
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#what-it-covers" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        What it covers
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#documentation" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Documentation
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#mcp-resource-server" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        MCP Resource Server
-      
-    </span>
-  </a>
-  
-</li>
-      
-    </ul>
-  
-</nav>
-      
     </li>
   
 
@@ -631,7 +531,7 @@
   
   
     <li class="md-nav__item">
-      <a href="getting-started/overview/" class="md-nav__link">
+      <a href="../../getting-started/overview/" class="md-nav__link">
         
   
   
@@ -659,7 +559,7 @@
   
   
     <li class="md-nav__item">
-      <a href="getting-started/installation/" class="md-nav__link">
+      <a href="../../getting-started/installation/" class="md-nav__link">
         
   
   
@@ -687,7 +587,7 @@
   
   
     <li class="md-nav__item">
-      <a href="getting-started/quick-start/" class="md-nav__link">
+      <a href="../../getting-started/quick-start/" class="md-nav__link">
         
   
   
@@ -715,7 +615,7 @@
   
   
     <li class="md-nav__item">
-      <a href="getting-started/storage-backends/" class="md-nav__link">
+      <a href="../../getting-started/storage-backends/" class="md-nav__link">
         
   
   
@@ -743,7 +643,7 @@
   
   
     <li class="md-nav__item">
-      <a href="getting-started/example-apps/" class="md-nav__link">
+      <a href="../../getting-started/example-apps/" class="md-nav__link">
         
   
   
@@ -832,7 +732,7 @@
   
   
     <li class="md-nav__item">
-      <a href="concepts/capability-interfaces/" class="md-nav__link">
+      <a href="../../concepts/capability-interfaces/" class="md-nav__link">
         
   
   
@@ -860,7 +760,7 @@
   
   
     <li class="md-nav__item">
-      <a href="concepts/oauth21-primer/" class="md-nav__link">
+      <a href="../../concepts/oauth21-primer/" class="md-nav__link">
         
   
   
@@ -888,7 +788,7 @@
   
   
     <li class="md-nav__item">
-      <a href="concepts/mcp-authorization/" class="md-nav__link">
+      <a href="../../concepts/mcp-authorization/" class="md-nav__link">
         
   
   
@@ -916,7 +816,7 @@
   
   
     <li class="md-nav__item">
-      <a href="concepts/authorization-server/" class="md-nav__link">
+      <a href="../../concepts/authorization-server/" class="md-nav__link">
         
   
   
@@ -944,7 +844,7 @@
   
   
     <li class="md-nav__item">
-      <a href="concepts/resource-server/" class="md-nav__link">
+      <a href="../../concepts/resource-server/" class="md-nav__link">
         
   
   
@@ -972,7 +872,7 @@
   
   
     <li class="md-nav__item">
-      <a href="concepts/par-jar/" class="md-nav__link">
+      <a href="../../concepts/par-jar/" class="md-nav__link">
         
   
   
@@ -1000,7 +900,7 @@
   
   
     <li class="md-nav__item">
-      <a href="concepts/jwt-bearer/" class="md-nav__link">
+      <a href="../../concepts/jwt-bearer/" class="md-nav__link">
         
   
   
@@ -1028,7 +928,7 @@
   
   
     <li class="md-nav__item">
-      <a href="concepts/ciba/" class="md-nav__link">
+      <a href="../../concepts/ciba/" class="md-nav__link">
         
   
   
@@ -1117,7 +1017,7 @@
   
   
     <li class="md-nav__item">
-      <a href="guides/add-oauth-provider/" class="md-nav__link">
+      <a href="../../guides/add-oauth-provider/" class="md-nav__link">
         
   
   
@@ -1145,7 +1045,7 @@
   
   
     <li class="md-nav__item">
-      <a href="guides/webauthn-passkeys/" class="md-nav__link">
+      <a href="../../guides/webauthn-passkeys/" class="md-nav__link">
         
   
   
@@ -1173,7 +1073,7 @@
   
   
     <li class="md-nav__item">
-      <a href="guides/api-tokens/" class="md-nav__link">
+      <a href="../../guides/api-tokens/" class="md-nav__link">
         
   
   
@@ -1201,7 +1101,7 @@
   
   
     <li class="md-nav__item">
-      <a href="guides/cli-login/" class="md-nav__link">
+      <a href="../../guides/cli-login/" class="md-nav__link">
         
   
   
@@ -1229,7 +1129,7 @@
   
   
     <li class="md-nav__item">
-      <a href="guides/path-prefix-and-dynamic-providers/" class="md-nav__link">
+      <a href="../../guides/path-prefix-and-dynamic-providers/" class="md-nav__link">
         
   
   
@@ -1257,7 +1157,7 @@
   
   
     <li class="md-nav__item">
-      <a href="guides/policy-engine/" class="md-nav__link">
+      <a href="../../guides/policy-engine/" class="md-nav__link">
         
   
   
@@ -1285,7 +1185,7 @@
   
   
     <li class="md-nav__item">
-      <a href="guides/single-binary-go-app/" class="md-nav__link">
+      <a href="../../guides/single-binary-go-app/" class="md-nav__link">
         
   
   
@@ -1313,7 +1213,7 @@
   
   
     <li class="md-nav__item">
-      <a href="guides/migrate-from-hand-rolled-sessions/" class="md-nav__link">
+      <a href="../../guides/migrate-from-hand-rolled-sessions/" class="md-nav__link">
         
   
   
@@ -1341,7 +1241,7 @@
   
   
     <li class="md-nav__item">
-      <a href="guides/oauth-hardening-and-auth-events/" class="md-nav__link">
+      <a href="../../guides/oauth-hardening-and-auth-events/" class="md-nav__link">
         
   
   
@@ -1369,7 +1269,7 @@
   
   
     <li class="md-nav__item">
-      <a href="guides/opentelemetry-tracing/" class="md-nav__link">
+      <a href="../../guides/opentelemetry-tracing/" class="md-nav__link">
         
   
   
@@ -1397,7 +1297,7 @@
   
   
     <li class="md-nav__item">
-      <a href="guides/audit-log-splunk/" class="md-nav__link">
+      <a href="../../guides/audit-log-splunk/" class="md-nav__link">
         
   
   
@@ -1425,7 +1325,7 @@
   
   
     <li class="md-nav__item">
-      <a href="guides/sqlite-storage/" class="md-nav__link">
+      <a href="../../guides/sqlite-storage/" class="md-nav__link">
         
   
   
@@ -1453,7 +1353,7 @@
   
   
     <li class="md-nav__item">
-      <a href="guides/postgres-mysql-storage/" class="md-nav__link">
+      <a href="../../guides/postgres-mysql-storage/" class="md-nav__link">
         
   
   
@@ -1481,7 +1381,7 @@
   
   
     <li class="md-nav__item">
-      <a href="guides/custom-storage-backend/" class="md-nav__link">
+      <a href="../../guides/custom-storage-backend/" class="md-nav__link">
         
   
   
@@ -1509,7 +1409,7 @@
   
   
     <li class="md-nav__item">
-      <a href="guides/migrate-from-cognito/" class="md-nav__link">
+      <a href="../../guides/migrate-from-cognito/" class="md-nav__link">
         
   
   
@@ -1537,7 +1437,7 @@
   
   
     <li class="md-nav__item">
-      <a href="guides/migrate-from-auth0/" class="md-nav__link">
+      <a href="../../guides/migrate-from-auth0/" class="md-nav__link">
         
   
   
@@ -1626,7 +1526,7 @@
   
   
     <li class="md-nav__item">
-      <a href="reference/configuration/" class="md-nav__link">
+      <a href="../../reference/configuration/" class="md-nav__link">
         
   
   
@@ -1654,7 +1554,7 @@
   
   
     <li class="md-nav__item">
-      <a href="reference/storage/" class="md-nav__link">
+      <a href="../../reference/storage/" class="md-nav__link">
         
   
   
@@ -1682,7 +1582,7 @@
   
   
     <li class="md-nav__item">
-      <a href="reference/errors/" class="md-nav__link">
+      <a href="../../reference/errors/" class="md-nav__link">
         
   
   
@@ -1710,7 +1610,7 @@
   
   
     <li class="md-nav__item">
-      <a href="reference/metrics/" class="md-nav__link">
+      <a href="../../reference/metrics/" class="md-nav__link">
         
   
   
@@ -1738,7 +1638,7 @@
   
   
     <li class="md-nav__item">
-      <a href="reference/spans/" class="md-nav__link">
+      <a href="../../reference/spans/" class="md-nav__link">
         
   
   
@@ -1766,7 +1666,7 @@
   
   
     <li class="md-nav__item">
-      <a href="reference/audit-events/" class="md-nav__link">
+      <a href="../../reference/audit-events/" class="md-nav__link">
         
   
   
@@ -1855,7 +1755,7 @@
   
   
     <li class="md-nav__item">
-      <a href="security/threat-model/" class="md-nav__link">
+      <a href="../../security/threat-model/" class="md-nav__link">
         
   
   
@@ -1883,7 +1783,7 @@
   
   
     <li class="md-nav__item">
-      <a href="security/http-security/" class="md-nav__link">
+      <a href="../../security/http-security/" class="md-nav__link">
         
   
   
@@ -1911,7 +1811,7 @@
   
   
     <li class="md-nav__item">
-      <a href="security/releases/" class="md-nav__link">
+      <a href="../../security/releases/" class="md-nav__link">
         
   
   
@@ -1939,7 +1839,7 @@
   
   
     <li class="md-nav__item">
-      <a href="security/benchmarks/" class="md-nav__link">
+      <a href="../../security/benchmarks/" class="md-nav__link">
         
   
   
@@ -1967,7 +1867,7 @@
   
   
     <li class="md-nav__item">
-      <a href="security/compliance-soc2/" class="md-nav__link">
+      <a href="../../security/compliance-soc2/" class="md-nav__link">
         
   
   
@@ -1995,7 +1895,7 @@
   
   
     <li class="md-nav__item">
-      <a href="security/compliance-gdpr/" class="md-nav__link">
+      <a href="../../security/compliance-gdpr/" class="md-nav__link">
         
   
   
@@ -2027,28 +1927,31 @@
       
   
   
+    
   
   
+  
     
     
     
     
+      
+        
+        
       
       
         
       
     
     
-    <li class="md-nav__item md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
       
         
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" checked>
         
           
-        
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_7" >
-        
-          
-          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="">
             
   
   
@@ -2066,7 +1969,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="true">
           <label class="md-nav__title" for="__nav_7">
             <span class="md-nav__icon md-icon"></span>
             
@@ -2081,10 +1984,37 @@
                 
   
   
+    
   
   
-    <li class="md-nav__item">
-      <a href="migrations/to-v2-module-path/" class="md-nav__link">
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Migrating to /v2
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
         
   
   
@@ -2100,6 +2030,70 @@
   
 
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#why" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-you-need-to-do" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What you need to do
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#installing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Installing
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#pseudo-version-users" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Pseudo-version users
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
     </li>
   
 
@@ -2112,7 +2106,7 @@
   
   
     <li class="md-nav__item">
-      <a href="migrations/v2.3-to-v2.4/" class="md-nav__link">
+      <a href="../v2.3-to-v2.4/" class="md-nav__link">
         
   
   
@@ -2140,7 +2134,7 @@
   
   
     <li class="md-nav__item">
-      <a href="migrations/v2.0-to-v2.1/" class="md-nav__link">
+      <a href="../v2.0-to-v2.1/" class="md-nav__link">
         
   
   
@@ -2168,7 +2162,7 @@
   
   
     <li class="md-nav__item">
-      <a href="migrations/v1.0-to-v2.0/" class="md-nav__link">
+      <a href="../v1.0-to-v2.0/" class="md-nav__link">
         
   
   
@@ -2196,7 +2190,7 @@
   
   
     <li class="md-nav__item">
-      <a href="migrations/v0.7-to-v1.0/" class="md-nav__link">
+      <a href="../v0.7-to-v1.0/" class="md-nav__link">
         
   
   
@@ -2231,7 +2225,7 @@
   
   
     <li class="md-nav__item">
-      <a href="changelog/" class="md-nav__link">
+      <a href="../../changelog/" class="md-nav__link">
         
   
   
@@ -2278,10 +2272,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#install" class="md-nav__link">
+  <a href="#why" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Install
+        Why
       
     </span>
   </a>
@@ -2289,10 +2283,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#quick-start" class="md-nav__link">
+  <a href="#what-you-need-to-do" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Quick Start
+        What you need to do
       
     </span>
   </a>
@@ -2300,10 +2294,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#what-it-covers" class="md-nav__link">
+  <a href="#installing" class="md-nav__link">
     <span class="md-ellipsis">
       
-        What it covers
+        Installing
       
     </span>
   </a>
@@ -2311,21 +2305,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#documentation" class="md-nav__link">
+  <a href="#pseudo-version-users" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Documentation
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#mcp-resource-server" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        MCP Resource Server
+        Pseudo-version users
       
     </span>
   </a>
@@ -2350,6 +2333,46 @@
   
 
 
+  <nav class="md-path" aria-label="Navigation" >
+    <ol class="md-path__list">
+      
+        
+  
+  
+    <li class="md-path__item">
+      <a href="../.." class="md-path__link">
+        
+  <span class="md-ellipsis">
+    Home
+  </span>
+
+      </a>
+    </li>
+  
+
+      
+      
+        
+  
+  
+    
+    
+      <li class="md-path__item">
+        <a href="./" class="md-path__link">
+          
+  <span class="md-ellipsis">
+    Migrations
+  </span>
+
+        </a>
+      </li>
+    
+  
+
+      
+    </ol>
+  </nav>
+
               
               <article class="md-content__inner md-typeset">
                 
@@ -2360,126 +2383,30 @@
   
 
 
-<h1 id="theauth-go">theauth-go<a class="headerlink" href="#theauth-go" title="Permanent link">&para;</a></h1>
-<script type="application/ld+json">
-{
-  "@context": "https://schema.org",
-  "@type": "SoftwareSourceCode",
-  "name": "theauth-go",
-  "description": "OAuth 2.1 authorization server and auth library for Go: sessions, magic links, WebAuthn/passkeys, TOTP, SAML, SCIM, RBAC, and MCP resource-server authorization. Postgres, MySQL, and in-memory storage.",
-  "codeRepository": "https://github.com/glincker/theauth-go",
-  "url": "https://go.theauth.dev/",
-  "programmingLanguage": "Go",
-  "license": "https://github.com/glincker/theauth-go/blob/main/LICENSE",
-  "runtimePlatform": "Go 1.25+",
-  "applicationCategory": "Authentication Library",
-  "keywords": "oauth2, oidc, mcp, mcp-authorization, golang, authorization-server, passkeys, webauthn, saml, scim, rbac, totp, jwt",
-  "author": {
-    "@type": "Organization",
-    "name": "GLINR Studios",
-    "url": "https://github.com/glincker"
-  }
-}
-</script>
-
-<p><a href="https://pkg.go.dev/github.com/glincker/theauth-go/v2"><img alt="Go Reference" src="https://pkg.go.dev/badge/github.com/glincker/theauth-go.svg" /></a>
-<a href="https://github.com/glincker/theauth-go/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/glincker/theauth-go/actions/workflows/ci.yml/badge.svg" /></a>
-<a href="https://github.com/glincker/theauth-go/releases"><img alt="Release" src="https://img.shields.io/github/v/release/glincker/theauth-go" /></a>
-<a href="https://github.com/glincker/theauth-go/blob/main/LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/License-MIT-yellow.svg" /></a></p>
-<p><strong>The first Go auth library where OAuth 2.1 MCP authorization, agent identities, and revocable delegation chains ship in a single import.</strong></p>
-<p>Drop it into a <code>chi</code> or <code>net/http</code> server in under twenty lines. Store sessions in Postgres or memory.</p>
-<h2 id="install">Install<a class="headerlink" href="#install" title="Permanent link">&para;</a></h2>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>go<span class="w"> </span>get<span class="w"> </span>github.com/glincker/theauth-go/v2
+<h1 id="migrating-to-v2">Migrating to /v2<a class="headerlink" href="#migrating-to-v2" title="Permanent link">&para;</a></h1>
+<p><strong>Summary:</strong> the module path is now <code>github.com/glincker/theauth-go/v2</code>. The API is unchanged. Only import paths need to change.</p>
+<h2 id="why">Why<a class="headerlink" href="#why" title="Permanent link">&para;</a></h2>
+<p>Go requires a module at major version 2 or higher to end its path in <code>/v2</code>. The earlier v2.x tags were published without it, so the Go toolchain could not resolve them and <code>go get github.com/glincker/theauth-go</code> silently returned v1.0.0. Releases from v2.6.0 onward use the correct path.</p>
+<h2 id="what-you-need-to-do">What you need to do<a class="headerlink" href="#what-you-need-to-do" title="Permanent link">&para;</a></h2>
+<p>Rewrite imports in your module (run from the module root, GNU sed shown; on macOS use <code>sed -i ''</code>):</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>grep<span class="w"> </span>-rl<span class="w"> </span><span class="s1">'github.com/glincker/theauth-go'</span><span class="w"> </span>--include<span class="o">=</span><span class="s1">'*.go'</span><span class="w"> </span>.<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="w">  </span><span class="p">|</span><span class="w"> </span>xargs<span class="w"> </span>sed<span class="w"> </span>-i<span class="w"> </span>-E<span class="w"> </span><span class="s1">'s#github.com/glincker/theauth-go(/(storage/(memory|postgres|mysql)|admin|audit|clientauth|policy|provider|email|crypto|internal)[^"]*)?"#github.com/glincker/theauth-go/v2\1"#'</span><span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="w">  </span><span class="o">&amp;&amp;</span><span class="w"> </span>grep<span class="w"> </span>-rl<span class="w"> </span><span class="s1">'theauth-go/v2/audit/sinks/otlp'</span><span class="w"> </span>--include<span class="o">=</span><span class="s1">'*.go'</span><span class="w"> </span>.<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="w">  </span><span class="p">|</span><span class="w"> </span>xargs<span class="w"> </span>sed<span class="w"> </span>-i<span class="w"> </span><span class="s1">'s#theauth-go/v2/audit/sinks/otlp#theauth-go/audit/sinks/otlp#'</span>
 </code></pre></div>
-<p>Requires <strong>Go 1.25+</strong>.</p>
-<h2 id="quick-start">Quick Start<a class="headerlink" href="#quick-start" title="Permanent link">&para;</a></h2>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="kn">package</span><span class="w"> </span><span class="nx">main</span>
-<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>
-<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="kn">import</span><span class="w"> </span><span class="p">(</span>
-<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="w">    </span><span class="s">"net/http"</span>
-<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>
-<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="w">    </span><span class="s">"github.com/glincker/theauth-go/v2"</span>
-<a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="w">    </span><span class="s">"github.com/glincker/theauth-go/v2/storage/memory"</span>
-<a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a><span class="w">    </span><span class="s">"github.com/go-chi/chi/v5"</span>
-<a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a><span class="p">)</span>
-<a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a>
-<a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a><span class="kd">func</span><span class="w"> </span><span class="nx">main</span><span class="p">()</span><span class="w"> </span><span class="p">{</span>
-<a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a><span class="w">    </span><span class="nx">a</span><span class="p">,</span><span class="w"> </span><span class="nx">_</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">theauth</span><span class="p">.</span><span class="nx">New</span><span class="p">(</span><span class="nx">theauth</span><span class="p">.</span><span class="nx">Config</span><span class="p">{</span>
-<a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a><span class="w">        </span><span class="nx">Storage</span><span class="p">:</span><span class="w"> </span><span class="nx">memory</span><span class="p">.</span><span class="nx">New</span><span class="p">(),</span>
-<a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a><span class="w">        </span><span class="nx">BaseURL</span><span class="p">:</span><span class="w"> </span><span class="s">"http://localhost:8080"</span><span class="p">,</span>
-<a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a><span class="w">    </span><span class="p">})</span>
-<a id="__codelineno-1-16" name="__codelineno-1-16" href="#__codelineno-1-16"></a>
-<a id="__codelineno-1-17" name="__codelineno-1-17" href="#__codelineno-1-17"></a><span class="w">    </span><span class="nx">r</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">chi</span><span class="p">.</span><span class="nx">NewRouter</span><span class="p">()</span>
-<a id="__codelineno-1-18" name="__codelineno-1-18" href="#__codelineno-1-18"></a><span class="w">    </span><span class="nx">a</span><span class="p">.</span><span class="nx">Mount</span><span class="p">(</span><span class="nx">r</span><span class="p">)</span>
-<a id="__codelineno-1-19" name="__codelineno-1-19" href="#__codelineno-1-19"></a>
-<a id="__codelineno-1-20" name="__codelineno-1-20" href="#__codelineno-1-20"></a><span class="w">    </span><span class="nx">r</span><span class="p">.</span><span class="nx">With</span><span class="p">(</span><span class="nx">a</span><span class="p">.</span><span class="nx">RequireAuth</span><span class="p">()).</span><span class="nx">Get</span><span class="p">(</span><span class="s">"/me"</span><span class="p">,</span><span class="w"> </span><span class="kd">func</span><span class="p">(</span><span class="nx">w</span><span class="w"> </span><span class="nx">http</span><span class="p">.</span><span class="nx">ResponseWriter</span><span class="p">,</span><span class="w"> </span><span class="nx">r</span><span class="w"> </span><span class="o">*</span><span class="nx">http</span><span class="p">.</span><span class="nx">Request</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
-<a id="__codelineno-1-21" name="__codelineno-1-21" href="#__codelineno-1-21"></a><span class="w">        </span><span class="nx">user</span><span class="p">,</span><span class="w"> </span><span class="nx">_</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">theauth</span><span class="p">.</span><span class="nx">UserFromContext</span><span class="p">(</span><span class="nx">r</span><span class="p">.</span><span class="nx">Context</span><span class="p">())</span>
-<a id="__codelineno-1-22" name="__codelineno-1-22" href="#__codelineno-1-22"></a><span class="w">        </span><span class="nx">w</span><span class="p">.</span><span class="nx">Write</span><span class="p">([]</span><span class="kt">byte</span><span class="p">(</span><span class="s">"hello "</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="nx">user</span><span class="p">.</span><span class="nx">Email</span><span class="p">))</span>
-<a id="__codelineno-1-23" name="__codelineno-1-23" href="#__codelineno-1-23"></a><span class="w">    </span><span class="p">})</span>
-<a id="__codelineno-1-24" name="__codelineno-1-24" href="#__codelineno-1-24"></a>
-<a id="__codelineno-1-25" name="__codelineno-1-25" href="#__codelineno-1-25"></a><span class="w">    </span><span class="nx">http</span><span class="p">.</span><span class="nx">ListenAndServe</span><span class="p">(</span><span class="s">":8080"</span><span class="p">,</span><span class="w"> </span><span class="nx">r</span><span class="p">)</span>
-<a id="__codelineno-1-26" name="__codelineno-1-26" href="#__codelineno-1-26"></a><span class="p">}</span>
+<p>Review the diff before committing: the standalone modules <code>storage/sqlite</code>, <code>mcpresource</code> and <code>audit/sinks/otlp</code> keep their existing paths and must not gain <code>/v2</code>.</p>
+<p>Then update the dependency:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>go<span class="w"> </span>get<span class="w"> </span>github.com/glincker/theauth-go/v2@latest
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>go<span class="w"> </span>mod<span class="w"> </span>tidy
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>go<span class="w"> </span>build<span class="w"> </span>./...
 </code></pre></div>
-<p>Run it:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>go<span class="w"> </span>run<span class="w"> </span>main.go
-<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="c1"># POST http://localhost:8080/auth/magic-link  {"email":"you@example.com"}</span>
+<h2 id="installing">Installing<a class="headerlink" href="#installing" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>go<span class="w"> </span>get<span class="w"> </span>github.com/glincker/theauth-go/v2
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>go<span class="w"> </span>get<span class="w"> </span>github.com/glincker/theauth-go/storage/sqlite<span class="w">   </span><span class="c1"># optional</span>
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>go<span class="w"> </span>get<span class="w"> </span>github.com/glincker/theauth-go/mcpresource<span class="w">      </span><span class="c1"># optional</span>
 </code></pre></div>
-<h2 id="what-it-covers">What it covers<a class="headerlink" href="#what-it-covers" title="Permanent link">&para;</a></h2>
-<table>
-<thead>
-<tr>
-<th>Area</th>
-<th>Capability</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>Identity</td>
-<td>Magic links, email/password (Argon2id), WebAuthn passkeys, TOTP, OAuth providers</td>
-</tr>
-<tr>
-<td>Enterprise</td>
-<td>SAML 2.0 SP, SCIM 2.0, multi-tenancy organizations, RBAC</td>
-</tr>
-<tr>
-<td>OAuth 2.1 AS</td>
-<td>Authorization code + PKCE, refresh rotation, DCR, EdDSA JWTs, audience binding</td>
-</tr>
-<tr>
-<td>MCP</td>
-<td>Agent identities, revocable delegation chains (RFC 8693), resource-server SDK</td>
-</tr>
-<tr>
-<td>Hardening</td>
-<td>Audit log, rate limiting, fuzz tests, benchmark gate, OTel/Prom adapter</td>
-</tr>
-</tbody>
-</table>
-<h2 id="documentation">Documentation<a class="headerlink" href="#documentation" title="Permanent link">&para;</a></h2>
-<ul>
-<li><a href="getting-started/overview/">Getting Started</a> - Installation, quick start, storage backends</li>
-<li><a href="concepts/oauth21-primer/">Concepts</a> - OAuth 2.1, MCP authorization, AS/RS roles</li>
-<li><a href="guides/add-oauth-provider/">Guides</a> - Step-by-step task guides</li>
-<li><a href="reference/configuration/">Reference</a> - Config shape, errors, metrics, spans, audit events</li>
-<li><a href="security/threat-model/">Security</a> - Threat model, release verification</li>
-<li><a href="migrations/v2.0-to-v2.1/">Migrations</a> - Upgrade guides between versions</li>
-<li><a href="changelog/">Changelog</a> - Full release history</li>
-</ul>
-<h2 id="mcp-resource-server">MCP Resource Server<a class="headerlink" href="#mcp-resource-server" title="Permanent link">&para;</a></h2>
-<p>For MCP servers that only need token validation (no auth server), install the zero-dependency SDK:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>go<span class="w"> </span>get<span class="w"> </span>github.com/glincker/theauth-go/mcpresource
-</code></pre></div>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="nx">v</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">mcpresource</span><span class="p">.</span><span class="nx">New</span><span class="p">(</span>
-<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="w">    </span><span class="s">"https://mcp.example.com"</span><span class="p">,</span>
-<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="w">    </span><span class="nx">mcpresource</span><span class="p">.</span><span class="nx">WithJWKS</span><span class="p">(</span><span class="s">"https://as.example.com/oauth/jwks"</span><span class="p">),</span>
-<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="w">    </span><span class="nx">mcpresource</span><span class="p">.</span><span class="nx">WithIntrospection</span><span class="p">(</span>
-<a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="w">        </span><span class="s">"https://as.example.com/oauth/introspect"</span><span class="p">,</span>
-<a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="w">        </span><span class="s">"mcp-client-id"</span><span class="p">,</span><span class="w"> </span><span class="s">"mcp-client-secret"</span><span class="p">,</span>
-<a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="w">    </span><span class="p">),</span>
-<a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a><span class="p">)</span>
-<a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a><span class="nx">r</span><span class="p">.</span><span class="nx">Use</span><span class="p">(</span><span class="nx">v</span><span class="p">.</span><span class="nx">Middleware</span><span class="p">)</span>
-</code></pre></div>
-<p>See <a href="concepts/resource-server/">Resource Server (mcpresource)</a> for the full walkthrough.</p>
+<h2 id="pseudo-version-users">Pseudo-version users<a class="headerlink" href="#pseudo-version-users" title="Permanent link">&para;</a></h2>
+<p>If you pinned a pseudo-version of the old path (for example from a branch or commit), your <code>go.mod</code> still points at <code>github.com/glincker/theauth-go</code>. That path does not receive v2.6.0 or later. Change the imports as above and require the <code>/v2</code> path.</p>
 
 
 
@@ -2535,10 +2462,10 @@
     
       
       
-      <script id="__config" type="application/json">{"annotate": null, "base": ".", "features": ["navigation.tabs", "navigation.tabs.sticky", "navigation.sections", "navigation.expand", "navigation.path", "navigation.top", "search.highlight", "search.suggest", "content.code.copy", "content.code.annotate"], "search": "assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"default": "latest", "provider": "mike"}}</script>
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.tabs", "navigation.tabs.sticky", "navigation.sections", "navigation.expand", "navigation.path", "navigation.top", "search.highlight", "search.suggest", "content.code.copy", "content.code.annotate"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"default": "latest", "provider": "mike"}}</script>
     
     
-      <script src="assets/javascripts/bundle.d7400e89.min.js"></script>
+      <script src="../../assets/javascripts/bundle.d7400e89.min.js"></script>
       
     
   </body>

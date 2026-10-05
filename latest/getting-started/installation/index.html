@@ -361,7 +361,7 @@
     
     
       <li class="md-tabs__item">
-        <a href="../../migrations/v2.3-to-v2.4/" class="md-tabs__link">
+        <a href="../../migrations/to-v2-module-path/" class="md-tabs__link">
           
   
   
@@ -2100,6 +2100,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../../migrations/to-v2-module-path/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Migrating to /v2
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../migrations/v2.3-to-v2.4/" class="md-nav__link">
         
   
@@ -2407,7 +2435,7 @@
 <li>A <code>chi</code> or <code>net/http</code>-compatible HTTP router (the library works with any; chi is used in examples).</li>
 </ul>
 <h2 id="install-the-main-module">Install the main module<a class="headerlink" href="#install-the-main-module" title="Permanent link">&para;</a></h2>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>go<span class="w"> </span>get<span class="w"> </span>github.com/glincker/theauth-go
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>go<span class="w"> </span>get<span class="w"> </span>github.com/glincker/theauth-go/v2
 </code></pre></div>
 <p>This installs the full theauth-go surface: magic links, email/password, WebAuthn, TOTP, SAML, SCIM, RBAC, audit, and the OAuth 2.1 authorization server.</p>
 <h2 id="install-only-the-mcp-resource-server-sdk">Install only the MCP resource server SDK<a class="headerlink" href="#install-only-the-mcp-resource-server-sdk" title="Permanent link">&para;</a></h2>
@@ -2417,7 +2445,7 @@
 <p><code>mcpresource</code> has no third-party dependencies. Importing it does not pull in theauth core or any storage adapter.</p>
 <h2 id="postgres-storage-adapter">Postgres storage adapter<a class="headerlink" href="#postgres-storage-adapter" title="Permanent link">&para;</a></h2>
 <p>The Postgres adapter uses <code>pgx/v5</code> and generated SQL via <code>sqlc</code>. It is bundled in the main module under <code>storage/postgres</code>; no separate <code>go get</code> is needed. You do need to run migrations before first use:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="kn">import</span><span class="w"> </span><span class="s">"github.com/glincker/theauth-go/storage/postgres"</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="kn">import</span><span class="w"> </span><span class="s">"github.com/glincker/theauth-go/v2/storage/postgres"</span>
 <a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>
 <a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="nx">pool</span><span class="p">,</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">pgxpool</span><span class="p">.</span><span class="nx">New</span><span class="p">(</span><span class="nx">ctx</span><span class="p">,</span><span class="w"> </span><span class="nx">os</span><span class="p">.</span><span class="nx">Getenv</span><span class="p">(</span><span class="s">"DATABASE_URL"</span><span class="p">))</span>
 <a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="c1">// Migrations are embedded; postgres.Migrate applies them (append-only,</span>
@@ -2429,7 +2457,7 @@
 </code></pre></div>
 <h2 id="verify-the-installation">Verify the installation<a class="headerlink" href="#verify-the-installation" title="Permanent link">&para;</a></h2>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>go<span class="w"> </span>build<span class="w"> </span>./...
-<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>go<span class="w"> </span><span class="nb">test</span><span class="w"> </span>github.com/glincker/theauth-go/...<span class="w"> </span>-count<span class="o">=</span><span class="m">1</span><span class="w"> </span>-short
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>go<span class="w"> </span><span class="nb">test</span><span class="w"> </span>github.com/glincker/theauth-go/v2/...<span class="w"> </span>-count<span class="o">=</span><span class="m">1</span><span class="w"> </span>-short
 </code></pre></div>
 <h2 id="release-verification">Release verification<a class="headerlink" href="#release-verification" title="Permanent link">&para;</a></h2>
 <p>Every release artifact is signed with <code>cosign</code> keyless signing (Sigstore OIDC). See <a href="../../security/releases/">Releases and Verification</a> for the smoke-test commands.</p>

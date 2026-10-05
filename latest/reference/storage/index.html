@@ -361,7 +361,7 @@
     
     
       <li class="md-tabs__item">
-        <a href="../../migrations/v2.3-to-v2.4/" class="md-tabs__link">
+        <a href="../../migrations/to-v2-module-path/" class="md-tabs__link">
           
   
   
@@ -2161,6 +2161,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../../migrations/to-v2-module-path/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Migrating to /v2
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../migrations/v2.3-to-v2.4/" class="md-nav__link">
         
   
@@ -2535,15 +2563,15 @@
 </thead>
 <tbody>
 <tr>
-<td><code>github.com/glincker/theauth-go/storage/memory</code></td>
+<td><code>github.com/glincker/theauth-go/v2/storage/memory</code></td>
 <td>Local dev, testing</td>
 </tr>
 <tr>
-<td><code>github.com/glincker/theauth-go/storage/postgres</code></td>
+<td><code>github.com/glincker/theauth-go/v2/storage/postgres</code></td>
 <td>Production (<code>pgx/v5</code> + <code>sqlc</code>)</td>
 </tr>
 <tr>
-<td><code>github.com/glincker/theauth-go/storage/mysql</code></td>
+<td><code>github.com/glincker/theauth-go/v2/storage/mysql</code></td>
 <td>Production, MySQL 8.x (v2.4+)</td>
 </tr>
 </tbody>
@@ -2606,7 +2634,7 @@
 <p>Since v2.4, theauth-go ships a public contract test suite in the <code>storagetest</code>
 package. Any custom adapter (or a new in-tree adapter) can be verified by calling
 <code>storagetest.Run</code>:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">import</span><span class="w"> </span><span class="s">"github.com/glincker/theauth-go/storagetest"</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">import</span><span class="w"> </span><span class="s">"github.com/glincker/theauth-go/v2/storagetest"</span>
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>
 <a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="kd">func</span><span class="w"> </span><span class="nx">TestConformance</span><span class="p">(</span><span class="nx">t</span><span class="w"> </span><span class="o">*</span><span class="nx">testing</span><span class="p">.</span><span class="nx">T</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
 <a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="w">    </span><span class="nx">storagetest</span><span class="p">.</span><span class="nx">Run</span><span class="p">(</span><span class="nx">t</span><span class="p">,</span><span class="w"> </span><span class="kd">func</span><span class="p">()</span><span class="w"> </span><span class="nx">theauth</span><span class="p">.</span><span class="nx">Storage</span><span class="w"> </span><span class="p">{</span>
@@ -2642,7 +2670,7 @@ is skipped in offline CI):</p>
 <a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="p">}</span>
 </code></pre></div>
 <h2 id="interface-documentation">Interface documentation<a class="headerlink" href="#interface-documentation" title="Permanent link">&para;</a></h2>
-<p>Full godoc is available at <a href="https://pkg.go.dev/github.com/glincker/theauth-go#Storage">pkg.go.dev/github.com/glincker/theauth-go#Storage</a>.</p>
+<p>Full godoc is available at <a href="https://pkg.go.dev/github.com/glincker/theauth-go/v2#Storage">pkg.go.dev/github.com/glincker/theauth-go/v2#Storage</a>.</p>
 <h2 id="special-rules">Special rules<a class="headerlink" href="#special-rules" title="Permanent link">&para;</a></h2>
 <h3 id="append-only-migrations">Append-only migrations<a class="headerlink" href="#append-only-migrations" title="Permanent link">&para;</a></h3>
 <p>The <code>storage/postgres/migrations/</code> directory is append-only. Columns are added via new migrations; they are never renamed destructively. This protects rolling-restart deployments.</p>
