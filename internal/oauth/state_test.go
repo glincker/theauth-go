@@ -67,3 +67,40 @@ func TestMatchReturnTo(t *testing.T) {
 		t.Error("empty allow-list must reject everything")
 	}
 }
+
+func TestMatchReturnToRejectsControlChars(t *testing.T) {
+	allow := []string{"/*"}
+	tests := []struct{ name, in string }{
+		{"tab", "/\t/evil.com"},
+		{"newline", "/\n/evil.com"},
+		{"carriage return", "/\r/evil.com"},
+		{"nul", "/\x00/evil.com"},
+		{"del", "/\x7f/evil.com"},
+		{"escape", "/\x1b/evil.com"},
+		{"backslash", "/\\evil.com"},
+		{"trailing tab", "/ok\t"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := MatchReturnTo(tc.in, allow); got != "" {
+				t.Fatalf("MatchReturnTo(%q) = %q, want rejection", tc.in, got)
+			}
+		})
+	}
+	for _, ok := range []string{"/dash", "/a/b?x=1&y=2", "/%2F/evil.com"} {
+		if got := MatchReturnTo(ok, allow); got != ok {
+			t.Fatalf("MatchReturnTo(%q) = %q, want it kept", ok, got)
+		}
+	}
+}
+
+func TestHasUnsafeRedirectChars(t *testing.T) {
+	for in, want := range map[string]bool{
+		"": false, "/ok": false, "/a?b=c": false, "https://x.example/p": false,
+		"/\t/x": true, "a\nb": true, "a\x00": true, "a\x7f": true, "/\\x": true,
+	} {
+		if got := HasUnsafeRedirectChars(in); got != want {
+			t.Errorf("HasUnsafeRedirectChars(%q) = %v, want %v", in, got, want)
+		}
+	}
+}
