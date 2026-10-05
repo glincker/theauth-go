@@ -10,6 +10,7 @@ use (
 	./examples/oauth-multi-provider
 	./examples/observability-otel
 	./examples/observability-prom
+	./examples/single-binary-sqlite
 	./examples/stdlib-app
 	./mcpresource
 	./storage/sqlite

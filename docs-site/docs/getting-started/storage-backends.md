@@ -1,6 +1,6 @@
 # Storage Backends
 
-theauth-go ships three built-in storage adapters. All three implement the same `Storage` interface, so you can switch between them by changing a single constructor argument.
+theauth-go ships four built-in storage adapters (memory, Postgres, MySQL and, as a separate module, SQLite). See [Capability interfaces](../concepts/capability-interfaces.md) for which adapter implements which capability. Memory, Postgres and MySQL implement the full `Storage` interface and are set as `Config.Storage`. SQLite implements `CoreStorage` plus optional capabilities and is set as `Config.CoreStorage` (see [Use the SQLite Backend](../guides/sqlite-storage.md)).
 
 ## In-memory (`storage/memory`)
 
@@ -138,4 +138,4 @@ available.
 | Local dev, CI | `memory` |
 | Production (single node or replicated Postgres) | `postgres` |
 | Production (MySQL 8.x, PlanetScale, RDS MySQL) | `mysql` |
-| Custom database (SQLite, CockroachDB, etc.) | Implement `Storage`; see [Write a Custom Storage Backend](../guides/custom-storage-backend.md) |
+| Custom database (CockroachDB, etc.) | Implement `Storage`; see [Write a Custom Storage Backend](../guides/custom-storage-backend.md) |

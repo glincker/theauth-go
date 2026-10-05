@@ -61,6 +61,8 @@ func TestMySQLStoreContract(t *testing.T) {
 	store := mysql.New(db)
 	storagetest.Run(t, store)
 	storagetest.RunMFACaps(t, store)
+	storagetest.RunAPITokens(t, store)
+	storagetest.RunDeviceCodes(t, store)
 
 	t.Run("UpdateSessionAuthLevelUnknownID", func(t *testing.T) {
 		if err := store.UpdateSessionAuthLevel(ctx, ulid.New(), "full"); !errors.Is(err, storage.ErrNotFound) {
@@ -156,6 +158,11 @@ func dropTables(t *testing.T, ctx context.Context, db *sql.DB) {
 
 	tables := []string{
 		"theauth_schema_migrations",
+		"throttle_entries",
+		"totp_last_steps",
+		"device_codes",
+		"api_tokens",
+		"session_links",
 		"audit_events",
 		"delegation_grants",
 		"agent_credentials",
