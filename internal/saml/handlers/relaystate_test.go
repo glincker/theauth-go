@@ -22,6 +22,10 @@ func TestHandleACS_RelayStateValidation(t *testing.T) {
 		{"foreign absolute url falls back", "https://evil.example.net/phish", "/dashboard"},
 		{"protocol-relative falls back", "//evil.example.net/phish", "/dashboard"},
 		{"backslash trick falls back", "/\\evil.example.net", "/dashboard"},
+		{"tab trick falls back", "/\t/evil.example.net", "/dashboard"},
+		{"newline trick falls back", "/\n/evil.example.net", "/dashboard"},
+		{"nul byte falls back", "/\x00/evil.example.net", "/dashboard"},
+		{"del byte falls back", "/\x7f/evil.example.net", "/dashboard"},
 		{"javascript scheme falls back", "javascript:alert(1)", "/dashboard"},
 		{"empty falls back", "", "/dashboard"},
 	}
