@@ -4,6 +4,8 @@
 package emailnorm
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"strings"
 
 	"golang.org/x/text/unicode/norm"
@@ -23,4 +25,11 @@ func (n Normalizer) Normalize(raw string) string {
 		s = norm.NFKC.String(s)
 	}
 	return strings.ToLower(s)
+}
+
+// LogRef returns a short stable pseudonym for an already-canonical address so
+// log lines can be correlated without writing the address itself.
+func LogRef(canonical string) string {
+	sum := sha256.Sum256([]byte(canonical))
+	return hex.EncodeToString(sum[:])[:12]
 }

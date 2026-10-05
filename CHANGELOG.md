@@ -12,6 +12,7 @@ adheres to [Semantic Versioning](https://semver.org/) from v1.0 forward.
 ### Added
 
 - `OAuthConfig.RedirectURI`, `RedirectURIAllowedHosts` and `AllowInsecureRedirectURI` to override and validate the OAuth redirect URI, plus `(*TheAuth).OAuthStart` and `OAuthCallback` for apps hosting their own routes.
+- Default logs no longer contain email addresses (password signin/signup/reset, magic link, `email.Noop`); lines carry `user_id` or a 12-hex `email_ref` hash instead.
 
 ## [2.6.0] - 2026-10-05
 

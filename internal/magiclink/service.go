@@ -126,7 +126,7 @@ func (s *Service) RequestForTest(ctx context.Context, emailAddr string) (string,
 	s.auditEm.EmitAudit(ctx, "magic_link.requested", models.TargetRef{Type: "user", ID: ml.ID.String()}, map[string]any{
 		"email_hash": hashEmailForAudit(emailAddr),
 	})
-	slog.Info("theauth: magic link requested", "email", emailAddr)
+	slog.Info("theauth: magic link requested", "email_ref", emailnorm.LogRef(emailAddr))
 	return token, nil
 }
 
@@ -187,7 +187,7 @@ func (s *Service) Consume(ctx context.Context, token string) (sessionToken strin
 	s.auditEm.EmitAudit(ctx, "user.login", models.TargetRef{Type: "user", ID: u.ID.String()}, map[string]any{
 		"auth_method": "magic_link",
 	})
-	slog.Info("theauth: magic link consumed", "user_id", u.ID.String(), "email", u.Email)
+	slog.Info("theauth: magic link consumed", "user_id", u.ID.String())
 	return sessToken, u, created, nil
 }
 
