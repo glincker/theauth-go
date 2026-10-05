@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"math"
 	"strings"
 	"time"
 
@@ -448,8 +449,8 @@ func (s *Store) ListUsersByOrganization(ctx context.Context, orgID theauth.ULID,
 		UserName:       filter.UserName,
 		ExternalID:     filter.ExternalID,
 		Email:          filter.Email,
-		OffsetN:        int32(offset),
-		LimitN:         int32(limit),
+		OffsetN:        clampInt32(offset),
+		LimitN:         clampInt32(limit),
 	})
 	if err != nil {
 		return nil, 0, err
@@ -478,8 +479,8 @@ func (s *Store) ListGroupsByOrganization(ctx context.Context, orgID theauth.ULID
 		OrganizationID: ulidToPgUUID(orgID),
 		DisplayName:    filter.DisplayName,
 		ExternalID:     filter.ExternalID,
-		OffsetN:        int32(offset),
-		LimitN:         int32(limit),
+		OffsetN:        clampInt32(offset),
+		LimitN:         clampInt32(limit),
 	})
 	if err != nil {
 		return nil, 0, err
@@ -706,4 +707,16 @@ func isUniqueViolation(err error, constraint string) bool {
 	msg := err.Error()
 	return strings.Contains(msg, "SQLSTATE 23505") &&
 		(constraint == "" || strings.Contains(msg, constraint))
+}
+
+// clampInt32 narrows n into the int32 range so caller-supplied offsets and
+// limits cannot wrap negative on conversion.
+func clampInt32(n int) int32 {
+	switch {
+	case n < 0:
+		return 0
+	case n > math.MaxInt32:
+		return math.MaxInt32
+	}
+	return int32(n)
 }
