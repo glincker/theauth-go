@@ -292,9 +292,9 @@ type PasswordPolicyConfig struct {
     // Default: false.
     AllowLegacyBcrypt bool
 
-    // OnLegacyHashAccepted is called after a successful bcrypt verify with the
-    // new Argon2id hash. Use this to persist the updated hash to storage.
-    // Called in a background goroutine; the login response is not delayed.
+    // OnLegacyHashAccepted is optional. The library persists the new Argon2id
+    // hash itself; this is called afterwards, from a separate goroutine, so a
+    // host that mirrors password hashes elsewhere can update its copy.
     OnLegacyHashAccepted func(userID string, newArgon2idHash string)
 }
 ```

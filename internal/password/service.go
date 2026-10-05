@@ -125,6 +125,8 @@ type Config struct {
 	Gate SignupGate
 	// AllowLegacyBcrypt accepts bcrypt hashes at signin and rehashes them to Argon2id.
 	AllowLegacyBcrypt bool
+	// OnLegacyHashAccepted is invoked in a goroutine after a legacy hash was upgraded and persisted.
+	OnLegacyHashAccepted func(userID, newArgon2idHash string)
 }
 
 // Service holds the dependencies needed for password flows.
@@ -314,7 +316,7 @@ func (s *Service) Signin(ctx context.Context, emailAddr, password, userAgent, ip
 	}
 	s.recordSuccess(ctx, ip, emailAddr)
 	if newHash != "" {
-		UpgradeHash(ctx, s.storage.SetUserPassword, user.ID, newHash)
+		UpgradeAndNotify(ctx, s.storage.SetUserPassword, s.cfg.OnLegacyHashAccepted, user.ID, newHash)
 	}
 	// v0.5 step-up: when TOTP is enrolled and confirmed for this user, mint
 	// a pending_2fa session instead of a full one. The caller (the HTTP

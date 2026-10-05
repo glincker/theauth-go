@@ -219,22 +219,22 @@ auth, err := theauth.New(theauth.Config{
     PasswordPolicy: theauth.PasswordPolicyConfig{
         AllowLegacyBcrypt: true,
         OnLegacyHashAccepted: func(userID string, newHash string) {
-            // Persist the new Argon2id hash to storage.
-            // This callback is called in the background after a successful
-            // bcrypt login. Update the user's password hash row.
+            // Optional: the library already persisted the new Argon2id hash.
+            // This runs in a separate goroutine after a successful bcrypt
+            // login; use it only to update a copy of the hash you keep elsewhere.
             go func() {
                 ctx := context.Background()
                 uid, _ := ulid.ParseStrict(userID)
-                _ = storage.SetUserPassword(ctx, uid, newHash)
+                _ = mirrorStore.SetUserPassword(ctx, uid, newHash)
             }()
         },
     },
 })
 ```
 
-Replace `storage.SetUserPassword` with your actual storage reference. The
-callback runs in the background; the user's login is not delayed by the
-re-hash operation.
+The library persists the new hash itself, so the callback is optional. Replace
+`mirrorStore` with whatever holds your own copy of the hash. The callback runs
+in a separate goroutine; the user's login is not delayed.
 
 ## Step 6: Dry-run apply
 

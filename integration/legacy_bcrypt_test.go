@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/glincker/theauth-go/v2"
+	"github.com/glincker/theauth-go/v2/crypto"
 	"github.com/glincker/theauth-go/v2/integration/internal/testutil"
 	"github.com/glincker/theauth-go/v2/internal/ulid"
 	"github.com/glincker/theauth-go/v2/storage/memory"
@@ -144,5 +145,166 @@ func TestLegacyBcryptStepUpAndChangePassword(t *testing.T) {
 				t.Fatalf("change password with flag on: %v", err)
 			}
 		}
+	}
+}
+
+type failingSetStore struct {
+	*memory.Store
+}
+
+func (failingSetStore) SetUserPassword(context.Context, theauth.ULID, string) error {
+	return errors.New("persist down")
+}
+
+type legacyCall struct{ userID, hash string }
+
+func legacyCallbackAuth(t *testing.T, allow, argon, failPersist bool, cb func(string, string)) (*theauth.TheAuth, theauth.User) {
+	t.Helper()
+	mem := memory.New()
+	var st theauth.Storage = mem
+	if failPersist {
+		st = failingSetStore{mem}
+	}
+	a, err := theauth.New(theauth.Config{
+		Storage: st, BaseURL: "http://localhost", SessionTTL: time.Hour, MagicLinkTTL: time.Minute,
+		RateLimitPerIP: 1000, RateLimitPerEmail: 1000,
+		PasswordPolicy: theauth.PasswordPolicyConfig{AllowLegacyBcrypt: allow, OnLegacyHashAccepted: cb},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(a.Close)
+	ctx := context.Background()
+	u, err := mem.CreateUser(ctx, theauth.User{ID: ulid.New(), Email: "legacy@h.com", CreatedAt: time.Now(), UpdatedAt: time.Now()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if argon {
+		if err := mem.SetUserPassword(ctx, u.ID, mustArgon(t)); err != nil {
+			t.Fatal(err)
+		}
+		return a, u
+	}
+	h, err := bcrypt.GenerateFromPassword([]byte(validPassword), bcrypt.MinCost)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := mem.SetUserPassword(ctx, u.ID, string(h)); err != nil {
+		t.Fatal(err)
+	}
+	return a, u
+}
+
+func mustArgon(t *testing.T) string {
+	t.Helper()
+	h, err := crypto.HashPassword(validPassword)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return h
+}
+
+func TestOnLegacyHashAcceptedCallback(t *testing.T) {
+	ctx := context.Background()
+	tests := []struct {
+		name        string
+		allow       bool
+		argon       bool
+		failPersist bool
+		password    string
+		wantCall    bool
+	}{
+		{"bcrypt, flag on", true, false, false, validPassword, true},
+		{"already argon2id", true, true, false, validPassword, false},
+		{"flag off", false, false, false, validPassword, false},
+		{"wrong password", true, false, false, "wrong-password-entirely", false},
+		{"persist fails", true, false, true, validPassword, false},
+	}
+	for _, flow := range []string{"signin", "stepup"} {
+		for _, tc := range tests {
+			t.Run(flow+"/"+tc.name, func(t *testing.T) {
+				calls := make(chan legacyCall, 4)
+				a, u := legacyCallbackAuth(t, tc.allow, tc.argon, tc.failPersist, func(id, h string) { calls <- legacyCall{id, h} })
+				if flow == "signin" {
+					_, _, err := testutil.SigninWithPasswordForTest(a, ctx, "legacy@h.com", tc.password, "ua", "")
+					if tc.allow && tc.password == validPassword && !tc.failPersist || tc.argon {
+						if err != nil {
+							t.Fatal(err)
+						}
+					}
+				} else {
+					_, sess, err := testutil.IssueSessionForTest(a, ctx, u, "ua", "")
+					if err != nil {
+						t.Fatal(err)
+					}
+					_, _ = a.StepUp(ctx, &sess, theauth.StepUpInput{Method: theauth.StepUpMethodPassword, Password: tc.password})
+				}
+				if tc.wantCall {
+					select {
+					case c := <-calls:
+						if c.userID != u.ID.String() || !strings.HasPrefix(c.hash, "$argon2id$") {
+							t.Fatalf("bad callback args: %q %.12s", c.userID, c.hash)
+						}
+					case <-time.After(2 * time.Second):
+						t.Fatal("callback not invoked")
+					}
+				}
+				select {
+				case c := <-calls:
+					t.Fatalf("unexpected extra callback: %+v", c)
+				case <-time.After(150 * time.Millisecond):
+				}
+			})
+		}
+	}
+}
+
+func TestOnLegacyHashAcceptedOffRequestGoroutine(t *testing.T) {
+	ctx := context.Background()
+	release := make(chan struct{})
+	done := make(chan struct{})
+	a, _ := legacyCallbackAuth(t, true, false, false, func(string, string) {
+		defer close(done)
+		<-release
+	})
+	finished := make(chan error, 1)
+	go func() {
+		_, _, err := testutil.SigninWithPasswordForTest(a, ctx, "legacy@h.com", validPassword, "ua", "")
+		finished <- err
+	}()
+	select {
+	case err := <-finished:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("signin blocked on the callback")
+	}
+	close(release)
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("callback never ran")
+	}
+}
+
+func TestOnLegacyHashAcceptedPanicDoesNotBreakLogin(t *testing.T) {
+	ctx := context.Background()
+	ran := make(chan struct{})
+	a, _ := legacyCallbackAuth(t, true, false, false, func(string, string) {
+		defer close(ran)
+		panic("host bug")
+	})
+	if _, _, err := testutil.SigninWithPasswordForTest(a, ctx, "legacy@h.com", validPassword, "ua", ""); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-ran:
+	case <-time.After(2 * time.Second):
+		t.Fatal("callback never ran")
+	}
+	time.Sleep(50 * time.Millisecond)
+	if _, _, err := testutil.SigninWithPasswordForTest(a, ctx, "legacy@h.com", validPassword, "ua", ""); err != nil {
+		t.Fatalf("second login after panic: %v", err)
 	}
 }

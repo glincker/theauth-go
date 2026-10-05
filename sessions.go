@@ -318,7 +318,7 @@ func (a *TheAuth) verifyStepUp(ctx context.Context, sess *Session, in StepUpInpu
 				return fmt.Errorf("theauth: step-up: verify password: %w", err)
 			}
 			if newHash != "" {
-				password.UpgradeHash(ctx, a.storage.SetUserPassword, sess.UserID, newHash)
+				password.UpgradeAndNotify(ctx, a.storage.SetUserPassword, a.onLegacyHash, sess.UserID, newHash)
 			}
 		}
 		if !ok {
