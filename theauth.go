@@ -16,6 +16,7 @@ import (
 	internaloauth "github.com/glincker/theauth-go/internal/oauth"
 	"github.com/glincker/theauth-go/internal/organizations"
 	"github.com/glincker/theauth-go/internal/password"
+	"github.com/glincker/theauth-go/internal/pathprefix"
 	"github.com/glincker/theauth-go/internal/rbac"
 	internalsaml "github.com/glincker/theauth-go/internal/saml"
 	internalscim "github.com/glincker/theauth-go/internal/scim"
@@ -41,7 +42,11 @@ type Config struct {
 	storageRaw  any
 	EmailSender email.Sender
 	BaseURL     string
-	SigningKey  ed25519.PrivateKey
+	// PathPrefix is the route prefix Mount and Handler serve under, and the
+	// prefix of every URL the library generates. Default "/auth". It must
+	// start with "/" and not end with one, for example "/api/v1/auth".
+	PathPrefix string
+	SigningKey ed25519.PrivateKey
 	// SessionTTL is the absolute session lifetime. Defaults to 24h.
 	SessionTTL time.Duration
 	// SessionIdleTimeout expires a session unused for this long. Zero
@@ -107,6 +112,18 @@ type Config struct {
 	// OAuth entirely (v0.1 / v0.2 behavior). Each provider's Name() must
 	// be unique within the slice.
 	Providers []Provider
+
+	// ProviderResolver, when set, supplies OAuth/OIDC providers that are not
+	// in Providers, looked up per request by name. Static providers win
+	// unless ProviderResolverFirst is set. A resolver error fails the flow
+	// closed. EncryptionKey is required when a resolver is set.
+	ProviderResolver ProviderResolver
+	// ProviderResolverFirst makes the resolver take precedence over Providers.
+	ProviderResolverFirst bool
+	// ProviderResolverTTL caches resolver answers, including "not found",
+	// for this long. Zero disables caching; use InvalidateProvider to
+	// drop an entry early.
+	ProviderResolverTTL time.Duration
 
 	// EncryptionKey is the 32-byte AES-256 key used to encrypt provider
 	// access/refresh tokens before they hit storage. Required when
@@ -259,7 +276,7 @@ type PasswordPolicyConfig struct {
 	// golang.org/x/crypto/bcrypt. On a successful match the password is
 	// transparently re-hashed with Argon2id; callers receive the new hash via
 	// the OnLegacyHashAccepted callback so they can update storage
-	// asynchronously. Set to false (default) in all non-migration deployments.
+	// asynchronously. With false, a bcrypt hash fails as invalid credentials. Set to false (default) in all non-migration deployments.
 	AllowLegacyBcrypt bool
 
 	// MinLength is the minimum password length in bytes. Default 12.
@@ -287,6 +304,8 @@ type TheAuth struct {
 	storage           Storage
 	emailSender       email.Sender
 	baseURL           string
+	allowLegacyBcrypt bool
+	pathPrefix        string
 	signingKey        ed25519.PrivateKey
 	sessionTTL        time.Duration
 	magicLinkTTL      time.Duration
@@ -319,6 +338,7 @@ type TheAuth struct {
 	// configured. PR H (2026-06-22): extracted from root service_oauth.go
 	// into internal/oauth.Service; root keeps thin forwarder methods.
 	providers         map[string]Provider
+	providerReg       *internaloauth.Registry
 	encryptionKey     []byte
 	postLoginRedirect string
 	oauthSvc          *internaloauth.Service
@@ -456,6 +476,8 @@ func New(cfg Config) (*TheAuth, error) {
 		storage:                    cfg.Storage,
 		emailSender:                cfg.EmailSender,
 		baseURL:                    cfg.BaseURL,
+		allowLegacyBcrypt:          cfg.PasswordPolicy.AllowLegacyBcrypt,
+		pathPrefix:                 pathprefix.Normalize(cfg.PathPrefix),
 		signingKey:                 cfg.SigningKey,
 		sessionTTL:                 cfg.SessionTTL,
 		sx:                         sx,

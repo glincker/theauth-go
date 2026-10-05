@@ -21,7 +21,7 @@ func (a *TheAuth) requireBearerToken(next http.Handler) http.Handler {
 		}
 		if _, ok := bearerToken(r); !ok {
 			if c, err := r.Cookie(a.cookieName); err == nil && c.Value != "" {
-				writeProblemJSON(w, http.StatusForbidden, "auth.bearer_required", "This route accepts an API bearer token only; sessions use /auth/tokens and /auth/me", "")
+				writeProblemJSON(w, http.StatusForbidden, "auth.bearer_required", "This route accepts an API bearer token only; sessions use "+a.pathPrefix+"/tokens and "+a.pathPrefix+"/me", "")
 				return
 			}
 			writeUnauthenticated(w, "auth.unauthenticated", "Missing credentials")

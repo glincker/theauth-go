@@ -233,6 +233,10 @@ func (a *TheAuth) DecideDeviceRequest(ctx context.Context, approver *User, ip, u
 	if err != nil {
 		return err
 	}
+	return s.decideRecord(ctx, approver, rec, approve, abilities)
+}
+
+func (s *apiTokenService) decideRecord(ctx context.Context, approver *User, rec *DeviceCode, approve bool, abilities []string) error {
 	d := DeviceDecision{Approve: approve, ApproverID: approver.ID}
 	if approve {
 		chosen := rec.RequestedAbilities
@@ -256,7 +260,7 @@ func (a *TheAuth) DecideDeviceRequest(ctx context.Context, approver *User, ip, u
 			return ErrAbilityNotHeld
 		}
 	}
-	err = s.dev.DecideDeviceCode(ctx, rec.UserCode, d, s.now().UTC())
+	err := s.dev.DecideDeviceCode(ctx, rec.UserCode, d, s.now().UTC())
 	if errors.Is(err, ErrStorageNotFound) {
 		return ErrDeviceExpired
 	}
@@ -349,4 +353,79 @@ func (a *TheAuth) PurgeExpiredDeviceCodes(ctx context.Context, before time.Time)
 		return 0, err
 	}
 	return s.dev.DeleteExpiredDeviceCodes(ctx, before)
+}
+
+// DeviceRequestSummary is one pending request as a dashboard lists it. It
+// carries the request ID instead of any code.
+type DeviceRequestSummary struct {
+	ID                 ULID      `json:"id"`
+	ClientName         string    `json:"clientName"`
+	RequestedAbilities []string  `json:"requestedAbilities"`
+	RequesterIP        string    `json:"requesterIp"`
+	RequesterUserAgent string    `json:"requesterUserAgent"`
+	CreatedAt          time.Time `json:"createdAt"`
+	ExpiresAt          time.Time `json:"expiresAt"`
+}
+
+// ErrDeviceListUnsupported is returned when the storage lacks DeviceCodeLister.
+var ErrDeviceListUnsupported = errors.New("theauth: storage does not implement DeviceCodeLister")
+
+func (s *apiTokenService) listPending(ctx context.Context) ([]DeviceCode, error) {
+	l, ok := s.dev.(DeviceCodeLister)
+	if !ok {
+		return nil, ErrDeviceListUnsupported
+	}
+	recs, err := l.ListPendingDeviceCodes(ctx, DevicePendingFilter{Now: s.now().UTC(), Limit: 500})
+	if err != nil {
+		return nil, fmt.Errorf("theauth: list pending device codes: %w", err)
+	}
+	return recs, nil
+}
+
+// ListDeviceRequests returns the pending, unexpired device requests, newest
+// first, without any device or user code.
+func (a *TheAuth) ListDeviceRequests(ctx context.Context) ([]DeviceRequestSummary, error) {
+	s, err := a.deviceSvc()
+	if err != nil {
+		return nil, err
+	}
+	recs, err := s.listPending(ctx)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]DeviceRequestSummary, 0, len(recs))
+	for _, r := range recs {
+		out = append(out, DeviceRequestSummary{
+			ID: r.ID, ClientName: r.ClientName, RequestedAbilities: slices.Clone(r.RequestedAbilities),
+			RequesterIP: r.RequesterIP, RequesterUserAgent: r.RequesterUA, CreatedAt: r.CreatedAt, ExpiresAt: r.ExpiresAt,
+		})
+	}
+	return out, nil
+}
+
+// DecideDeviceRequestByID approves or denies a pending request by its ID with
+// the same rules as DecideDeviceRequest. An unknown, expired or already
+// decided ID returns ErrDeviceInvalid or ErrDeviceExpired.
+func (a *TheAuth) DecideDeviceRequestByID(ctx context.Context, approver *User, id ULID, approve bool, abilities []string) error {
+	s, err := a.deviceSvc()
+	if err != nil {
+		return err
+	}
+	recs, err := s.listPending(ctx)
+	if err != nil {
+		return err
+	}
+	i := slices.IndexFunc(recs, func(r DeviceCode) bool { return r.ID == id })
+	if i < 0 {
+		return ErrDeviceInvalid
+	}
+	if err := s.decideRecord(ctx, approver, &recs[i], approve, abilities); err != nil {
+		return err
+	}
+	action := "device.denied"
+	if approve {
+		action = "device.approved"
+	}
+	a.EmitAudit(ctx, action, TargetRef{Type: "device_request", ID: id.String()}, map[string]any{"approver": approver.ID.String()})
+	return nil
 }

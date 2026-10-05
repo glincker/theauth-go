@@ -61,11 +61,12 @@ type OAuthConfig struct {
 	InviteCheck func(ctx context.Context, email string) (bool, error)
 }
 
-func oauthConfigFromRoot(c *OAuthConfig) internaloauth.Config {
+func oauthConfigFromRoot(c *OAuthConfig, prefix string) internaloauth.Config {
 	if c == nil {
-		return internaloauth.Config{}
+		return internaloauth.Config{PathPrefix: prefix}
 	}
 	return internaloauth.Config{
+		PathPrefix:          prefix,
 		StateStore:          c.StateStore,
 		StateTTL:            c.StateTTL,
 		AllowedReturnTo:     append([]string(nil), c.AllowedReturnTo...),

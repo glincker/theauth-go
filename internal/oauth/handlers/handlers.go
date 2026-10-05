@@ -38,6 +38,12 @@ type Service interface {
 	Callback(ctx context.Context, providerName, code, state, binding, userAgent, ip string) (oauth.CallbackResult, error)
 }
 
+// ProviderLookuper is optionally implemented by a Service whose providers
+// can change at runtime; it lets the handler fail closed on a lookup error.
+type ProviderLookuper interface {
+	LookupProvider(ctx context.Context, name string) (bool, error)
+}
+
 // SessionCookieConfig is the session cookie shape used after a
 // successful callback.
 type SessionCookieConfig struct {
@@ -68,10 +74,29 @@ func (h *Handler) Mount(r chi.Router, ipLimit func(http.Handler) http.Handler) {
 	})
 }
 
-func (h *Handler) handleStart(w http.ResponseWriter, r *http.Request) {
-	name := chi.URLParam(r, "name")
+func (h *Handler) providerOK(w http.ResponseWriter, r *http.Request, name string) bool {
+	if lk, ok := h.svc.(ProviderLookuper); ok {
+		found, err := lk.LookupProvider(r.Context(), name)
+		if err != nil {
+			http.Error(w, "provider unavailable", http.StatusServiceUnavailable)
+			return false
+		}
+		if !found {
+			http.Error(w, "unknown provider", http.StatusNotFound)
+			return false
+		}
+		return true
+	}
 	if !h.svc.HasProvider(name) {
 		http.Error(w, "unknown provider", http.StatusNotFound)
+		return false
+	}
+	return true
+}
+
+func (h *Handler) handleStart(w http.ResponseWriter, r *http.Request) {
+	name := chi.URLParam(r, "name")
+	if !h.providerOK(w, r, name) {
 		return
 	}
 	res, err := h.svc.Start(r.Context(), name, r.URL.Query().Get("return_to"))
@@ -93,8 +118,7 @@ func (h *Handler) handleStart(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) handleCallback(w http.ResponseWriter, r *http.Request) {
 	name := chi.URLParam(r, "name")
-	if !h.svc.HasProvider(name) {
-		http.Error(w, "unknown provider", http.StatusNotFound)
+	if !h.providerOK(w, r, name) {
 		return
 	}
 	q := r.URL.Query()

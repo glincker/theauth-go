@@ -238,3 +238,22 @@ func (s *Store) DeleteExpiredDeviceCodes(_ context.Context, before time.Time) (i
 	}
 	return n, nil
 }
+
+// ListPendingDeviceCodes returns pending, unexpired requests newest first without device code hashes.
+func (s *Store) ListPendingDeviceCodes(_ context.Context, f theauth.DevicePendingFilter) ([]theauth.DeviceCode, error) {
+	s.tokens.mu.Lock()
+	defer s.tokens.mu.Unlock()
+	var out []theauth.DeviceCode
+	for _, d := range s.tokens.devices {
+		if d.Status == theauth.DeviceStatusPending && f.Now.Before(d.ExpiresAt) {
+			cp := cloneDevice(d)
+			cp.DeviceCodeHash = nil
+			out = append(out, cp)
+		}
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].CreatedAt.After(out[j].CreatedAt) })
+	if f.Limit > 0 && len(out) > f.Limit {
+		out = out[:f.Limit]
+	}
+	return out, nil
+}
