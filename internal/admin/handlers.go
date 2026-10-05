@@ -44,6 +44,12 @@ type Storage interface {
 	RevokeSession(ctx context.Context, id models.ULID) error
 }
 
+// sessionLister is the optional session-list capability; storages without it
+// list nothing.
+type sessionLister interface {
+	ListUserSessions(ctx context.Context, userID models.ULID) ([]models.Session, error)
+}
+
 // RBACService is the role-mutation surface used by the user / role
 // endpoints.
 type RBACService interface {
@@ -422,7 +428,19 @@ func (h *Handler) listSessions(w http.ResponseWriter, r *http.Request) {
 		Sessions []models.Session `json:"sessions"`
 		Next     string           `json:"next,omitempty"`
 	}
-	httpx.WriteJSON(w, http.StatusOK, response{Sessions: []models.Session{}})
+	sessions := []models.Session{}
+	if l, ok := h.storage.(sessionLister); ok {
+		userID, _ := ulid.Parse(userIDStr)
+		rows, err := l.ListUserSessions(r.Context(), userID)
+		if err != nil {
+			admin.Write(w, http.StatusInternalServerError, admin.CodeInternal, err.Error(), "")
+			return
+		}
+		if rows != nil {
+			sessions = rows
+		}
+	}
+	httpx.WriteJSON(w, http.StatusOK, response{Sessions: sessions})
 }
 
 func (h *Handler) revokeSession(w http.ResponseWriter, r *http.Request) {

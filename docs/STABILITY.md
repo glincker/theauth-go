@@ -216,6 +216,11 @@ library uses a type assertion to detect support at runtime. The base
 into the capability it belongs to only in a major release, otherwise behind
 a new optional interface.
 
+Session management follows this rule: `SessionManagementStorage` and
+`SessionLinkStorage` (storage_sessions.go) are optional capabilities outside
+`Storage`; see `docs/SESSIONS.md`. The new `Session` fields `LastSeenAt`,
+`ElevatedUntil` and `CredentialID` are additive.
+
 ## Special rule: database migrations
 
 Postgres migrations under `storage/postgres/migrations/` are append-only.

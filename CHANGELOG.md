@@ -55,6 +55,26 @@ adheres to [Semantic Versioning](https://semver.org/) from v1.0 forward.
   implementation plus `storagetest.RunAPITokens` and `RunDeviceCodes`. See
   `docs-site/docs/guides/api-tokens.md`.
 
+
+- **End-user session management.** `GET /auth/sessions`,
+  `DELETE /auth/sessions/{id}`, `POST /auth/sessions/revoke-others` and
+  `POST /auth/password/change`, backed by the new optional
+  `SessionManagementStorage` capability. `Config.SessionIdleTimeout` and
+  `Config.SessionTouchInterval` add idle expiry with throttled last-seen
+  writes; `Session` gains `LastSeenAt`, `ElevatedUntil` and `CredentialID`.
+  The admin session list is now real instead of empty. See `docs/SESSIONS.md`.
+- **Session rotation on MFA completion and password change.** The TOTP verify
+  and recovery routes now set a new cookie and revoke the pending token.
+- **Step-up re-auth.** `POST /auth/step-up` (password, TOTP or passkey),
+  `RequireRecentAuth(maxAge)` and `WatchSession` /
+  `WatchSessionMiddleware` for re-checking long-lived streams.
+- **Programmatic session links.** `Config.SessionLinks`, `MintSessionLink`,
+  `ConsumeSessionLink`, `POST /auth/session-link/consume` and the optional
+  `SessionLinkStorage` capability. Sessions tied to an upstream credential are
+  re-checked through `CredentialChecker` on every use, and
+  `RevokeSessionsByCredential` cuts them at once.
+- `storagetest.RunSessionManagement` contract suite; the memory adapter
+  implements both new capabilities.
 - **Storage capability interfaces and `Config.CoreStorage`.** `Storage` is now
   the embedding of small capability interfaces (`UserStorage`,
   `SessionStorage`, `MagicLinkStorage`, `PasswordStorage`,

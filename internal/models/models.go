@@ -54,6 +54,16 @@ type Session struct {
 	// the duration of the session. Nil in single-tenant deployments and on
 	// any session that has not picked an org yet.
 	ActiveOrganizationID *ULID `json:"activeOrganizationId,omitempty"`
+	// LastSeenAt is the throttled last-activity time used for idle timeout
+	// and the "last seen" column of a session list. Zero on rows written by
+	// storage without SessionManagementStorage.
+	LastSeenAt time.Time `json:"lastSeenAt"`
+	// ElevatedUntil marks a step-up re-authentication window; nil when the
+	// session was never elevated.
+	ElevatedUntil *time.Time `json:"elevatedUntil,omitempty"`
+	// CredentialID names the upstream credential (for example an API token
+	// id) a session minted from a session link is tied to; empty otherwise.
+	CredentialID string `json:"credentialId,omitempty"`
 }
 
 // Expired reports whether the session is no longer usable at the given time.

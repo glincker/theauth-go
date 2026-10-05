@@ -334,3 +334,14 @@ const (
 	OAuthErrServerError             = "server_error"
 	OAuthErrInvalidTarget           = "invalid_target"
 )
+
+// Session management sentinels.
+var (
+	// ErrCredentialRevoked is returned by a CredentialChecker when the
+	// upstream credential a session is tied to is no longer valid.
+	ErrCredentialRevoked = models.ErrCredentialRevoked
+
+	// ErrSessionLinkInvalid is returned when a session link cannot be
+	// exchanged for any reason.
+	ErrSessionLinkInvalid = models.ErrSessionLinkInvalid
+)

@@ -245,6 +245,7 @@ func TestMemoryCapabilityContracts(t *testing.T) {
 		run  func(*testing.T)
 	}{
 		{"core", func(t *testing.T) { storagetest.RunCore(t, coreOnlyStore{New()}) }},
+		{"session management", func(t *testing.T) { storagetest.RunSessionManagement(t, New()) }},
 		{"webauthn", func(t *testing.T) { storagetest.RunWebAuthn(t, New()) }},
 		{"totp", func(t *testing.T) { storagetest.RunTOTP(t, New()) }},
 		{"audit", func(t *testing.T) { storagetest.RunAudit(t, New()) }},

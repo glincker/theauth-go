@@ -32,6 +32,12 @@ import (
 //	POST   /auth/email-password/reset             consume a reset token + set new password (rate-limited)
 //	GET    /auth/me                               return the authenticated user (RequireAuth)
 //	DELETE /auth/sessions/current                 revoke the current session (RequireAuth)
+//	GET    /auth/sessions                         list the caller's sessions (SessionManagementStorage)
+//	DELETE /auth/sessions/{id}                    revoke one of the caller's sessions
+//	POST   /auth/sessions/revoke-others           revoke every session but the current one
+//	POST   /auth/step-up                          elevate the session (password, totp or passkey)
+//	POST   /auth/password/change                  change password, rotate the session
+//	POST   /auth/session-link/consume             exchange a session link (Config.SessionLinks)
 //
 // Default rate limits: 5/min per source IP on every credential endpoint, plus
 // 3/min per email on signin + forgot (most attack-surface). All limits are
@@ -96,6 +102,8 @@ func (a *TheAuth) mountRoutes(r chi.Router) {
 			}
 		}
 
+
+		a.mountSessionManagement(r, ipLimit)
 		r.With(a.RequireAuth()).Delete("/sessions/current", a.handleSessionDelete)
 		r.With(a.RequireAuth()).Get("/me", a.handleMe)
 	})
@@ -357,11 +365,19 @@ func (s totpServiceAdapter) FinishEnrollment(ctx context.Context, userID ULID, e
 }
 
 func (s totpServiceAdapter) Verify(ctx context.Context, pendingSessionToken, code string) (string, Session, error) {
-	return s.a.VerifyTOTP(ctx, pendingSessionToken, code)
+	_, sess, err := s.a.VerifyTOTP(ctx, pendingSessionToken, code)
+	if err != nil {
+		return "", Session{}, err
+	}
+	return s.a.RotateSession(ctx, sess)
 }
 
 func (s totpServiceAdapter) ConsumeRecoveryCode(ctx context.Context, pendingSessionToken, code string) (string, Session, error) {
-	return s.a.ConsumeRecoveryCode(ctx, pendingSessionToken, code)
+	_, sess, err := s.a.ConsumeRecoveryCode(ctx, pendingSessionToken, code)
+	if err != nil {
+		return "", Session{}, err
+	}
+	return s.a.RotateSession(ctx, sess)
 }
 
 func (s totpServiceAdapter) Delete(ctx context.Context, userID ULID) error {
