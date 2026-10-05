@@ -228,7 +228,7 @@ into the capability it belongs to only in a major release, otherwise behind
 a new optional interface.
 
 Session management follows this rule: `SessionManagementStorage` and
-`SessionLinkStorage` (storage_caps_sessions.go) are optional capabilities outside
+`SessionLinkStorage` (storage_caps.go) are optional capabilities outside
 `Storage`; see `docs/SESSIONS.md`. The new `Session` fields `LastSeenAt`,
 `ElevatedUntil` and `CredentialID` are additive.
 
