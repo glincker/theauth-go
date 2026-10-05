@@ -3,7 +3,6 @@ package storagetest
 import (
 	"context"
 	"errors"
-	"fmt"
 	"testing"
 
 	"github.com/glincker/theauth-go/policy"
@@ -135,7 +134,7 @@ func RunPolicy(t *testing.T, store policy.Storage) {
 		got.Document[0] = 'Y'
 		again, _ := store.GetPolicy(ctx, id("iso"))
 		if string(again.Document) != contractDoc {
-			t.Fatal(fmt.Sprintf("stored document aliased caller bytes: %q", again.Document))
+			t.Fatalf("stored document aliased caller bytes: %q", again.Document)
 		}
 	})
 }

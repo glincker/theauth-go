@@ -49,31 +49,31 @@ func run(args []string, stdout, stderr io.Writer, getenv func(string) string, tt
 		return exitUsage
 	}
 	if *server == "" || (*format != "table" && *format != "json") {
-		fmt.Fprintln(stderr, "usage: theauth-doctor --server URL [--token-file F] [--format table|json] [--fail-on SEVERITY]")
+		_, _ = fmt.Fprintln(stderr, "usage: theauth-doctor --server URL [--token-file F] [--format table|json] [--fail-on SEVERITY]")
 		return exitUsage
 	}
 	threshold := theauth.Severity(*failOn)
 	if *failOn != "" && threshold.Rank() == 0 {
-		fmt.Fprintf(stderr, "invalid --fail-on %q\n", *failOn)
+		_, _ = fmt.Fprintf(stderr, "invalid --fail-on %q\n", *failOn)
 		return exitUsage
 	}
 	token, err := loadToken(*tokenFile, getenv)
 	if err != nil {
-		fmt.Fprintln(stderr, err)
+		_, _ = fmt.Fprintln(stderr, err)
 		return exitUsage
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), *timeout)
 	defer cancel()
 	rep, err := fetch(ctx, http.DefaultClient, strings.TrimRight(*server, "/")+*path, token)
 	if err != nil {
-		fmt.Fprintln(stderr, err)
+		_, _ = fmt.Fprintln(stderr, err)
 		return exitFail
 	}
 	if *format == "json" {
 		enc := json.NewEncoder(stdout)
 		enc.SetIndent("", "  ")
 		if err := enc.Encode(rep); err != nil {
-			fmt.Fprintln(stderr, "write json:", err)
+			_, _ = fmt.Fprintln(stderr, "write json:", err)
 			return exitFail
 		}
 	} else {
@@ -137,20 +137,20 @@ func color(sev theauth.Severity) string {
 
 func printTable(w io.Writer, rep theauth.Report, useColor bool) {
 	if len(rep.Findings) == 0 {
-		fmt.Fprintln(w, "No findings.")
+		_, _ = fmt.Fprintln(w, "No findings.")
 		return
 	}
 	tw := tabwriter.NewWriter(w, 0, 4, 2, ' ', 0)
-	fmt.Fprintln(tw, "SEVERITY\tID\tTITLE")
+	_, _ = fmt.Fprintln(tw, "SEVERITY\tID\tTITLE")
 	for _, f := range rep.Findings {
 		sev := strings.ToUpper(string(f.Severity))
 		if useColor {
 			sev = color(f.Severity) + sev + "\x1b[0m"
 		}
-		fmt.Fprintf(tw, "%s\t%s\t%s\n", sev, f.ID, f.Title)
+		_, _ = fmt.Fprintf(tw, "%s\t%s\t%s\n", sev, f.ID, f.Title)
 	}
 	_ = tw.Flush()
-	fmt.Fprintf(w, "\n%d critical, %d high, %d medium, %d low, %d info\n",
+	_, _ = fmt.Fprintf(w, "\n%d critical, %d high, %d medium, %d low, %d info\n",
 		rep.Summary[theauth.SeverityCritical], rep.Summary[theauth.SeverityHigh],
 		rep.Summary[theauth.SeverityMedium], rep.Summary[theauth.SeverityLow], rep.Summary[theauth.SeverityInfo])
 }

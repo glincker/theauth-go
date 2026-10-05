@@ -106,19 +106,6 @@ func TestEvaluate(t *testing.T) {
 	}
 }
 
-func contains(s, sub string) bool {
-	return len(sub) == 0 || (len(s) >= len(sub) && indexOf(s, sub) >= 0)
-}
-
-func indexOf(s, sub string) int {
-	for i := 0; i+len(sub) <= len(s); i++ {
-		if s[i:i+len(sub)] == sub {
-			return i
-		}
-	}
-	return -1
-}
-
 func TestEvaluatorClock(t *testing.T) {
 	p := pol(t, "p", `{"effect":"allow","actions":["*"],"resources":["*"],"conditions":[{"op":"daily_window","values":["09:00","10:00"]}]}`)
 	in := Evaluator{Now: func() time.Time { return time.Date(2026, 1, 1, 9, 30, 0, 0, time.UTC) }}
