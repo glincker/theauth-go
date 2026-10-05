@@ -650,6 +650,9 @@ func TestStepUpWithTOTP(t *testing.T) {
 	if resp.StatusCode != http.StatusOK || !bytes.Contains(body, []byte("elevatedUntil")) {
 		t.Fatalf("step-up: %d %s", resp.StatusCode, body)
 	}
+	if resp, _ = postJSONWithCookies(t, srv, "/auth/step-up", map[string]string{"method": "totp", "code": good}, full); resp.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("replayed code: %d, want 401", resp.StatusCode)
+	}
 	for i := 0; i < 5; i++ {
 		postJSONWithCookies(t, srv, "/auth/step-up", map[string]string{"method": "totp", "code": "000000"}, full)
 	}
