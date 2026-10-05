@@ -347,3 +347,11 @@ or `AccountUX` continue to see the v1.0 surface unchanged.
   append-only).
 - Changing the semantics of an existing `Stats` field.
 - Adding UPDATE or DELETE to the audit interface.
+
+## API tokens and device grant (additive)
+
+`Config.APITokens`, `APITokensConfig`, `DeviceConfig`, `APIToken`, `DeviceCode`,
+`Principal`, the `APITokenStorage` and `DeviceCodeStorage` capability
+interfaces, `RequireAbility`, and the `/auth/tokens` and `/auth/device/*`
+routes are additive and covered by the same SemVer guarantees. The `Storage`
+method set is unchanged.

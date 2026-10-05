@@ -89,6 +89,13 @@ func (a *TheAuth) mountRoutes(r chi.Router) {
 			a.mountSAML(r)
 		}
 
+		if a.apiTokens != nil {
+			a.mountAPITokens(r, ipLimit)
+			if a.apiTokens.dev != nil {
+				a.mountDevice(r, ipLimit)
+			}
+		}
+
 		r.With(a.RequireAuth()).Delete("/sessions/current", a.handleSessionDelete)
 		r.With(a.RequireAuth()).Get("/me", a.handleMe)
 	})

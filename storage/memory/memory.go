@@ -37,6 +37,8 @@ type Store struct {
 	jti *jtiState
 	// CIBA: backchannel authentication requests. See memory_ciba.go.
 	ciba *cibaState
+	// scoped API tokens + device codes. See memory_apitokens.go.
+	tokens tokenState
 }
 
 func New() *Store {

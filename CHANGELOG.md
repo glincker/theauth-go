@@ -27,6 +27,23 @@ adheres to [Semantic Versioning](https://semver.org/) from v1.0 forward.
 
 ### Added
 
+- **Scoped API tokens and the RFC 8628 device grant.** New `Config.APITokens`
+  (backed by the optional `APITokenStorage` and `DeviceCodeStorage`
+  capabilities; the `Storage` method set is unchanged). Tokens are opaque,
+  shown once, stored only as a SHA-256 hash, carry caller-defined abilities
+  plus a reserved exclusive `root`, always expire, and record `last_used_at`.
+  Every token has an owner (a user or a service account); a user lists and
+  revokes only their own tokens, an admin can manage all. Tokens stop working
+  when the owner is deleted or reported inactive, and abilities are clamped to
+  the owner's current abilities on every request. `RequireAbility(name)`
+  accepts a session or a bearer token. Routes: `/auth/tokens` (POST, GET,
+  DELETE), `/auth/device/code`, `/auth/device/token`, `/auth/device/approve`.
+  The device grant enforces `slow_down`, expiry, per-approver user code
+  attempt limits and an atomic compare-and-set redeem, and caps minted token
+  abilities to the approver (root only when requested and held). Memory
+  implementation plus `storagetest.RunAPITokens` and `RunDeviceCodes`. See
+  `docs-site/docs/guides/api-tokens.md`.
+
 - **Storage capability interfaces and `Config.CoreStorage`.** `Storage` is now
   the embedding of small capability interfaces (`UserStorage`,
   `SessionStorage`, `MagicLinkStorage`, `PasswordStorage`,

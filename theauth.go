@@ -103,6 +103,11 @@ type Config struct {
 	// your own origin; cross-origin redirects are not validated here.
 	PostLoginRedirect string
 
+	// APITokens enables scoped API tokens, RequireAbility and, via its Device
+	// field, the device authorization grant. Needs APITokenStorage (and
+	// DeviceCodeStorage for Device).
+	APITokens *APITokensConfig
+
 	// WebAuthn enables passkey registration + discoverable login when non-nil.
 	// RPID and RPOrigins are mandatory per spec. Leave nil to keep v0.4 behavior.
 	WebAuthn *WebAuthnConfig
@@ -237,6 +242,7 @@ type TheAuth struct {
 	trustedProxies    []netip.Prefix
 	trustedOrigins    []string
 	csrfDisabled      bool
+	apiTokens         *apiTokenService
 
 	// dcrRegistrationTokenHashes is the sha256-hashed set of operator
 	// initial access tokens accepted by POST /oauth/register when DCR is
@@ -415,6 +421,9 @@ func New(cfg Config) (*TheAuth, error) {
 	}
 
 	if err := wireServices(a, cfg, providers, sp); err != nil {
+		return nil, err
+	}
+	if a.apiTokens, err = newAPITokenService(a, cfg.APITokens, cfg.storageRaw); err != nil {
 		return nil, err
 	}
 	return a, nil

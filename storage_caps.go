@@ -341,6 +341,8 @@ func checkStorageCapabilities(cfg *Config) error {
 	_, scim := raw.(SCIMStorage)
 	_, rbac := raw.(RBACStorage)
 	_, audit := raw.(AuditStorage)
+	_, apiTokens := raw.(APITokenStorage)
+	_, deviceCodes := raw.(DeviceCodeStorage)
 	reqs := []struct {
 		enabled   bool
 		feature   string
@@ -355,6 +357,8 @@ func checkStorageCapabilities(cfg *Config) error {
 		{cfg.SCIM != nil, "SCIM", "SCIMStorage", scim},
 		{cfg.RBAC != nil, "RBAC", "RBACStorage", rbac},
 		{cfg.Audit != nil, "Audit", "AuditStorage", audit},
+		{cfg.APITokens != nil, "APITokens", "APITokenStorage", apiTokens},
+		{cfg.APITokens != nil && cfg.APITokens.Device != nil, "APITokens.Device", "DeviceCodeStorage", deviceCodes},
 		{cfg.AccountUX, "AccountUX", "OAuthAccountStorage", oauthAcct},
 		{cfg.AccountUX, "AccountUX", "WebAuthnStorage", webauthn},
 		{cfg.AccountUX, "AccountUX", "TOTPStorage", totp},
