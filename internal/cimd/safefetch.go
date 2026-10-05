@@ -15,6 +15,8 @@ import (
 var ErrBlockedAddress = errors.New("cimd: destination address is not publicly routable")
 
 var blockedPrefixes = mustPrefixes(
+	"0.0.0.0/8",         // "this network"
+	"::/96",             // deprecated IPv4-compatible IPv6
 	"100.64.0.0/10",     // CGNAT
 	"192.0.0.0/24",      // IETF protocol assignments
 	"198.18.0.0/15",     // benchmarking
