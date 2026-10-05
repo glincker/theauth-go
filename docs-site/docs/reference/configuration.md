@@ -275,7 +275,7 @@ type CIBAConfig struct {
 }
 ```
 
-`AuthorizationServerConfig` also carries several fields not detailed above: `SigningAlg`, `KeyRotationPeriod`, `KeyRetention`, `AuthorizationCodeTTL`, `RegistrationAccessTokenTTL`, `Clock`, `LoginURL`, `DisableRotation`, `DPoP *DPoPConfig` (RFC 9449 sender-constrained tokens), and `CIMD *CIMDConfig` (Client ID Metadata Documents resolver). See `as.go` and `domains.go` in the repository for the full field list until this page is expanded.
+`AuthorizationServerConfig` also carries several fields not detailed above: `SigningAlg`, `KeyRotationPeriod`, `KeyRetention`, `AuthorizationCodeTTL`, `RegistrationAccessTokenTTL`, `Clock`, `LoginURL`, `DisableRotation`, `DPoP *DPoPConfig` (RFC 9449 sender-constrained tokens), and `CIMD *CIMDConfig` (Client ID Metadata Documents resolver). See `config_as.go` and `models.go` in the repository for the full field list until this page is expanded.
 
 ## Password policy (v2.4)
 

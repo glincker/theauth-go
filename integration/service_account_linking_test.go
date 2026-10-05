@@ -4,7 +4,7 @@ package integration
 // scenarios specified in the implementation proposal.
 //
 // Tests use the in-process memory adapter and call service methods directly
-// via the export_test.go helpers so no HTTP layer is involved, keeping
+// via the testutil helpers so no HTTP layer is involved, keeping
 // runtime fast and avoiding flakiness from network timing.
 
 import (

@@ -192,7 +192,7 @@ func (s *Service) normalizeEmail(e string) string {
 
 // ValidateEmail wraps mail.ParseAddress and returns the normalized form
 // when the input is a syntactically valid address. Exposed for the
-// fuzz-test seam in the root export_test.go.
+// fuzz-test seam in internal/testhooks.
 func ValidateEmail(raw string) (string, error) {
 	addr, err := mail.ParseAddress(raw)
 	if err != nil {

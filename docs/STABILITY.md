@@ -207,8 +207,8 @@ actions will keep their name and target shape through every minor release.
   for completeness.
 - Anything under `examples/`. Examples may be rewritten or removed at any
   time.
-- Test helpers in `*_test.go` files including `export_test.go` symbols.
-  Those exist for our own tests and are not importable outside the module.
+- Test helpers in `*_test.go` files and `internal/testhooks`. Those exist for
+  our own tests and are not importable outside the module.
 - The audit writer internals (channel sizing strategy, goroutine
   scheduling, batch SQL shape). Only the contract described under
   `Stats` and `EmitAudit` semantics is stable.
@@ -228,7 +228,7 @@ into the capability it belongs to only in a major release, otherwise behind
 a new optional interface.
 
 Session management follows this rule: `SessionManagementStorage` and
-`SessionLinkStorage` (storage_sessions.go) are optional capabilities outside
+`SessionLinkStorage` (storage_caps_sessions.go) are optional capabilities outside
 `Storage`; see `docs/SESSIONS.md`. The new `Session` fields `LastSeenAt`,
 `ElevatedUntil` and `CredentialID` are additive.
 

@@ -7,7 +7,7 @@ import (
 	internaldpop "github.com/glincker/theauth-go/v2/internal/dpop"
 )
 
-// as.go: AuthorizationServerConfig declaration plus the thin forwarders
+// config_as.go: AuthorizationServerConfig declaration plus the thin forwarders
 // that consolidate the small helpers historically attached to the *asState
 // struct. PR B architecture reorg (2026-06-20) moved the runtime
 // implementation to internal/as; the struct + asConfigFromRoot at the

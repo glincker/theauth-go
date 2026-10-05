@@ -278,7 +278,7 @@ func (a *TheAuth) consumeMagicLink(ctx context.Context, token string) (sessionTo
 // ---------- Password forwarders ----------
 
 // validateEmail forwards to password.ValidateEmail for the fuzz seam.
-// Used by the export_test.go ValidateEmailForTest shim.
+// Used by the internal/testhooks ValidateEmail hook.
 func validateEmail(raw string) (string, error) {
 	return password.ValidateEmail(raw)
 }

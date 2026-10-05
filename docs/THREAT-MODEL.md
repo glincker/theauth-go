@@ -63,7 +63,7 @@ The following are explicitly **not** mitigated by this library. They are the dep
 - **Secret management at rest.** Encryption keys (`AuditConfig.EncryptionKey`, TOTP key, etc.) must be supplied by the operator; the library does not manage a secret store.
 - **Container/VM/Kubernetes pod isolation.** Network policies, pod security admission, and kernel security modules are outside library scope.
 - **Operator's authentication device security.** TOTP app compromise, WebAuthn key theft, or phone compromise for CIBA-style flows are not addressable at the library layer.
-- **DDoS at the network layer.** The library provides application-layer rate limits (`RateLimitByIP`, `RateLimitByEmail` in `middleware_ratelimit.go:171-229`) but not TCP/UDP-layer flood protection.
+- **DDoS at the network layer.** The library provides application-layer rate limits (`RateLimitByIP`, `RateLimitByEmail` in `middleware.go` and `internal/ratelimit`) but not TCP/UDP-layer flood protection.
 - **Side channels in Go runtime or `crypto/subtle`.** The library uses `crypto/subtle` for all sensitive comparisons but cannot guarantee the Go runtime's memory allocator or garbage collector do not introduce timing channels.
 
 ---
@@ -113,7 +113,7 @@ The following are explicitly **not** mitigated by this library. They are the dep
 
 | Threat | Mitigation | Residual Risk |
 |---|---|---|
-| Credential stuffing on token endpoint | `RateLimitByIP` and `RateLimitByEmail` middlewares (`middleware_ratelimit.go:171-229`). | Rate limit budgets are configurable; operator must tune to production traffic patterns. |
+| Credential stuffing on token endpoint | `RateLimitByIP` and `RateLimitByEmail` middlewares (`middleware.go` and `internal/ratelimit`). | Rate limit budgets are configurable; operator must tune to production traffic patterns. |
 | Argon2 CPU exhaustion | Password verification pays the full Argon2id cost even on user-not-found to prevent timing-based user enumeration (`internal/password/service.go:240`). | At default `m=64MiB, t=3, p=4` this is intentionally expensive; operators must size compute accordingly. |
 
 **Elevation of Privilege**

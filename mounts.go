@@ -17,7 +17,7 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
-// handlers_admin.go: thin forwarder around the extracted
+// mounts.go: thin forwarder around the extracted
 // internal/admin/handlers package. PR F architecture reorg
 // (2026-06-20) moved the 12 /admin/v1 endpoints plus the
 // requireOrgMatch middleware there. The agent + delegation admin

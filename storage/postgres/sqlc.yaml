@@ -1,0 +1,17 @@
+version: "2"
+sql:
+  - schema:
+      - "migrations/0001_init.up.sql"
+      - "migrations/0002_passwords.up.sql"
+      - "migrations/0003_oauth_accounts.up.sql"
+      - "migrations/0004_webauthn_credentials.up.sql"
+      - "migrations/0005_totp.up.sql"
+    queries: "queries.sql"
+    engine: "postgresql"
+    gen:
+      go:
+        package: "sqlc"
+        out: "sqlc"
+        sql_package: "pgx/v5"
+        emit_json_tags: false
+        emit_pointers_for_null_types: true
