@@ -9,8 +9,10 @@ package httpx
 import (
 	"encoding/json"
 	"errors"
+	"math"
 	"net"
 	"net/http"
+	"strconv"
 
 	"github.com/glincker/theauth-go/internal/models"
 	"github.com/go-chi/chi/v5"
@@ -30,8 +32,13 @@ func ErrToHTTP(w http.ResponseWriter, err error) {
 			WriteJSONError(w, http.StatusConflict, te.Code, te.Message)
 		case models.CodeInvalidCredentials:
 			WriteJSONError(w, http.StatusUnauthorized, te.Code, te.Message)
-		case models.CodeRateLimited:
+		case models.CodeRateLimited, models.CodeAccountLocked:
+			if te.RetryAfter > 0 {
+				w.Header().Set("Retry-After", strconv.Itoa(int(math.Ceil(te.RetryAfter.Seconds()))))
+			}
 			WriteJSONError(w, http.StatusTooManyRequests, te.Code, te.Message)
+		case models.CodeSignupClosed, models.CodeSetupTokenInvalid:
+			WriteJSONError(w, http.StatusForbidden, te.Code, te.Message)
 		case models.CodePasswordResetExpired, models.CodePasswordResetInvalid:
 			WriteJSONError(w, http.StatusUnauthorized, te.Code, te.Message)
 		case models.CodeInvalidTOTP, models.CodeWebAuthn:
@@ -49,9 +56,34 @@ func ErrToHTTP(w http.ResponseWriter, err error) {
 	case errors.Is(err, models.ErrInvalidToken),
 		errors.Is(err, models.ErrMagicLinkExpired),
 		errors.Is(err, models.ErrSessionExpired):
-		http.Error(w, err.Error(), http.StatusUnauthorized)
+		Error(w, http.StatusUnauthorized, err.Error())
 	default:
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		Error(w, http.StatusInternalServerError, "internal error")
+	}
+}
+
+// Error writes a JSON error body whose stable code derives from the HTTP
+// status. Replaces plain-text http.Error across the handlers.
+func Error(w http.ResponseWriter, status int, message string) {
+	WriteJSONError(w, status, codeForStatus(status), message)
+}
+
+func codeForStatus(status int) string {
+	switch status {
+	case http.StatusBadRequest:
+		return models.CodeBadRequest
+	case http.StatusUnauthorized:
+		return models.CodeUnauthorized
+	case http.StatusForbidden:
+		return models.CodeForbidden
+	case http.StatusNotFound:
+		return models.CodeNotFound
+	case http.StatusConflict:
+		return models.CodeConflict
+	case http.StatusTooManyRequests:
+		return models.CodeRateLimited
+	default:
+		return models.CodeInternal
 	}
 }
 
@@ -97,7 +129,7 @@ func PathULID(w http.ResponseWriter, r *http.Request, name string) (models.ULID,
 	raw := chi.URLParam(r, name)
 	id, err := ulid.Parse(raw)
 	if err != nil {
-		http.Error(w, "invalid "+name, http.StatusBadRequest)
+		Error(w, http.StatusBadRequest, "invalid "+name)
 		return models.ULID{}, false
 	}
 	return id, true

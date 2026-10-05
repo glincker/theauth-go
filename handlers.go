@@ -6,12 +6,14 @@ import (
 	"errors"
 	"io"
 	"log/slog"
+	"math"
 	"net/http"
 	"net/mail"
-	"strings"
+	"strconv"
 	"time"
 
 	ashandlers "github.com/glincker/theauth-go/internal/as/handlers"
+	"github.com/glincker/theauth-go/internal/httpx"
 	"github.com/glincker/theauth-go/internal/models"
 	oauthhandlers "github.com/glincker/theauth-go/internal/oauth/handlers"
 	passwordhandlers "github.com/glincker/theauth-go/internal/password/handlers"
@@ -60,6 +62,9 @@ func (a *TheAuth) mountRoutes(r chi.Router) {
 		// allowing enumeration of registered email addresses. Apply the same
 		// per-IP and per-email caps used by the password endpoints.
 		r.With(ipLimit, emailLimit).Post("/magic-link", a.handleMagicLinkRequest)
+		if a.bootstrap != nil {
+			r.Get("/bootstrap/status", a.handleBootstrapStatus)
+		}
 		r.Get("/magic-link/verify", a.handleMagicLinkVerify)
 
 		r.Route("/email-password", func(r chi.Router) {
@@ -102,7 +107,6 @@ func (a *TheAuth) mountRoutes(r chi.Router) {
 			}
 		}
 
-
 		a.mountSessionManagement(r, ipLimit)
 		r.With(a.RequireAuth()).Delete("/sessions/current", a.handleSessionDelete)
 		r.With(a.RequireAuth()).Get("/me", a.handleMe)
@@ -141,17 +145,17 @@ func (a *TheAuth) handleMagicLinkRequest(w http.ResponseWriter, r *http.Request)
 		Email string `json:"email"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.Email == "" {
-		http.Error(w, "invalid body", http.StatusBadRequest)
+		httpx.Error(w, http.StatusBadRequest, "invalid body")
 		return
 	}
-	addr, err := mail.ParseAddress(body.Email)
+	addr, err := mail.ParseAddress(a.normalizeEmail(body.Email))
 	if err != nil {
-		http.Error(w, "invalid email", http.StatusBadRequest)
+		httpx.Error(w, http.StatusBadRequest, "invalid email")
 		return
 	}
-	email := strings.ToLower(strings.TrimSpace(addr.Address))
+	email := a.normalizeEmail(addr.Address)
 	if err := a.requestMagicLink(r.Context(), email); err != nil {
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		httpx.Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 	w.WriteHeader(http.StatusOK)
@@ -161,7 +165,7 @@ func (a *TheAuth) handleMagicLinkRequest(w http.ResponseWriter, r *http.Request)
 func (a *TheAuth) handleMagicLinkVerify(w http.ResponseWriter, r *http.Request) {
 	token := r.URL.Query().Get("token")
 	if token == "" {
-		http.Error(w, "missing token", http.StatusBadRequest)
+		httpx.Error(w, http.StatusBadRequest, "missing token")
 		return
 	}
 	sessToken, _, err := a.consumeMagicLink(r.Context(), token)
@@ -185,7 +189,7 @@ func (a *TheAuth) handleMagicLinkVerify(w http.ResponseWriter, r *http.Request) 
 func (a *TheAuth) handleMe(w http.ResponseWriter, r *http.Request) {
 	user, ok := UserFromContext(r.Context())
 	if !ok {
-		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		httpx.Error(w, http.StatusUnauthorized, "unauthorized")
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
@@ -195,11 +199,11 @@ func (a *TheAuth) handleMe(w http.ResponseWriter, r *http.Request) {
 func (a *TheAuth) handleSessionDelete(w http.ResponseWriter, r *http.Request) {
 	sess, ok := SessionFromContext(r.Context())
 	if !ok {
-		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		httpx.Error(w, http.StatusUnauthorized, "unauthorized")
 		return
 	}
 	if err := a.storage.RevokeSession(r.Context(), sess.ID); err != nil {
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		httpx.Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 	a.EmitAudit(r.Context(), "user.logout", TargetRef{Type: "session", ID: sess.ID.String()}, nil)
@@ -228,8 +232,13 @@ func errToHTTP(w http.ResponseWriter, err error) {
 			writeJSONError(w, http.StatusConflict, te.Code, te.Message)
 		case CodeInvalidCredentials:
 			writeJSONError(w, http.StatusUnauthorized, te.Code, te.Message)
-		case CodeRateLimited:
+		case CodeRateLimited, CodeAccountLocked:
+			if te.RetryAfter > 0 {
+				w.Header().Set("Retry-After", strconv.Itoa(int(math.Ceil(te.RetryAfter.Seconds()))))
+			}
 			writeJSONError(w, http.StatusTooManyRequests, te.Code, te.Message)
+		case CodeSignupClosed, CodeSetupTokenInvalid:
+			writeJSONError(w, http.StatusForbidden, te.Code, te.Message)
 		case CodePasswordResetExpired, CodePasswordResetInvalid:
 			writeJSONError(w, http.StatusUnauthorized, te.Code, te.Message)
 		case CodeInvalidTOTP, CodeWebAuthn:
@@ -250,16 +259,15 @@ func errToHTTP(w http.ResponseWriter, err error) {
 		errors.Is(err, ErrMagicLinkExpired),
 		errors.Is(err, ErrMagicLinkUsed),
 		errors.Is(err, ErrSessionExpired):
-		http.Error(w, err.Error(), http.StatusUnauthorized)
+		httpx.Error(w, http.StatusUnauthorized, err.Error())
 	case errors.Is(err, ErrUserNotFound):
-		http.Error(w, err.Error(), http.StatusNotFound)
+		httpx.Error(w, http.StatusNotFound, err.Error())
 	default:
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		httpx.Error(w, http.StatusInternalServerError, "internal error")
 	}
 }
 
 // writeJSONError emits the v0.2+ error response shape: {"code":"...","message":"..."}.
-// Old (v0.1) error responses still use plain-text http.Error for backward compat.
 func writeJSONError(w http.ResponseWriter, status int, code, message string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)

@@ -40,6 +40,7 @@ import (
 
 	"github.com/crewjam/saml"
 	"github.com/glincker/theauth-go/internal/audit"
+	"github.com/glincker/theauth-go/internal/emailnorm"
 	"github.com/glincker/theauth-go/internal/models"
 	"github.com/glincker/theauth-go/internal/ulid"
 )
@@ -89,6 +90,7 @@ type SessionIssuer interface {
 // Mirrors the root theauth.SAMLConfig field set; the cert + key are
 // pre-parsed.
 type Config struct {
+	Email           emailnorm.Normalizer
 	SPCert          *x509.Certificate
 	SPKey           *rsa.PrivateKey
 	AuthnRequestTTL time.Duration
@@ -347,6 +349,9 @@ func (s *Service) FinishLogin(ctx context.Context, connectionID models.ULID, sam
 	}
 
 	mapped := mapAssertion(conn, assertion)
+	if s.cfg != nil {
+		mapped.Email = s.cfg.Email.Normalize(mapped.Email)
+	}
 	if mapped.Email == "" {
 		return "", models.Session{}, false, ErrSAMLMissingEmail
 	}

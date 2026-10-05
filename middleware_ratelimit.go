@@ -13,6 +13,8 @@ import (
 	"time"
 
 	"golang.org/x/time/rate"
+
+	"github.com/glincker/theauth-go/internal/httpx"
 )
 
 // keyedLimiter is an in-memory per-key sliding-window limiter. Each unique
@@ -188,7 +190,7 @@ func (a *TheAuth) RateLimitByIP(perMinute int) func(http.Handler) http.Handler {
 			if !k.Allow(ip) {
 				blocked.Inc()
 				w.Header().Set("Retry-After", "60")
-				http.Error(w, "rate_limited", http.StatusTooManyRequests)
+				httpx.Error(w, http.StatusTooManyRequests, "rate_limited")
 				return
 			}
 			next.ServeHTTP(w, r)
@@ -222,11 +224,11 @@ func (a *TheAuth) RateLimitByEmail(perMinute int) func(http.Handler) http.Handle
 				next.ServeHTTP(w, r)
 				return
 			}
-			key := strings.ToLower(strings.TrimSpace(body.Email))
+			key := a.normalizeEmail(body.Email)
 			if !k.Allow(key) {
 				blocked.Inc()
 				w.Header().Set("Retry-After", "60")
-				http.Error(w, "rate_limited", http.StatusTooManyRequests)
+				httpx.Error(w, http.StatusTooManyRequests, "rate_limited")
 				return
 			}
 			next.ServeHTTP(w, r)

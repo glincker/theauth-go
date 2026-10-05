@@ -23,6 +23,7 @@ import (
 	"github.com/glincker/theauth-go/crypto"
 	"github.com/glincker/theauth-go/email"
 	"github.com/glincker/theauth-go/internal/audit"
+	"github.com/glincker/theauth-go/internal/emailnorm"
 	"github.com/glincker/theauth-go/internal/models"
 	"github.com/glincker/theauth-go/internal/ulid"
 )
@@ -54,6 +55,20 @@ type Service struct {
 	ttl      time.Duration
 	sessions SessionIssuer
 	auditEm  audit.Emitter
+	norm     emailnorm.Normalizer
+	gate     SignupGate
+}
+
+// SignupGate decides whether a magic link may create a new user.
+type SignupGate interface {
+	Begin(ctx context.Context) (done func(created *models.User), err error)
+}
+
+// SetHardening configures email canonicalization and the signup gate.
+// Call before the service handles requests; gate may be nil.
+func (s *Service) SetHardening(norm emailnorm.Normalizer, gate SignupGate) {
+	s.norm = norm
+	s.gate = gate
 }
 
 // New constructs a magiclink Service.
@@ -82,7 +97,7 @@ func (s *Service) Request(ctx context.Context, emailAddr string) error {
 // RequestForTest is the same as Request but returns the raw token so tests
 // can drive a consume flow without scraping email.
 func (s *Service) RequestForTest(ctx context.Context, emailAddr string) (string, error) {
-	emailAddr = strings.ToLower(strings.TrimSpace(emailAddr))
+	emailAddr = s.norm.Normalize(emailAddr)
 	token, err := crypto.NewToken()
 	if err != nil {
 		return "", err
@@ -131,6 +146,13 @@ func (s *Service) Consume(ctx context.Context, token string) (sessionToken strin
 	// Find-or-create user
 	u, err := s.storage.UserByEmail(ctx, ml.Email)
 	if errors.Is(err, models.ErrStorageNotFound) {
+		if s.gate != nil {
+			done, gerr := s.gate.Begin(ctx)
+			if gerr != nil {
+				return "", nil, false, gerr
+			}
+			defer func() { done(u) }()
+		}
 		now := time.Now()
 		newUser, cerr := s.storage.CreateUser(ctx, models.User{
 			ID:              ulid.New(),

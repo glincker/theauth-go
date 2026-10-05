@@ -17,6 +17,7 @@ import (
 	"time"
 
 	accounthandlers "github.com/glincker/theauth-go/internal/account"
+	"github.com/glincker/theauth-go/internal/httpx"
 	"github.com/glincker/theauth-go/internal/identitylink"
 	"github.com/glincker/theauth-go/internal/models"
 	orghandlers "github.com/glincker/theauth-go/internal/organizations/handlers"
@@ -250,7 +251,7 @@ func sessionFromRequest(r *http.Request) (*models.Session, bool) {
 func (a *TheAuth) requireOrgRole(w http.ResponseWriter, r *http.Request, orgID, userID ULID, roles ...string) bool {
 	role, err := a.storage.OrganizationMemberRole(r.Context(), orgID, userID)
 	if err != nil {
-		http.Error(w, "not found", http.StatusNotFound)
+		httpx.Error(w, http.StatusNotFound, "not found")
 		return false
 	}
 	for _, want := range roles {
@@ -258,7 +259,7 @@ func (a *TheAuth) requireOrgRole(w http.ResponseWriter, r *http.Request, orgID, 
 			return true
 		}
 	}
-	http.Error(w, "forbidden", http.StatusForbidden)
+	httpx.Error(w, http.StatusForbidden, "forbidden")
 	return false
 }
 
@@ -400,6 +401,7 @@ func (a *TheAuth) newSCIMHandler() *scimhandlers.Handler {
 		scimhandlers.Config{
 			BaseURL:     a.baseURL,
 			MaxPageSize: maxPage,
+			Email:       a.emailNorm,
 		},
 		a.emitSCIMAuditExternal,
 		a.ensureOrgMembership,

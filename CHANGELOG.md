@@ -6,6 +6,47 @@ adheres to [Semantic Versioning](https://semver.org/) from v1.0 forward.
 
 ## [Unreleased]
 
+### Security
+
+- **Login throttle.** Password signin is now gated before any credential work
+  by per (client IP, normalized email) exponential backoff after a grace
+  period, plus a per-user lockout that auto-expires and can be cleared with
+  `TheAuth.UnlockUser`. Unknown and known accounts take the same path. On by
+  default; tune or disable with `Config.LoginThrottle`, supply a persistent
+  `LoginThrottleStore` to share state across processes. Refusals return 429
+  with a `Retry-After` header and code `rate_limited` or `account_locked`.
+- **MFA hardening.** TOTP codes are single use: the last accepted time-step is
+  recorded per user and replays are rejected (RFC 6238 section 5.2). TOTP and
+  recovery-code guesses are now capped per user, not per pending session, so
+  re-entering the password for fresh pending sessions no longer resets the
+  budget. Optional `TOTPReplayStorage` makes the step durable; without it the
+  step is held in process memory.
+- **First-run bootstrap.** `Config.Bootstrap` closes public signup and requires
+  a one-time setup token (generated and logged at startup, or supplied) to
+  create the first user. New: `TheAuth.UserCount`, `TheAuth.SetupToken`,
+  `GET /auth/bootstrap/status`, `TheAuth.ResetPasswordAdmin` for a
+  recover-admin command, and `BootstrapConfig.OnFirstUser` for granting roles.
+  Needs the optional `UserCountStorage` capability.
+- **Email canonicalization.** Every email entry point (password, magic link,
+  rate-limit key, SAML, SCIM) trims and lowercases, and folds Unicode
+  compatibility forms when `Config.EmailNFKC` is set. `TheAuth.NormalizeEmail`
+  exposes the same rule.
+- **Password policy.** `PasswordPolicyConfig` gains `MinLength`, `MaxBytes`
+  (default 72, the bcrypt limit; longer passwords now return 400
+  `weak_password` instead of failing later) and an optional `BreachChecker`.
+  `HIBPBreachChecker` implements the Have I Been Pwned k-anonymity range API,
+  is off by default and fails open on network errors.
+
+### Changed
+
+- **JSON error bodies.** Handlers that returned plain-text `http.Error`
+  bodies now return `{"code","message"}` JSON with a stable code
+  (`bad_request`, `unauthorized`, `forbidden`, `not_found`, `conflict`,
+  `rate_limited`, `internal_error`). Status codes are unchanged. Clients that
+  string-matched the old plain-text body must switch to the `code` field. The
+  OAuth provider and authorization server handlers are not yet converted.
+- `go.mod`: `golang.org/x/text` is now a direct dependency (NFKC).
+
 ### Fixed
 
 - **Synced-passkey login failure (backup-eligible flag).** WebAuthn login

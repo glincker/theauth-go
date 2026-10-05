@@ -343,11 +343,39 @@ func wireServices(a *TheAuth, cfg Config, providers map[string]Provider, sp saml
 
 	// High-complexity services: TOTP before password (password depends on
 	// totpSvc as its PendingTOTPIssuer).
+	a.throttle = cfg.LoginThrottle.limiter()
+	var gate *bootstrapGate
+	if cfg.Bootstrap != nil {
+		counter, ok := cfg.storageRaw.(UserCountStorage)
+		if !ok {
+			return missingCapability("UserCountStorage (required by Config.Bootstrap)")
+		}
+		g, gerr := newBootstrapGate(cfg.Bootstrap, counter, a.throttle)
+		if gerr != nil {
+			return gerr
+		}
+		gate = g
+		a.bootstrap = g
+		a.magicSvc.SetHardening(a.emailNorm, g)
+	} else {
+		a.magicSvc.SetHardening(a.emailNorm, nil)
+	}
 	a.totpSvc = internaltotp.NewService(cfg.Storage, a.sessionSvc, a, totpConfigFromRoot(cfg.TOTP), cfg.EncryptionKey)
-	pwSvc, err := password.NewService(cfg.Storage, cfg.EmailSender, a.sessionSvc, a.magicSvc, a.totpSvc, a, password.Config{
+	replay, _ := cfg.storageRaw.(internaltotp.ReplayStore)
+	a.totpSvc.SetHardening(a.throttle, replay)
+	pwCfg := password.Config{
 		BaseURL:     cfg.BaseURL,
 		TOTPEnabled: cfg.TOTP != nil,
-	})
+		MinLength:   cfg.PasswordPolicy.MinLength,
+		MaxBytes:    cfg.PasswordPolicy.MaxBytes,
+		Breach:      cfg.PasswordPolicy.BreachChecker,
+		Email:       a.emailNorm,
+		Throttle:    a.throttle,
+	}
+	if gate != nil {
+		pwCfg.Gate = gate
+	}
+	pwSvc, err := password.NewService(cfg.Storage, cfg.EmailSender, a.sessionSvc, a.magicSvc, a.totpSvc, a, pwCfg)
 	if err != nil {
 		return err
 	}
@@ -357,7 +385,11 @@ func wireServices(a *TheAuth, cfg Config, providers map[string]Provider, sp saml
 		return err
 	}
 	a.webauthnSvc = waSvc
-	a.samlSvc = internalsaml.NewService(cfg.Storage, a.sessionSvc, a, samlConfigFromRoot(cfg.SAML, sp.cert, sp.key))
+	samlCfg := samlConfigFromRoot(cfg.SAML, sp.cert, sp.key)
+	if samlCfg != nil {
+		samlCfg.Email = a.emailNorm
+	}
+	a.samlSvc = internalsaml.NewService(cfg.Storage, a.sessionSvc, a, samlCfg)
 
 	// Wire OAuth provider service. The GC goroutine is started inside
 	// internaloauth.New so there is no separate Start call needed.
