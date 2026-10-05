@@ -320,11 +320,23 @@ func bindingHash(binding string) []byte {
 	return h[:]
 }
 
+// HasUnsafeRedirectChars reports whether s holds a backslash or an ASCII
+// control character. Browsers drop tabs and newlines and read a backslash as
+// a slash, so "/<TAB>/host" or "/\host" would otherwise turn into "//host".
+func HasUnsafeRedirectChars(s string) bool {
+	for _, r := range s {
+		if r < 0x20 || r == 0x7f || r == '\\' {
+			return true
+		}
+	}
+	return false
+}
+
 // MatchReturnTo returns candidate when it matches an allow-list entry, else
 // "". Entries are exact absolute URLs or "/" paths; a trailing "*" makes an
 // entry a prefix match. Protocol-relative and backslash forms never match.
 func MatchReturnTo(candidate string, allow []string) string {
-	if candidate == "" || len(allow) == 0 || strings.ContainsAny(candidate, "\\\r\n") {
+	if candidate == "" || len(allow) == 0 || HasUnsafeRedirectChars(candidate) {
 		return ""
 	}
 	if strings.HasPrefix(candidate, "//") {
