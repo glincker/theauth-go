@@ -334,7 +334,7 @@ func (s *Store) ListPendingDeviceCodes(ctx context.Context, f theauth.DevicePend
 	}
 	rows, err := s.pool.Query(ctx, `SELECT `+deviceCols+` FROM device_codes
 WHERE status = $1 AND expires_at > $2 ORDER BY created_at DESC, id DESC LIMIT $3`,
-		theauth.DeviceStatusPending, f.Now, int32(limit))
+		theauth.DeviceStatusPending, f.Now, clampInt32(limit))
 	if err != nil {
 		return nil, fmt.Errorf("postgres: list pending device codes: %w", err)
 	}
