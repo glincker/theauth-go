@@ -429,6 +429,10 @@ of feedback):
   `APIToken.Kind`, `AgentName`, `DelegatedBy`, `Principal.ActorChain`,
   `RevocationBus` and the revocation watcher helpers (`docs/AGENT-IDENTITY.md`).
 - `ImportAPIToken` and the legacy token and bcrypt options.
+- `sqlite.NewTx` and the `Import*To` helpers (`ImportUserTo`, `ImportAPITokenTo`,
+  `ImportTOTPSecretTo`, `ImportWebAuthnCredentialTo`) and their `TheAuth` forms.
+- `CIMDConfig.AllowPrivateNetworks`, `CIMDConfig.DenyHost` and
+  `SAMLConfig.AllowedRelayStates`.
 - `github.com/glincker/theauth-go/storage/sqlite` (now with capability parity;
   still no organizations, SAML, SCIM or RBAC).
 - `github.com/glincker/theauth-go/v2/clientauth`

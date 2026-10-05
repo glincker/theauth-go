@@ -15,6 +15,8 @@ Docs: https://go.theauth.dev/ . Full list: [CHANGELOG.md](../CHANGELOG.md).
 - **Device-request routes need the root ability by default** (`DeviceRequestsAbility`, or `DeviceRequestsAnySignedInUser`).
 - **Closed signup and `Config.Bootstrap` need `UserCountStorage`.**
 - **`PasswordPolicy.AllowLegacyBcrypt` is now honored.**
+- **CIMD fetches refuse non-public addresses** (a localhost CIMD setup needs `CIMDConfig.AllowPrivateNetworks`).
+- **Authorization errors redirect only to a registered `redirect_uri`, and SAML `RelayState` is restricted** (`SAMLConfig.AllowedRelayStates`).
 - Also: CSRF/Origin checks on cookie-authenticated writes (`TrustedOrigins`), 72 byte password cap, new migrations (Postgres and MySQL 0017 and 0018, SQLite 0006 to 0008).
 
 ## Highlights
@@ -33,6 +35,7 @@ Docs: https://go.theauth.dev/ . Full list: [CHANGELOG.md](../CHANGELOG.md).
 - Login throttle and per-user lockout, TOTP replay protection, per-user MFA guess caps.
 - First-run bootstrap with a one-time setup token, email canonicalization, password policy and optional HIBP check.
 - OAuth login CSRF binding and verified-email account linking.
+- SSRF guard on the CIMD client-metadata fetch (dial-time address check, no redirects); authorization error and SAML `RelayState` redirects validated.
 - Fix: synced passkeys (backup-eligible flag) can sign in again.
 
 ## Stability

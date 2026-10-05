@@ -52,6 +52,16 @@ existing call, but each changes runtime behavior.
 - **`PasswordPolicy.AllowLegacyBcrypt` is now honored** at signin, step-up and
   password change. With it off, a bcrypt hash returns invalid credentials
   instead of a 500.
+- **CIMD client-metadata fetches refuse non-public addresses.** Loopback,
+  private, link-local (including cloud metadata), CGNAT and similar ranges are
+  blocked at dial time, redirects are never followed and no proxy is used. A
+  localhost CIMD setup now needs `CIMDConfig.AllowPrivateNetworks` (a dev
+  opt-in); `CIMDConfig.DenyHost` adds a host deny hook.
+- **Authorization error responses and SAML `RelayState` are restricted.**
+  Authorization errors redirect only when `redirect_uri` exactly matches a
+  registered URI. SAML `RelayState` must be a same-site path, the configured
+  post-login URL or an entry in `SAMLConfig.AllowedRelayStates`; anything else
+  falls back to the default.
 - Other changes worth a look: cookie-authenticated mutating requests with a
   foreign `Origin` now get 403 (`Config.TrustedOrigins`,
   `Config.DisableCSRFProtection`); passwords over `MaxBytes` (default 72) return
@@ -243,6 +253,15 @@ Policy, posture and audit
   empty list collapses the per-IP rate-limit bucket. See the new HTTP security
   doc.
 
+Importing existing data
+
+- **`sqlite.NewTx` binds the SQLite Store to a caller's `*sql.Tx`** (SAVEPOINTs,
+  no nested transactions), plus `ImportUserTo`, `ImportAPITokenTo`,
+  `ImportTOTPSecretTo` and `ImportWebAuthnCredentialTo` (and `TheAuth` method
+  forms) for one-transaction backfills.
+- Plaintext TOTP secrets are encrypted on import like enrollment; recovery codes
+  must be regenerated. See the SQLite guide.
+
 ### Changed
 
 - **Module path** is now `github.com/glincker/theauth-go/v2` (see Upgrade
@@ -319,6 +338,11 @@ Policy, posture and audit
   verified-email requirement for linking existing accounts (see Changed and
   Fixed).
 - **CSRF / Origin protection and automatic Secure cookies** (see Added).
+- CIMD fetches refuse non-public addresses at dial time, with no redirects or
+  proxy; `CIMDConfig.AllowPrivateNetworks` (dev) and `DenyHost` added.
+- Authorization error responses redirect only to a registered `redirect_uri`;
+  SAML `RelayState` is restricted to same-site paths or
+  `SAMLConfig.AllowedRelayStates`.
 
 ## [2.5.0] - 2026-07-14
 

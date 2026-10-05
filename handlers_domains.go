@@ -342,6 +342,9 @@ func (a *TheAuth) newSAMLHandler() *samlhandlers.Handler {
 		},
 		a.postLoginRedirect,
 	)
+	if a.samlCfg != nil {
+		h.SetAllowedRelayStates(a.samlCfg.AllowedRelayStates)
+	}
 	h.AttachCRUD(samlConnectionServiceAdapter{a: a}, a.requireOrgRoleHTTP, userFromRequest)
 	return h
 }

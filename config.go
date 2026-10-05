@@ -127,6 +127,12 @@ type SAMLConfig struct {
 	// 30 seconds (matches crewjam default). Some IdPs (Okta on slow clocks)
 	// need 60s.
 	ClockSkew time.Duration
+
+	// AllowedRelayStates lists extra post-login destinations accepted as
+	// RelayState (exact absolute URLs, or "/" prefixes ending in "*").
+	// Same-site paths and Config.PostLoginRedirect are always accepted;
+	// any other RelayState falls back to PostLoginRedirect.
+	AllowedRelayStates []string
 }
 
 // SCIMConfig wires the SCIM 2.0 endpoint behavior.

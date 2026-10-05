@@ -12,10 +12,12 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/glincker/theauth-go/v2/internal/httpx"
 	"github.com/glincker/theauth-go/v2/internal/models"
+	internaloauth "github.com/glincker/theauth-go/v2/internal/oauth"
 	"github.com/glincker/theauth-go/v2/internal/saml"
 	"github.com/go-chi/chi/v5"
 )
@@ -46,6 +48,7 @@ type Handler struct {
 	svc               Service
 	sessionCookie     SessionCookieConfig
 	postLoginRedirect string
+	allowedRelay      []string
 
 	// CRUD-side fields populated by AttachCRUD (PR F). Nil-valued when
 	// AttachCRUD was not invoked; MountCRUD must not be called in that
@@ -59,6 +62,28 @@ type Handler struct {
 // is sent to when the IdP did not include a RelayState.
 func New(svc Service, sessionCookie SessionCookieConfig, postLoginRedirect string) *Handler {
 	return &Handler{svc: svc, sessionCookie: sessionCookie, postLoginRedirect: postLoginRedirect}
+}
+
+// SetAllowedRelayStates lists absolute URLs or "/" prefixes (a trailing "*"
+// makes a prefix match) accepted as RelayState besides same-site paths.
+func (h *Handler) SetAllowedRelayStates(allow []string) {
+	h.allowedRelay = append([]string(nil), allow...)
+}
+
+// safeRelay returns relay when it is a same-site path, the configured
+// post-login URL, or an allow-listed destination; otherwise the default.
+func (h *Handler) safeRelay(relay string) string {
+	if relay == "" || relay == h.postLoginRedirect {
+		return h.postLoginRedirect
+	}
+	if strings.HasPrefix(relay, "/") && !strings.HasPrefix(relay, "//") &&
+		!strings.ContainsAny(relay, "\\\r\n") {
+		return relay
+	}
+	if m := internaloauth.MatchReturnTo(relay, h.allowedRelay); m != "" {
+		return m
+	}
+	return h.postLoginRedirect
 }
 
 // Mount registers /saml/{connectionId}/* under r.
@@ -75,10 +100,7 @@ func (h *Handler) handleLogin(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	relay := r.URL.Query().Get("RelayState")
-	if relay == "" {
-		relay = h.postLoginRedirect
-	}
+	relay := h.safeRelay(r.URL.Query().Get("RelayState"))
 	redirect, err := h.svc.BeginLogin(r.Context(), id, relay)
 	if err != nil {
 		httpx.Error(w, http.StatusBadRequest, "saml login failed")
@@ -123,10 +145,7 @@ func (h *Handler) handleACS(w http.ResponseWriter, r *http.Request) {
 		SameSite: http.SameSiteLaxMode,
 		Expires:  time.Now().Add(h.sessionCookie.TTL),
 	})
-	if relayState == "" {
-		relayState = h.postLoginRedirect
-	}
-	http.Redirect(w, r, relayState, http.StatusFound)
+	http.Redirect(w, r, h.safeRelay(relayState), http.StatusFound)
 }
 
 func (h *Handler) handleMetadata(w http.ResponseWriter, r *http.Request) {
