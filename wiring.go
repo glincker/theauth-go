@@ -47,6 +47,7 @@ type samlParsed struct {
 // applyConfigDefaults fills in zero-value Config fields with library
 // defaults. Must be called before any validation or wiring.
 func applyConfigDefaults(cfg *Config) {
+	applySessionDefaults(cfg)
 	if cfg.SessionTTL == 0 {
 		cfg.SessionTTL = 24 * time.Hour
 	}
@@ -334,6 +335,7 @@ func wireServices(a *TheAuth, cfg Config, providers map[string]Provider, sp saml
 	// Core services (session, magic link, SCIM, organizations, RBAC).
 	permCatalog, permIndex, defaultSeeds := a.permCatalog, a.permIndex, a.defaultRoleSeeds
 	a.sessionSvc = session.New(cfg.Storage, cfg.SessionTTL)
+	a.sx.install(a.sessionSvc)
 	a.magicSvc = magiclink.New(cfg.Storage, cfg.EmailSender, cfg.BaseURL, cfg.MagicLinkTTL, a.sessionSvc, a)
 	a.scimSvc = internalscim.NewService(cfg.Storage, scimConfigFromRoot(cfg.SCIM))
 	a.orgsSvc = organizations.New(cfg.Storage, orgsConfigFromRoot(cfg.Organizations))

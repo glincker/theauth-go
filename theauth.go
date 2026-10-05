@@ -35,12 +35,26 @@ type Config struct {
 	// only the capabilities the enabled features need. It must cover users,
 	// sessions, magic links and passwords; New returns
 	// ErrStorageMissingCapability when an enabled feature needs more.
-	CoreStorage  CoreStorage
-	storageRaw   any
-	EmailSender  email.Sender
-	BaseURL      string
-	SigningKey   ed25519.PrivateKey
-	SessionTTL   time.Duration
+	CoreStorage CoreStorage
+	storageRaw  any
+	EmailSender email.Sender
+	BaseURL     string
+	SigningKey  ed25519.PrivateKey
+	// SessionTTL is the absolute session lifetime. Defaults to 24h.
+	SessionTTL time.Duration
+	// SessionIdleTimeout expires a session unused for this long. Zero
+	// disables it. Needs a storage implementing SessionManagementStorage.
+	SessionIdleTimeout time.Duration
+	// SessionTouchInterval throttles last-seen writes to at most one per
+	// session per interval. Defaults to 1m; negative disables last-seen
+	// tracking. Must be shorter than SessionIdleTimeout when that is set.
+	SessionTouchInterval time.Duration
+	// StepUpTTL is how long a successful POST /auth/step-up elevates a
+	// session. Defaults to 5m.
+	StepUpTTL time.Duration
+	// SessionLinks enables programmatic session links when non-nil. Needs a
+	// storage implementing SessionLinkStorage and SessionManagementStorage.
+	SessionLinks *SessionLinksConfig
 	MagicLinkTTL time.Duration
 	CookieName   string
 	// SecureCookie forces the Secure attribute on every session cookie.
@@ -342,6 +356,7 @@ type TheAuth struct {
 	// goroutines + audit writer goroutine) and declares its own minimal
 	// Storage interface. Root methods on *TheAuth forward to these so the
 	// public surface is byte-stable.
+	sx          *sessionExt
 	passwordSvc *password.Service
 	totpSvc     *internaltotp.Service
 	webauthnSvc *internalwebauthn.Service
@@ -367,6 +382,10 @@ func New(cfg Config) (*TheAuth, error) {
 	if cfg.CoreStorage != nil {
 		cfg.Storage = assembleStorage(cfg.CoreStorage)
 	}
+	sx, err := newSessionExt(&cfg)
+	if err != nil {
+		return nil, err
+	}
 
 	permCatalog, permIndex, defaultSeeds, err := validateRBAC(cfg.RBAC)
 	if err != nil {
@@ -384,6 +403,7 @@ func New(cfg Config) (*TheAuth, error) {
 		baseURL:                    cfg.BaseURL,
 		signingKey:                 cfg.SigningKey,
 		sessionTTL:                 cfg.SessionTTL,
+		sx:                         sx,
 		magicLinkTTL:               cfg.MagicLinkTTL,
 		cookieName:                 cfg.CookieName,
 		secureCookie:               cfg.SecureCookie,

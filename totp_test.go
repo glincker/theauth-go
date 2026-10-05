@@ -391,17 +391,33 @@ func TestStepUpFlow(t *testing.T) {
 		t.Fatalf("verify: %d body=%s", resp.StatusCode, string(body))
 	}
 
-	// 8. /auth/me now succeeds with the same cookie (server promoted it
-	// in place and re-emitted the cookie with the same value).
-	meReq2, _ := http.NewRequest("GET", srv.URL+"/auth/me", nil)
-	for _, c := range pending {
-		meReq2.AddCookie(c)
+	// 8. MFA completion rotates the session: the new cookie works, the
+	// pending cookie is dead.
+	assertRotated(t, srv, pending, resp.Cookies(), "verify")
+}
+
+// assertRotated checks /auth/me succeeds with the rotated cookies and fails
+// with the pre-rotation ones.
+func assertRotated(t *testing.T, srv *httptest.Server, old, fresh []*http.Cookie, step string) {
+	t.Helper()
+	me := func(cookies []*http.Cookie) int {
+		req, _ := http.NewRequest("GET", srv.URL+"/auth/me", nil)
+		for _, c := range cookies {
+			req.AddCookie(c)
+		}
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_ = resp.Body.Close()
+		return resp.StatusCode
 	}
-	meResp2, _ := http.DefaultClient.Do(meReq2)
-	if meResp2.StatusCode != 200 {
-		t.Fatalf("/auth/me after verify should be 200; got %d", meResp2.StatusCode)
+	if got := me(fresh); got != http.StatusOK {
+		t.Fatalf("/auth/me after %s with rotated cookie: got %d want 200", step, got)
 	}
-	_ = meResp2.Body.Close()
+	if got := me(old); got != http.StatusUnauthorized {
+		t.Fatalf("/auth/me after %s with pre-rotation cookie: got %d want 401", step, got)
+	}
 }
 
 // TestRecoveryStepUpFlow exercises the same flow but uses a recovery code
@@ -448,13 +464,5 @@ func TestRecoveryStepUpFlow(t *testing.T) {
 	if resp.StatusCode != 200 {
 		t.Fatalf("recovery: %d body=%s", resp.StatusCode, string(body))
 	}
-	meReq, _ := http.NewRequest("GET", srv.URL+"/auth/me", nil)
-	for _, c := range pending {
-		meReq.AddCookie(c)
-	}
-	meResp, _ := http.DefaultClient.Do(meReq)
-	if meResp.StatusCode != 200 {
-		t.Fatalf("/auth/me after recovery should be 200; got %d", meResp.StatusCode)
-	}
-	_ = meResp.Body.Close()
+	assertRotated(t, srv, pending, resp.Cookies(), "recovery")
 }

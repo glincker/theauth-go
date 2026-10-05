@@ -19,6 +19,8 @@ type Store struct {
 	passwordHashes map[theauth.ULID]string
 	resetTokens    map[theauth.ULID]theauth.PasswordResetToken
 	oauthAccounts  map[theauth.ULID]theauth.OAuthAccount
+	// sessionLinks backs SessionLinkStorage; see memory_sessions.go.
+	sessionLinks map[theauth.ULID]theauth.SessionLink
 	// v0.5
 	webauthnCreds map[theauth.ULID]theauth.WebAuthnCredential
 	totpSecrets   map[theauth.ULID]theauth.TOTPSecret

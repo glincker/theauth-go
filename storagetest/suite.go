@@ -105,6 +105,12 @@ func Run(t *testing.T, store theauth.Storage) {
 	RunAudit(t, store)
 	RunRBAC(t, store)
 
+	if sm, ok := store.(SessionManagementSuiteStorage); ok {
+		RunSessionManagement(t, sm)
+	} else {
+		t.Log("backend does not implement session management capabilities; skipping")
+	}
+
 	oauthStore, ok := store.(theauth.OAuthServerStorage)
 	if !ok {
 		t.Log("backend does not implement OAuthServerStorage; skipping OAuth AS sub-tests")
