@@ -98,6 +98,8 @@ has moved. Examples:
   are in `mounts_extracted.go`.
 
 The symbol identifiers are unchanged; only their file location moved.
+
+These file names describe the layout at that release. The module root was reorganised again in v2.6.0, so the current locations differ. See [REPO-LAYOUT.md](https://github.com/glincker/theauth-go/blob/main/docs/REPO-LAYOUT.md) for the move map.
 This affects code search and IDE jump-to-definition, not compilation.
 
 ### Storage interfaces
