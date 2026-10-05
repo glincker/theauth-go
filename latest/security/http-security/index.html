@@ -10,13 +10,13 @@
       
       
       
-        <link rel="canonical" href="https://go.theauth.dev/latest/concepts/par-jar/">
+        <link rel="canonical" href="https://go.theauth.dev/latest/security/http-security/">
       
       
-        <link rel="prev" href="../resource-server/">
+        <link rel="prev" href="../threat-model/">
       
       
-        <link rel="next" href="../jwt-bearer/">
+        <link rel="next" href="../releases/">
       
       
         
@@ -27,7 +27,7 @@
     
     
       
-        <title>PAR + JAR (FAPI 2.0) - theauth-go</title>
+        <title>HTTP Security - theauth-go</title>
       
     
     
@@ -61,17 +61,17 @@
     
   
 <meta property="og:type" content="website" />
-<meta property="og:title" content="PAR + JAR (FAPI 2.0) - theauth-go" />
+<meta property="og:title" content="HTTP Security - theauth-go" />
 <meta property="og:description" content="Go auth library covering OAuth 2.1, MCP authorization, agent identities, WebAuthn, SAML, SCIM, and more." />
-<meta property="og:image" content="https://go.theauth.dev/latest/assets/images/social/concepts/par-jar.png" />
+<meta property="og:image" content="https://go.theauth.dev/latest/assets/images/social/security/http-security.png" />
 <meta property="og:image:type" content="image/png" />
 <meta property="og:image:width" content="1200" />
 <meta property="og:image:height" content="630" />
-<meta property="og:url" content="https://go.theauth.dev/latest/concepts/par-jar/" />
+<meta property="og:url" content="https://go.theauth.dev/latest/security/http-security/" />
 <meta property="twitter:card" content="summary_large_image" />
-<meta property="twitter:title" content="PAR + JAR (FAPI 2.0) - theauth-go" />
+<meta property="twitter:title" content="HTTP Security - theauth-go" />
 <meta property="twitter:description" content="Go auth library covering OAuth 2.1, MCP authorization, agent identities, WebAuthn, SAML, SCIM, and more." />
-<meta property="twitter:image" content="https://go.theauth.dev/latest/assets/images/social/concepts/par-jar.png" />
+<meta property="twitter:image" content="https://go.theauth.dev/latest/assets/images/social/security/http-security.png" />
 </head>
   
   
@@ -91,7 +91,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#par-jar-pushed-authorization-requests-and-jwt-secured-authorization-requests" class="md-skip">
+        <a href="#http-security" class="md-skip">
           Skip to content
         </a>
       
@@ -131,7 +131,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              PAR + JAR (FAPI 2.0)
+              HTTP Security
             
           </span>
         </div>
@@ -275,13 +275,11 @@
   
   
   
-    
-  
   
     
     
-      <li class="md-tabs__item md-tabs__item--active">
-        <a href="../oauth21-primer/" class="md-tabs__link">
+      <li class="md-tabs__item">
+        <a href="../../concepts/oauth21-primer/" class="md-tabs__link">
           
   
   
@@ -337,11 +335,13 @@
   
   
   
+    
+  
   
     
     
-      <li class="md-tabs__item">
-        <a href="../../security/threat-model/" class="md-tabs__link">
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="../threat-model/" class="md-tabs__link">
           
   
   
@@ -675,31 +675,28 @@
       
   
   
-    
   
   
-  
     
     
     
     
-      
-        
-        
       
       
         
       
     
     
-    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--nested">
       
         
-        
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" checked>
         
           
-          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
             
   
   
@@ -717,7 +714,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="true">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
           <label class="md-nav__title" for="__nav_3">
             <span class="md-nav__icon md-icon"></span>
             
@@ -735,7 +732,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../oauth21-primer/" class="md-nav__link">
+      <a href="../../concepts/oauth21-primer/" class="md-nav__link">
         
   
   
@@ -763,7 +760,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../mcp-authorization/" class="md-nav__link">
+      <a href="../../concepts/mcp-authorization/" class="md-nav__link">
         
   
   
@@ -791,7 +788,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../authorization-server/" class="md-nav__link">
+      <a href="../../concepts/authorization-server/" class="md-nav__link">
         
   
   
@@ -819,7 +816,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../resource-server/" class="md-nav__link">
+      <a href="../../concepts/resource-server/" class="md-nav__link">
         
   
   
@@ -844,37 +841,10 @@
                 
   
   
-    
   
   
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
-      
-      
-        
-      
-      
-        <label class="md-nav__link md-nav__link--active" for="__toc">
-          
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    PAR + JAR (FAPI 2.0)
-  
-
-    
-  </span>
-  
-  
-
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
-      <a href="./" class="md-nav__link md-nav__link--active">
+    <li class="md-nav__item">
+      <a href="../../concepts/par-jar/" class="md-nav__link">
         
   
   
@@ -890,125 +860,6 @@
   
 
       </a>
-      
-        
-
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-    
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#why-par-and-jar" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Why PAR and JAR?
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#standard-flow-before-parjar" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Standard flow (before PAR/JAR)
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#flow-with-par" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Flow with PAR
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#flow-with-jar-on-top-of-par" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Flow with JAR (on top of PAR)
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#fapi-20-baseline" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        FAPI 2.0 baseline
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#enabling-par" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Enabling PAR
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#enabling-jar" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Enabling JAR
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#par-endpoint-reference" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        PAR endpoint reference
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#see-also" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        See also
-      
-    </span>
-  </a>
-  
-</li>
-      
-    </ul>
-  
-</nav>
-      
     </li>
   
 
@@ -1021,7 +872,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../jwt-bearer/" class="md-nav__link">
+      <a href="../../concepts/jwt-bearer/" class="md-nav__link">
         
   
   
@@ -1049,7 +900,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../ciba/" class="md-nav__link">
+      <a href="../../concepts/ciba/" class="md-nav__link">
         
   
   
@@ -1679,28 +1530,31 @@
       
   
   
+    
   
   
+  
     
     
     
     
+      
+        
+        
       
       
         
       
     
     
-    <li class="md-nav__item md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
       
         
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" checked>
         
           
-        
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_6" >
-        
-          
-          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="">
             
   
   
@@ -1718,7 +1572,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="true">
           <label class="md-nav__title" for="__nav_6">
             <span class="md-nav__icon md-icon"></span>
             
@@ -1736,7 +1590,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../security/threat-model/" class="md-nav__link">
+      <a href="../threat-model/" class="md-nav__link">
         
   
   
@@ -1761,10 +1615,37 @@
                 
   
   
+    
   
   
-    <li class="md-nav__item">
-      <a href="../../security/http-security/" class="md-nav__link">
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    HTTP Security
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
         
   
   
@@ -1780,6 +1661,70 @@
   
 
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#stdlib-entry-point" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Stdlib entry point
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#csrf-and-origin-checks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CSRF and Origin checks
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#secure-cookies" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Secure cookies
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#behind-a-reverse-proxy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Behind a reverse proxy
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
     </li>
   
 
@@ -1792,7 +1737,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../security/releases/" class="md-nav__link">
+      <a href="../releases/" class="md-nav__link">
         
   
   
@@ -1820,7 +1765,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../security/benchmarks/" class="md-nav__link">
+      <a href="../benchmarks/" class="md-nav__link">
         
   
   
@@ -1848,7 +1793,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../security/compliance-soc2/" class="md-nav__link">
+      <a href="../compliance-soc2/" class="md-nav__link">
         
   
   
@@ -1876,7 +1821,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../security/compliance-gdpr/" class="md-nav__link">
+      <a href="../compliance-gdpr/" class="md-nav__link">
         
   
   
@@ -2131,10 +2076,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#why-par-and-jar" class="md-nav__link">
+  <a href="#stdlib-entry-point" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Why PAR and JAR?
+        Stdlib entry point
       
     </span>
   </a>
@@ -2142,10 +2087,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#standard-flow-before-parjar" class="md-nav__link">
+  <a href="#csrf-and-origin-checks" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Standard flow (before PAR/JAR)
+        CSRF and Origin checks
       
     </span>
   </a>
@@ -2153,10 +2098,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#flow-with-par" class="md-nav__link">
+  <a href="#secure-cookies" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Flow with PAR
+        Secure cookies
       
     </span>
   </a>
@@ -2164,65 +2109,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#flow-with-jar-on-top-of-par" class="md-nav__link">
+  <a href="#behind-a-reverse-proxy" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Flow with JAR (on top of PAR)
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#fapi-20-baseline" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        FAPI 2.0 baseline
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#enabling-par" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Enabling PAR
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#enabling-jar" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Enabling JAR
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#par-endpoint-reference" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        PAR endpoint reference
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#see-also" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        See also
+        Behind a reverse proxy
       
     </span>
   </a>
@@ -2272,10 +2162,10 @@
     
     
       <li class="md-path__item">
-        <a href="../oauth21-primer/" class="md-path__link">
+        <a href="../threat-model/" class="md-path__link">
           
   <span class="md-ellipsis">
-    Concepts
+    Security
   </span>
 
         </a>
@@ -2297,177 +2187,36 @@
   
 
 
-<h1 id="par-jar-pushed-authorization-requests-and-jwt-secured-authorization-requests">PAR + JAR: Pushed Authorization Requests and JWT-Secured Authorization Requests<a class="headerlink" href="#par-jar-pushed-authorization-requests-and-jwt-secured-authorization-requests" title="Permanent link">&para;</a></h1>
-<p>Pushed Authorization Requests (PAR, RFC 9126) and JWT-Secured Authorization
-Requests (JAR, RFC 9101) are two complementary enhancements to the OAuth 2.1
-authorization code flow. Together with JWT-Bearer client authentication (RFC
-7523), they form the FAPI 2.0 Security Profile baseline required by open
-banking, healthcare, and other regulated API ecosystems.</p>
-<h2 id="why-par-and-jar">Why PAR and JAR?<a class="headerlink" href="#why-par-and-jar" title="Permanent link">&para;</a></h2>
-<p>In the standard authorization code flow, all authorization parameters are sent
-as query parameters in the browser redirect URL. This has two problems:</p>
-<ol>
-<li><strong>Integrity:</strong> a network adversary or a compromised browser can tamper with
-   the parameters before the request reaches the authorization server.</li>
-<li><strong>Confidentiality:</strong> sensitive parameters (scope, claims, resource) are
-   visible in browser history, server access logs, and referrer headers.</li>
-</ol>
-<p>PAR solves confidentiality and integrity by sending the request body directly
-to the AS over a back-channel HTTPS connection before the browser redirect.
-JAR solves integrity by wrapping the parameters in a signed JWT that the AS
-verifies against the client's registered public key.</p>
-<h2 id="standard-flow-before-parjar">Standard flow (before PAR/JAR)<a class="headerlink" href="#standard-flow-before-parjar" title="Permanent link">&para;</a></h2>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>User              Browser              Client App           Authorization Server
-<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a> |                  |                      |                        |
-<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a> | Click "Sign in"  |                      |                        |
-<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a> |-----------------&gt;|                      |                        |
-<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a> |                  | Redirect to /oauth/authorize?response_type=code
-<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a> |                  |  &amp;client_id=...&amp;redirect_uri=...&amp;scope=...&amp;state=...
-<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a> |                  |--------------------------------------------------------------&gt;|
-<a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a> |                  |                      |         Render consent screen          |
-<a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a> |                  |&lt;--------------------------------------------------------------|
-<a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a> | Approve          |                      |                        |
-<a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a> |-----------------&gt;|                      |                        |
-<a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a> |                  | Redirect to /callback?code=...&amp;state=...      |
-<a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a> |                  |&lt;--------------------------------------------------------------|
-<a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a> |                  | POST /oauth/token (code exchange)             |
-<a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a> |                  |---------------------&gt;|                        |
-<a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a> |                  |                      | access_token, refresh_token            |
+<h1 id="http-security">HTTP security<a class="headerlink" href="#http-security" title="Permanent link">&para;</a></h1>
+<h2 id="stdlib-entry-point">Stdlib entry point<a class="headerlink" href="#stdlib-entry-point" title="Permanent link">&para;</a></h2>
+<p><code>(*TheAuth).Handler()</code> returns an <code>http.Handler</code> with every route <code>Mount</code>
+registers, for <code>net/http</code> without chi:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nx">mux</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">http</span><span class="p">.</span><span class="nx">NewServeMux</span><span class="p">()</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="nx">mux</span><span class="p">.</span><span class="nx">Handle</span><span class="p">(</span><span class="s">"/auth/"</span><span class="p">,</span><span class="w"> </span><span class="nx">a</span><span class="p">.</span><span class="nx">Handler</span><span class="p">())</span>
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="c1">// or under a prefix: mux.Handle("/api/", http.StripPrefix("/api", a.Handler()))</span>
 </code></pre></div>
-<p><strong>Problem:</strong> all parameters, including <code>scope</code> and <code>resource</code>, travel through
-the browser address bar.</p>
-<h2 id="flow-with-par">Flow with PAR<a class="headerlink" href="#flow-with-par" title="Permanent link">&para;</a></h2>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>User              Browser              Client App           Authorization Server
-<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a> |                  |                      |                        |
-<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a> | Click "Sign in"  |                      |                        |
-<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a> |-----------------&gt;|                      |                        |
-<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a> |                  |       POST /oauth/par (back-channel HTTPS)    |
-<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a> |                  |                      |-----------------------&gt;|
-<a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a> |                  |                      |  { request_uri, expires_in: 60 }       |
-<a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a> |                  |                      |&lt;-----------------------|
-<a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a> |                  | Redirect to /oauth/authorize?request_uri=urn:...&amp;client_id=...
-<a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a> |                  |--------------------------------------------------------------&gt;|
-<a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a> |                  |                      |         Render consent screen          |
-<a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a> |                  |&lt;--------------------------------------------------------------|
-<a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a> | Approve          |                      |                        |
-<a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a> |-----------------&gt;|                      |                        |
-<a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a> |                  | Redirect to /callback?code=...&amp;state=...      |
-<a id="__codelineno-1-16" name="__codelineno-1-16" href="#__codelineno-1-16"></a> |                  |&lt;--------------------------------------------------------------|
-<a id="__codelineno-1-17" name="__codelineno-1-17" href="#__codelineno-1-17"></a> |                  | POST /oauth/token (code exchange)             |
-<a id="__codelineno-1-18" name="__codelineno-1-18" href="#__codelineno-1-18"></a> |                  |---------------------&gt;|                        |
+<h2 id="csrf-and-origin-checks">CSRF and Origin checks<a class="headerlink" href="#csrf-and-origin-checks" title="Permanent link">&para;</a></h2>
+<p><code>SameSite=Lax</code> does not stop requests from sibling subdomains, which are
+same-site. theauth-go therefore rejects (403) any POST, PUT, PATCH or DELETE
+that carries cookies when its <code>Origin</code> (or, if absent, <code>Referer</code>) is not
+trusted. Trusted means the <code>BaseURL</code> origin or an entry in
+<code>Config.TrustedOrigins</code>. If neither header is present, a <code>Sec-Fetch-Site</code> of
+<code>same-site</code> or <code>cross-site</code> is rejected.</p>
+<p>Exempt: GET/HEAD/OPTIONS, requests with <code>Authorization: Bearer</code>, and requests
+with no cookies. Set <code>Config.DisableCSRFProtection</code> to opt out.</p>
+<h2 id="secure-cookies">Secure cookies<a class="headerlink" href="#secure-cookies" title="Permanent link">&para;</a></h2>
+<p>Cookies get <code>Secure</code> when <code>Config.SecureCookie</code> is true, <code>BaseURL</code> is https,
+the connection is TLS, or the peer is in <code>TrustedProxies</code> and sent
+<code>X-Forwarded-Proto: https</code>. A plain-http <code>BaseURL</code> (local dev) stays non-Secure.</p>
+<h2 id="behind-a-reverse-proxy">Behind a reverse proxy<a class="headerlink" href="#behind-a-reverse-proxy" title="Permanent link">&para;</a></h2>
+<p><code>X-Forwarded-For</code> and <code>X-Forwarded-Proto</code> are honored only from peers inside
+<code>Config.TrustedProxies</code>. The default is empty, so behind Caddy, nginx or a load
+balancer every client appears as the proxy IP and the per-IP rate limit
+collapses into one shared bucket. List the proxy network:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="nx">TrustedProxies</span><span class="p">:</span><span class="w"> </span><span class="p">[]</span><span class="nx">netip</span><span class="p">.</span><span class="nx">Prefix</span><span class="p">{</span><span class="nx">netip</span><span class="p">.</span><span class="nx">MustParsePrefix</span><span class="p">(</span><span class="s">"10.0.0.0/8"</span><span class="p">)},</span>
 </code></pre></div>
-<p><strong>Advantage:</strong> the browser only ever sees the opaque <code>request_uri</code> handle.
-All sensitive parameters stay server-to-server.</p>
-<h2 id="flow-with-jar-on-top-of-par">Flow with JAR (on top of PAR)<a class="headerlink" href="#flow-with-jar-on-top-of-par" title="Permanent link">&para;</a></h2>
-<p>The <code>/oauth/par</code> body includes a <code>request</code> JWT parameter instead of (or in
-addition to) plain parameters:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>POST /oauth/par
-<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>Content-Type: application/x-www-form-urlencoded
-<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>
-<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>client_id=my-client
-<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>&amp;request=eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCJ9...
-</code></pre></div>
-<p>The <code>request</code> JWT is signed with the client's private key. The AS verifies the
-signature against the client's registered public key (<code>jwks_uri</code> or inline
-<code>jwks</code>). A tampered request JWT fails signature verification and is rejected
-with <code>invalid_request_object</code>.</p>
-<p><strong>Advantage:</strong> even if the back-channel POST is intercepted or replayed, the
-parameters cannot be altered without detection.</p>
-<h2 id="fapi-20-baseline">FAPI 2.0 baseline<a class="headerlink" href="#fapi-20-baseline" title="Permanent link">&para;</a></h2>
-<p>FAPI 2.0 (Financial-grade API Security Profile 2.0) requires:</p>
-<ul>
-<li>PAR (RFC 9126): mandatory.</li>
-<li>JAR (RFC 9101): mandatory.</li>
-<li>PKCE S256: mandatory (already mandatory in theauth-go by default).</li>
-<li>JWT-Bearer client authentication (RFC 7523): mandatory (added in v2.4, see
-  <a href="../jwt-bearer/">JWT-Bearer</a>).</li>
-</ul>
-<p>When all three are active, theauth-go satisfies the FAPI 2.0 Security Profile
-baseline.</p>
-<h2 id="enabling-par">Enabling PAR<a class="headerlink" href="#enabling-par" title="Permanent link">&para;</a></h2>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="nx">cfg</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">theauth</span><span class="p">.</span><span class="nx">Config</span><span class="p">{</span>
-<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="w">    </span><span class="nx">AuthorizationServer</span><span class="p">:</span><span class="w"> </span><span class="o">&amp;</span><span class="nx">theauth</span><span class="p">.</span><span class="nx">AuthorizationServerConfig</span><span class="p">{</span>
-<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="w">        </span><span class="nx">Issuer</span><span class="p">:</span><span class="w"> </span><span class="s">"https://auth.example.com"</span><span class="p">,</span>
-<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="w">        </span><span class="nx">PAR</span><span class="p">:</span><span class="w"> </span><span class="o">&amp;</span><span class="nx">theauth</span><span class="p">.</span><span class="nx">PARConfig</span><span class="p">{</span>
-<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="w">            </span><span class="c1">// RequirePAR = true rejects plain /authorize requests that do</span>
-<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="w">            </span><span class="c1">// not reference a request_uri. Recommended for FAPI profiles.</span>
-<a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="w">            </span><span class="nx">RequirePAR</span><span class="p">:</span><span class="w"> </span><span class="kc">false</span><span class="p">,</span>
-<a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a><span class="w">            </span><span class="c1">// RequestURITTL for the request_uri handle. Default: 60s.</span>
-<a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a><span class="w">            </span><span class="nx">RequestURITTL</span><span class="p">:</span><span class="w"> </span><span class="mi">60</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="nx">time</span><span class="p">.</span><span class="nx">Second</span><span class="p">,</span>
-<a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a><span class="w">        </span><span class="p">},</span>
-<a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a><span class="w">    </span><span class="p">},</span>
-<a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a><span class="p">}</span>
-</code></pre></div>
-<p>The AS advertises PAR support in its metadata:
-<code>pushed_authorization_request_endpoint: https://auth.example.com/oauth/par</code>.</p>
-<h2 id="enabling-jar">Enabling JAR<a class="headerlink" href="#enabling-jar" title="Permanent link">&para;</a></h2>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="nx">cfg</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">theauth</span><span class="p">.</span><span class="nx">Config</span><span class="p">{</span>
-<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="w">    </span><span class="nx">AuthorizationServer</span><span class="p">:</span><span class="w"> </span><span class="o">&amp;</span><span class="nx">theauth</span><span class="p">.</span><span class="nx">AuthorizationServerConfig</span><span class="p">{</span>
-<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="w">        </span><span class="nx">Issuer</span><span class="p">:</span><span class="w"> </span><span class="s">"https://auth.example.com"</span><span class="p">,</span>
-<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="w">        </span><span class="nx">JAR</span><span class="p">:</span><span class="w"> </span><span class="o">&amp;</span><span class="nx">theauth</span><span class="p">.</span><span class="nx">JARConfig</span><span class="p">{</span>
-<a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="w">            </span><span class="c1">// AcceptedAlgorithms lists the JWS algorithms the AS accepts on</span>
-<a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="w">            </span><span class="c1">// request objects. Defaults: ES256, RS256, EdDSA. HS* and "none"</span>
-<a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="w">            </span><span class="c1">// are always rejected regardless of this list.</span>
-<a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a><span class="w">            </span><span class="nx">AcceptedAlgorithms</span><span class="p">:</span><span class="w"> </span><span class="p">[]</span><span class="kt">string</span><span class="p">{</span><span class="s">"ES256"</span><span class="p">,</span><span class="w"> </span><span class="s">"PS256"</span><span class="p">},</span>
-<a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a><span class="w">            </span><span class="c1">// RequireJAR = true rejects plain parameter requests; all</span>
-<a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a><span class="w">            </span><span class="c1">// parameters must be inside a signed request JWT.</span>
-<a id="__codelineno-4-11" name="__codelineno-4-11" href="#__codelineno-4-11"></a><span class="w">            </span><span class="nx">RequireJAR</span><span class="p">:</span><span class="w"> </span><span class="kc">false</span><span class="p">,</span>
-<a id="__codelineno-4-12" name="__codelineno-4-12" href="#__codelineno-4-12"></a><span class="w">        </span><span class="p">},</span>
-<a id="__codelineno-4-13" name="__codelineno-4-13" href="#__codelineno-4-13"></a><span class="w">    </span><span class="p">},</span>
-<a id="__codelineno-4-14" name="__codelineno-4-14" href="#__codelineno-4-14"></a><span class="p">}</span>
-</code></pre></div>
-<p>The AS advertises JAR support:
-<code>request_object_signing_alg_values_supported: ["ES256", "PS256"]</code>.</p>
-<h2 id="par-endpoint-reference">PAR endpoint reference<a class="headerlink" href="#par-endpoint-reference" title="Permanent link">&para;</a></h2>
-<p><code>POST /oauth/par</code></p>
-<table>
-<thead>
-<tr>
-<th>Parameter</th>
-<th>Required</th>
-<th>Notes</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>client_id</code></td>
-<td>Yes</td>
-<td>Client identifier.</td>
-</tr>
-<tr>
-<td><code>client_secret</code></td>
-<td>Conditional</td>
-<td>Required for <code>client_secret_post</code> auth method.</td>
-</tr>
-<tr>
-<td><code>request</code></td>
-<td>No (Yes with JAR)</td>
-<td>Signed request JWT (RFC 9101).</td>
-</tr>
-<tr>
-<td>Standard OAuth params</td>
-<td>Yes</td>
-<td><code>response_type</code>, <code>redirect_uri</code>, <code>scope</code>, <code>code_challenge</code>, <code>code_challenge_method</code>, <code>state</code>.</td>
-</tr>
-</tbody>
-</table>
-<p>Response (200 OK):</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="p">{</span>
-<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="w">  </span><span class="nt">"request_uri"</span><span class="p">:</span><span class="w"> </span><span class="s2">"urn:ietf:params:oauth:request_uri:abc123xyz"</span><span class="p">,</span>
-<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="w">  </span><span class="nt">"expires_in"</span><span class="p">:</span><span class="w"> </span><span class="mi">60</span>
-<a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="p">}</span>
-</code></pre></div>
-<p>Then redirect the user to:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>GET /oauth/authorize?client_id=my-client&amp;request_uri=urn:ietf:params:oauth:request_uri:abc123xyz
-</code></pre></div>
-<h2 id="see-also">See also<a class="headerlink" href="#see-also" title="Permanent link">&para;</a></h2>
-<ul>
-<li><a href="../jwt-bearer/">JWT-Bearer client auth and grants</a></li>
-<li><a href="../authorization-server/">Authorization Server concepts</a></li>
-<li><a href="../../reference/configuration/">Configuration reference</a></li>
-<li>RFC 9126: OAuth 2.0 Pushed Authorization Requests</li>
-<li>RFC 9101: The OAuth 2.0 JWT-Secured Authorization Request (JAR)</li>
-</ul>
+<p>A startup warning is logged when the list is empty; set
+<code>SuppressTrustedProxiesWarning</code> if the server is exposed directly.</p>
 
 
 

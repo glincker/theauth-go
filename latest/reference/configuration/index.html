@@ -1045,6 +1045,90 @@
   
   
     <li class="md-nav__item">
+      <a href="../../guides/api-tokens/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API Tokens and Device Login
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guides/cli-login/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CLI Login
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guides/oauth-hardening-and-auth-events/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    OAuth Hardening and Auth Events
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../guides/opentelemetry-tracing/" class="md-nav__link">
         
   
@@ -1081,6 +1165,34 @@
     
   
     Stream Audit Logs to Splunk
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guides/sqlite-storage/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Use the SQLite Backend
   
 
     
@@ -1720,6 +1832,34 @@
     
   
     Threat Model
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../security/http-security/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    HTTP Security
   
 
     
@@ -2390,13 +2530,13 @@
 <td><code>SecureCookie</code></td>
 <td><code>bool</code></td>
 <td><code>false</code></td>
-<td>Set to <code>true</code> in production (requires HTTPS).</td>
+<td>Forces <code>Secure</code> on every cookie. When false, <code>Secure</code> is still set per request if <code>BaseURL</code> is https, the connection is TLS, or a <code>TrustedProxies</code> peer sent <code>X-Forwarded-Proto: https</code>.</td>
 </tr>
 <tr>
 <td><code>SuppressSecureCookieWarning</code></td>
 <td><code>bool</code></td>
 <td><code>false</code></td>
-<td>Silence the startup warning when <code>SecureCookie</code> is false (useful in local dev).</td>
+<td>Silence the startup warning when <code>SecureCookie</code> is false and <code>BaseURL</code> is not https (useful in local dev).</td>
 </tr>
 </tbody>
 </table>
@@ -2427,7 +2567,25 @@
 <td><code>TrustedProxies</code></td>
 <td><code>[]netip.Prefix</code></td>
 <td><code>nil</code></td>
-<td>Reverse-proxy networks whose <code>X-Forwarded-For</code> is trusted. Default: no XFF trust.</td>
+<td>Reverse-proxy networks whose <code>X-Forwarded-For</code> is trusted. Default: no XFF trust. Also gates <code>X-Forwarded-Proto</code>. See <a href="../../security/http-security/">HTTP security</a>.</td>
+</tr>
+<tr>
+<td><code>SuppressTrustedProxiesWarning</code></td>
+<td><code>bool</code></td>
+<td><code>false</code></td>
+<td>Silence the startup warning logged when <code>TrustedProxies</code> is empty.</td>
+</tr>
+<tr>
+<td><code>TrustedOrigins</code></td>
+<td><code>[]string</code></td>
+<td><code>nil</code></td>
+<td>Extra origins allowed to send cookie-authenticated state-changing requests. The <code>BaseURL</code> origin is always trusted.</td>
+</tr>
+<tr>
+<td><code>DisableCSRFProtection</code></td>
+<td><code>bool</code></td>
+<td><code>false</code></td>
+<td>Turn off the Origin/Referer check.</td>
 </tr>
 </tbody>
 </table>

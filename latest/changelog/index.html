@@ -1043,6 +1043,90 @@
   
   
     <li class="md-nav__item">
+      <a href="../guides/api-tokens/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API Tokens and Device Login
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../guides/cli-login/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CLI Login
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../guides/oauth-hardening-and-auth-events/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    OAuth Hardening and Auth Events
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../guides/opentelemetry-tracing/" class="md-nav__link">
         
   
@@ -1079,6 +1163,34 @@
     
   
     Stream Audit Logs to Splunk
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../guides/sqlite-storage/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Use the SQLite Backend
   
 
     
@@ -1501,6 +1613,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../security/http-security/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    HTTP Security
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../security/releases/" class="md-nav__link">
         
   
@@ -1877,6 +2017,119 @@
 <a href="https://keepachangelog.com/en/1.1.0/">Keep a Changelog</a> and the project
 adheres to <a href="https://semver.org/">Semantic Versioning</a> from v1.0 forward.</p>
 <h2 id="unreleased">[Unreleased]<a class="headerlink" href="#unreleased" title="Permanent link">&para;</a></h2>
+<h3 id="added">Added<a class="headerlink" href="#added" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>SQLite capability parity.</strong> <code>storage/sqlite</code> now implements
+  <code>APITokenStorage</code>, <code>DeviceCodeStorage</code>, <code>SessionManagementStorage</code>,
+  <code>SessionLinkStorage</code>, <code>TOTPReplayStorage</code>, <code>UserCountStorage</code>,
+  <code>WebAuthnRenameStorage</code> and <code>RecoveryCodeStorage</code>, with atomic single-use
+  claims for device codes and session links. Migrations 0006 to 0008.</li>
+<li>
+<p><strong>Shared login throttle for SQLite.</strong> <code>Store.ThrottleStore</code> persists
+  throttle counters. New optional <code>LoginThrottleCASStore</code> lets the limiter
+  retry on conflict across processes instead of last-writer-wins.</p>
+</li>
+<li>
+<p><strong><code>clientauth</code> package.</strong> Client side of the device grant for host CLIs:
+  <code>DeviceLogin</code> (polling with <code>slow_down</code>, denial and expiry handling), a 0600
+  <code>FileStore</code> plus an injectable <code>KeychainStore</code>, and a <code>Client</code> that attaches
+  the bearer token and returns <code>ErrReloginRequired</code> on expiry or 401. See
+  <code>examples/cli-login</code> and the CLI Login guide.</p>
+</li>
+<li>
+<p><strong>Agent identity on API tokens.</strong> <code>MintAgentToken</code> mints a short-lived
+  <code>kind=agent</code> token for a human; abilities are the intersection of the
+  agent's allowed set and the user's current abilities, re-evaluated per
+  request. <code>APIToken</code> gains <code>Kind</code>, <code>AgentName</code>, <code>DelegatedBy</code> (shown in
+  listings and <code>POST /auth/tokens</code>), <code>Principal.ActorChain</code> records agent and
+  human, and audit events under an agent token carry both. <code>RegisterAgent</code>
+  creates an OAuth agent plus its delegation grant in one call. See
+  <code>docs/AGENT-IDENTITY.md</code>.</p>
+</li>
+<li><strong>Revocation watcher.</strong> <code>RevocationBus</code> (in-process default, pluggable for
+  Postgres NOTIFY or Redis), <code>SubscribeRevocations</code>, <code>NotifyOwnerDisabled</code>,
+  <code>WatchRevocation</code> and <code>WatchRevocationMiddleware</code> cancel long-lived
+  requests within seconds of a session, token, agent, credential or
+  delegation revoke. Reuses <code>WatchSession</code> for session polling.</li>
+</ul>
+<h3 id="security">Security<a class="headerlink" href="#security" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Login throttle.</strong> Password signin is now gated before any credential work
+  by per (client IP, normalized email) exponential backoff after a grace
+  period, plus a per-user lockout that auto-expires and can be cleared with
+  <code>TheAuth.UnlockUser</code>. Unknown and known accounts take the same path. On by
+  default; tune or disable with <code>Config.LoginThrottle</code>, supply a persistent
+  <code>LoginThrottleStore</code> to share state across processes. Refusals return 429
+  with a <code>Retry-After</code> header and code <code>rate_limited</code> or <code>account_locked</code>.</li>
+<li><strong>MFA hardening.</strong> TOTP codes are single use: the last accepted time-step is
+  recorded per user and replays are rejected (RFC 6238 section 5.2). TOTP and
+  recovery-code guesses are now capped per user, not per pending session, so
+  re-entering the password for fresh pending sessions no longer resets the
+  budget. Optional <code>TOTPReplayStorage</code> makes the step durable; without it the
+  step is held in process memory.</li>
+<li><strong>First-run bootstrap.</strong> <code>Config.Bootstrap</code> closes public signup and requires
+  a one-time setup token (generated and logged at startup, or supplied) to
+  create the first user. New: <code>TheAuth.UserCount</code>, <code>TheAuth.SetupToken</code>,
+  <code>GET /auth/bootstrap/status</code>, <code>TheAuth.ResetPasswordAdmin</code> for a
+  recover-admin command, and <code>BootstrapConfig.OnFirstUser</code> for granting roles.
+  Needs the optional <code>UserCountStorage</code> capability.</li>
+<li><strong>Email canonicalization.</strong> Every email entry point (password, magic link,
+  rate-limit key, SAML, SCIM) trims and lowercases, and folds Unicode
+  compatibility forms when <code>Config.EmailNFKC</code> is set. <code>TheAuth.NormalizeEmail</code>
+  exposes the same rule.</li>
+<li><strong>Password policy.</strong> <code>PasswordPolicyConfig</code> gains <code>MinLength</code>, <code>MaxBytes</code>
+  (default 72, the bcrypt limit; longer passwords now return 400
+  <code>weak_password</code> instead of failing later) and an optional <code>BreachChecker</code>.
+  <code>HIBPBreachChecker</code> implements the Have I Been Pwned k-anonymity range API,
+  is off by default and fails open on network errors.</li>
+</ul>
+<h3 id="changed">Changed<a class="headerlink" href="#changed" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>JSON error bodies.</strong> Handlers that returned plain-text <code>http.Error</code>
+  bodies now return <code>{"code","message"}</code> JSON with a stable code
+  (<code>bad_request</code>, <code>unauthorized</code>, <code>forbidden</code>, <code>not_found</code>, <code>conflict</code>,
+  <code>rate_limited</code>, <code>internal_error</code>). Status codes are unchanged. Clients that
+  string-matched the old plain-text body must switch to the <code>code</code> field. The
+  OAuth provider and authorization server handlers are not yet converted.</li>
+<li>
+<p><code>go.mod</code>: <code>golang.org/x/text</code> is now a direct dependency (NFKC).</p>
+</li>
+<li>
+<p><strong>OAuth login CSRF closed with a real browser binding.</strong> The <code>/start</code> cookie
+  now carries a secret distinct from the <code>state</code> parameter; the server stores
+  its hash and verifies it in constant time at <code>/callback</code>. State is burned on
+  any failed check. Behavior change: the <code>theauth_oauth_state</code> cookie value no
+  longer equals the <code>state</code> query parameter.</p>
+</li>
+<li><strong>Existing accounts are no longer linked by an unverified provider email.</strong>
+  A callback whose email matches an existing user now fails unless the
+  provider marks the email verified. Provider emails are lower-cased and
+  trimmed before lookup (no more case-split shadow accounts).</li>
+</ul>
+<h3 id="added_1">Added<a class="headerlink" href="#added_1" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong><code>Config.OAuth</code> (<code>OAuthConfig</code>).</strong> Pluggable <code>OAuthStateStore</code> (in-memory
+  default with expiry sweep), <code>StateTTL</code>, a <code>return_to</code> allow-list, and a
+  signup policy (<code>open</code> default, <code>closed</code>, <code>allowed_domains</code>, <code>invite</code>). The
+  default stays open so v2 callers are unchanged.</li>
+<li><strong><code>provider/oidc</code>.</strong> Generic OIDC provider with issuer discovery, PKCE,
+  nonce and full ID token verification. New optional <code>NonceProvider</code>
+  interface; <code>ProviderToken.IDToken</code> field.</li>
+<li><strong>Passkey policy.</strong> <code>WebAuthnConfig.RequireUserVerification</code> and
+  <code>CloneWarning</code> (<code>reject</code> default, <code>flag</code>). RP ID stays config-only.</li>
+<li><strong><code>Config.AuthEventSink</code>.</strong> PII-minimal <code>AuthEvent</code> stream (user id plus IP
+  prefix) for login, MFA, password, passkey, TOTP, session and token events,
+  plus <code>RecordTokenMinted</code> / <code>RecordTokenRevoked</code> hook points and
+  <code>AuthEventChannelSink</code>. Audit log gained <code>login.failed</code>, <code>mfa.verified</code>,
+  <code>mfa.failed</code>, <code>passkey.renamed</code>, <code>passkey.clone_warning</code>,
+  <code>totp.recovery_regenerated</code>, <code>token.minted</code>, <code>token.revoked</code>; client IP and
+  user agent are now attached to every audited request.</li>
+<li><strong>Endpoints.</strong> <code>GET /auth/totp</code>, <code>POST /auth/totp/recovery-codes</code>,
+  <code>PATCH /auth/webauthn/credentials/{id}</code>; <code>DELETE /auth/totp</code> is covered for
+  both slash forms. New optional storage capabilities
+  <code>WebAuthnRenameStorage</code> and <code>RecoveryCodeStorage</code> (memory, Postgres, MySQL)
+  with <code>storagetest.RunMFACaps</code>.</li>
+</ul>
 <h3 id="fixed">Fixed<a class="headerlink" href="#fixed" title="Permanent link">&para;</a></h3>
 <ul>
 <li><strong>Synced-passkey login failure (backup-eligible flag).</strong> WebAuthn login
@@ -1896,12 +2149,100 @@ adheres to <a href="https://semver.org/">Semantic Versioning</a> from v1.0 forwa
   surfaced to the client) for diagnosability. Found via production log
   analysis from a consuming application, not this repo's issue tracker.</li>
 </ul>
-<h3 id="added">Added<a class="headerlink" href="#added" title="Permanent link">&para;</a></h3>
+<h3 id="added_2">Added<a class="headerlink" href="#added_2" title="Permanent link">&para;</a></h3>
 <ul>
-<li><strong><code>Storage.UpdateWebAuthnBackupFlags</code>.</strong> New storage method backing the
+<li>
+<p><strong><code>storage/sqlite</code> adapter (separate module).</strong> Pure Go (<code>modernc.org/sqlite</code>)
+  storage for <code>CoreStorage</code> plus the OAuthAccount, WebAuthn, TOTP and Audit
+  capabilities. <code>New(db)</code> wraps a caller-owned <code>*sql.DB</code> and refuses a database
+  with foreign keys off. <code>Migrations()</code> exports numbered forward-only <code>.sql</code>
+  files for a host migrator, <code>Migrate</code> is an optional standalone runner with its
+  own version table, and <code>WithTablePrefix</code> keeps the tables clear of host ones.
+  <code>SweepExpired</code> is a method for a host ticker. Passes <code>storagetest.RunCore</code>,
+  <code>RunWebAuthn</code>, <code>RunTOTP</code> and <code>RunAudit</code> against a temp-file WAL database,
+  including concurrent access. Organizations, SAML, SCIM and RBAC are not
+  implemented and return <code>ErrStorageMissingCapability</code>.</p>
+</li>
+<li>
+<p><strong>Scoped API tokens and the RFC 8628 device grant.</strong> New <code>Config.APITokens</code>
+  (backed by the optional <code>APITokenStorage</code> and <code>DeviceCodeStorage</code>
+  capabilities; the <code>Storage</code> method set is unchanged). Tokens are opaque,
+  shown once, stored only as a SHA-256 hash, carry caller-defined abilities
+  plus a reserved exclusive <code>root</code>, always expire, and record <code>last_used_at</code>.
+  Every token has an owner (a user or a service account); a user lists and
+  revokes only their own tokens, an admin can manage all. Tokens stop working
+  when the owner is deleted or reported inactive, and abilities are clamped to
+  the owner's current abilities on every request. <code>RequireAbility(name)</code>
+  accepts a session or a bearer token. Routes: <code>/auth/tokens</code> (POST, GET,
+  DELETE), <code>/auth/device/code</code>, <code>/auth/device/token</code>, <code>/auth/device/approve</code>.
+  The device grant enforces <code>slow_down</code>, expiry, per-approver user code
+  attempt limits and an atomic compare-and-set redeem, and caps minted token
+  abilities to the approver (root only when requested and held). Memory
+  implementation plus <code>storagetest.RunAPITokens</code> and <code>RunDeviceCodes</code>. See
+  <code>docs-site/docs/guides/api-tokens.md</code>.</p>
+</li>
+<li>
+<p><strong>End-user session management.</strong> <code>GET /auth/sessions</code>,
+  <code>DELETE /auth/sessions/{id}</code>, <code>POST /auth/sessions/revoke-others</code> and
+  <code>POST /auth/password/change</code>, backed by the new optional
+  <code>SessionManagementStorage</code> capability. <code>Config.SessionIdleTimeout</code> and
+  <code>Config.SessionTouchInterval</code> add idle expiry with throttled last-seen
+  writes; <code>Session</code> gains <code>LastSeenAt</code>, <code>ElevatedUntil</code> and <code>CredentialID</code>.
+  The admin session list is now real instead of empty. See <code>docs/SESSIONS.md</code>.</p>
+</li>
+<li><strong>Session rotation on MFA completion and password change.</strong> The TOTP verify
+  and recovery routes now set a new cookie and revoke the pending token.</li>
+<li><strong>Step-up re-auth.</strong> <code>POST /auth/step-up</code> (password, TOTP or passkey),
+  <code>RequireRecentAuth(maxAge)</code> and <code>WatchSession</code> /
+  <code>WatchSessionMiddleware</code> for re-checking long-lived streams.</li>
+<li><strong>Programmatic session links.</strong> <code>Config.SessionLinks</code>, <code>MintSessionLink</code>,
+  <code>ConsumeSessionLink</code>, <code>POST /auth/session-link/consume</code> and the optional
+  <code>SessionLinkStorage</code> capability. Sessions tied to an upstream credential are
+  re-checked through <code>CredentialChecker</code> on every use, and
+  <code>RevokeSessionsByCredential</code> cuts them at once.</li>
+<li><code>storagetest.RunSessionManagement</code> contract suite; the memory adapter
+  implements both new capabilities.</li>
+<li>
+<p><strong>Storage capability interfaces and <code>Config.CoreStorage</code>.</strong> <code>Storage</code> is now
+  the embedding of small capability interfaces (<code>UserStorage</code>,
+  <code>SessionStorage</code>, <code>MagicLinkStorage</code>, <code>PasswordStorage</code>,
+  <code>OAuthAccountStorage</code>, <code>WebAuthnStorage</code>, <code>TOTPStorage</code>,
+  <code>OrganizationStorage</code>, <code>SAMLStorage</code>, <code>SCIMStorage</code>, <code>RBACStorage</code>,
+  <code>AuditStorage</code>) with an identical method set, so existing adapters and
+  callers compile unchanged. <code>Config.CoreStorage</code> accepts an adapter that
+  implements only users, sessions, magic links and passwords; <code>New</code> returns
+  the new <code>ErrStorageMissingCapability</code>, naming the feature and capability,
+  when an enabled feature needs more. <code>storagetest</code> gains <code>RunCore</code>,
+  <code>RunWebAuthn</code>, <code>RunTOTP</code>, <code>RunAudit</code>, <code>RunRBAC</code> and <code>RunOAuthServer</code>;
+  <code>storagetest.Run</code> still runs everything.</p>
+</li>
+<li>
+<p><strong><code>(*TheAuth).Handler()</code>.</strong> Returns an <code>http.Handler</code> serving every route
+  <code>Mount</code> registers, so <code>net/http</code> ServeMux users need no chi import.
+  <code>examples/stdlib-app</code> now uses it.</p>
+</li>
+<li><strong>CSRF / Origin protection.</strong> Cookie-authenticated POST/PUT/PATCH/DELETE
+  requests whose <code>Origin</code> (or <code>Referer</code>) is not the <code>BaseURL</code> origin or in the
+  new <code>Config.TrustedOrigins</code> get 403, closing the sibling-subdomain gap that
+  <code>SameSite=Lax</code> leaves. Bearer requests and GET/HEAD/OPTIONS are exempt.
+  Opt out with <code>Config.DisableCSRFProtection</code>.</li>
+<li><strong>Automatic <code>Secure</code> cookies.</strong> <code>Secure</code> is now set per request when
+  <code>BaseURL</code> is https, the connection is TLS, or a <code>TrustedProxies</code> peer sent
+  <code>X-Forwarded-Proto: https</code>. <code>Config.SecureCookie: true</code> still forces it.
+  Behavior change: an https <code>BaseURL</code> with <code>SecureCookie: false</code> now yields
+  Secure cookies.</li>
+<li>
+<p><strong><code>TrustedProxies</code> startup warning.</strong> A WARN is logged when it is empty
+  (silence with <code>Config.SuppressTrustedProxiesWarning</code>); behind a proxy an
+  empty list collapses the per-IP rate-limit bucket. See the new HTTP security
+  doc.</p>
+</li>
+<li>
+<p><strong><code>Storage.UpdateWebAuthnBackupFlags</code>.</strong> New storage method backing the
   login-time reconciliation write for legacy WebAuthn credentials. Implemented
   across the Postgres, MySQL, and in-memory backends and covered by the shared
-  <code>storagetest</code> conformance suite.</li>
+  <code>storagetest</code> conformance suite.</p>
+</li>
 </ul>
 <h2 id="250-2026-07-14">[2.5.0] - 2026-07-14<a class="headerlink" href="#250-2026-07-14" title="Permanent link">&para;</a></h2>
 <p>Stable release graduating v2.5.0-rc.1. Completes the <code>Config.LifecycleHooks</code>
@@ -1909,7 +2250,7 @@ surface (#76) with all six hooks fully wired, fixes a real bug where the
 batteries-included <code>Mount()</code> HTTP routes bypassed hook dispatch entirely for
 password/TOTP/WebAuthn, and closes out a batch of storage-layer correctness
 fixes across Postgres and MySQL.</p>
-<h3 id="added_1">Added<a class="headerlink" href="#added_1" title="Permanent link">&para;</a></h3>
+<h3 id="added_3">Added<a class="headerlink" href="#added_3" title="Permanent link">&para;</a></h3>
 <ul>
 <li><strong><code>Config.LifecycleHooks</code> fully wired (#76).</strong> <code>OnSignup</code> now also fires
   from SAML signup and a user's first WebAuthn credential (passkey
@@ -1962,7 +2303,7 @@ fixes across Postgres and MySQL.</p>
 <h2 id="250-rc1-2026-06-22">[2.5.0-rc.1] - 2026-06-22<a class="headerlink" href="#250-rc1-2026-06-22" title="Permanent link">&para;</a></h2>
 <p>The "consumer feedback" release. Closes the three highest-impact friction points raised in the 2026-06-22 consumer-feedback session: the hook surface for lifecycle events, opt-in automatic tenant provisioning, and a unified RFC 7807 error envelope across all auth/RBAC middleware. All additions are fully additive: downstream code compiles unchanged.</p>
 <p>This is a release candidate so consumers can road-test the new surface (LifecycleHooks contract, TenancyConfig auto-provisioning, error envelope shape) before the stable v2.5.0 tag. The remaining hook wiring (passkey, SAML, OnPasswordChange, OnMFAEnabled, OnTokenIssued, OnOrgSwitch) and the selective re-exports work (#79) ship in subsequent v2.5.x patches without API change.</p>
-<h3 id="added_2">Added<a class="headerlink" href="#added_2" title="Permanent link">&para;</a></h3>
+<h3 id="added_4">Added<a class="headerlink" href="#added_4" title="Permanent link">&para;</a></h3>
 <ul>
 <li><strong><code>Config.LifecycleHooks</code> surface (#76, partial).</strong> New optional hook bundle
   lets consumers react to authentication-lifecycle events without forking
@@ -2020,7 +2361,7 @@ A new MySQL 8.x backend, a public <code>storagetest</code> contract suite, CIBA 
 authentication (RFC 9509), and a CLI migration tool for Cognito and Auth0 round
 out the release. All additions are fully additive: downstream code compiles
 unchanged.</p>
-<h3 id="added_3">Added<a class="headerlink" href="#added_3" title="Permanent link">&para;</a></h3>
+<h3 id="added_5">Added<a class="headerlink" href="#added_5" title="Permanent link">&para;</a></h3>
 <ul>
 <li><strong>MySQL 8.x storage backend (#62).</strong> <code>storage/mysql</code> implements <code>theauth.Storage</code>
   and <code>OAuthServerStorage</code> with full parity with the existing postgres backend.
@@ -2142,7 +2483,7 @@ unchanged.</p>
   window closes.</p>
 </li>
 </ul>
-<h3 id="changed">Changed<a class="headerlink" href="#changed" title="Permanent link">&para;</a></h3>
+<h3 id="changed_1">Changed<a class="headerlink" href="#changed_1" title="Permanent link">&para;</a></h3>
 <ul>
 <li>
 <p><strong><code>AuthorizationServerConfig</code> extended with new optional sub-configs (additive).</strong>
@@ -2196,7 +2537,7 @@ unchanged.</p>
   on every push to <code>main</code>. Build locally: <code>cd docs-site &amp;&amp; mkdocs build --strict</code>.</p>
 </li>
 </ul>
-<h3 id="security">Security<a class="headerlink" href="#security" title="Permanent link">&para;</a></h3>
+<h3 id="security_1">Security<a class="headerlink" href="#security_1" title="Permanent link">&para;</a></h3>
 <ul>
 <li>
 <p><strong>Supply chain: goreleaser + cosign + SLSA (#57).</strong> Every release artifact
@@ -2221,7 +2562,7 @@ features land here that close the gap with Auth0, Clerk, and Better-Auth:
 account linking with mandatory step-up, eight new built-in OAuth providers
 (12 total), and pluggable SIEM streaming sinks for enterprise audit log
 shipping. Public API stays additive; downstream code compiles unchanged.</p>
-<h3 id="added_4">Added<a class="headerlink" href="#added_4" title="Permanent link">&para;</a></h3>
+<h3 id="added_6">Added<a class="headerlink" href="#added_6" title="Permanent link">&para;</a></h3>
 <ul>
 <li><strong>Account linking and identity merge (#55).</strong> Users can now bind a new
   authentication method to an existing account, or merge two accounts into
@@ -2292,7 +2633,7 @@ shipping. Public API stays additive; downstream code compiles unchanged.</p>
     option for per-sink PII stripping (stricter than the default).</li>
 <li>New stats field: <code>Stats.AuditSinkFailed uint64</code>.</li>
 </ul>
-<h3 id="changed_1">Changed<a class="headerlink" href="#changed_1" title="Permanent link">&para;</a></h3>
+<h3 id="changed_2">Changed<a class="headerlink" href="#changed_2" title="Permanent link">&para;</a></h3>
 <ul>
 <li><strong>Stats counters expanded.</strong> <code>Stats.AuditSinkFailed</code> added; existing
   counters unchanged. Per the additive-fields contract, downstream code
@@ -2304,7 +2645,7 @@ features (CIMD, DPoP, observability adapters), four security closures, four perf
 items, +175pp of direct handler coverage on two highest-blast-radius packages,
 and an architectural cleanup that brings <code>theauth.go</code> from 1,171 LOC under the
 500 LOC ceiling. Public API stays byte-stable; every addition is additive.</p>
-<h3 id="added_5">Added<a class="headerlink" href="#added_5" title="Permanent link">&para;</a></h3>
+<h3 id="added_7">Added<a class="headerlink" href="#added_7" title="Permanent link">&para;</a></h3>
 <ul>
 <li>
 <p><strong>OAuth Client ID Metadata Documents (CIMD) per MCP spec 2025-11-25 (#42).</strong>
@@ -2377,7 +2718,7 @@ and an architectural cleanup that brings <code>theauth.go</code> from 1,171 LOC 
   <code>errors.Is(err, theauth.ErrAuthorizationServerNotConfigured)</code>.</p>
 </li>
 </ul>
-<h3 id="changed_2">Changed<a class="headerlink" href="#changed_2" title="Permanent link">&para;</a></h3>
+<h3 id="changed_3">Changed<a class="headerlink" href="#changed_3" title="Permanent link">&para;</a></h3>
 <ul>
 <li>
 <p><strong><code>theauth.go</code> LOC: 1,171 -&gt; 383 (#50).</strong> Wiring extracted to <code>wiring.go</code>,
@@ -2492,7 +2833,7 @@ and an architectural cleanup that brings <code>theauth.go</code> from 1,171 LOC 
   <code>stdlib-app</code>, <code>observability-otel</code>, <code>observability-prom</code>.</p>
 </li>
 </ul>
-<h3 id="security_1">Security<a class="headerlink" href="#security_1" title="Permanent link">&para;</a></h3>
+<h3 id="security_2">Security<a class="headerlink" href="#security_2" title="Permanent link">&para;</a></h3>
 <ul>
 <li>
 <p><strong>N1 (security re-audit).</strong> Cache invalidation gap: revoked / suspended

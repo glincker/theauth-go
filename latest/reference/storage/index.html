@@ -1045,6 +1045,90 @@
   
   
     <li class="md-nav__item">
+      <a href="../../guides/api-tokens/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API Tokens and Device Login
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guides/cli-login/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CLI Login
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guides/oauth-hardening-and-auth-events/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    OAuth Hardening and Auth Events
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../guides/opentelemetry-tracing/" class="md-nav__link">
         
   
@@ -1081,6 +1165,34 @@
     
   
     Stream Audit Logs to Splunk
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guides/sqlite-storage/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Use the SQLite Backend
   
 
     
@@ -1352,6 +1464,17 @@
     <span class="md-ellipsis">
       
         In-tree adapters
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#capability-interfaces-and-corestorage" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Capability interfaces and CoreStorage
       
     </span>
   </a>
@@ -1649,6 +1772,34 @@
     
   
     Threat Model
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../security/http-security/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    HTTP Security
   
 
     
@@ -2030,6 +2181,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#capability-interfaces-and-corestorage" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Capability interfaces and CoreStorage
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#extension-interface-oauthserverstorage" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2220,6 +2382,55 @@
 </table>
 <p>All adapters expose <code>New(...)</code> constructors that return a <code>*Store</code> satisfying
 <code>theauth.Storage</code>.</p>
+<h2 id="capability-interfaces-and-corestorage">Capability interfaces and <code>CoreStorage</code><a class="headerlink" href="#capability-interfaces-and-corestorage" title="Permanent link">&para;</a></h2>
+<p><code>Storage</code> is the embedding of small capability interfaces, so an adapter can implement only what the enabled features need.</p>
+<table>
+<thead>
+<tr>
+<th>Interface</th>
+<th>Needed when</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>UserStorage</code>, <code>SessionStorage</code>, <code>MagicLinkStorage</code>, <code>PasswordStorage</code></td>
+<td>Always (together they are <code>CoreStorage</code>)</td>
+</tr>
+<tr>
+<td><code>OAuthAccountStorage</code></td>
+<td><code>Config.Providers</code> or <code>Config.AccountUX</code></td>
+</tr>
+<tr>
+<td><code>WebAuthnStorage</code></td>
+<td><code>Config.WebAuthn</code> or <code>Config.AccountUX</code></td>
+</tr>
+<tr>
+<td><code>TOTPStorage</code></td>
+<td><code>Config.TOTP</code> or <code>Config.AccountUX</code></td>
+</tr>
+<tr>
+<td><code>OrganizationStorage</code></td>
+<td><code>Config.Organizations</code></td>
+</tr>
+<tr>
+<td><code>SAMLStorage</code></td>
+<td><code>Config.SAML</code></td>
+</tr>
+<tr>
+<td><code>SCIMStorage</code></td>
+<td><code>Config.SCIM</code></td>
+</tr>
+<tr>
+<td><code>RBACStorage</code></td>
+<td><code>Config.RBAC</code></td>
+</tr>
+<tr>
+<td><code>AuditStorage</code></td>
+<td><code>Config.Audit</code></td>
+</tr>
+</tbody>
+</table>
+<p>Set <code>Config.CoreStorage</code> instead of <code>Config.Storage</code> (exactly one of the two) to use a smaller adapter. <code>New</code> asserts each enabled feature's capability and returns <code>ErrStorageMissingCapability</code>, naming the feature and interface, when it is missing. Verify an adapter per capability with <code>storagetest.RunCore</code>, <code>RunWebAuthn</code>, <code>RunTOTP</code>, <code>RunAudit</code>, <code>RunRBAC</code> and <code>RunOAuthServer</code>; <code>storagetest.Run</code> runs them all.</p>
 <h2 id="extension-interface-oauthserverstorage">Extension interface: <code>OAuthServerStorage</code><a class="headerlink" href="#extension-interface-oauthserverstorage" title="Permanent link">&para;</a></h2>
 <p>When <code>Config.AuthorizationServer</code> is set, the storage adapter must also satisfy <code>OAuthServerStorage</code>. This interface adds methods for OAuth clients, authorization codes, refresh tokens, JWKS keys, agents, and delegation grants.</p>
 <p>Both in-tree adapters satisfy <code>OAuthServerStorage</code> when the OAuth 2.1 AS migrations have been applied.</p>
