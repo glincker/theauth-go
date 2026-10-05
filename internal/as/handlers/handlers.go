@@ -226,7 +226,7 @@ func (h *Handler) handleAuthorize(w http.ResponseWriter, r *http.Request) {
 			http.Redirect(w, r, h.svc.Cfg.LoginURL+"?next="+next, http.StatusFound)
 			return
 		}
-		writeAuthorizeError(w, r, req, err)
+		h.writeAuthorizeError(w, r, req, err)
 		return
 	}
 	http.Redirect(w, r, res.RedirectURL, http.StatusFound)
@@ -305,9 +305,10 @@ func (h *Handler) handlePAR(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(resp)
 }
 
-func writeAuthorizeError(w http.ResponseWriter, r *http.Request, req internalas.AuthorizeRequest, err error) {
+func (h *Handler) writeAuthorizeError(w http.ResponseWriter, r *http.Request, req internalas.AuthorizeRequest, err error) {
 	code := mapOAuthErrorCode(err)
-	if req.RedirectURI != "" && code != oauthErrInvalidRequest && code != oauthErrInvalidTarget {
+	// RFC 6749 4.1.2.1: never redirect to a redirect_uri that is not registered.
+	if req.RedirectURI != "" && h.svc.RedirectURIRegisteredFor(r.Context(), req.ClientID, req.RedirectURI) && code != oauthErrInvalidRequest && code != oauthErrInvalidTarget {
 		u, perr := url.Parse(req.RedirectURI)
 		if perr == nil {
 			qq := u.Query()
