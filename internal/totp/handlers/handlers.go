@@ -10,6 +10,7 @@ package handlers
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"time"
 
@@ -31,6 +32,8 @@ type Service interface {
 	Verify(ctx context.Context, pendingSessionToken, code string) (string, models.Session, error)
 	ConsumeRecoveryCode(ctx context.Context, pendingSessionToken, code string) (string, models.Session, error)
 	Delete(ctx context.Context, userID models.ULID) error
+	Status(ctx context.Context, userID models.ULID) (totp.Status, error)
+	RegenerateRecoveryCodes(ctx context.Context, userID models.ULID) ([]string, error)
 }
 
 // CookieConfig captures the session cookie shape (name, secure, TTL)
@@ -69,6 +72,8 @@ func (h *Handler) Mount(r chi.Router, ipLimit, requireAuth, requirePendingOrFull
 		r.With(ipLimit, requirePendingOrFull).Post("/verify", h.handleVerify)
 		r.With(ipLimit, requirePendingOrFull).Post("/recovery", h.handleRecovery)
 		r.With(requireAuth).Delete("/", h.handleDelete)
+		r.With(requireAuth).Get("/", h.handleStatus)
+		r.With(ipLimit, requireAuth).Post("/recovery-codes", h.handleRegenerate)
 	})
 }
 
@@ -175,4 +180,33 @@ func (h *Handler) setSessionCookie(w http.ResponseWriter, token string) {
 		SameSite: http.SameSiteLaxMode,
 		Expires:  time.Now().Add(h.cookie.TTL),
 	})
+}
+
+func (h *Handler) handleStatus(w http.ResponseWriter, r *http.Request) {
+	user, _ := h.userFromCtx(r)
+	st, err := h.svc.Status(r.Context(), user.ID)
+	if err != nil {
+		httpx.ErrToHTTP(w, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, st)
+}
+
+func (h *Handler) handleRegenerate(w http.ResponseWriter, r *http.Request) {
+	user, _ := h.userFromCtx(r)
+	codes, err := h.svc.RegenerateRecoveryCodes(r.Context(), user.ID)
+	switch {
+	case errors.Is(err, totp.ErrNotEnrolled):
+		http.Error(w, "totp not enrolled", http.StatusConflict)
+		return
+	case errors.Is(err, totp.ErrRecoveryUnsupported):
+		http.Error(w, "recovery code management not supported by storage", http.StatusNotImplemented)
+		return
+	case err != nil:
+		httpx.ErrToHTTP(w, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, struct {
+		RecoveryCodes []string `json:"recoveryCodes"`
+	}{RecoveryCodes: codes})
 }

@@ -6,6 +6,42 @@ adheres to [Semantic Versioning](https://semver.org/) from v1.0 forward.
 
 ## [Unreleased]
 
+### Security
+
+- **OAuth login CSRF closed with a real browser binding.** The `/start` cookie
+  now carries a secret distinct from the `state` parameter; the server stores
+  its hash and verifies it in constant time at `/callback`. State is burned on
+  any failed check. Behavior change: the `theauth_oauth_state` cookie value no
+  longer equals the `state` query parameter.
+- **Existing accounts are no longer linked by an unverified provider email.**
+  A callback whose email matches an existing user now fails unless the
+  provider marks the email verified. Provider emails are lower-cased and
+  trimmed before lookup (no more case-split shadow accounts).
+
+### Added
+
+- **`Config.OAuth` (`OAuthConfig`).** Pluggable `OAuthStateStore` (in-memory
+  default with expiry sweep), `StateTTL`, a `return_to` allow-list, and a
+  signup policy (`open` default, `closed`, `allowed_domains`, `invite`). The
+  default stays open so v2 callers are unchanged.
+- **`provider/oidc`.** Generic OIDC provider with issuer discovery, PKCE,
+  nonce and full ID token verification. New optional `NonceProvider`
+  interface; `ProviderToken.IDToken` field.
+- **Passkey policy.** `WebAuthnConfig.RequireUserVerification` and
+  `CloneWarning` (`reject` default, `flag`). RP ID stays config-only.
+- **`Config.AuthEventSink`.** PII-minimal `AuthEvent` stream (user id plus IP
+  prefix) for login, MFA, password, passkey, TOTP, session and token events,
+  plus `RecordTokenMinted` / `RecordTokenRevoked` hook points and
+  `AuthEventChannelSink`. Audit log gained `login.failed`, `mfa.verified`,
+  `mfa.failed`, `passkey.renamed`, `passkey.clone_warning`,
+  `totp.recovery_regenerated`, `token.minted`, `token.revoked`; client IP and
+  user agent are now attached to every audited request.
+- **Endpoints.** `GET /auth/totp`, `POST /auth/totp/recovery-codes`,
+  `PATCH /auth/webauthn/credentials/{id}`; `DELETE /auth/totp` is covered for
+  both slash forms. New optional storage capabilities
+  `WebAuthnRenameStorage` and `RecoveryCodeStorage` (memory, Postgres, MySQL)
+  with `storagetest.RunMFACaps`.
+
 ### Fixed
 
 - **Synced-passkey login failure (backup-eligible flag).** WebAuthn login

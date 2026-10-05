@@ -107,6 +107,15 @@ type Config struct {
 	// RPID and RPOrigins are mandatory per spec. Leave nil to keep v0.4 behavior.
 	WebAuthn *WebAuthnConfig
 
+	// OAuth tunes OAuth login hardening: state store, return-to allow-list
+	// and signup policy. Nil keeps the defaults documented on OAuthConfig.
+	OAuth *OAuthConfig
+
+	// AuthEventSink, when set, receives every security-relevant
+	// authentication event (login, MFA, password, passkey, TOTP, session,
+	// token) as a PII-minimal AuthEvent. Independent of Config.Audit.
+	AuthEventSink AuthEventSink
+
 	// TOTP enables time-based second-factor enrollment + verification when non-nil.
 	// Requires Config.EncryptionKey (already required by v0.3 OAuth) so the stored
 	// secret is encrypted at rest. New returns an error if TOTP is set without a key.
@@ -254,6 +263,7 @@ type TheAuth struct {
 	encryptionKey     []byte
 	postLoginRedirect string
 	oauthSvc          *internaloauth.Service
+	authEventSink     AuthEventSink
 
 	// WebAuthn (v0.5). webauthnCfg is the original Config.WebAuthn pointer
 	// kept as a nil-signal for mount() and to give the handler access to
@@ -397,6 +407,7 @@ func New(cfg Config) (*TheAuth, error) {
 		encryptionKey:              cfg.EncryptionKey,
 		postLoginRedirect:          cfg.PostLoginRedirect,
 		webauthnCfg:                cfg.WebAuthn,
+		authEventSink:              cfg.AuthEventSink,
 		totpCfg:                    cfg.TOTP,
 		orgsCfg:                    cfg.Organizations,
 		samlCfg:                    cfg.SAML,

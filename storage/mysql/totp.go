@@ -147,6 +147,35 @@ VALUES (?, ?, ?, ?)`,
 	return nil
 }
 
+// CountUnusedRecoveryCodes implements theauth.RecoveryCodeStorage.
+func (s *Store) CountUnusedRecoveryCodes(ctx context.Context, userID theauth.ULID) (int, error) {
+	var n int
+	err := s.db.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM totp_recovery_codes WHERE user_id = ? AND used_at IS NULL`,
+		ulidToBytes(userID)).Scan(&n)
+	return n, err
+}
+
+// ReplaceRecoveryCodes implements theauth.RecoveryCodeStorage.
+func (s *Store) ReplaceRecoveryCodes(ctx context.Context, userID theauth.ULID, codes []theauth.RecoveryCode) error {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+	if _, err := tx.ExecContext(ctx, `DELETE FROM totp_recovery_codes WHERE user_id = ?`, ulidToBytes(userID)); err != nil {
+		return err
+	}
+	for _, c := range codes {
+		if _, err := tx.ExecContext(ctx,
+			`INSERT INTO totp_recovery_codes (id, user_id, code_hash, created_at) VALUES (?, ?, ?, ?)`,
+			ulidToBytes(c.ID), ulidToBytes(c.UserID), c.CodeHash, timeUTC(c.CreatedAt)); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
+}
+
 func (s *Store) ConsumeRecoveryCode(ctx context.Context, userID theauth.ULID, code string, at time.Time) error {
 	rows, err := s.db.QueryContext(ctx, `
 SELECT id, code_hash FROM totp_recovery_codes

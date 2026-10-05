@@ -236,6 +236,12 @@ func TestMemoryStoreContract(t *testing.T) {
 	storagetest.Run(t, New())
 }
 
+// TestMemoryStoreMFACaps runs the optional-capability contract for passkey
+// rename and recovery code management.
+func TestMemoryStoreMFACaps(t *testing.T) {
+	storagetest.RunMFACaps(t, New())
+}
+
 type coreOnlyStore struct{ theauth.CoreStorage }
 
 // TestMemoryCapabilityContracts runs each per-capability entry point on its own fresh store.

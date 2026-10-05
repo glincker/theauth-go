@@ -6,6 +6,7 @@ import (
 
 	"github.com/glincker/theauth-go/crypto"
 	"github.com/glincker/theauth-go/internal/identitylink"
+	"github.com/glincker/theauth-go/internal/ulid"
 )
 
 // ValidateEmailForTest exposes the unexported validateEmail helper for
@@ -151,3 +152,16 @@ func NewRawTokenForTest() (string, error) {
 func HashTokenForTest(token string) []byte {
 	return crypto.HashToken(token)
 }
+
+// SignupWithPasswordForTestStore creates a bare verified user straight in the
+// store, bypassing services, for tests that need a pre-existing account.
+func SignupWithPasswordForTestStore(s interface {
+	CreateUser(ctx context.Context, u User) (User, error)
+}, email string) (*User, string, error) {
+	now := time.Now()
+	u, err := s.CreateUser(context.Background(), User{ID: ulid.New(), Email: email, CreatedAt: now, UpdatedAt: now})
+	return &u, "", err
+}
+
+// OAuthCodeChallengeForTest exposes the PKCE S256 transform.
+func OAuthCodeChallengeForTest(verifier string) string { return crypto.CodeChallenge(verifier) }

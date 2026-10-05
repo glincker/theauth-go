@@ -52,6 +52,9 @@ type virtualAuthenticator struct {
 	credID    []byte
 	priv      *ecdsa.PrivateKey
 	signCount uint32
+	// noUV drops the user-verified flag; freezeCount stops the counter advancing.
+	noUV        bool
+	freezeCount bool
 }
 
 func newVirtualAuthenticator(t *testing.T) *virtualAuthenticator {
@@ -133,7 +136,10 @@ func clientDataJSON(t *testing.T, typ, challenge string) []byte {
 // flags.
 func (va *virtualAuthenticator) registrationBody(t *testing.T, challenge string, backupEligible, backupState bool) []byte {
 	t.Helper()
-	flags := flagUP | flagUV | flagAT
+	flags := flagUP | flagAT
+	if !va.noUV {
+		flags |= flagUV
+	}
 	if backupEligible {
 		flags |= flagBE
 	}
@@ -171,8 +177,13 @@ func (va *virtualAuthenticator) registrationBody(t *testing.T, challenge string,
 // each call so the service's replay guard is satisfied across repeated logins.
 func (va *virtualAuthenticator) assertionBody(t *testing.T, challenge string, userHandle []byte, backupEligible, backupState bool) []byte {
 	t.Helper()
-	va.signCount++
-	flags := flagUP | flagUV
+	if !va.freezeCount {
+		va.signCount++
+	}
+	flags := flagUP
+	if !va.noUV {
+		flags |= flagUV
+	}
 	if backupEligible {
 		flags |= flagBE
 	}

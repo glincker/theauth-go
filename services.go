@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/glincker/theauth-go/internal/agent"
+	internaloauth "github.com/glincker/theauth-go/internal/oauth"
 	internalsaml "github.com/glincker/theauth-go/internal/saml"
 )
 
@@ -127,8 +128,8 @@ func (a *TheAuth) RevokeAgent(ctx context.Context, agentID ULID, reason string) 
 
 // startOAuth delegates the /auth/providers/{name}/start flow to
 // the extracted internal/oauth.Service.
-func (a *TheAuth) startOAuth(ctx context.Context, providerName string) (authURL, state string, err error) {
-	return a.oauthSvc.Start(ctx, providerName)
+func (a *TheAuth) startOAuth(ctx context.Context, providerName, returnTo string) (internaloauth.StartResult, error) {
+	return a.oauthSvc.Start(ctx, providerName, returnTo)
 }
 
 // callbackOAuth delegates the /auth/providers/{name}/callback flow to
@@ -136,11 +137,12 @@ func (a *TheAuth) startOAuth(ctx context.Context, providerName string) (authURL,
 // row was created during this call (third branch of find-or-create) and
 // OnSignin for the session that was just issued. Hook errors and panics
 // are logged but do NOT fail the request.
-func (a *TheAuth) callbackOAuth(ctx context.Context, providerName, code, state, userAgent, ip string) (sessionToken string, user *User, err error) {
-	sessionToken, user, created, err := a.oauthSvc.Callback(ctx, providerName, code, state, userAgent, ip)
+func (a *TheAuth) callbackOAuth(ctx context.Context, providerName, code, state, binding, userAgent, ip string) (internaloauth.CallbackResult, *User, error) {
+	res, user, created, err := a.oauthSvc.Callback(ctx, providerName, code, state, binding, userAgent, ip)
 	if err != nil {
-		return sessionToken, user, err
+		return res, user, err
 	}
+	sessionToken := res.SessionToken
 	if created {
 		a.autoProvisionPersonalOrg(ctx, user, sessionToken)
 		a.fireOnSignup(ctx, user, SignupMethodOAuth)
@@ -148,7 +150,7 @@ func (a *TheAuth) callbackOAuth(ctx context.Context, providerName, code, state, 
 	if sess := a.sessionFromToken(ctx, sessionToken); sess != nil {
 		a.fireOnSignin(ctx, user, sess)
 	}
-	return sessionToken, user, nil
+	return res, user, nil
 }
 
 // ---------- SAML connections + SP-flow forwarders ----------

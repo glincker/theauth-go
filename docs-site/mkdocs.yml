@@ -78,6 +78,7 @@ nav:
   - Guides:
       - Add an OAuth Provider: guides/add-oauth-provider.md
       - Enable WebAuthn Passkeys: guides/webauthn-passkeys.md
+      - OAuth Hardening and Auth Events: guides/oauth-hardening-and-auth-events.md
       - Wire OpenTelemetry Tracing: guides/opentelemetry-tracing.md
       - Stream Audit Logs to Splunk: guides/audit-log-splunk.md
       - Write a Custom Storage Backend: guides/custom-storage-backend.md

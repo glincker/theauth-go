@@ -251,6 +251,7 @@ func (s *Service) Signin(ctx context.Context, emailAddr, password, userAgent, ip
 		// The dummy hash mints once at NewService time; the verify
 		// result is ignored.
 		_, _ = crypto.VerifyPassword(password, s.dummyHash)
+		s.emitLoginFailed(ctx, nil, userAgent, ip, "unknown_user")
 		return "", nil, "", models.NewError(models.CodeInvalidCredentials, "invalid email or password", nil)
 	}
 	if err != nil {
@@ -261,6 +262,7 @@ func (s *Service) Signin(ctx context.Context, emailAddr, password, userAgent, ip
 		// Pay the verify cost against the dummy hash so the timing matches
 		// the genuine wrong-password branch (security audit M6).
 		_, _ = crypto.VerifyPassword(password, s.dummyHash)
+		s.emitLoginFailed(ctx, &user.ID, userAgent, ip, "no_password")
 		return "", nil, "", models.NewError(models.CodeInvalidCredentials, "invalid email or password", nil)
 	}
 	ok, err := crypto.VerifyPassword(password, hash)
@@ -270,6 +272,7 @@ func (s *Service) Signin(ctx context.Context, emailAddr, password, userAgent, ip
 		return "", nil, "", err
 	}
 	if !ok {
+		s.emitLoginFailed(ctx, &user.ID, userAgent, ip, "bad_password")
 		return "", nil, "", models.NewError(models.CodeInvalidCredentials, "invalid email or password", nil)
 	}
 	// v0.5 step-up: when TOTP is enrolled and confirmed for this user, mint
@@ -397,4 +400,13 @@ func (s *Service) Reset(ctx context.Context, token, newPassword string) (models.
 	s.auditEm.EmitAudit(ctx, "password.changed", models.TargetRef{Type: "user", ID: rt.UserID.String()}, nil)
 	slog.Info("theauth: password reset", "user_id", rt.UserID.String())
 	return rt.UserID, nil
+}
+
+func (s *Service) emitLoginFailed(ctx context.Context, userID *models.ULID, userAgent, ip, reason string) {
+	target := models.TargetRef{}
+	if userID != nil {
+		target = models.TargetRef{Type: "user", ID: userID.String()}
+	}
+	s.auditEm.EmitAudit(audit.WithAuditMetadata(ctx, audit.AuditMetadata{IP: ip, UserAgent: userAgent}),
+		"login.failed", target, map[string]any{"auth_method": "password", "reason": reason})
 }

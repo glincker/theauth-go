@@ -10,12 +10,14 @@ package handlers
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"time"
 
 	"github.com/glincker/theauth-go/internal/httpx"
 	"github.com/glincker/theauth-go/internal/models"
+	"github.com/glincker/theauth-go/internal/webauthn"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-webauthn/webauthn/protocol"
 )
@@ -33,6 +35,7 @@ type Service interface {
 	FinishLogin(ctx context.Context, challengeToken string, body io.Reader, ua, ip string) (string, models.Session, error)
 	ListCredentials(ctx context.Context, userID models.ULID) ([]models.WebAuthnCredential, error)
 	DeleteCredential(ctx context.Context, id, userID models.ULID) error
+	RenameCredential(ctx context.Context, id, userID models.ULID, name string) error
 }
 
 // webauthnChallengeCookieName is the short-lived cookie set at /begin
@@ -95,6 +98,7 @@ func (h *Handler) Mount(r chi.Router, ipLimit, requireAuth func(http.Handler) ht
 		r.With(ipLimit).Post("/login/finish", h.handleLoginFinish)
 		r.With(requireAuth).Get("/credentials", h.handleCredentialsList)
 		r.With(requireAuth).Delete("/credentials/{id}", h.handleCredentialsDelete)
+		r.With(requireAuth).Patch("/credentials/{id}", h.handleCredentialsRename)
 	})
 }
 
@@ -215,6 +219,32 @@ func (h *Handler) handleCredentialsDelete(w http.ResponseWriter, r *http.Request
 		return
 	}
 	if err := h.svc.DeleteCredential(r.Context(), id, user.ID); err != nil {
+		httpx.ErrToHTTP(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h *Handler) handleCredentialsRename(w http.ResponseWriter, r *http.Request) {
+	user, _ := h.userFromCtx(r)
+	id, err := httpx.ParseULIDParam(chi.URLParam(r, "id"))
+	if err != nil {
+		http.Error(w, "invalid credential id", http.StatusBadRequest)
+		return
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, 1<<12)
+	var body struct {
+		Name string `json:"name"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		http.Error(w, "invalid body", http.StatusBadRequest)
+		return
+	}
+	if err := h.svc.RenameCredential(r.Context(), id, user.ID, body.Name); err != nil {
+		if errors.Is(err, webauthn.ErrRenameUnsupported) {
+			http.Error(w, "rename not supported by storage", http.StatusNotImplemented)
+			return
+		}
 		httpx.ErrToHTTP(w, err)
 		return
 	}

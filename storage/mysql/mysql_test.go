@@ -60,6 +60,7 @@ func TestMySQLStoreContract(t *testing.T) {
 
 	store := mysql.New(db)
 	storagetest.Run(t, store)
+	storagetest.RunMFACaps(t, store)
 
 	t.Run("UpdateSessionAuthLevelUnknownID", func(t *testing.T) {
 		if err := store.UpdateSessionAuthLevel(ctx, ulid.New(), "full"); !errors.Is(err, storage.ErrNotFound) {

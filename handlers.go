@@ -13,6 +13,7 @@ import (
 
 	ashandlers "github.com/glincker/theauth-go/internal/as/handlers"
 	"github.com/glincker/theauth-go/internal/models"
+	internaloauth "github.com/glincker/theauth-go/internal/oauth"
 	oauthhandlers "github.com/glincker/theauth-go/internal/oauth/handlers"
 	passwordhandlers "github.com/glincker/theauth-go/internal/password/handlers"
 	totphandlers "github.com/glincker/theauth-go/internal/totp/handlers"
@@ -38,7 +39,7 @@ import (
 // in-memory + per-process; replace at the LB layer for multi-instance deploys.
 func (a *TheAuth) Mount(r chi.Router) {
 	r.Group(func(r chi.Router) {
-		r.Use(a.securityMiddleware)
+		r.Use(a.securityMiddleware, a.auditContextMiddleware)
 		a.mountRoutes(r)
 	})
 }
@@ -282,16 +283,16 @@ func (s oauthServiceAdapter) HasProvider(name string) bool {
 
 // Start delegates the /auth/providers/{name}/start flow to
 // *TheAuth.startOAuth.
-func (s oauthServiceAdapter) Start(ctx context.Context, providerName string) (string, string, error) {
-	return s.a.startOAuth(ctx, providerName)
+func (s oauthServiceAdapter) Start(ctx context.Context, providerName, returnTo string) (internaloauth.StartResult, error) {
+	return s.a.startOAuth(ctx, providerName, returnTo)
 }
 
 // Callback delegates the /auth/providers/{name}/callback flow to
 // *TheAuth.callbackOAuth, discarding the *User return (the handler
 // only needs the session token).
-func (s oauthServiceAdapter) Callback(ctx context.Context, providerName, code, state, ua, ip string) (string, error) {
-	tok, _, err := s.a.callbackOAuth(ctx, providerName, code, state, ua, ip)
-	return tok, err
+func (s oauthServiceAdapter) Callback(ctx context.Context, providerName, code, state, binding, ua, ip string) (internaloauth.CallbackResult, error) {
+	res, _, err := s.a.callbackOAuth(ctx, providerName, code, state, binding, ua, ip)
+	return res, err
 }
 
 // passwordServiceAdapter implements internal/password/handlers.Service on
@@ -357,6 +358,14 @@ func (s totpServiceAdapter) ConsumeRecoveryCode(ctx context.Context, pendingSess
 	return s.a.ConsumeRecoveryCode(ctx, pendingSessionToken, code)
 }
 
+func (s totpServiceAdapter) Status(ctx context.Context, userID ULID) (TOTPStatus, error) {
+	return s.a.TOTPStatus(ctx, userID)
+}
+
+func (s totpServiceAdapter) RegenerateRecoveryCodes(ctx context.Context, userID ULID) ([]string, error) {
+	return s.a.RegenerateRecoveryCodes(ctx, userID)
+}
+
 func (s totpServiceAdapter) Delete(ctx context.Context, userID ULID) error {
 	return s.a.totpSvc.Delete(ctx, userID)
 }
@@ -406,6 +415,10 @@ func (s webauthnServiceAdapter) FinishLogin(ctx context.Context, challengeToken 
 
 func (s webauthnServiceAdapter) ListCredentials(ctx context.Context, userID ULID) ([]WebAuthnCredential, error) {
 	return s.a.webauthnSvc.ListCredentials(ctx, userID)
+}
+
+func (s webauthnServiceAdapter) RenameCredential(ctx context.Context, id, userID ULID, name string) error {
+	return s.a.webauthnSvc.RenameCredential(ctx, id, userID, name)
 }
 
 func (s webauthnServiceAdapter) DeleteCredential(ctx context.Context, id, userID ULID) error {

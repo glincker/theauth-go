@@ -342,6 +342,9 @@ func wireServices(a *TheAuth, cfg Config, providers map[string]Provider, sp saml
 	// High-complexity services: TOTP before password (password depends on
 	// totpSvc as its PendingTOTPIssuer).
 	a.totpSvc = internaltotp.NewService(cfg.Storage, a.sessionSvc, a, totpConfigFromRoot(cfg.TOTP), cfg.EncryptionKey)
+	if rc, ok := cfg.storageRaw.(RecoveryCodeStorage); ok {
+		a.totpSvc.SetRecoveryStore(rc)
+	}
 	pwSvc, err := password.NewService(cfg.Storage, cfg.EmailSender, a.sessionSvc, a.magicSvc, a.totpSvc, a, password.Config{
 		BaseURL:     cfg.BaseURL,
 		TOTPEnabled: cfg.TOTP != nil,
@@ -353,6 +356,9 @@ func wireServices(a *TheAuth, cfg Config, providers map[string]Provider, sp saml
 	waSvc, err := internalwebauthn.NewService(cfg.Storage, a.sessionSvc, a, webauthnConfigFromRoot(cfg.WebAuthn))
 	if err != nil {
 		return err
+	}
+	if rn, ok := cfg.storageRaw.(WebAuthnRenameStorage); ok {
+		waSvc.SetRenamer(rn)
 	}
 	a.webauthnSvc = waSvc
 	a.samlSvc = internalsaml.NewService(cfg.Storage, a.sessionSvc, a, samlConfigFromRoot(cfg.SAML, sp.cert, sp.key))
@@ -386,6 +392,7 @@ func wireServices(a *TheAuth, cfg Config, providers map[string]Provider, sp saml
 			oauthSessionAdapter{svc: a.sessionSvc},
 			a,
 			onConflict,
+			oauthConfigFromRoot(cfg.OAuth),
 		)
 	}
 
@@ -462,6 +469,9 @@ func webauthnConfigFromRoot(c *WebAuthnConfig) *internalwebauthn.Config {
 		RPDisplayName: c.RPDisplayName,
 		RPOrigins:     append([]string(nil), c.RPOrigins...),
 		ChallengeTTL:  c.ChallengeTTL,
+
+		RequireUserVerification: c.RequireUserVerification,
+		CloneWarning:            string(c.CloneWarning),
 	}
 }
 

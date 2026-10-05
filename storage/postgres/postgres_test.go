@@ -364,6 +364,7 @@ func TestPostgresStoreContract(t *testing.T) {
 
 	store := New(pool)
 	storagetest.Run(t, store)
+	storagetest.RunMFACaps(t, store)
 
 	t.Run("UpdateAgentLastActiveUnknownID", func(t *testing.T) {
 		if err := store.UpdateAgentLastActive(context.Background(), ulid.New(), time.Now()); !errors.Is(err, storage.ErrNotFound) {
