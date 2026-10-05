@@ -39,6 +39,17 @@ type CASStore interface {
 	CompareAndSwap(ctx context.Context, key string, prev Entry, prevExists bool, next Entry) (bool, error)
 }
 
+// LoginEntryDeleter is an optional Store capability. DeleteLoginEntries
+// removes every per-(IP, identifier) backoff entry for ident regardless of IP,
+// i.e. the keys built by LoginKey. A store ending in the "|"+ident suffix may
+// also clear entries of identifiers that merely end with "|"+ident.
+type LoginEntryDeleter interface {
+	DeleteLoginEntries(ctx context.Context, ident string) error
+}
+
+// LoginKeyPrefix is the key prefix of per-(IP, identifier) backoff entries.
+const LoginKeyPrefix = "login:"
+
 // Config holds every threshold. Zero values are replaced by defaults in
 // WithDefaults.
 type Config struct {
@@ -117,7 +128,7 @@ func New(store Store, cfg Config) *Limiter {
 // SetClock replaces the time source; tests only.
 func (l *Limiter) SetClock(now func() time.Time) { l.now = now }
 
-func loginKey(ip, ident string) string { return "login:" + ip + "|" + ident }
+func loginKey(ip, ident string) string { return LoginKeyPrefix + ip + "|" + ident }
 func userKey(ident string) string      { return "user:" + ident }
 func mfaKey(userID string) string      { return "mfa:" + userID }
 
@@ -208,6 +219,22 @@ func (l *Limiter) UnlockIdentifier(ctx context.Context, ident, userID string) er
 		if err := l.store.Delete(ctx, mfaKey(userID)); err != nil {
 			return fmt.Errorf("throttle: unlock mfa: %w", err)
 		}
+	}
+	return nil
+}
+
+// ClearLoginBackoff drops the backoff entries of ident for every client IP.
+// It needs a Store implementing LoginEntryDeleter; for other stores it is a
+// no-op and the entries age out after Config.ResetAfter.
+func (l *Limiter) ClearLoginBackoff(ctx context.Context, ident string) error {
+	d, ok := l.store.(LoginEntryDeleter)
+	if !ok {
+		return nil
+	}
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if err := d.DeleteLoginEntries(ctx, ident); err != nil {
+		return fmt.Errorf("throttle: clear login backoff: %w", err)
 	}
 	return nil
 }

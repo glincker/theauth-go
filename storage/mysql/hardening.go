@@ -5,15 +5,17 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/glincker/theauth-go/v2"
 )
 
 var (
-	_ theauth.TOTPReplayStorage     = (*Store)(nil)
-	_ theauth.UserCountStorage      = (*Store)(nil)
-	_ theauth.LoginThrottleCASStore = (*ThrottleStore)(nil)
+	_ theauth.TOTPReplayStorage         = (*Store)(nil)
+	_ theauth.UserCountStorage          = (*Store)(nil)
+	_ theauth.LoginThrottleCASStore     = (*ThrottleStore)(nil)
+	_ theauth.LoginThrottleEntryDeleter = (*ThrottleStore)(nil)
 )
 
 // AdvanceTOTPStep records step as the user's last used TOTP step, returning false when it is not strictly newer.
@@ -152,6 +154,18 @@ UPDATE throttle_entries SET failures = ?, last_failure = ?, blocked_until = ?, e
 		return false, fmt.Errorf("mysql: throttle compare and swap: %w", err)
 	}
 	return true, nil
+}
+
+// DeleteLoginEntries removes every login backoff entry for ident across all client IPs.
+func (t *ThrottleStore) DeleteLoginEntries(ctx context.Context, ident string) error {
+	if _, err := t.s.db.ExecContext(ctx, `DELETE FROM throttle_entries WHERE entry_key LIKE ? ESCAPE '!'`, loginEntryPattern(ident)); err != nil {
+		return fmt.Errorf("mysql: throttle delete login entries: %w", err)
+	}
+	return nil
+}
+
+func loginEntryPattern(ident string) string {
+	return "login:%|" + strings.NewReplacer("!", "!!", "%", "!%", "_", "!_").Replace(ident)
 }
 
 // SweepExpired deletes entries whose ExpiresAt is at or before now and returns how many it removed.

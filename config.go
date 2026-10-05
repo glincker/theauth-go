@@ -857,6 +857,10 @@ type LoginThrottleEntry = throttle.Entry
 // lets several processes share counters without losing updates.
 type LoginThrottleCASStore = throttle.CASStore
 
+// LoginThrottleEntryDeleter is the optional LoginThrottleStore capability that
+// lets ResetPasswordAdmin clear an email's backoff entries across all client IPs.
+type LoginThrottleEntryDeleter = throttle.LoginEntryDeleter
+
 // BreachChecker reports whether a password appears in a known breach corpus.
 type BreachChecker = password.BreachChecker
 

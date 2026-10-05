@@ -114,6 +114,9 @@ func (s *Service) AdminSetPassword(ctx context.Context, emailAddr, newPassword s
 		if err := s.cfg.Throttle.UnlockIdentifier(ctx, emailAddr, user.ID.String()); err != nil {
 			slog.Warn("theauth: clear lockout after admin password reset failed", "user_id", user.ID.String(), "err", err.Error())
 		}
+		if err := s.cfg.Throttle.ClearLoginBackoff(ctx, emailAddr); err != nil {
+			slog.Warn("theauth: clear login backoff after admin password reset failed", "user_id", user.ID.String(), "err", err.Error())
+		}
 	}
 	s.auditEm.EmitAudit(ctx, "password.admin_reset", models.TargetRef{Type: "user", ID: user.ID.String()}, nil)
 	return user.ID, nil

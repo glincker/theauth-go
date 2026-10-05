@@ -3,6 +3,7 @@ package sqlite
 import (
 	"context"
 	"database/sql"
+	"strings"
 	"time"
 
 	"github.com/glincker/theauth-go/v2"
@@ -95,4 +96,15 @@ ON CONFLICT (key) DO NOTHING`),
 func (t *ThrottleStore) SweepExpired(ctx context.Context, now time.Time) (int, error) {
 	res, err := t.s.db.ExecContext(ctx, t.s.q(`DELETE FROM theauth_throttle_entries WHERE expires_at <= ?`), toMicro(now))
 	return rowsOrErr("throttle sweep", res, err)
+}
+
+// DeleteLoginEntries removes every login backoff entry for ident across all client IPs.
+func (t *ThrottleStore) DeleteLoginEntries(ctx context.Context, ident string) error {
+	_, err := t.s.db.ExecContext(ctx, t.s.q(`DELETE FROM theauth_throttle_entries WHERE key LIKE ? ESCAPE '!'`), loginEntryPattern(ident))
+	return wrap("throttle delete login entries", err)
+}
+
+func loginEntryPattern(ident string) string {
+	r := strings.NewReplacer("!", "!!", "%", "!%", "_", "!_")
+	return "login:%|" + r.Replace(ident)
 }
