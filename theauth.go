@@ -193,6 +193,11 @@ type Config struct {
 	// AgentSecretLength=32.
 	AgentIdentity *AgentConfig
 
+	// RevocationBus carries revocation events to long-lived connections.
+	// Defaults to an in-process bus; supply one backed by Postgres NOTIFY or
+	// Redis when streams and revokes can land on different processes.
+	RevocationBus RevocationBus
+
 	// AccountUX (v2.0 phase 6) mounts /account/agents and /account/delegations
 	// when true. Requires AgentIdentity to be configured. Routes are gated by
 	// session cookie auth only (no special permission): they manage the
@@ -293,6 +298,7 @@ type TheAuth struct {
 	trustedOrigins    []string
 	csrfDisabled      bool
 	apiTokens         *apiTokenService
+	revocations       RevocationBus
 
 	storageRaw any
 	emailNorm  emailnorm.Normalizer
@@ -454,6 +460,7 @@ func New(cfg Config) (*TheAuth, error) {
 		sx:                         sx,
 		magicLinkTTL:               cfg.MagicLinkTTL,
 		cookieName:                 cfg.CookieName,
+		revocations:                cfg.RevocationBus,
 		secureCookie:               cfg.SecureCookie,
 		rateLimitPerIP:             cfg.RateLimitPerIP,
 		rateLimitPerEmail:          cfg.RateLimitPerEmail,
@@ -483,6 +490,9 @@ func New(cfg Config) (*TheAuth, error) {
 		hooks:                      coalesceHooks(cfg.Observability),
 		lifecycle:                  coalesceLifecycleHooks(cfg.LifecycleHooks),
 		tenancyCfg:                 cfg.Tenancy,
+	}
+	if a.revocations == nil {
+		a.revocations = NewMemoryRevocationBus()
 	}
 
 	if err := wireServices(a, cfg, providers, sp); err != nil {

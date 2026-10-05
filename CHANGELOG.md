@@ -6,6 +6,22 @@ adheres to [Semantic Versioning](https://semver.org/) from v1.0 forward.
 
 ## [Unreleased]
 
+### Added
+
+- **Agent identity on API tokens.** `MintAgentToken` mints a short-lived
+  `kind=agent` token for a human; abilities are the intersection of the
+  agent's allowed set and the user's current abilities, re-evaluated per
+  request. `APIToken` gains `Kind`, `AgentName`, `DelegatedBy` (shown in
+  listings and `POST /auth/tokens`), `Principal.ActorChain` records agent and
+  human, and audit events under an agent token carry both. `RegisterAgent`
+  creates an OAuth agent plus its delegation grant in one call. See
+  `docs/AGENT-IDENTITY.md`.
+- **Revocation watcher.** `RevocationBus` (in-process default, pluggable for
+  Postgres NOTIFY or Redis), `SubscribeRevocations`, `NotifyOwnerDisabled`,
+  `WatchRevocation` and `WatchRevocationMiddleware` cancel long-lived
+  requests within seconds of a session, token, agent, credential or
+  delegation revoke. Reuses `WatchSession` for session polling.
+
 ### Security
 
 - **Login throttle.** Password signin is now gated before any credential work

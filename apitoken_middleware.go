@@ -27,7 +27,43 @@ type Principal struct {
 	TokenID   *ULID
 	// Abilities are the effective abilities for this request.
 	Abilities []string
-	user      *User
+	// TokenKind is the API token kind, empty for sessions.
+	TokenKind string
+	// AgentName names the agent behind an agent token.
+	AgentName string
+	// DelegatedBy is the human an agent token acts for.
+	DelegatedBy *ULID
+	user        *User
+}
+
+// Actor is one link of an actor chain.
+type Actor struct {
+	Kind string `json:"kind"`
+	ID   string `json:"id,omitempty"`
+	Name string `json:"name,omitempty"`
+}
+
+// Actor kinds.
+const (
+	ActorKindUser  = "user"
+	ActorKindAgent = "agent"
+)
+
+// ActorChain lists who is acting, outermost first: the human, then the agent
+// acting for them. A plain user or personal token yields just the user.
+func (p Principal) ActorChain() []Actor {
+	chain := []Actor{{Kind: ActorKindUser, ID: p.UserID.String()}}
+	if p.AgentName != "" {
+		chain = append(chain, Actor{Kind: ActorKindAgent, ID: tokenIDString(p.TokenID), Name: p.AgentName})
+	}
+	return chain
+}
+
+func tokenIDString(id *ULID) string {
+	if id == nil {
+		return ""
+	}
+	return id.String()
 }
 
 // Has reports whether the principal holds the ability, directly or through root.
