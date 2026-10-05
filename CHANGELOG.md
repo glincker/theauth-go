@@ -22,6 +22,17 @@ adheres to [Semantic Versioning](https://semver.org/) from v1.0 forward.
   `ProviderResolverTTL`, `(*TheAuth).InvalidateProvider` and `ListProviders`.
   Names are validated and resolver errors fail closed.
 
+- **Device pending list.** `GET /auth/device/requests` lists pending device
+  requests (no codes or hashes) and `POST /auth/device/requests/{id}/approve|deny`
+  decides one by ID, session only, with the same capping and atomicity as the
+  user code route. New optional `DeviceCodeLister` storage extension for memory,
+  SQLite, Postgres and MySQL, plus `ListDeviceRequests` and
+  `DecideDeviceRequestByID`.
+  These routes are restricted by default: the session must hold
+  `APITokensConfig.DeviceRequestsAbility` (empty means root) or the host sets
+  `DeviceRequestsAnySignedInUser`. Others get 403 `auth.forbidden`. The by-code
+  route is unchanged.
+
 - **Security doctor.** `(*TheAuth).Doctor` reports posture findings (open signup,
   bootstrap gate, proxies, cookies, CSRF, throttle, password and session policy,
   token hygiene, encryption key, audit, WebAuthn RP ID) with stable IDs and

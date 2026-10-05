@@ -55,6 +55,14 @@ type APITokensConfig struct {
 	// still use tokens. Use it to model disabled accounts. A user whose row
 	// is gone is always inactive. Default: active.
 	OwnerActive func(ctx context.Context, ownerID ULID) (bool, error)
+	// DeviceRequestsAbility is the ability a signed-in session must hold to
+	// list and decide pending device requests by ID. Empty means root.
+	DeviceRequestsAbility string
+	// DeviceRequestsAnySignedInUser lets any signed-in user list and decide
+	// pending requests by ID. Off by default: approving from a list skips the
+	// proof of holding the code shown on the device, which aids phishing in a
+	// multi-user app.
+	DeviceRequestsAnySignedInUser bool
 	// Device enables /auth/device/*. Nil leaves the device grant off.
 	Device *DeviceConfig
 }
