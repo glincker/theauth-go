@@ -7,7 +7,7 @@ replace github.com/glincker/theauth-go/v2 => ../..
 require github.com/glincker/theauth-go/v2 v2.0.0-00010101000000-000000000000
 
 require (
-	github.com/beevik/etree v1.7.1 // indirect
+	github.com/beevik/etree v1.8.1 // indirect
 	github.com/boombuler/barcode v1.0.1-0.20190219062509-6c824513bacc // indirect
 	github.com/crewjam/saml v0.5.1 // indirect
 	github.com/fxamacker/cbor/v2 v2.9.3 // indirect
