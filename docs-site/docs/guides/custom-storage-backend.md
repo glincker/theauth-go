@@ -4,13 +4,13 @@ theauth-go's persistence layer is pluggable via the `Storage` interface. You can
 
 ## The `Storage` interface
 
-The `Storage` interface is defined in the root package (`github.com/glincker/theauth-go`). It covers sessions, users, magic links, password reset tokens, WebAuthn credentials, TOTP secrets, OAuth accounts, and more.
+The `Storage` interface is defined in the root package (`github.com/glincker/theauth-go/v2`). It covers sessions, users, magic links, password reset tokens, WebAuthn credentials, TOTP secrets, OAuth accounts, and more.
 
-Browse the interface in the [Storage Reference](../reference/storage.md) or on [pkg.go.dev](https://pkg.go.dev/github.com/glincker/theauth-go#Storage).
+Browse the interface in the [Storage Reference](../reference/storage.md) or on [pkg.go.dev](https://pkg.go.dev/github.com/glincker/theauth-go/v2#Storage).
 
 ## The `storagetest` package
 
-The repository ships `github.com/glincker/theauth-go/storagetest`: a conformance test suite that verifies a storage implementation satisfies the full contract. Run it against your implementation before using it in production:
+The repository ships `github.com/glincker/theauth-go/v2/storagetest`: a conformance test suite that verifies a storage implementation satisfies the full contract. Run it against your implementation before using it in production:
 
 ```go
 package mystorage_test
@@ -18,7 +18,7 @@ package mystorage_test
 import (
     "testing"
 
-    "github.com/glincker/theauth-go/storagetest"
+    "github.com/glincker/theauth-go/v2/storagetest"
     "myapp/mystorage"
 )
 

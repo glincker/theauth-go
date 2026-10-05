@@ -8,7 +8,7 @@ Reference adapter bridging `theauth.Metrics` to `github.com/prometheus/client_go
 import (
     "net/http"
 
-    "github.com/glincker/theauth-go"
+    "github.com/glincker/theauth-go/v2"
     prombridge "github.com/glincker/theauth-go/examples/observability-prom"
     "github.com/prometheus/client_golang/prometheus"
     "github.com/prometheus/client_golang/prometheus/promhttp"

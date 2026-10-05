@@ -109,6 +109,7 @@ nav:
       - SOC 2 Mapping: security/compliance-soc2.md
       - GDPR Reference: security/compliance-gdpr.md
   - Migrations:
+      - Migrating to /v2: migrations/to-v2-module-path.md
       - v2.3 to v2.4: migrations/v2.3-to-v2.4.md
       - v2.0 to v2.1: migrations/v2.0-to-v2.1.md
       - v1.0 to v2.0: migrations/v1.0-to-v2.0.md

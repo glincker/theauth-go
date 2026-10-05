@@ -5,7 +5,7 @@ tokens. Policies are JSON documents of allow and deny statements. Evaluation is
 default-deny, and an explicit deny always wins.
 
 ```go
-import "github.com/glincker/theauth-go/policy"
+import "github.com/glincker/theauth-go/v2/policy"
 ```
 
 ## Policy documents

@@ -5,7 +5,7 @@ This guide builds the shape many self-hosted tools have: one static Go binary, o
 You need Go 1.26 or newer. `storage/sqlite` pulls in `modernc.org/sqlite`, which declares Go 1.26. The root `theauth-go` module itself builds on Go 1.25.
 
 ```sh
-go get github.com/glincker/theauth-go
+go get github.com/glincker/theauth-go/v2
 go get github.com/glincker/theauth-go/storage/sqlite
 ```
 

@@ -12,8 +12,8 @@ theauth-go ships a ready-made Splunk HTTP Event Collector sink under `audit/sink
 
 ```go
 import (
-    "github.com/glincker/theauth-go"
-    "github.com/glincker/theauth-go/audit/sinks/splunkhec"
+    "github.com/glincker/theauth-go/v2"
+    "github.com/glincker/theauth-go/v2/audit/sinks/splunkhec"
 )
 
 sink, err := splunkhec.New("https://splunk.example.com:8088", os.Getenv("SPLUNK_HEC_TOKEN"))
@@ -59,7 +59,7 @@ import (
     "fmt"
     "net/http"
 
-    "github.com/glincker/theauth-go"
+    "github.com/glincker/theauth-go/v2"
 )
 
 type Sink struct {

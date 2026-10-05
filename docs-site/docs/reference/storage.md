@@ -10,9 +10,9 @@ The base `Storage` interface is frozen at v1.0. Adding a method to it is a v2.0 
 
 | Package | Use case |
 |---|---|
-| `github.com/glincker/theauth-go/storage/memory` | Local dev, testing |
-| `github.com/glincker/theauth-go/storage/postgres` | Production (`pgx/v5` + `sqlc`) |
-| `github.com/glincker/theauth-go/storage/mysql` | Production, MySQL 8.x (v2.4+) |
+| `github.com/glincker/theauth-go/v2/storage/memory` | Local dev, testing |
+| `github.com/glincker/theauth-go/v2/storage/postgres` | Production (`pgx/v5` + `sqlc`) |
+| `github.com/glincker/theauth-go/v2/storage/mysql` | Production, MySQL 8.x (v2.4+) |
 
 All adapters expose `New(...)` constructors that return a `*Store` satisfying
 `theauth.Storage`.
@@ -48,7 +48,7 @@ package. Any custom adapter (or a new in-tree adapter) can be verified by callin
 `storagetest.Run`:
 
 ```go
-import "github.com/glincker/theauth-go/storagetest"
+import "github.com/glincker/theauth-go/v2/storagetest"
 
 func TestConformance(t *testing.T) {
     storagetest.Run(t, func() theauth.Storage {
@@ -90,7 +90,7 @@ func TestConformance(t *testing.T) {
 
 ## Interface documentation
 
-Full godoc is available at [pkg.go.dev/github.com/glincker/theauth-go#Storage](https://pkg.go.dev/github.com/glincker/theauth-go#Storage).
+Full godoc is available at [pkg.go.dev/github.com/glincker/theauth-go/v2#Storage](https://pkg.go.dev/github.com/glincker/theauth-go/v2#Storage).
 
 ## Special rules
 

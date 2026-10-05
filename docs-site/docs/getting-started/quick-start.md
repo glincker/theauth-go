@@ -10,8 +10,8 @@ package main
 import (
     "net/http"
 
-    "github.com/glincker/theauth-go"
-    "github.com/glincker/theauth-go/storage/memory"
+    "github.com/glincker/theauth-go/v2"
+    "github.com/glincker/theauth-go/v2/storage/memory"
     "github.com/go-chi/chi/v5"
 )
 
@@ -62,7 +62,7 @@ Replace `memory.New()` with the Postgres adapter for persistent sessions:
 ```go
 import (
     "github.com/jackc/pgx/v5/pgxpool"
-    "github.com/glincker/theauth-go/storage/postgres"
+    "github.com/glincker/theauth-go/v2/storage/postgres"
 )
 
 pool, _ := pgxpool.New(ctx, os.Getenv("DATABASE_URL"))

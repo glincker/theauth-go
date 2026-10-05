@@ -10,18 +10,18 @@ version before removal with a `// Deprecated:` godoc line.
 
 ## Stable packages (v1.0)
 
-- `github.com/glincker/theauth-go`
-- `github.com/glincker/theauth-go/crypto`
-- `github.com/glincker/theauth-go/email`
-- `github.com/glincker/theauth-go/provider`
-- `github.com/glincker/theauth-go/provider/github`
-- `github.com/glincker/theauth-go/provider/google`
-- `github.com/glincker/theauth-go/provider/microsoft`
-- `github.com/glincker/theauth-go/provider/discord`
-- `github.com/glincker/theauth-go/storage`
-- `github.com/glincker/theauth-go/storage/memory`
-- `github.com/glincker/theauth-go/storage/postgres`
-- `github.com/glincker/theauth-go/admin`
+- `github.com/glincker/theauth-go/v2`
+- `github.com/glincker/theauth-go/v2/crypto`
+- `github.com/glincker/theauth-go/v2/email`
+- `github.com/glincker/theauth-go/v2/provider`
+- `github.com/glincker/theauth-go/v2/provider/github`
+- `github.com/glincker/theauth-go/v2/provider/google`
+- `github.com/glincker/theauth-go/v2/provider/microsoft`
+- `github.com/glincker/theauth-go/v2/provider/discord`
+- `github.com/glincker/theauth-go/v2/storage`
+- `github.com/glincker/theauth-go/v2/storage/memory`
+- `github.com/glincker/theauth-go/v2/storage/postgres`
+- `github.com/glincker/theauth-go/v2/admin`
 
 ## Stable packages (v2.0 additions)
 
@@ -45,9 +45,9 @@ The v2.0 surface above is unchanged. v2.3 adds the following packages for
 SIEM audit log streaming, covered by the same SemVer guarantees from this
 point forward.
 
-- `github.com/glincker/theauth-go/audit/sinks/splunkhec`: Splunk HTTP Event
+- `github.com/glincker/theauth-go/v2/audit/sinks/splunkhec`: Splunk HTTP Event
   Collector sink. No new deps; importable as part of the root module.
-- `github.com/glincker/theauth-go/audit/sinks/webhook`: generic CloudEvents
+- `github.com/glincker/theauth-go/v2/audit/sinks/webhook`: generic CloudEvents
   1.0 POST sink with HMAC-SHA256 signing. No new deps; importable as part of
   the root module.
 - `github.com/glincker/theauth-go/audit/sinks/otlp`: OTLP/HTTP logs sink.
@@ -74,11 +74,11 @@ New, non-breaking: `Config.OAuth`, `Config.AuthEventSink`, `OAuthConfig`,
 `WebAuthnRenameStorage`, `RecoveryCodeStorage`,
 `(*TheAuth).RecordTokenMinted`, `RecordTokenRevoked`, `TOTPStatus`,
 `RegenerateRecoveryCodes`, `RenamePasskey`, and the package
-`github.com/glincker/theauth-go/provider/oidc`.
+`github.com/glincker/theauth-go/v2/provider/oidc`.
 
 ## Stable surface
 
-### Root package: `github.com/glincker/theauth-go`
+### Root package: `github.com/glincker/theauth-go/v2`
 
 **Core types**: `TheAuth`, `Config`, `Storage`, `Provider`, `ProviderToken`,
 `ProviderUser`, `User`, `Session`, `MagicLink`, `PasswordResetToken`,

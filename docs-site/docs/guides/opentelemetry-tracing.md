@@ -14,7 +14,7 @@ package otelbridge
 import (
     "context"
 
-    "github.com/glincker/theauth-go"
+    "github.com/glincker/theauth-go/v2"
     "go.opentelemetry.io/otel/attribute"
     "go.opentelemetry.io/otel/codes"
     oteltrace "go.opentelemetry.io/otel/trace"
@@ -66,7 +66,7 @@ func (s *otelSpan) End() {
 ```go
 import (
     "go.opentelemetry.io/otel"
-    "github.com/glincker/theauth-go"
+    "github.com/glincker/theauth-go/v2"
     otelbridge "myapp/internal/otelbridge"
 )
 

@@ -5,7 +5,7 @@ theauth-go ships four built-in storage adapters (memory, Postgres, MySQL and, as
 ## In-memory (`storage/memory`)
 
 ```go
-import "github.com/glincker/theauth-go/storage/memory"
+import "github.com/glincker/theauth-go/v2/storage/memory"
 
 store := memory.New()
 ```
@@ -19,7 +19,7 @@ store := memory.New()
 ```go
 import (
     "github.com/jackc/pgx/v5/pgxpool"
-    "github.com/glincker/theauth-go/storage/postgres"
+    "github.com/glincker/theauth-go/v2/storage/postgres"
 )
 
 pool, err := pgxpool.New(ctx, os.Getenv("DATABASE_URL"))
@@ -68,7 +68,7 @@ Both adapters satisfy `theauth.Storage`. The interface is the only surface a cus
 import (
     "database/sql"
     _ "github.com/go-sql-driver/mysql"
-    "github.com/glincker/theauth-go/storage/mysql"
+    "github.com/glincker/theauth-go/v2/storage/mysql"
 )
 
 db, err := sql.Open("mysql", os.Getenv("MYSQL_DSN"))

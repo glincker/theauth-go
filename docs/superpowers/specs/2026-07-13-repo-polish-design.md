@@ -28,7 +28,7 @@ Community Standards / issue templates):**
 
 **Deliberately NOT moved:**
 - The ~30 root `.go` files (the root Go package, `package theauth`). Moving
-  these would change the public import path (`github.com/glincker/theauth-go`
+  these would change the public import path (`github.com/glincker/theauth-go/v2`
   → something else), a breaking change for every consumer. Out of scope
   regardless of visual root-listing concerns.
 - `README.md`, `LICENSE`, `CHANGELOG.md` — strong convention (GitHub requires

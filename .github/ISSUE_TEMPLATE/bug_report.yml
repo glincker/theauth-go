@@ -14,7 +14,7 @@ body:
     id: version
     attributes:
       label: theauth-go version
-      description: Output of `go list -m github.com/glincker/theauth-go` or the git tag.
+      description: Output of `go list -m github.com/glincker/theauth-go/v2` or the git tag.
       placeholder: "v2.0.2"
     validations:
       required: true

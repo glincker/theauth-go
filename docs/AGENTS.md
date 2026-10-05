@@ -23,7 +23,7 @@ It is **not** a SaaS, **not** a port of a TypeScript library, and **not** a host
 ## Quick install
 
 ```bash
-go get github.com/glincker/theauth-go
+go get github.com/glincker/theauth-go/v2
 ```
 
 Requires Go 1.25+.
@@ -36,8 +36,8 @@ package main
 import (
     "net/http"
 
-    "github.com/glincker/theauth-go"
-    "github.com/glincker/theauth-go/storage/memory"
+    "github.com/glincker/theauth-go/v2"
+    "github.com/glincker/theauth-go/v2/storage/memory"
     "github.com/go-chi/chi/v5"
 )
 
@@ -59,7 +59,7 @@ func main() {
 }
 ```
 
-This compiles and runs as-is against `go 1.25`, `github.com/glincker/theauth-go v0.1.x`, `github.com/go-chi/chi/v5`.
+This compiles and runs as-is against `go 1.25`, `github.com/glincker/theauth-go/v2 v0.1.x`, `github.com/go-chi/chi/v5`.
 
 ## Common patterns
 
@@ -73,7 +73,7 @@ This compiles and runs as-is against `go 1.25`, `github.com/glincker/theauth-go 
 - **Custom storage:** implement the `Storage` interface (one type, focused methods); the in-memory and Postgres adapters are reference implementations
 - **Tune rate limits:** `theauth.Config{ RateLimitPerIP: 10, RateLimitPerEmail: 5 }` (defaults 5/min and 3/min)
 - **Handle v0.2 errors:** switch on the `code` field of the `{code, message}` JSON response body: `weak_password`, `email_taken`, `invalid_credentials`, `rate_limited`, `password_reset_invalid`, `password_reset_expired`
-- **Enable GitHub OAuth (v0.3)**: import `github.com/glincker/theauth-go/provider/github`, pass `github.New(github.Config{ClientID, ClientSecret})` into `theauth.Config.Providers`, and set a 32-byte `Config.EncryptionKey` (AES-256). `a.Mount(r)` then adds `GET /auth/providers/github/start` and `/callback`. PKCE S256 is enforced; provider tokens are AES-GCM encrypted at rest
+- **Enable GitHub OAuth (v0.3)**: import `github.com/glincker/theauth-go/v2/provider/github`, pass `github.New(github.Config{ClientID, ClientSecret})` into `theauth.Config.Providers`, and set a 32-byte `Config.EncryptionKey` (AES-256). `a.Mount(r)` then adds `GET /auth/providers/github/start` and `/callback`. PKCE S256 is enforced; provider tokens are AES-GCM encrypted at rest
 - **Enable Google / Microsoft / Discord OAuth (v0.4)**: same pattern as GitHub. Import the relevant sub-package (`provider/google`, `provider/microsoft`, `provider/discord`), construct with `<pkg>.New(<pkg>.Config{ClientID, ClientSecret})`, and add to `Config.Providers`. Microsoft also accepts `Tenant` (defaults to `"common"`; pass a tenant GUID or verified domain for single tenant apps). Routes mount at `/auth/providers/{name}/start` and `/callback` per provider
 - **Enable WebAuthn passkeys (v0.5)**: set `Config.WebAuthn = &theauth.WebAuthnConfig{RPID: "yourapp.com", RPDisplayName: "Your App", RPOrigins: []string{"https://yourapp.com"}}`. Routes mount at `/auth/webauthn/register/{begin,finish}`, `/auth/webauthn/login/{begin,finish}`, and `/auth/webauthn/credentials`. Passkey login bypasses TOTP step-up by design (single-factor-strong per NIST SP 800-63B rev 4)
 - **Enable TOTP 2FA (v0.5)**: set `Config.TOTP = &theauth.TOTPConfig{Issuer: "Your App"}` plus a 32 byte `Config.EncryptionKey`. Routes mount at `/auth/totp/enroll/{begin,finish}`, `/auth/totp/verify`, `/auth/totp/recovery`, and `DELETE /auth/totp`. Password signin returns `{"step":"totp_required"}` when the user has a confirmed secret; the cookie carries a `pending_2fa` session that only the verify routes accept

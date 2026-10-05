@@ -13,8 +13,8 @@
 
 ***OAuth 2.1 + MCP authorization for Go. Type-safe, dependency-light, FAPI-adjacent.***
 
-[![Go Reference](https://pkg.go.dev/badge/github.com/glincker/theauth-go.svg)](https://pkg.go.dev/github.com/glincker/theauth-go)
-[![Go Report Card](https://goreportcard.com/badge/github.com/glincker/theauth-go)](https://goreportcard.com/report/github.com/glincker/theauth-go)
+[![Go Reference](https://pkg.go.dev/badge/github.com/glincker/theauth-go.svg)](https://pkg.go.dev/github.com/glincker/theauth-go/v2)
+[![Go Report Card](https://goreportcard.com/badge/github.com/glincker/theauth-go/v2)](https://goreportcard.com/report/github.com/glincker/theauth-go/v2)
 [![Release](https://img.shields.io/github/v/release/glincker/theauth-go?label=latest)](https://github.com/glincker/theauth-go/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![CI](https://github.com/glincker/theauth-go/actions/workflows/ci.yml/badge.svg)](https://github.com/glincker/theauth-go/actions/workflows/ci.yml)
@@ -26,7 +26,7 @@
 [![Discord](https://img.shields.io/discord/829168897080557579?style=flat-square&logo=discord&logoColor=white&label=discord&color=5865F2)](https://discord.gg/Ar5pcaZB99)
 
 ```bash
-go get github.com/glincker/theauth-go
+go get github.com/glincker/theauth-go/v2
 ```
 
 </div>
@@ -38,7 +38,7 @@ theauth-go is a Go library, not a hosted service. You mount it into your own `ne
 Needs Go 1.26 for `storage/sqlite` (its pure Go driver declares 1.26). The root module builds on Go 1.25.
 
 ```bash
-go get github.com/glincker/theauth-go github.com/glincker/theauth-go/storage/sqlite
+go get github.com/glincker/theauth-go/v2 github.com/glincker/theauth-go/storage/sqlite
 ```
 
 ```go
@@ -193,15 +193,15 @@ theauth-go is the first Go auth library where **OAuth 2.1**, **MCP authorization
 **Requirements:** Go 1.25+
 
 ```bash
-go get github.com/glincker/theauth-go
+go get github.com/glincker/theauth-go/v2
 ```
 
 **Step 1 -- Create an auth instance with in-memory storage:**
 
 ```go
 import (
-    "github.com/glincker/theauth-go"
-    "github.com/glincker/theauth-go/storage/memory"
+    "github.com/glincker/theauth-go/v2"
+    "github.com/glincker/theauth-go/v2/storage/memory"
 )
 
 a, err := theauth.New(theauth.Config{
@@ -229,7 +229,7 @@ r.With(a.RequireAuth()).Get("/dashboard", func(w http.ResponseWriter, r *http.Re
 ```go
 import (
     "github.com/jackc/pgx/v5/pgxpool"
-    "github.com/glincker/theauth-go/storage/postgres"
+    "github.com/glincker/theauth-go/v2/storage/postgres"
 )
 
 pool, _ := pgxpool.New(ctx, os.Getenv("DATABASE_URL"))

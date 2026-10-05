@@ -10,7 +10,7 @@ Getting theauth-go into a Go module is a single `go get`. This page covers the m
 ## Install the main module
 
 ```bash
-go get github.com/glincker/theauth-go
+go get github.com/glincker/theauth-go/v2
 ```
 
 This installs the full theauth-go surface: magic links, email/password, WebAuthn, TOTP, SAML, SCIM, RBAC, audit, and the OAuth 2.1 authorization server.
@@ -30,7 +30,7 @@ go get github.com/glincker/theauth-go/mcpresource
 The Postgres adapter uses `pgx/v5` and generated SQL via `sqlc`. It is bundled in the main module under `storage/postgres`; no separate `go get` is needed. You do need to run migrations before first use:
 
 ```go
-import "github.com/glincker/theauth-go/storage/postgres"
+import "github.com/glincker/theauth-go/v2/storage/postgres"
 
 pool, err := pgxpool.New(ctx, os.Getenv("DATABASE_URL"))
 // Migrations are embedded; postgres.Migrate applies them (append-only,
@@ -45,7 +45,7 @@ store := postgres.New(pool)
 
 ```bash
 go build ./...
-go test github.com/glincker/theauth-go/... -count=1 -short
+go test github.com/glincker/theauth-go/v2/... -count=1 -short
 ```
 
 ## Release verification
