@@ -6,12 +6,12 @@ adheres to [Semantic Versioning](https://semver.org/) from v1.0 forward.
 
 ## [Unreleased]
 
-### Security
+## [2.6.0] - 2026-10-05
 
-- CIMD fetches refuse non-public addresses at dial time, no redirects or proxy; `CIMDConfig.AllowPrivateNetworks` (dev) and `DenyHost` added.
-- Authorization error responses redirect only to a registered `redirect_uri`; SAML `RelayState` is restricted to same-site paths or `SAMLConfig.AllowedRelayStates`.
+### Upgrade notes
 
-### Changed
+Read these before upgrading from v2.5.x. None changes the Go API of an
+existing call, but each changes runtime behavior.
 
 - **Module path is now `github.com/glincker/theauth-go/v2`; update imports.**
   The v2.x tags were never resolvable by the Go toolchain because the module
@@ -20,43 +20,204 @@ adheres to [Semantic Versioning](https://semver.org/) from v1.0 forward.
   [Migrating to /v2](https://github.com/glincker/theauth-go/blob/main/docs-site/docs/migrations/to-v2-module-path.md).
   The `storage/sqlite`, `mcpresource` and `audit/sinks/otlp` modules keep their
   paths and now require the v2 root.
+- **Login throttle is on by default.** Password signin is gated by per
+  (client IP, normalized email) backoff and a per-user lockout. Refusals return
+  429 with `Retry-After` and code `rate_limited` or `account_locked`. Tune or
+  disable with `Config.LoginThrottle`.
+- **JSON error bodies.** Handlers that returned plain-text `http.Error` bodies
+  now return `{"code","message"}` JSON with a stable code (`bad_request`,
+  `unauthorized`, `forbidden`, `not_found`, `conflict`, `rate_limited`,
+  `internal_error`). Status codes are unchanged. Clients that string-matched the
+  old plain-text body must switch to the `code` field. The OAuth provider and
+  authorization server handlers are not yet converted.
+- **TOTP verify and recovery routes rotate the session cookie.** They set a new
+  cookie and revoke the pending token, so clients must keep the cookie from the
+  response.
+- **The OAuth state cookie value no longer equals the `state` parameter.** The
+  `theauth_oauth_state` cookie carries a separate browser-binding secret; code
+  that read or compared the two values must stop.
+- **OAuth callback refuses an email matching an existing account** unless the
+  provider marks the email verified. Provider emails are lower-cased and
+  trimmed before lookup.
+- **An https `BaseURL` now yields Secure cookies**, even with
+  `SecureCookie: false`. Secure is set per request for https `BaseURL`, TLS
+  connections, or a `TrustedProxies` peer sending `X-Forwarded-Proto: https`.
+- **`EncryptionKey` is required when a `ProviderResolver` is set.**
+- **Device-request routes are restricted to the root ability by default.**
+  `GET /auth/device/requests` and the approve/deny by ID routes need a session
+  holding `APITokensConfig.DeviceRequestsAbility` (empty means root), or set
+  `DeviceRequestsAnySignedInUser`. Others get 403 `auth.forbidden`.
+- **Closed signup needs `UserCountStorage`.** `Config.Bootstrap` and closed
+  signup require the optional capability on your storage adapter.
+- **`PasswordPolicy.AllowLegacyBcrypt` is now honored** at signin, step-up and
+  password change. With it off, a bcrypt hash returns invalid credentials
+  instead of a 500.
+- **CIMD client-metadata fetches refuse non-public addresses.** Loopback,
+  private, link-local (including cloud metadata), CGNAT and similar ranges are
+  blocked at dial time, redirects are never followed and no proxy is used. A
+  localhost CIMD setup now needs `CIMDConfig.AllowPrivateNetworks` (a dev
+  opt-in); `CIMDConfig.DenyHost` adds a host deny hook.
+- **Authorization error responses and SAML `RelayState` are restricted.**
+  Authorization errors redirect only when `redirect_uri` exactly matches a
+  registered URI. SAML `RelayState` must be a same-site path, the configured
+  post-login URL or an entry in `SAMLConfig.AllowedRelayStates`; anything else
+  falls back to the default.
+- Other changes worth a look: cookie-authenticated mutating requests with a
+  foreign `Origin` now get 403 (`Config.TrustedOrigins`,
+  `Config.DisableCSRFProtection`); passwords over `MaxBytes` (default 72) return
+  400 `weak_password`; WebAuthn credentials gain `backup_eligible` and
+  `backup_state` columns (migration 0017); Postgres and MySQL add migration
+  0018; SQLite adds migrations 0006 to 0008.
 
 ### Added
 
-- **`sqlite.NewTx` binds the SQLite Store to a caller's `*sql.Tx`** (SAVEPOINTs, no nested transactions), plus `ImportUserTo`, `ImportAPITokenTo`, `ImportTOTPSecretTo` and `ImportWebAuthnCredentialTo` (and `TheAuth` method forms) for one-transaction backfills.
-- Plaintext TOTP secrets are encrypted on import like enrollment; recovery codes must be regenerated. See the SQLite guide.
-
-- **Legacy API token acceptance.** `APITokensConfig.AcceptUnprefixed` accepts
-  unprefixed bearer tokens by SHA-256 hash, and `ImportAPIToken` inserts an
-  existing token record by hash without seeing the secret.
+Module path and HTTP embedding
 
 - **`Config.PathPrefix`.** Serve the auth routes under a custom prefix (default
   `/auth`, validated) with no `http.StripPrefix`. OAuth redirect URIs, magic and
   reset links, the WebAuthn challenge cookie path and the authorization server
   login URL follow it. `clientauth` takes the same prefix via `AuthPath`.
+- **`(*TheAuth).Handler()`.** Returns an `http.Handler` serving every route
+  `Mount` registers, so `net/http` ServeMux users need no chi import.
+  `examples/stdlib-app` now uses it.
 
+Storage
+
+- **Storage capability interfaces and `Config.CoreStorage`.** `Storage` is now
+  the embedding of small capability interfaces (`UserStorage`,
+  `SessionStorage`, `MagicLinkStorage`, `PasswordStorage`,
+  `OAuthAccountStorage`, `WebAuthnStorage`, `TOTPStorage`,
+  `OrganizationStorage`, `SAMLStorage`, `SCIMStorage`, `RBACStorage`,
+  `AuditStorage`) with an identical method set, so existing adapters and
+  callers compile unchanged. `Config.CoreStorage` accepts an adapter that
+  implements only users, sessions, magic links and passwords; `New` returns
+  the new `ErrStorageMissingCapability`, naming the feature and capability,
+  when an enabled feature needs more. `storagetest` gains `RunCore`,
+  `RunWebAuthn`, `RunTOTP`, `RunAudit`, `RunRBAC` and `RunOAuthServer`;
+  `storagetest.Run` still runs everything.
+- **`storage/sqlite` adapter (separate module).** Pure Go (`modernc.org/sqlite`)
+  storage for `CoreStorage` plus the OAuthAccount, WebAuthn, TOTP and Audit
+  capabilities. `New(db)` wraps a caller-owned `*sql.DB` and refuses a database
+  with foreign keys off. `Migrations()` exports numbered forward-only `.sql`
+  files for a host migrator, `Migrate` is an optional standalone runner with its
+  own version table, and `WithTablePrefix` keeps the tables clear of host ones.
+  `SweepExpired` is a method for a host ticker. Passes `storagetest.RunCore`,
+  `RunWebAuthn`, `RunTOTP` and `RunAudit` against a temp-file WAL database,
+  including concurrent access. Organizations, SAML, SCIM and RBAC are not
+  implemented and return `ErrStorageMissingCapability`.
+- **SQLite capability parity.** `storage/sqlite` now also implements
+  `APITokenStorage`, `DeviceCodeStorage`, `SessionManagementStorage`,
+  `SessionLinkStorage`, `TOTPReplayStorage`, `UserCountStorage`,
+  `WebAuthnRenameStorage` and `RecoveryCodeStorage`, with atomic single-use
+  claims for device codes and session links. Migrations 0006 to 0008.
+- **Postgres and MySQL capability parity.** Both adapters now implement
+  `APITokenStorage`, `DeviceCodeStorage`, `SessionManagementStorage`,
+  `SessionLinkStorage`, `TOTPReplayStorage`, `UserCountStorage` and a shared
+  `Store.ThrottleStore` (`LoginThrottleCASStore`), so tokens, device login,
+  session management and closed signup work on them. Migration 0018 in each
+  adapter; atomic single-use claims. MySQL `CreateUser` now defaults zero
+  `CreatedAt` and `UpdatedAt` instead of failing.
+- **Shared login throttle for SQLite.** `Store.ThrottleStore` persists
+  throttle counters. New optional `LoginThrottleCASStore` lets the limiter
+  retry on conflict across processes instead of last-writer-wins.
+- **`Storage.UpdateWebAuthnBackupFlags`.** New storage method backing the
+  login-time reconciliation write for legacy WebAuthn credentials. Implemented
+  across the Postgres, MySQL, and in-memory backends and covered by the shared
+  `storagetest` conformance suite.
+
+OAuth and OIDC
+
+- **`Config.OAuth` (`OAuthConfig`).** Pluggable `OAuthStateStore` (in-memory
+  default with expiry sweep), `StateTTL`, a `return_to` allow-list, and a
+  signup policy (`open` default, `closed`, `allowed_domains`, `invite`). The
+  default stays open so v2 callers are unchanged.
+- **`provider/oidc`.** Generic OIDC provider with issuer discovery, PKCE,
+  nonce and full ID token verification. New optional `NonceProvider`
+  interface; `ProviderToken.IDToken` field.
 - **`Config.ProviderResolver`.** Resolve OAuth/OIDC providers per request for
   runtime add, edit and remove, with `ProviderResolverFirst`,
   `ProviderResolverTTL`, `(*TheAuth).InvalidateProvider` and `ListProviders`.
   Names are validated and resolver errors fail closed.
 
+Sessions, step-up and MFA
+
+- **End-user session management.** `GET /auth/sessions`,
+  `DELETE /auth/sessions/{id}`, `POST /auth/sessions/revoke-others` and
+  `POST /auth/password/change`, backed by the new optional
+  `SessionManagementStorage` capability. `Config.SessionIdleTimeout` and
+  `Config.SessionTouchInterval` add idle expiry with throttled last-seen
+  writes; `Session` gains `LastSeenAt`, `ElevatedUntil` and `CredentialID`.
+  The admin session list is now real instead of empty. See `docs/SESSIONS.md`.
+- **Step-up re-auth.** `POST /auth/step-up` (password, TOTP or passkey),
+  `RequireRecentAuth(maxAge)` and `WatchSession` /
+  `WatchSessionMiddleware` for re-checking long-lived streams.
+- **Programmatic session links.** `Config.SessionLinks`, `MintSessionLink`,
+  `ConsumeSessionLink`, `POST /auth/session-link/consume` and the optional
+  `SessionLinkStorage` capability. Sessions tied to an upstream credential are
+  re-checked through `CredentialChecker` on every use, and
+  `RevokeSessionsByCredential` cuts them at once.
+- `storagetest.RunSessionManagement` contract suite; the memory adapter
+  implements both new capabilities.
+- **Passkey policy.** `WebAuthnConfig.RequireUserVerification` and
+  `CloneWarning` (`reject` default, `flag`). RP ID stays config-only.
+- **MFA endpoints.** `GET /auth/totp`, `POST /auth/totp/recovery-codes`,
+  `PATCH /auth/webauthn/credentials/{id}`; `DELETE /auth/totp` is covered for
+  both slash forms. New optional storage capabilities
+  `WebAuthnRenameStorage` and `RecoveryCodeStorage` (memory, Postgres, MySQL)
+  with `storagetest.RunMFACaps`.
+- **Revocation watcher.** `RevocationBus` (in-process default, pluggable for
+  Postgres NOTIFY or Redis), `SubscribeRevocations`, `NotifyOwnerDisabled`,
+  `WatchRevocation` and `WatchRevocationMiddleware` cancel long-lived
+  requests within seconds of a session, token, agent, credential or
+  delegation revoke. Reuses `WatchSession` for session polling.
+
+API tokens, device grant, agents and CLI login
+
+- **Scoped API tokens and the RFC 8628 device grant.** New `Config.APITokens`
+  (backed by the optional `APITokenStorage` and `DeviceCodeStorage`
+  capabilities; the `Storage` method set is unchanged). Tokens are opaque,
+  shown once, stored only as a SHA-256 hash, carry caller-defined abilities
+  plus a reserved exclusive `root`, always expire, and record `last_used_at`.
+  Every token has an owner (a user or a service account); a user lists and
+  revokes only their own tokens, an admin can manage all. Tokens stop working
+  when the owner is deleted or reported inactive, and abilities are clamped to
+  the owner's current abilities on every request. `RequireAbility(name)`
+  accepts a session or a bearer token. Routes: `/auth/tokens` (POST, GET,
+  DELETE), `/auth/device/code`, `/auth/device/token`, `/auth/device/approve`.
+  The device grant enforces `slow_down`, expiry, per-approver user code
+  attempt limits and an atomic compare-and-set redeem, and caps minted token
+  abilities to the approver (root only when requested and held). Memory
+  implementation plus `storagetest.RunAPITokens` and `RunDeviceCodes`. See
+  `docs-site/docs/guides/api-tokens.md`.
+- **Legacy API token acceptance.** `APITokensConfig.AcceptUnprefixed` accepts
+  unprefixed bearer tokens by SHA-256 hash, and `ImportAPIToken` inserts an
+  existing token record by hash without seeing the secret.
+- **Token self-service routes.** `GET /auth/tokens/current` describes the
+  presented API bearer token and `DELETE /auth/tokens/current` revokes it, so
+  `clientauth` `Whoami` and `Logout` work against a real server. Bearer-only,
+  own record only, no secret or hash in responses.
 - **Device pending list.** `GET /auth/device/requests` lists pending device
   requests (no codes or hashes) and `POST /auth/device/requests/{id}/approve|deny`
   decides one by ID, session only, with the same capping and atomicity as the
   user code route. New optional `DeviceCodeLister` storage extension for memory,
   SQLite, Postgres and MySQL, plus `ListDeviceRequests` and
-  `DecideDeviceRequestByID`.
-  These routes are restricted by default: the session must hold
-  `APITokensConfig.DeviceRequestsAbility` (empty means root) or the host sets
-  `DeviceRequestsAnySignedInUser`. Others get 403 `auth.forbidden`. The by-code
-  route is unchanged.
+  `DecideDeviceRequestByID`. Restricted by default (see Upgrade notes); the
+  by-code route is unchanged.
+- **`clientauth` package.** Client side of the device grant for host CLIs:
+  `DeviceLogin` (polling with `slow_down`, denial and expiry handling), a 0600
+  `FileStore` plus an injectable `KeychainStore`, and a `Client` that attaches
+  the bearer token and returns `ErrReloginRequired` on expiry or 401. See
+  `examples/cli-login` and the CLI Login guide.
+- **Agent identity on API tokens.** `MintAgentToken` mints a short-lived
+  `kind=agent` token for a human; abilities are the intersection of the
+  agent's allowed set and the user's current abilities, re-evaluated per
+  request. `APIToken` gains `Kind`, `AgentName`, `DelegatedBy` (shown in
+  listings and `POST /auth/tokens`), `Principal.ActorChain` records agent and
+  human, and audit events under an agent token carry both. `RegisterAgent`
+  creates an OAuth agent plus its delegation grant in one call. See
+  `docs/AGENT-IDENTITY.md`.
 
-- **Security doctor.** `(*TheAuth).Doctor` reports posture findings (open signup,
-  bootstrap gate, proxies, cookies, CSRF, throttle, password and session policy,
-  token hygiene, encryption key, audit, WebAuthn RP ID) with stable IDs and
-  severities. `GET /auth/admin/doctor` serves it to root callers, and
-  `cmd/theauth-doctor` prints it with `--format json` and `--fail-on` for CI.
-  See `docs/SECURITY-DOCTOR.md`.
+Policy, posture and audit
 
 - **`policy` package.** Dependency-free JSON policy engine (allow/deny
   statements, action and resource globs with `{var}` substitution, equality,
@@ -66,46 +227,87 @@ adheres to [Semantic Versioning](https://semver.org/) from v1.0 forward.
   `policy.Storage` capability with a memory store and `storagetest.RunPolicy`,
   and token permission boundaries that only narrow. New
   `TheAuth.AuthenticatePrincipal`. See the Policy Engine guide.
+- **Security doctor.** `(*TheAuth).Doctor` reports posture findings (open signup,
+  bootstrap gate, proxies, cookies, CSRF, throttle, password and session policy,
+  token hygiene, encryption key, audit, WebAuthn RP ID) with stable IDs and
+  severities. `GET /auth/admin/doctor` serves it to root callers, and
+  `cmd/theauth-doctor` prints it with `--format json` and `--fail-on` for CI.
+  See `docs/SECURITY-DOCTOR.md`.
+- **`Config.AuthEventSink`.** PII-minimal `AuthEvent` stream (user id plus IP
+  prefix) for login, MFA, password, passkey, TOTP, session and token events,
+  plus `RecordTokenMinted` / `RecordTokenRevoked` hook points and
+  `AuthEventChannelSink`. Audit log gained `login.failed`, `mfa.verified`,
+  `mfa.failed`, `passkey.renamed`, `passkey.clone_warning`,
+  `totp.recovery_regenerated`, `token.minted`, `token.revoked`; client IP and
+  user agent are now attached to every audited request.
+- **CSRF / Origin protection.** Cookie-authenticated POST/PUT/PATCH/DELETE
+  requests whose `Origin` (or `Referer`) is not the `BaseURL` origin or in the
+  new `Config.TrustedOrigins` get 403, closing the sibling-subdomain gap that
+  `SameSite=Lax` leaves. Bearer requests and GET/HEAD/OPTIONS are exempt.
+  Opt out with `Config.DisableCSRFProtection`.
+- **Automatic `Secure` cookies.** `Secure` is now set per request when
+  `BaseURL` is https, the connection is TLS, or a `TrustedProxies` peer sent
+  `X-Forwarded-Proto: https`. `Config.SecureCookie: true` still forces it.
+- **`TrustedProxies` startup warning.** A WARN is logged when it is empty
+  (silence with `Config.SuppressTrustedProxiesWarning`); behind a proxy an
+  empty list collapses the per-IP rate-limit bucket. See the new HTTP security
+  doc.
 
-- **Postgres and MySQL capability parity.** Both adapters now implement
-  `APITokenStorage`, `DeviceCodeStorage`, `SessionManagementStorage`,
-  `SessionLinkStorage`, `TOTPReplayStorage`, `UserCountStorage` and a shared
-  `Store.ThrottleStore` (`LoginThrottleCASStore`), so tokens, device login,
-  session management and closed signup work on them. Migration 0018 in each
-  adapter; atomic single-use claims. MySQL `CreateUser` now defaults zero
-  `CreatedAt` and `UpdatedAt` instead of failing.
-- **Token self-service routes.** `GET /auth/tokens/current` describes the
-  presented API bearer token and `DELETE /auth/tokens/current` revokes it, so
-  `clientauth` `Whoami` and `Logout` work against a real server. Bearer-only,
-  own record only, no secret or hash in responses.
-- **SQLite capability parity.** `storage/sqlite` now implements
-  `APITokenStorage`, `DeviceCodeStorage`, `SessionManagementStorage`,
-  `SessionLinkStorage`, `TOTPReplayStorage`, `UserCountStorage`,
-  `WebAuthnRenameStorage` and `RecoveryCodeStorage`, with atomic single-use
-  claims for device codes and session links. Migrations 0006 to 0008.
-- **Shared login throttle for SQLite.** `Store.ThrottleStore` persists
-  throttle counters. New optional `LoginThrottleCASStore` lets the limiter
-  retry on conflict across processes instead of last-writer-wins.
+Importing existing data
 
-- **`clientauth` package.** Client side of the device grant for host CLIs:
-  `DeviceLogin` (polling with `slow_down`, denial and expiry handling), a 0600
-  `FileStore` plus an injectable `KeychainStore`, and a `Client` that attaches
-  the bearer token and returns `ErrReloginRequired` on expiry or 401. See
-  `examples/cli-login` and the CLI Login guide.
+- **`sqlite.NewTx` binds the SQLite Store to a caller's `*sql.Tx`** (SAVEPOINTs,
+  no nested transactions), plus `ImportUserTo`, `ImportAPITokenTo`,
+  `ImportTOTPSecretTo` and `ImportWebAuthnCredentialTo` (and `TheAuth` method
+  forms) for one-transaction backfills.
+- Plaintext TOTP secrets are encrypted on import like enrollment; recovery codes
+  must be regenerated. See the SQLite guide.
 
-- **Agent identity on API tokens.** `MintAgentToken` mints a short-lived
-  `kind=agent` token for a human; abilities are the intersection of the
-  agent's allowed set and the user's current abilities, re-evaluated per
-  request. `APIToken` gains `Kind`, `AgentName`, `DelegatedBy` (shown in
-  listings and `POST /auth/tokens`), `Principal.ActorChain` records agent and
-  human, and audit events under an agent token carry both. `RegisterAgent`
-  creates an OAuth agent plus its delegation grant in one call. See
-  `docs/AGENT-IDENTITY.md`.
-- **Revocation watcher.** `RevocationBus` (in-process default, pluggable for
-  Postgres NOTIFY or Redis), `SubscribeRevocations`, `NotifyOwnerDisabled`,
-  `WatchRevocation` and `WatchRevocationMiddleware` cancel long-lived
-  requests within seconds of a session, token, agent, credential or
-  delegation revoke. Reuses `WatchSession` for session polling.
+### Changed
+
+- **Module path** is now `github.com/glincker/theauth-go/v2` (see Upgrade
+  notes).
+- **JSON error bodies** replace plain-text `http.Error` bodies (see Upgrade
+  notes).
+- **OAuth login CSRF closed with a real browser binding.** The `/start` cookie
+  now carries a secret distinct from the `state` parameter; the server stores
+  its hash and verifies it in constant time at `/callback`. State is burned on
+  any failed check.
+- **Session rotation on MFA completion and password change.** The TOTP verify
+  and recovery routes now set a new cookie and revoke the pending token.
+- **Password policy.** `PasswordPolicyConfig` gains `MinLength`, `MaxBytes`
+  (default 72, the bcrypt limit; longer passwords now return 400
+  `weak_password` instead of failing later) and an optional `BreachChecker`.
+  `HIBPBreachChecker` implements the Have I Been Pwned k-anonymity range API,
+  is off by default and fails open on network errors.
+- `go.mod`: `golang.org/x/text` is now a direct dependency (NFKC).
+
+### Fixed
+
+- **Synced-passkey login failure (backup-eligible flag).** WebAuthn login
+  failed with a generic "verification failed" for any credential whose
+  authenticator reports the backup-eligible (BE) flag, which is the
+  overwhelming majority of real-world passkeys (iCloud Keychain, Google
+  Password Manager, and every other synced passkey). The library never
+  persisted a credential's BE / BS flags at registration nor restored them at
+  login, so go-webauthn's `validateLogin` BE-equality check always compared
+  the asserted `true` against a stored `false` and rejected the assertion.
+  Registration now captures the flags, login restores them, and new nullable
+  `backup_eligible` / `backup_state` columns (migration 0017, Postgres +
+  MySQL) back the round trip. Credentials registered before this fix have no
+  recorded flags and are reconciled on their next login via trust-on-first
+  use, then enforced strictly thereafter. A WebAuthn validation failure of
+  any kind now also logs the underlying go-webauthn error server-side (never
+  surfaced to the client) for diagnosability. Found via production log
+  analysis from a consuming application, not this repo's issue tracker.
+- `PasswordPolicy.AllowLegacyBcrypt` is now honored at signin, step-up and
+  password change, with rehash to Argon2id on success. With it off, a bcrypt
+  hash returns invalid credentials instead of a 500.
+- Existing accounts are no longer linked by an unverified provider email: a
+  callback whose email matches an existing user fails unless the provider marks
+  it verified, and provider emails are lower-cased and trimmed before lookup (no
+  more case-split shadow accounts).
+- MySQL `CreateUser` defaults zero `CreatedAt` and `UpdatedAt` instead of
+  failing.
 
 ### Security
 
@@ -132,166 +334,15 @@ adheres to [Semantic Versioning](https://semver.org/) from v1.0 forward.
   rate-limit key, SAML, SCIM) trims and lowercases, and folds Unicode
   compatibility forms when `Config.EmailNFKC` is set. `TheAuth.NormalizeEmail`
   exposes the same rule.
-- **Password policy.** `PasswordPolicyConfig` gains `MinLength`, `MaxBytes`
-  (default 72, the bcrypt limit; longer passwords now return 400
-  `weak_password` instead of failing later) and an optional `BreachChecker`.
-  `HIBPBreachChecker` implements the Have I Been Pwned k-anonymity range API,
-  is off by default and fails open on network errors.
-
-### Changed
-
-- **JSON error bodies.** Handlers that returned plain-text `http.Error`
-  bodies now return `{"code","message"}` JSON with a stable code
-  (`bad_request`, `unauthorized`, `forbidden`, `not_found`, `conflict`,
-  `rate_limited`, `internal_error`). Status codes are unchanged. Clients that
-  string-matched the old plain-text body must switch to the `code` field. The
-  OAuth provider and authorization server handlers are not yet converted.
-- `go.mod`: `golang.org/x/text` is now a direct dependency (NFKC).
-
-- **OAuth login CSRF closed with a real browser binding.** The `/start` cookie
-  now carries a secret distinct from the `state` parameter; the server stores
-  its hash and verifies it in constant time at `/callback`. State is burned on
-  any failed check. Behavior change: the `theauth_oauth_state` cookie value no
-  longer equals the `state` query parameter.
-- **Existing accounts are no longer linked by an unverified provider email.**
-  A callback whose email matches an existing user now fails unless the
-  provider marks the email verified. Provider emails are lower-cased and
-  trimmed before lookup (no more case-split shadow accounts).
-
-### Added
-
-- **`Config.OAuth` (`OAuthConfig`).** Pluggable `OAuthStateStore` (in-memory
-  default with expiry sweep), `StateTTL`, a `return_to` allow-list, and a
-  signup policy (`open` default, `closed`, `allowed_domains`, `invite`). The
-  default stays open so v2 callers are unchanged.
-- **`provider/oidc`.** Generic OIDC provider with issuer discovery, PKCE,
-  nonce and full ID token verification. New optional `NonceProvider`
-  interface; `ProviderToken.IDToken` field.
-- **Passkey policy.** `WebAuthnConfig.RequireUserVerification` and
-  `CloneWarning` (`reject` default, `flag`). RP ID stays config-only.
-- **`Config.AuthEventSink`.** PII-minimal `AuthEvent` stream (user id plus IP
-  prefix) for login, MFA, password, passkey, TOTP, session and token events,
-  plus `RecordTokenMinted` / `RecordTokenRevoked` hook points and
-  `AuthEventChannelSink`. Audit log gained `login.failed`, `mfa.verified`,
-  `mfa.failed`, `passkey.renamed`, `passkey.clone_warning`,
-  `totp.recovery_regenerated`, `token.minted`, `token.revoked`; client IP and
-  user agent are now attached to every audited request.
-- **Endpoints.** `GET /auth/totp`, `POST /auth/totp/recovery-codes`,
-  `PATCH /auth/webauthn/credentials/{id}`; `DELETE /auth/totp` is covered for
-  both slash forms. New optional storage capabilities
-  `WebAuthnRenameStorage` and `RecoveryCodeStorage` (memory, Postgres, MySQL)
-  with `storagetest.RunMFACaps`.
-
-### Fixed
-
-- **Synced-passkey login failure (backup-eligible flag).** WebAuthn login
-  failed with a generic "verification failed" for any credential whose
-  authenticator reports the backup-eligible (BE) flag, which is the
-  overwhelming majority of real-world passkeys (iCloud Keychain, Google
-  Password Manager, and every other synced passkey). The library never
-  persisted a credential's BE / BS flags at registration nor restored them at
-  login, so go-webauthn's `validateLogin` BE-equality check always compared
-  the asserted `true` against a stored `false` and rejected the assertion.
-  Registration now captures the flags, login restores them, and new nullable
-  `backup_eligible` / `backup_state` columns (migration 0017, Postgres +
-  MySQL) back the round trip. Credentials registered before this fix have no
-  recorded flags and are reconciled on their next login via trust-on-first
-  -use, then enforced strictly thereafter. A WebAuthn validation failure of
-  any kind now also logs the underlying go-webauthn error server-side (never
-  surfaced to the client) for diagnosability. Found via production log
-  analysis from a consuming application, not this repo's issue tracker.
-
-### Added
-
-- **`storage/sqlite` adapter (separate module).** Pure Go (`modernc.org/sqlite`)
-  storage for `CoreStorage` plus the OAuthAccount, WebAuthn, TOTP and Audit
-  capabilities. `New(db)` wraps a caller-owned `*sql.DB` and refuses a database
-  with foreign keys off. `Migrations()` exports numbered forward-only `.sql`
-  files for a host migrator, `Migrate` is an optional standalone runner with its
-  own version table, and `WithTablePrefix` keeps the tables clear of host ones.
-  `SweepExpired` is a method for a host ticker. Passes `storagetest.RunCore`,
-  `RunWebAuthn`, `RunTOTP` and `RunAudit` against a temp-file WAL database,
-  including concurrent access. Organizations, SAML, SCIM and RBAC are not
-  implemented and return `ErrStorageMissingCapability`.
-
-- **Scoped API tokens and the RFC 8628 device grant.** New `Config.APITokens`
-  (backed by the optional `APITokenStorage` and `DeviceCodeStorage`
-  capabilities; the `Storage` method set is unchanged). Tokens are opaque,
-  shown once, stored only as a SHA-256 hash, carry caller-defined abilities
-  plus a reserved exclusive `root`, always expire, and record `last_used_at`.
-  Every token has an owner (a user or a service account); a user lists and
-  revokes only their own tokens, an admin can manage all. Tokens stop working
-  when the owner is deleted or reported inactive, and abilities are clamped to
-  the owner's current abilities on every request. `RequireAbility(name)`
-  accepts a session or a bearer token. Routes: `/auth/tokens` (POST, GET,
-  DELETE), `/auth/device/code`, `/auth/device/token`, `/auth/device/approve`.
-  The device grant enforces `slow_down`, expiry, per-approver user code
-  attempt limits and an atomic compare-and-set redeem, and caps minted token
-  abilities to the approver (root only when requested and held). Memory
-  implementation plus `storagetest.RunAPITokens` and `RunDeviceCodes`. See
-  `docs-site/docs/guides/api-tokens.md`.
-
-
-- **End-user session management.** `GET /auth/sessions`,
-  `DELETE /auth/sessions/{id}`, `POST /auth/sessions/revoke-others` and
-  `POST /auth/password/change`, backed by the new optional
-  `SessionManagementStorage` capability. `Config.SessionIdleTimeout` and
-  `Config.SessionTouchInterval` add idle expiry with throttled last-seen
-  writes; `Session` gains `LastSeenAt`, `ElevatedUntil` and `CredentialID`.
-  The admin session list is now real instead of empty. See `docs/SESSIONS.md`.
-- **Session rotation on MFA completion and password change.** The TOTP verify
-  and recovery routes now set a new cookie and revoke the pending token.
-- **Step-up re-auth.** `POST /auth/step-up` (password, TOTP or passkey),
-  `RequireRecentAuth(maxAge)` and `WatchSession` /
-  `WatchSessionMiddleware` for re-checking long-lived streams.
-- **Programmatic session links.** `Config.SessionLinks`, `MintSessionLink`,
-  `ConsumeSessionLink`, `POST /auth/session-link/consume` and the optional
-  `SessionLinkStorage` capability. Sessions tied to an upstream credential are
-  re-checked through `CredentialChecker` on every use, and
-  `RevokeSessionsByCredential` cuts them at once.
-- `storagetest.RunSessionManagement` contract suite; the memory adapter
-  implements both new capabilities.
-- **Storage capability interfaces and `Config.CoreStorage`.** `Storage` is now
-  the embedding of small capability interfaces (`UserStorage`,
-  `SessionStorage`, `MagicLinkStorage`, `PasswordStorage`,
-  `OAuthAccountStorage`, `WebAuthnStorage`, `TOTPStorage`,
-  `OrganizationStorage`, `SAMLStorage`, `SCIMStorage`, `RBACStorage`,
-  `AuditStorage`) with an identical method set, so existing adapters and
-  callers compile unchanged. `Config.CoreStorage` accepts an adapter that
-  implements only users, sessions, magic links and passwords; `New` returns
-  the new `ErrStorageMissingCapability`, naming the feature and capability,
-  when an enabled feature needs more. `storagetest` gains `RunCore`,
-  `RunWebAuthn`, `RunTOTP`, `RunAudit`, `RunRBAC` and `RunOAuthServer`;
-  `storagetest.Run` still runs everything.
-
-- **`(*TheAuth).Handler()`.** Returns an `http.Handler` serving every route
-  `Mount` registers, so `net/http` ServeMux users need no chi import.
-  `examples/stdlib-app` now uses it.
-- **CSRF / Origin protection.** Cookie-authenticated POST/PUT/PATCH/DELETE
-  requests whose `Origin` (or `Referer`) is not the `BaseURL` origin or in the
-  new `Config.TrustedOrigins` get 403, closing the sibling-subdomain gap that
-  `SameSite=Lax` leaves. Bearer requests and GET/HEAD/OPTIONS are exempt.
-  Opt out with `Config.DisableCSRFProtection`.
-- **Automatic `Secure` cookies.** `Secure` is now set per request when
-  `BaseURL` is https, the connection is TLS, or a `TrustedProxies` peer sent
-  `X-Forwarded-Proto: https`. `Config.SecureCookie: true` still forces it.
-  Behavior change: an https `BaseURL` with `SecureCookie: false` now yields
-  Secure cookies.
-- **`TrustedProxies` startup warning.** A WARN is logged when it is empty
-  (silence with `Config.SuppressTrustedProxiesWarning`); behind a proxy an
-  empty list collapses the per-IP rate-limit bucket. See the new HTTP security
-  doc.
-
-- **`Storage.UpdateWebAuthnBackupFlags`.** New storage method backing the
-  login-time reconciliation write for legacy WebAuthn credentials. Implemented
-  across the Postgres, MySQL, and in-memory backends and covered by the shared
-  `storagetest` conformance suite.
-
-### Fixed
-
-- `PasswordPolicy.AllowLegacyBcrypt` is now honored at signin, step-up and
-  password change, with rehash to Argon2id on success. With it off, a bcrypt
-  hash returns invalid credentials instead of a 500.
+- **OAuth login CSRF and account takeover.** Browser-bound state cookie and
+  verified-email requirement for linking existing accounts (see Changed and
+  Fixed).
+- **CSRF / Origin protection and automatic Secure cookies** (see Added).
+- CIMD fetches refuse non-public addresses at dial time, with no redirects or
+  proxy; `CIMDConfig.AllowPrivateNetworks` (dev) and `DenyHost` added.
+- Authorization error responses redirect only to a registered `redirect_uri`;
+  SAML `RelayState` is restricted to same-site paths or
+  `SAMLConfig.AllowedRelayStates`.
 
 ## [2.5.0] - 2026-07-14
 
@@ -1307,3 +1358,8 @@ single-use token.
 Initial release: magic-link email auth, opaque session tokens with
 revocation, chi-friendly middleware, in-memory and Postgres storage
 adapters.
+
+
+[Unreleased]: https://github.com/glincker/theauth-go/compare/v2.6.0...HEAD
+[2.6.0]: https://github.com/glincker/theauth-go/compare/v2.5.0...v2.6.0
+[2.5.0]: https://github.com/glincker/theauth-go/compare/v2.5.0-rc.1...v2.5.0

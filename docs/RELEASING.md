@@ -63,6 +63,19 @@ Warning: anyone on the old path (including pseudo-versions of
 `github.com/glincker/theauth-go`) must change their imports to the `/v2` path.
 The old path stays frozen at v1.0.0. See `docs-site/docs/migrations/to-v2-module-path.md`.
 
+## Release checklist
+
+Order matters because sub-modules can only pin the root after the proxy serves it.
+
+- [ ] CHANGELOG.md has a dated `## [X.Y.Z]` section with `### Upgrade notes` first, and compare links at the bottom.
+- [ ] `docs/release-notes-vX.Y.Z.md` matches the changelog.
+- [ ] `GOWORK=off go build ./... && go test ./...` pass on the default branch.
+- [ ] Tag the root module (`vX.Y.Z`) and push it; wait for the release workflow.
+- [ ] `go list -m github.com/glincker/theauth-go/v2@vX.Y.Z` resolves through proxy.golang.org.
+- [ ] Pin sub-modules to the root tag, merge that PR, then tag sub-modules on the merged commit.
+- [ ] Verify cosign and SLSA attestations (steps 5 and 6 below).
+- [ ] Publish the release notes and announce.
+
 ## Prerequisites
 
 - Write access to `glincker/theauth-go` on GitHub
