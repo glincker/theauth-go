@@ -87,7 +87,7 @@ func (s *Store) MovePasswordHash(ctx context.Context, primaryID, secondaryID the
 	if primaryID == secondaryID {
 		return nil
 	}
-	return s.inTx(ctx, "move password hash", func(tx *sql.Tx) error {
+	return s.inTx(ctx, "move password hash", func(tx DBTX) error {
 		res, err := tx.ExecContext(ctx, s.q(`
 INSERT INTO theauth_user_passwords (user_id, password_hash)
 SELECT ?, password_hash FROM theauth_user_passwords WHERE user_id = ?

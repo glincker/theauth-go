@@ -8,6 +8,7 @@ import (
 	"regexp"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/glincker/theauth-go/v2"
@@ -64,11 +65,22 @@ func buildConfig(opts []Option) (config, error) {
 	return c, nil
 }
 
+// DBTX is the subset of *sql.DB and *sql.Tx the Store runs its statements on.
+type DBTX interface {
+	ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error)
+	QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error)
+	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
+	PrepareContext(ctx context.Context, query string) (*sql.Stmt, error)
+}
+
 // Store is the SQLite-backed storage adapter.
 type Store struct {
-	db     *sql.DB
+	db     DBTX
 	prefix string
 	cache  sync.Map
+	// Bound to a caller's transaction: multi-statement methods use savepoints, never BeginTx.
+	inCallerTx bool
+	savepoints atomic.Uint64
 }
 
 // New wraps db, which the caller keeps ownership of, and verifies foreign keys are enforced.
@@ -80,16 +92,43 @@ func New(db *sql.DB, opts ...Option) (*Store, error) {
 	if err != nil {
 		return nil, err
 	}
-	if !c.allowFKsOff {
-		var on int
-		if err := db.QueryRowContext(context.Background(), `PRAGMA foreign_keys`).Scan(&on); err != nil {
-			return nil, fmt.Errorf("theauth sqlite: read foreign_keys pragma: %w", err)
-		}
-		if on != 1 {
-			return nil, errors.New("theauth sqlite: PRAGMA foreign_keys is off; add _pragma=foreign_keys(1) to the DSN or pass AllowForeignKeysOff")
-		}
+	if err := checkForeignKeys(db, c); err != nil {
+		return nil, err
 	}
 	return &Store{db: db, prefix: c.prefix}, nil
+}
+
+// NewTx binds a Store to the caller's open transaction so every method runs on it.
+//
+// Nothing is committed or rolled back by the Store: the caller owns tx and must
+// stop using the Store once tx ends. Multi-statement methods use SAVEPOINTs
+// inside tx. Run Migrate on the *sql.DB beforehand; it cannot run inside a Tx.
+func NewTx(tx *sql.Tx, opts ...Option) (*Store, error) {
+	if tx == nil {
+		return nil, errors.New("theauth sqlite: nil *sql.Tx")
+	}
+	c, err := buildConfig(opts)
+	if err != nil {
+		return nil, err
+	}
+	if err := checkForeignKeys(tx, c); err != nil {
+		return nil, err
+	}
+	return &Store{db: tx, prefix: c.prefix, inCallerTx: true}, nil
+}
+
+func checkForeignKeys(db DBTX, c config) error {
+	if c.allowFKsOff {
+		return nil
+	}
+	var on int
+	if err := db.QueryRowContext(context.Background(), `PRAGMA foreign_keys`).Scan(&on); err != nil {
+		return fmt.Errorf("theauth sqlite: read foreign_keys pragma: %w", err)
+	}
+	if on != 1 {
+		return errors.New("theauth sqlite: PRAGMA foreign_keys is off; add _pragma=foreign_keys(1) to the DSN or pass AllowForeignKeysOff")
+	}
+	return nil
 }
 
 // q rewrites the default table prefix in a query to the configured one.
@@ -105,8 +144,15 @@ func (s *Store) q(query string) string {
 	return out
 }
 
-func (s *Store) inTx(ctx context.Context, op string, fn func(*sql.Tx) error) error {
-	tx, err := s.db.BeginTx(ctx, nil)
+func (s *Store) inTx(ctx context.Context, op string, fn func(tx DBTX) error) error {
+	if s.inCallerTx {
+		return s.inSavepoint(ctx, op, fn)
+	}
+	db, ok := s.db.(*sql.DB)
+	if !ok {
+		return fmt.Errorf("theauth sqlite: %s: unsupported DBTX %T", op, s.db)
+	}
+	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("theauth sqlite: %s: begin: %w", op, err)
 	}
@@ -116,6 +162,23 @@ func (s *Store) inTx(ctx context.Context, op string, fn func(*sql.Tx) error) err
 	}
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("theauth sqlite: %s: commit: %w", op, err)
+	}
+	return nil
+}
+
+func (s *Store) inSavepoint(ctx context.Context, op string, fn func(tx DBTX) error) error {
+	name := fmt.Sprintf("theauth_sp_%d", s.savepoints.Add(1))
+	if _, err := s.db.ExecContext(ctx, `SAVEPOINT `+name); err != nil {
+		return fmt.Errorf("theauth sqlite: %s: savepoint: %w", op, err)
+	}
+	if err := fn(s.db); err != nil {
+		bg := context.WithoutCancel(ctx)
+		_, _ = s.db.ExecContext(bg, `ROLLBACK TO `+name)
+		_, _ = s.db.ExecContext(bg, `RELEASE `+name)
+		return fmt.Errorf("theauth sqlite: %s: %w", op, err)
+	}
+	if _, err := s.db.ExecContext(ctx, `RELEASE `+name); err != nil {
+		return fmt.Errorf("theauth sqlite: %s: release savepoint: %w", op, err)
 	}
 	return nil
 }

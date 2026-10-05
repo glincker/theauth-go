@@ -344,6 +344,10 @@ func (a *TheAuth) ImportAPIToken(ctx context.Context, in ImportedToken) (APIToke
 	if err != nil {
 		return APIToken{}, err
 	}
+	return importAPIToken(ctx, s.store, s, in, s.now())
+}
+
+func importAPIToken(ctx context.Context, store APITokenStorage, v *apiTokenService, in ImportedToken, now time.Time) (APIToken, error) {
 	if in.OwnerKind == "" {
 		in.OwnerKind = OwnerKindUser
 	}
@@ -357,8 +361,13 @@ func (a *TheAuth) ImportAPIToken(ctx context.Context, in ImportedToken) (APIToke
 	if name == "" || len(name) > 120 {
 		return APIToken{}, errors.New("theauth: token name must be 1 to 120 characters")
 	}
-	if err := s.validateAbilities(in.Abilities, false); err != nil {
+	if err := v.validateAbilities(in.Abilities, false); err != nil {
 		return APIToken{}, err
+	}
+	if _, err := store.APITokenByHash(ctx, in.TokenHash); err == nil {
+		return APIToken{}, fmt.Errorf("theauth: import API token: %w", ErrImportDuplicate)
+	} else if !errors.Is(err, ErrStorageNotFound) {
+		return APIToken{}, fmt.Errorf("theauth: import API token: look up hash: %w", err)
 	}
 	id := in.ID
 	if id == (ULID{}) {
@@ -366,7 +375,7 @@ func (a *TheAuth) ImportAPIToken(ctx context.Context, in ImportedToken) (APIToke
 	}
 	created := in.CreatedAt
 	if created.IsZero() {
-		created = s.now()
+		created = now
 	}
 	t := APIToken{
 		ID: id, OwnerID: in.OwnerID, OwnerKind: in.OwnerKind, Name: name,
@@ -374,11 +383,21 @@ func (a *TheAuth) ImportAPIToken(ctx context.Context, in ImportedToken) (APIToke
 		Hint: "imported", CreatedAt: created.UTC(), ExpiresAt: in.ExpiresAt, LastUsedAt: in.LastUsedAt,
 		Kind: APITokenKindPersonal,
 	}
-	saved, err := s.store.InsertAPIToken(ctx, t)
+	saved, err := store.InsertAPIToken(ctx, t)
 	if err != nil {
 		return APIToken{}, fmt.Errorf("theauth: import API token: %w", err)
 	}
 	return saved, nil
+}
+
+// ImportAPITokenTo inserts an existing token by hash straight into store, with no TheAuth instance.
+//
+// Abilities are checked for syntax only, since there is no configured allowlist.
+func ImportAPITokenTo(ctx context.Context, store APITokenStorage, in ImportedToken) (APIToken, error) {
+	if store == nil {
+		return APIToken{}, errors.New("theauth: nil storage")
+	}
+	return importAPIToken(ctx, store, &apiTokenService{}, in, time.Now())
 }
 
 // touchInterval bounds last_used_at writes to one per token per interval.
