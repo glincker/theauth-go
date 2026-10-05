@@ -32,6 +32,13 @@ covered by the same SemVer guarantees from this point forward.
   zero-dependency Go module: a consumer pulling this package does NOT
   transitively pull theauth core or the storage adapters).
 
+## Experimental packages
+
+- `github.com/glincker/theauth-go/storage/sqlite`: separate Go module backed
+  by `modernc.org/sqlite`. Core, OAuthAccount, WebAuthn, TOTP and Audit
+  capabilities only. Its migrations are append-only like the other adapters.
+  Promoted to stable once organizations and RBAC land.
+
 ## Stable packages (v2.3 additions)
 
 The v2.0 surface above is unchanged. v2.3 adds the following packages for

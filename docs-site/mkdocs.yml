@@ -80,6 +80,7 @@ nav:
       - Enable WebAuthn Passkeys: guides/webauthn-passkeys.md
       - Wire OpenTelemetry Tracing: guides/opentelemetry-tracing.md
       - Stream Audit Logs to Splunk: guides/audit-log-splunk.md
+      - Use the SQLite Backend: guides/sqlite-storage.md
       - Write a Custom Storage Backend: guides/custom-storage-backend.md
       - Migrate from Cognito: guides/migrate-from-cognito.md
       - Migrate from Auth0: guides/migrate-from-auth0.md

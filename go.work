@@ -12,4 +12,5 @@ use (
 	./examples/observability-prom
 	./examples/stdlib-app
 	./mcpresource
+	./storage/sqlite
 )

@@ -27,6 +27,17 @@ adheres to [Semantic Versioning](https://semver.org/) from v1.0 forward.
 
 ### Added
 
+- **`storage/sqlite` adapter (separate module).** Pure Go (`modernc.org/sqlite`)
+  storage for `CoreStorage` plus the OAuthAccount, WebAuthn, TOTP and Audit
+  capabilities. `New(db)` wraps a caller-owned `*sql.DB` and refuses a database
+  with foreign keys off. `Migrations()` exports numbered forward-only `.sql`
+  files for a host migrator, `Migrate` is an optional standalone runner with its
+  own version table, and `WithTablePrefix` keeps the tables clear of host ones.
+  `SweepExpired` is a method for a host ticker. Passes `storagetest.RunCore`,
+  `RunWebAuthn`, `RunTOTP` and `RunAudit` against a temp-file WAL database,
+  including concurrent access. Organizations, SAML, SCIM and RBAC are not
+  implemented and return `ErrStorageMissingCapability`.
+
 - **Storage capability interfaces and `Config.CoreStorage`.** `Storage` is now
   the embedding of small capability interfaces (`UserStorage`,
   `SessionStorage`, `MagicLinkStorage`, `PasswordStorage`,
