@@ -192,3 +192,8 @@ func TestThrottleConcurrentLimitersLoseNoFailures(t *testing.T) {
 		t.Fatalf("Failures = %d, want %d (lost updates)", e.Failures, perLimiter*len(limiters))
 	}
 }
+
+func TestLegacyTokenImport(t *testing.T) {
+	t.Parallel()
+	storagetest.RunLegacyTokenImport(t, newStore(t))
+}

@@ -8,6 +8,9 @@ adheres to [Semantic Versioning](https://semver.org/) from v1.0 forward.
 
 ### Added
 
+- **Legacy API token acceptance.** `APITokensConfig.AcceptUnprefixed` accepts
+  unprefixed bearer tokens by SHA-256 hash, and `ImportAPIToken` inserts an
+  existing token record by hash without seeing the secret.
 - **Security doctor.** `(*TheAuth).Doctor` reports posture findings (open signup,
   bootstrap gate, proxies, cookies, CSRF, throttle, password and session policy,
   token hygiene, encryption key, audit, WebAuthn RP ID) with stable IDs and
@@ -243,6 +246,12 @@ adheres to [Semantic Versioning](https://semver.org/) from v1.0 forward.
   login-time reconciliation write for legacy WebAuthn credentials. Implemented
   across the Postgres, MySQL, and in-memory backends and covered by the shared
   `storagetest` conformance suite.
+
+### Fixed
+
+- `PasswordPolicy.AllowLegacyBcrypt` is now honored at signin, step-up and
+  password change, with rehash to Argon2id on success. With it off, a bcrypt
+  hash returns invalid credentials instead of a 500.
 
 ## [2.5.0] - 2026-07-14
 

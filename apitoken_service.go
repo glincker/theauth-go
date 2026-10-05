@@ -29,6 +29,9 @@ var (
 type APITokensConfig struct {
 	// Prefix is prepended to every token secret. Defaults to "tk".
 	Prefix string
+	// AcceptUnprefixed also accepts bearer secrets that lack the prefix,
+	// looked up by the same SHA-256 hash. For migrating legacy random tokens.
+	AcceptUnprefixed bool
 	// Abilities restricts caller-defined ability names. Empty accepts any
 	// well-formed name. AbilityRoot is always allowed and always exclusive.
 	Abilities []string
@@ -311,11 +314,70 @@ func (s *apiTokenService) mint(ctx context.Context, in MintAPITokenInput) (strin
 	return raw, saved, nil
 }
 
+// ImportedToken is an existing token record to insert by hash. The secret is never supplied.
+type ImportedToken struct {
+	// ID is optional; a new one is generated when zero.
+	ID         ULID
+	OwnerID    ULID
+	OwnerKind  string
+	Name       string
+	Abilities  []string
+	TokenHash  []byte
+	CreatedAt  time.Time
+	ExpiresAt  *time.Time
+	LastUsedAt *time.Time
+}
+
+// ImportAPIToken inserts an existing token by its SHA-256 hash. The hash must
+// cover the full raw secret as presented by clients; tokens lacking the
+// configured prefix authenticate only when Config.APITokens.AcceptUnprefixed is set.
+func (a *TheAuth) ImportAPIToken(ctx context.Context, in ImportedToken) (APIToken, error) {
+	s, err := a.apiSvc()
+	if err != nil {
+		return APIToken{}, err
+	}
+	if in.OwnerKind == "" {
+		in.OwnerKind = OwnerKindUser
+	}
+	if in.OwnerKind != OwnerKindUser && in.OwnerKind != OwnerKindServiceAccount {
+		return APIToken{}, fmt.Errorf("theauth: unknown owner kind %q", in.OwnerKind)
+	}
+	if len(in.TokenHash) != sha256.Size {
+		return APIToken{}, errors.New("theauth: imported token hash must be a 32 byte SHA-256 digest")
+	}
+	name := strings.TrimSpace(in.Name)
+	if name == "" || len(name) > 120 {
+		return APIToken{}, errors.New("theauth: token name must be 1 to 120 characters")
+	}
+	if err := s.validateAbilities(in.Abilities, false); err != nil {
+		return APIToken{}, err
+	}
+	id := in.ID
+	if id == (ULID{}) {
+		id = ulid.New()
+	}
+	created := in.CreatedAt
+	if created.IsZero() {
+		created = s.now()
+	}
+	t := APIToken{
+		ID: id, OwnerID: in.OwnerID, OwnerKind: in.OwnerKind, Name: name,
+		Abilities: slices.Clone(in.Abilities), TokenHash: slices.Clone(in.TokenHash),
+		Hint: "imported", CreatedAt: created.UTC(), ExpiresAt: in.ExpiresAt, LastUsedAt: in.LastUsedAt,
+		Kind: APITokenKindPersonal,
+	}
+	saved, err := s.store.InsertAPIToken(ctx, t)
+	if err != nil {
+		return APIToken{}, fmt.Errorf("theauth: import API token: %w", err)
+	}
+	return saved, nil
+}
+
 // touchInterval bounds last_used_at writes to one per token per interval.
 const touchInterval = time.Minute
 
 func (s *apiTokenService) authenticate(ctx context.Context, raw string) (*Principal, error) {
-	if !strings.HasPrefix(raw, s.cfg.Prefix+"_") {
+	if raw == "" || (!s.cfg.AcceptUnprefixed && !strings.HasPrefix(raw, s.cfg.Prefix+"_")) {
 		return nil, ErrAPITokenInvalid
 	}
 	tok, err := s.store.APITokenByHash(ctx, hashToken(raw))

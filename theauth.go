@@ -259,7 +259,7 @@ type PasswordPolicyConfig struct {
 	// golang.org/x/crypto/bcrypt. On a successful match the password is
 	// transparently re-hashed with Argon2id; callers receive the new hash via
 	// the OnLegacyHashAccepted callback so they can update storage
-	// asynchronously. Set to false (default) in all non-migration deployments.
+	// asynchronously. With false, a bcrypt hash fails as invalid credentials. Set to false (default) in all non-migration deployments.
 	AllowLegacyBcrypt bool
 
 	// MinLength is the minimum password length in bytes. Default 12.
@@ -287,6 +287,7 @@ type TheAuth struct {
 	storage           Storage
 	emailSender       email.Sender
 	baseURL           string
+	allowLegacyBcrypt bool
 	signingKey        ed25519.PrivateKey
 	sessionTTL        time.Duration
 	magicLinkTTL      time.Duration
@@ -456,6 +457,7 @@ func New(cfg Config) (*TheAuth, error) {
 		storage:                    cfg.Storage,
 		emailSender:                cfg.EmailSender,
 		baseURL:                    cfg.BaseURL,
+		allowLegacyBcrypt:          cfg.PasswordPolicy.AllowLegacyBcrypt,
 		signingKey:                 cfg.SigningKey,
 		sessionTTL:                 cfg.SessionTTL,
 		sx:                         sx,

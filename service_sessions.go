@@ -249,7 +249,7 @@ func (a *TheAuth) ChangePassword(ctx context.Context, cur Session, currentPasswo
 	}
 	ok := false
 	if hash != "" {
-		if ok, err = crypto.VerifyPassword(currentPassword, hash); err != nil {
+		if ok, _, err = password.VerifyCredential(currentPassword, hash, a.allowLegacyBcrypt); err != nil {
 			return "", fmt.Errorf("theauth: change password: verify: %w", err)
 		}
 	}
@@ -310,8 +310,12 @@ func (a *TheAuth) verifyStepUp(ctx context.Context, sess *Session, in StepUpInpu
 		}
 		ok := false
 		if hash != "" {
-			if ok, err = crypto.VerifyPassword(in.Password, hash); err != nil {
+			var newHash string
+			if ok, newHash, err = password.VerifyCredential(in.Password, hash, a.allowLegacyBcrypt); err != nil {
 				return fmt.Errorf("theauth: step-up: verify password: %w", err)
+			}
+			if newHash != "" {
+				password.UpgradeHash(ctx, a.storage.SetUserPassword, sess.UserID, newHash)
 			}
 		}
 		if !ok {

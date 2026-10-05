@@ -120,6 +120,8 @@ type Config struct {
 	Throttle *throttle.Limiter
 	// Gate, when non-nil, decides whether Signup may proceed.
 	Gate SignupGate
+	// AllowLegacyBcrypt accepts bcrypt hashes at signin and rehashes them to Argon2id.
+	AllowLegacyBcrypt bool
 }
 
 // Service holds the dependencies needed for password flows.
@@ -296,7 +298,7 @@ func (s *Service) Signin(ctx context.Context, emailAddr, password, userAgent, ip
 		s.emitLoginFailed(ctx, &user.ID, userAgent, ip, "no_password")
 		return "", nil, "", models.NewError(models.CodeInvalidCredentials, "invalid email or password", nil)
 	}
-	ok, err := crypto.VerifyPassword(password, hash)
+	ok, newHash, err := VerifyCredential(password, hash, s.cfg.AllowLegacyBcrypt)
 	if err != nil {
 		// Malformed stored hash; server-side fault, not a credential miss.
 		slog.Error("theauth: stored password hash unparseable", "user_id", user.ID.String(), "err", err.Error())
@@ -308,6 +310,9 @@ func (s *Service) Signin(ctx context.Context, emailAddr, password, userAgent, ip
 		return "", nil, "", models.NewError(models.CodeInvalidCredentials, "invalid email or password", nil)
 	}
 	s.recordSuccess(ctx, ip, emailAddr)
+	if newHash != "" {
+		UpgradeHash(ctx, s.storage.SetUserPassword, user.ID, newHash)
+	}
 	// v0.5 step-up: when TOTP is enrolled and confirmed for this user, mint
 	// a pending_2fa session instead of a full one. The caller (the HTTP
 	// handler) renders {"step":"totp_required"} so the client knows to
