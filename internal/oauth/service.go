@@ -339,7 +339,7 @@ func MatchReturnTo(candidate string, allow []string) string {
 	if candidate == "" || len(allow) == 0 || HasUnsafeRedirectChars(candidate) {
 		return ""
 	}
-	if strings.HasPrefix(candidate, "//") {
+	if strings.HasPrefix(candidate, "//") || strings.HasPrefix(candidate, "/\\") {
 		return ""
 	}
 	for _, e := range allow {

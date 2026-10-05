@@ -77,7 +77,7 @@ func (h *Handler) safeRelay(relay string) string {
 		return h.postLoginRedirect
 	}
 	if strings.HasPrefix(relay, "/") && !strings.HasPrefix(relay, "//") &&
-		!internaloauth.HasUnsafeRedirectChars(relay) {
+		!strings.HasPrefix(relay, "/\\") && !internaloauth.HasUnsafeRedirectChars(relay) {
 		return relay
 	}
 	if m := internaloauth.MatchReturnTo(relay, h.allowedRelay); m != "" {
