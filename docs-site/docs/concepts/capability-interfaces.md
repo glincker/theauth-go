@@ -24,18 +24,19 @@ Verified against the adapters in this repository. "Yes" means the adapter has th
 | User count (first-run `Bootstrap`) | `UserCountStorage` | Yes | Yes | Yes | Yes |
 | Passkey rename | `WebAuthnRenameStorage` | Yes | Yes | Yes | Yes |
 | Recovery code count and regenerate | `RecoveryCodeStorage` | Yes | Yes | Yes | Yes |
-| Durable TOTP replay protection | `TOTPReplayStorage` | Yes | Yes | Pending | Pending |
-| Session list, idle timeout, step-up | `SessionManagementStorage` | Yes | Yes | Pending | Pending |
-| Session links | `SessionLinkStorage` | Yes | Yes | Pending | Pending |
-| Scoped API tokens | `APITokenStorage` | Yes | Yes | Pending | Pending |
-| Device grant (RFC 8628) | `DeviceCodeStorage` | Yes | Yes | Pending | Pending |
-| Shared login throttle store | `LoginThrottleStore` | In-process default | Yes | In-process default | In-process default |
+| Durable TOTP replay protection | `TOTPReplayStorage` | Yes | Yes | Yes | Yes |
+| Session list, idle timeout, step-up | `SessionManagementStorage` | Yes | Yes | Yes | Yes |
+| Session links | `SessionLinkStorage` | Yes | Yes | Yes | Yes |
+| Scoped API tokens | `APITokenStorage` | Yes | Yes | Yes | Yes |
+| Device grant (RFC 8628) | `DeviceCodeStorage` | Yes | Yes | Yes | Yes |
+| Shared login throttle store | `LoginThrottleStore` | In-process default | Yes | Yes | Yes |
 | Organizations, SAML, SCIM, RBAC | `OrganizationStorage`, `SAMLStorage`, `SCIMStorage`, `RBACStorage` | Yes | No | Yes | Yes |
 | OAuth 2.1 authorization server, agent identity | `OAuthServerStorage` | Yes | No | Yes | Yes |
 | CIBA backchannel auth | `CIBAStorage` | Yes | No | Yes | No |
 | Durable JWT-bearer `jti` replay | `JWTBearerStorage` | Yes | No | No | No |
+| Authorization policies ([policy engine](../guides/policy-engine.md)) | `policy.Storage` | Yes | No | No | No |
 
-"Pending" means the capability is not implemented in the Postgres and MySQL adapters on this branch, so enabling the feature with those backends returns `ErrStorageMissingCapability` from `New`. Work to add them is tracked separately; check the changelog before relying on either state.
+Postgres and MySQL implement the token, device, session-management, TOTP replay, user-count and throttle capabilities, and the new `storagetest` suites for them pass against live PostgreSQL 16 and MySQL 8. The older shared contract gate for those two adapters (`THEAUTH_PG_CONTRACT`, `THEAUTH_MYSQL_CONTRACT`) is still off in CI because some older subtests fail; see `docs/ROADMAP.md`. Treat Postgres and MySQL support for the newer features as newly added.
 
 Notes:
 
@@ -64,7 +65,7 @@ Agent tokens minted with `MintAgentToken` are API tokens (`kind=agent`), so they
 
 - **memory**: tests and demos. State is lost on restart.
 - **sqlite** (`storage/sqlite`, separate module, Go 1.26): single-binary and single-host apps, CLIs with a local server, edge boxes. Covers sign-in, passkeys, TOTP, sessions with step-up, API tokens, device login and audit. It has no organizations, SAML, SCIM, RBAC or OAuth authorization server. One process should own the file.
-- **postgres**: multi-instance production with the full enterprise and OAuth server surface. Does not yet have the token, device and session-management capabilities listed as pending above.
-- **mysql**: same coverage as Postgres except CIBA, with the same pending items.
+- **postgres**: multi-instance production with the full enterprise and OAuth server surface, plus tokens, device login and session management. No durable JWT-bearer `jti` replay store.
+- **mysql**: same coverage as Postgres except CIBA.
 
-Pick by the features you need first, host topology second. If you need both API tokens or device login and organizations or the authorization server, no single built-in backend has both today. You can implement the missing capability on your own adapter; see [Write a Custom Storage Backend](../guides/custom-storage-backend.md) and run the `storagetest` suites (`RunAPITokens`, `RunDeviceCodes`, `RunSessionManagement`) against it.
+Pick by the features you need first, host topology second. SQLite is the fit for a single-binary app without organizations, SAML, SCIM or the authorization server. If you need those, use Postgres or MySQL. You can also implement a capability on your own adapter; see [Write a Custom Storage Backend](../guides/custom-storage-backend.md) and run the `storagetest` suites (`RunAPITokens`, `RunDeviceCodes`, `RunSessionManagement`) against it.
