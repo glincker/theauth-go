@@ -8,6 +8,12 @@ adheres to [Semantic Versioning](https://semver.org/) from v1.0 forward.
 
 ### Added
 
+- **Security doctor.** `(*TheAuth).Doctor` reports posture findings (open signup,
+  bootstrap gate, proxies, cookies, CSRF, throttle, password and session policy,
+  token hygiene, encryption key, audit, WebAuthn RP ID) with stable IDs and
+  severities. `GET /auth/admin/doctor` serves it to root callers, and
+  `cmd/theauth-doctor` prints it with `--format json` and `--fail-on` for CI.
+  See `docs/SECURITY-DOCTOR.md`.
 - **Token self-service routes.** `GET /auth/tokens/current` describes the
   presented API bearer token and `DELETE /auth/tokens/current` revokes it, so
   `clientauth` `Whoami` and `Logout` work against a real server. Bearer-only,

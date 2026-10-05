@@ -301,6 +301,7 @@ type TheAuth struct {
 	revocations       RevocationBus
 
 	storageRaw any
+	doctorCfg  Config
 	emailNorm  emailnorm.Normalizer
 	throttle   *throttle.Limiter
 	bootstrap  *bootstrapGate
@@ -491,6 +492,7 @@ func New(cfg Config) (*TheAuth, error) {
 		lifecycle:                  coalesceLifecycleHooks(cfg.LifecycleHooks),
 		tenancyCfg:                 cfg.Tenancy,
 	}
+	a.doctorCfg = cfg
 	if a.revocations == nil {
 		a.revocations = NewMemoryRevocationBus()
 	}
