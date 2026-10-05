@@ -81,6 +81,7 @@ nav:
       - Enable WebAuthn Passkeys: guides/webauthn-passkeys.md
       - API Tokens and Device Login: guides/api-tokens.md
       - CLI Login: guides/cli-login.md
+      - Path Prefix and Dynamic Providers: guides/path-prefix-and-dynamic-providers.md
       - Policy Engine: guides/policy-engine.md
 
       - Auth for a Single-Binary Go App: guides/single-binary-go-app.md

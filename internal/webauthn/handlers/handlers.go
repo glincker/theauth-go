@@ -58,6 +58,8 @@ type SessionCookieConfig struct {
 // ChallengeCookieConfig captures the challenge cookie shape (just
 // SecureFlag + TTL; Name + Path are constants above).
 type ChallengeCookieConfig struct {
+	// Path scopes the challenge cookie. Empty means "/auth/webauthn".
+	Path       string
 	SecureFlag bool
 	TTL        time.Duration
 }
@@ -102,11 +104,18 @@ func (h *Handler) Mount(r chi.Router, ipLimit, requireAuth func(http.Handler) ht
 	})
 }
 
+func (h *Handler) challengePath() string {
+	if h.challengeCfg.Path != "" {
+		return h.challengeCfg.Path
+	}
+	return webauthnCookiePath
+}
+
 func (h *Handler) setChallengeCookie(w http.ResponseWriter, token string) {
 	http.SetCookie(w, &http.Cookie{
 		Name:     webauthnChallengeCookieName,
 		Value:    token,
-		Path:     webauthnCookiePath,
+		Path:     h.challengePath(),
 		HttpOnly: true,
 		Secure:   h.challengeCfg.SecureFlag,
 		SameSite: http.SameSiteLaxMode,
@@ -118,7 +127,7 @@ func (h *Handler) clearChallengeCookie(w http.ResponseWriter) {
 	http.SetCookie(w, &http.Cookie{
 		Name:     webauthnChallengeCookieName,
 		Value:    "",
-		Path:     webauthnCookiePath,
+		Path:     h.challengePath(),
 		MaxAge:   -1,
 		HttpOnly: true,
 		Secure:   h.challengeCfg.SecureFlag,

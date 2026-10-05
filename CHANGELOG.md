@@ -8,6 +8,31 @@ adheres to [Semantic Versioning](https://semver.org/) from v1.0 forward.
 
 ### Added
 
+- **Legacy API token acceptance.** `APITokensConfig.AcceptUnprefixed` accepts
+  unprefixed bearer tokens by SHA-256 hash, and `ImportAPIToken` inserts an
+  existing token record by hash without seeing the secret.
+
+- **`Config.PathPrefix`.** Serve the auth routes under a custom prefix (default
+  `/auth`, validated) with no `http.StripPrefix`. OAuth redirect URIs, magic and
+  reset links, the WebAuthn challenge cookie path and the authorization server
+  login URL follow it. `clientauth` takes the same prefix via `AuthPath`.
+
+- **`Config.ProviderResolver`.** Resolve OAuth/OIDC providers per request for
+  runtime add, edit and remove, with `ProviderResolverFirst`,
+  `ProviderResolverTTL`, `(*TheAuth).InvalidateProvider` and `ListProviders`.
+  Names are validated and resolver errors fail closed.
+
+- **Device pending list.** `GET /auth/device/requests` lists pending device
+  requests (no codes or hashes) and `POST /auth/device/requests/{id}/approve|deny`
+  decides one by ID, session only, with the same capping and atomicity as the
+  user code route. New optional `DeviceCodeLister` storage extension for memory,
+  SQLite, Postgres and MySQL, plus `ListDeviceRequests` and
+  `DecideDeviceRequestByID`.
+  These routes are restricted by default: the session must hold
+  `APITokensConfig.DeviceRequestsAbility` (empty means root) or the host sets
+  `DeviceRequestsAnySignedInUser`. Others get 403 `auth.forbidden`. The by-code
+  route is unchanged.
+
 - **Security doctor.** `(*TheAuth).Doctor` reports posture findings (open signup,
   bootstrap gate, proxies, cookies, CSRF, throttle, password and session policy,
   token hygiene, encryption key, audit, WebAuthn RP ID) with stable IDs and
@@ -243,6 +268,12 @@ adheres to [Semantic Versioning](https://semver.org/) from v1.0 forward.
   login-time reconciliation write for legacy WebAuthn credentials. Implemented
   across the Postgres, MySQL, and in-memory backends and covered by the shared
   `storagetest` conformance suite.
+
+### Fixed
+
+- `PasswordPolicy.AllowLegacyBcrypt` is now honored at signin, step-up and
+  password change, with rehash to Argon2id on success. With it off, a bcrypt
+  hash returns invalid credentials instead of a 500.
 
 ## [2.5.0] - 2026-07-14
 

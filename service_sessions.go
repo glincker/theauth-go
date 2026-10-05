@@ -249,7 +249,7 @@ func (a *TheAuth) ChangePassword(ctx context.Context, cur Session, currentPasswo
 	}
 	ok := false
 	if hash != "" {
-		if ok, err = crypto.VerifyPassword(currentPassword, hash); err != nil {
+		if ok, _, err = password.VerifyCredential(currentPassword, hash, a.allowLegacyBcrypt); err != nil {
 			return "", fmt.Errorf("theauth: change password: verify: %w", err)
 		}
 	}
@@ -310,8 +310,12 @@ func (a *TheAuth) verifyStepUp(ctx context.Context, sess *Session, in StepUpInpu
 		}
 		ok := false
 		if hash != "" {
-			if ok, err = crypto.VerifyPassword(in.Password, hash); err != nil {
+			var newHash string
+			if ok, newHash, err = password.VerifyCredential(in.Password, hash, a.allowLegacyBcrypt); err != nil {
 				return fmt.Errorf("theauth: step-up: verify password: %w", err)
+			}
+			if newHash != "" {
+				password.UpgradeHash(ctx, a.storage.SetUserPassword, sess.UserID, newHash)
 			}
 		}
 		if !ok {
@@ -367,7 +371,7 @@ func (a *TheAuth) RequireRecentAuth(maxAge time.Duration) func(http.Handler) htt
 		return auth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			sess, _ := SessionFromContext(r.Context())
 			if sess == nil || time.Since(a.lastAuthAt(sess)) > maxAge {
-				writeProblemJSON(w, http.StatusForbidden, "auth.recent_auth_required", "Recent authentication required, POST /auth/step-up", "")
+				writeProblemJSON(w, http.StatusForbidden, "auth.recent_auth_required", "Recent authentication required, POST "+a.pathPrefix+"/step-up", "")
 				return
 			}
 			next.ServeHTTP(w, r)

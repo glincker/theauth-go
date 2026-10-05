@@ -262,3 +262,20 @@ func (a *TheAuth) ensureOrgMembership(ctx context.Context, orgID, userID ULID) e
 		Role:           OrgRoleMember,
 	})
 }
+
+// InvalidateProvider drops the cached ProviderResolver answer for name so a
+// provider edited or removed at runtime takes effect on the next request.
+func (a *TheAuth) InvalidateProvider(name string) {
+	if a.providerReg != nil {
+		a.providerReg.Invalidate(name)
+	}
+}
+
+// ListProviders returns the static providers plus those a ProviderResolver
+// that implements ProviderLister reports.
+func (a *TheAuth) ListProviders(ctx context.Context) ([]Provider, error) {
+	if a.providerReg == nil {
+		return nil, nil
+	}
+	return a.providerReg.List(ctx)
+}
