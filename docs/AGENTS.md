@@ -103,14 +103,15 @@ This compiles and runs as-is against `go 1.25`, `github.com/glincker/theauth-go/
 - `theauth.go`: `New(Config)`, top-level wiring
 - `handlers.go`: HTTP handlers mounted by `a.Mount(r)`
 - `middleware.go`: `RequireAuth()` and context helpers (`UserFromContext`)
-- `sessions.go`: session issue, validate, revoke
+- `internal/session/`: session issue, validate, revoke; `sessions.go`: session list and revoke, step-up and session links on `*TheAuth`
 - `internal/magiclink/`: magic-link issue + consume
 - `internal/oauth/`: OAuth start, callback, find-or-create (v0.3)
 - `mounts.go`: HTTP handler wiring for all features; `internal/oauth/` handles `/auth/providers/{name}/*` (v0.3)
-- `provider/doc.go`: `Provider` interface + `ProviderToken` / `ProviderUser` types
+- `internal/oauth/service.go`: `Provider` interface + `ProviderToken` / `ProviderUser` types, re-exported from the root in `models.go`
 - `provider/github/`: GitHub `Provider` implementation (v0.3)
 - `provider/google/`, `provider/microsoft/`, `provider/discord/`: v0.4 `Provider` implementations
-- `provider/oidc/`: generic OIDC provider; uses `oidc.jwks` for JWKS validation
+- `provider/internal/oauthtest/`: shared httptest scaffolding used by the v0.4 provider tests; internal so external consumers cannot import it
+- `provider/oidc/`: generic OIDC provider; `provider/oidc/jwks.go` fetches and caches the issuer's signing keys
 - `internal/webauthn/`: WebAuthn passkey registration + discoverable login (v0.5); wired in `mounts.go`
 - `internal/totp/`: TOTP enrollment, verify, recovery-code consumption, pending_2fa session state machine (v0.5); wired in `mounts.go`
 - `crypto/aesgcm.go` + `crypto/pkce.go` + `crypto/recoverycode.go`: encryption, PKCE, recovery-code hashing primitives
