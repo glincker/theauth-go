@@ -8,6 +8,7 @@ import (
 	"encoding/pem"
 	"errors"
 	"log/slog"
+	"strings"
 	"time"
 
 	"github.com/glincker/theauth-go/crypto"
@@ -98,8 +99,11 @@ func validateConfig(cfg *Config) (providers map[string]Provider, sp samlParsed, 
 	}
 
 	// M3 (security audit 2026-06-21): warn when SecureCookie is false.
-	if !cfg.SecureCookie && !cfg.SuppressSecureCookieWarning {
-		slog.Warn("SecureCookie: false is deprecated; v3.0 will default to true. Set Config.SuppressSecureCookieWarning=true to suppress this warning in dev.")
+	if !cfg.SecureCookie && !cfg.SuppressSecureCookieWarning && !strings.HasPrefix(strings.ToLower(cfg.BaseURL), "https://") {
+		slog.Warn("SecureCookie: false with a non-https BaseURL; cookies are Secure only when the request arrives over TLS or via a trusted proxy. Set Config.SuppressSecureCookieWarning=true to suppress this warning in dev.")
+	}
+	if cfg.RateLimitPerIP > 0 && len(cfg.TrustedProxies) == 0 && !cfg.SuppressTrustedProxiesWarning {
+		slog.Warn("TrustedProxies is empty: behind a reverse proxy every client shares one per-IP rate-limit bucket. List the proxy CIDRs in Config.TrustedProxies, or set Config.SuppressTrustedProxiesWarning=true if exposed directly.")
 	}
 
 	// OAuth providers: need a 32-byte key, unique names.

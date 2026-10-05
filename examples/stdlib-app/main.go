@@ -8,7 +8,6 @@ import (
 
 	"github.com/glincker/theauth-go"
 	"github.com/glincker/theauth-go/storage/memory"
-	"github.com/go-chi/chi/v5"
 )
 
 func main() {
@@ -25,15 +24,8 @@ func main() {
 	}
 	defer a.Close()
 
-	// theauth-go's Mount writes onto a chi.Router. Mount onto a chi
-	// subrouter and then expose it under /auth/ via a plain
-	// http.ServeMux. The point of this example is that no framework is
-	// required: chi is only used to satisfy the Mount signature.
-	authRouter := chi.NewRouter()
-	a.Mount(authRouter)
-
 	mux := http.NewServeMux()
-	mux.Handle("/auth/", authRouter)
+	mux.Handle("/auth/", a.Handler())
 	mux.HandleFunc("GET /", func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte("open /auth/me after signing in via /auth/magic-link"))
 	})

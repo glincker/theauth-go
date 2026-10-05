@@ -92,6 +92,7 @@ nav:
       - Audit Events: reference/audit-events.md
   - Security:
       - Threat Model: security/threat-model.md
+      - HTTP Security: security/http-security.md
       - Releases and Verification: security/releases.md
       - Benchmarks: security/benchmarks.md
       - SOC 2 Mapping: security/compliance-soc2.md

@@ -43,6 +43,9 @@ type Config struct {
 	SessionTTL   time.Duration
 	MagicLinkTTL time.Duration
 	CookieName   string
+	// SecureCookie forces the Secure attribute on every session cookie.
+	// When false, Secure is still set per request if BaseURL is https, the
+	// connection is TLS, or a TrustedProxies peer sent X-Forwarded-Proto: https.
 	SecureCookie bool
 	// SuppressSecureCookieWarning silences the v2.2 deprecation WARN logged
 	// when SecureCookie is false. Set this to true in local/dev environments
@@ -67,6 +70,21 @@ type Config struct {
 	// netip.MustParsePrefix("172.16.0.0/12"). For a single-host LB front
 	// end pass a /32 (or /128 for IPv6) literal.
 	TrustedProxies []netip.Prefix
+
+	// TrustedOrigins lists extra origins (scheme://host[:port]) allowed to
+	// send cookie-authenticated state-changing requests. The BaseURL origin
+	// is always trusted. Cross-origin SPAs on a sibling domain add theirs here.
+	TrustedOrigins []string
+
+	// DisableCSRFProtection turns off the Origin/Referer check on
+	// cookie-authenticated POST/PUT/PATCH/DELETE requests. Leave false
+	// unless a fronting layer already enforces it.
+	DisableCSRFProtection bool
+
+	// SuppressTrustedProxiesWarning silences the startup WARN logged when
+	// TrustedProxies is empty. Set it when the server is exposed directly
+	// with no reverse proxy in front.
+	SuppressTrustedProxiesWarning bool
 
 	// Providers is the list of OAuth providers exposed under
 	// /auth/providers/{name}/start and /callback. Leave nil to disable
@@ -217,6 +235,8 @@ type TheAuth struct {
 	rateLimitPerIP    int
 	rateLimitPerEmail int
 	trustedProxies    []netip.Prefix
+	trustedOrigins    []string
+	csrfDisabled      bool
 
 	// dcrRegistrationTokenHashes is the sha256-hashed set of operator
 	// initial access tokens accepted by POST /oauth/register when DCR is
@@ -353,6 +373,11 @@ func New(cfg Config) (*TheAuth, error) {
 		return nil, err
 	}
 
+	trustedOrigins, err := normalizeOrigins(cfg.TrustedOrigins)
+	if err != nil {
+		return nil, err
+	}
+
 	a := &TheAuth{
 		storage:                    cfg.Storage,
 		emailSender:                cfg.EmailSender,
@@ -365,6 +390,8 @@ func New(cfg Config) (*TheAuth, error) {
 		rateLimitPerIP:             cfg.RateLimitPerIP,
 		rateLimitPerEmail:          cfg.RateLimitPerEmail,
 		trustedProxies:             append([]netip.Prefix(nil), cfg.TrustedProxies...),
+		trustedOrigins:             trustedOrigins,
+		csrfDisabled:               cfg.DisableCSRFProtection,
 		dcrRegistrationTokenHashes: dcrTokenHashes,
 		providers:                  providers,
 		encryptionKey:              cfg.EncryptionKey,
