@@ -177,6 +177,13 @@ type WebAuthnConfig struct {
 	// CloneWarningReject, refuses the login; CloneWarningFlag lets it
 	// through and emits a passkey.clone_warning audit event.
 	CloneWarning CloneWarningPolicy
+	// UserHandleResolver lets passkeys imported from another system sign in
+	// when their authenticator holds a user handle that is not a theauth
+	// handle. It receives the credential id and the handle and must return
+	// the user that handle denotes. The credential's stored owner stays
+	// authoritative: login is refused unless the resolver returns that same
+	// user. Nil (the default) accepts only theauth user handles.
+	UserHandleResolver func(ctx context.Context, credentialID, userHandle []byte) (ULID, error)
 }
 
 // CloneWarningPolicy selects the response to a sign count regression.

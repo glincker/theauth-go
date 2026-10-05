@@ -57,12 +57,19 @@ type challenge struct {
 type webauthnUser struct {
 	u           models.User
 	credentials []gowebauthn.Credential
+	// handle overrides WebAuthnID for credentials imported with a foreign user handle.
+	handle []byte
 }
 
 // WebAuthnID returns the user's 16 raw ULID bytes as the WebAuthn user
 // handle. ULID fits well inside the 64 byte handle limit and is stable
 // across email or display name renames.
-func (w *webauthnUser) WebAuthnID() []byte { return w.u.ID[:] }
+func (w *webauthnUser) WebAuthnID() []byte {
+	if len(w.handle) > 0 {
+		return w.handle
+	}
+	return w.u.ID[:]
+}
 
 // WebAuthnName is the human-readable identifier (email).
 func (w *webauthnUser) WebAuthnName() string { return w.u.Email }
@@ -111,6 +118,9 @@ type Config struct {
 	RequireUserVerification bool
 	// CloneWarning is CloneWarningReject (default) or CloneWarningFlag.
 	CloneWarning string
+	// UserHandleResolver maps a foreign user handle to its owner; nil keeps
+	// the library-handle-only behavior.
+	UserHandleResolver func(ctx context.Context, credentialID, userHandle []byte) (models.ULID, error)
 }
 
 // Clone-warning policies for a sign count that fails to advance.
@@ -479,12 +489,7 @@ func (s *Service) FinishLogin(ctx context.Context, challengeToken string, body i
 	// authenticator's rawID and userHandle. We use userHandle (which is
 	// our ULID bytes) to load the owning user and their credentials.
 	handler := func(rawID, userHandle []byte) (gowebauthn.User, error) {
-		if len(userHandle) != 16 {
-			return nil, errors.New("theauth: unexpected user handle length")
-		}
-		var uid models.ULID
-		copy(uid[:], userHandle)
-		u, err := s.storage.UserByID(ctx, uid)
+		uid, u, handle, err := s.loginOwner(ctx, rawID, userHandle)
 		if err != nil {
 			return nil, err
 		}
@@ -492,7 +497,7 @@ func (s *Service) FinishLogin(ctx context.Context, challengeToken string, body i
 		if err != nil {
 			return nil, err
 		}
-		wu := &webauthnUser{u: *u, credentials: make([]gowebauthn.Credential, 0, len(creds))}
+		wu := &webauthnUser{u: *u, credentials: make([]gowebauthn.Credential, 0, len(creds)), handle: handle}
 		for _, c := range creds {
 			gc := dbToGoWebauthnCredential(c)
 			if bytes.Equal(c.CredentialID, rawID) && (c.BackupEligible == nil || c.BackupState == nil) {
@@ -579,6 +584,42 @@ func (s *Service) FinishLogin(ctx context.Context, challengeToken string, body i
 	})
 	slog.Info("theauth: passkey login", "user_id", user.ID.String(), "credential_id_len", len(stored.CredentialID))
 	return sessTok, sess, nil
+}
+
+var errHandleRejected = errors.New("theauth: user handle not accepted")
+
+// loginOwner resolves the user an assertion's handle refers to. A library
+// handle (16 ULID bytes of an existing user) is used as is. Otherwise, when a
+// UserHandleResolver is set, the credential id's stored owner is authoritative
+// and the resolver must agree with it; every failure returns the same error.
+// The returned handle is non-nil only for the foreign-handle path.
+func (s *Service) loginOwner(ctx context.Context, rawID, userHandle []byte) (models.ULID, *models.User, []byte, error) {
+	var uid models.ULID
+	var lookupErr error = errors.New("theauth: unexpected user handle length")
+	if len(userHandle) == 16 {
+		copy(uid[:], userHandle)
+		u, err := s.storage.UserByID(ctx, uid)
+		if err == nil {
+			return uid, u, nil, nil
+		}
+		lookupErr = err
+	}
+	if s.cfg.UserHandleResolver == nil {
+		return uid, nil, nil, lookupErr
+	}
+	stored, err := s.storage.WebAuthnCredentialByCredentialID(ctx, rawID)
+	if err != nil || stored == nil {
+		return uid, nil, nil, errHandleRejected
+	}
+	resolved, err := s.cfg.UserHandleResolver(ctx, rawID, userHandle)
+	if err != nil || resolved != stored.UserID {
+		return uid, nil, nil, errHandleRejected
+	}
+	u, err := s.storage.UserByID(ctx, stored.UserID)
+	if err != nil {
+		return uid, nil, nil, errHandleRejected
+	}
+	return stored.UserID, u, append([]byte(nil), userHandle...), nil
 }
 
 // ListCredentials returns the stored WebAuthn credentials for a user.

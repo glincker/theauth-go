@@ -15,6 +15,10 @@ adheres to [Semantic Versioning](https://semver.org/) from v1.0 forward.
 - Default logs no longer contain email addresses (password signin/signup/reset, magic link, `email.Noop`); lines carry `user_id` or a 12-hex `email_ref` hash instead.
 - `ResetPasswordAdmin` now also clears the email's per-IP login backoff entries (new optional `LoginThrottleEntryDeleter` store capability; implemented by the memory, sqlite, postgres and mysql stores).
 
+### Added
+
+- `WebAuthnConfig.UserHandleResolver`: lets imported passkeys whose authenticator holds a foreign user handle sign in; the credential's stored owner stays authoritative and the resolver must agree with it.
+
 ## [2.6.0] - 2026-10-05
 
 ### Upgrade notes
