@@ -10,6 +10,7 @@ import (
 	internalas "github.com/glincker/theauth-go/internal/as"
 	internalaudit "github.com/glincker/theauth-go/internal/audit"
 	"github.com/glincker/theauth-go/internal/delegation"
+	"github.com/glincker/theauth-go/internal/emailnorm"
 	"github.com/glincker/theauth-go/internal/identitylink"
 	"github.com/glincker/theauth-go/internal/magiclink"
 	internaloauth "github.com/glincker/theauth-go/internal/oauth"
@@ -19,24 +20,48 @@ import (
 	internalsaml "github.com/glincker/theauth-go/internal/saml"
 	internalscim "github.com/glincker/theauth-go/internal/scim"
 	"github.com/glincker/theauth-go/internal/session"
+	"github.com/glincker/theauth-go/internal/throttle"
 	internaltotp "github.com/glincker/theauth-go/internal/totp"
 	internalwebauthn "github.com/glincker/theauth-go/internal/webauthn"
 )
 
 // Config holds the wiring for a TheAuth instance.
 //
-// Storage and BaseURL are required. Everything else has sensible defaults
+// BaseURL and exactly one of Storage or CoreStorage are required. Everything else has sensible defaults
 // applied by New: SessionTTL=24h, MagicLinkTTL=15m, CookieName="theauth_session",
 // EmailSender=email.Noop{}. SigningKey is reserved for future JWT signing (v0.2+);
 // v0.1 uses opaque tokens and leaves the field nil.
 type Config struct {
-	Storage      Storage
-	EmailSender  email.Sender
-	BaseURL      string
-	SigningKey   ed25519.PrivateKey
-	SessionTTL   time.Duration
+	Storage Storage
+	// CoreStorage is the alternative to Storage for adapters that implement
+	// only the capabilities the enabled features need. It must cover users,
+	// sessions, magic links and passwords; New returns
+	// ErrStorageMissingCapability when an enabled feature needs more.
+	CoreStorage CoreStorage
+	storageRaw  any
+	EmailSender email.Sender
+	BaseURL     string
+	SigningKey  ed25519.PrivateKey
+	// SessionTTL is the absolute session lifetime. Defaults to 24h.
+	SessionTTL time.Duration
+	// SessionIdleTimeout expires a session unused for this long. Zero
+	// disables it. Needs a storage implementing SessionManagementStorage.
+	SessionIdleTimeout time.Duration
+	// SessionTouchInterval throttles last-seen writes to at most one per
+	// session per interval. Defaults to 1m; negative disables last-seen
+	// tracking. Must be shorter than SessionIdleTimeout when that is set.
+	SessionTouchInterval time.Duration
+	// StepUpTTL is how long a successful POST /auth/step-up elevates a
+	// session. Defaults to 5m.
+	StepUpTTL time.Duration
+	// SessionLinks enables programmatic session links when non-nil. Needs a
+	// storage implementing SessionLinkStorage and SessionManagementStorage.
+	SessionLinks *SessionLinksConfig
 	MagicLinkTTL time.Duration
 	CookieName   string
+	// SecureCookie forces the Secure attribute on every session cookie.
+	// When false, Secure is still set per request if BaseURL is https, the
+	// connection is TLS, or a TrustedProxies peer sent X-Forwarded-Proto: https.
 	SecureCookie bool
 	// SuppressSecureCookieWarning silences the v2.2 deprecation WARN logged
 	// when SecureCookie is false. Set this to true in local/dev environments
@@ -62,6 +87,21 @@ type Config struct {
 	// end pass a /32 (or /128 for IPv6) literal.
 	TrustedProxies []netip.Prefix
 
+	// TrustedOrigins lists extra origins (scheme://host[:port]) allowed to
+	// send cookie-authenticated state-changing requests. The BaseURL origin
+	// is always trusted. Cross-origin SPAs on a sibling domain add theirs here.
+	TrustedOrigins []string
+
+	// DisableCSRFProtection turns off the Origin/Referer check on
+	// cookie-authenticated POST/PUT/PATCH/DELETE requests. Leave false
+	// unless a fronting layer already enforces it.
+	DisableCSRFProtection bool
+
+	// SuppressTrustedProxiesWarning silences the startup WARN logged when
+	// TrustedProxies is empty. Set it when the server is exposed directly
+	// with no reverse proxy in front.
+	SuppressTrustedProxiesWarning bool
+
 	// Providers is the list of OAuth providers exposed under
 	// /auth/providers/{name}/start and /callback. Leave nil to disable
 	// OAuth entirely (v0.1 / v0.2 behavior). Each provider's Name() must
@@ -79,9 +119,23 @@ type Config struct {
 	// your own origin; cross-origin redirects are not validated here.
 	PostLoginRedirect string
 
+	// APITokens enables scoped API tokens, RequireAbility and, via its Device
+	// field, the device authorization grant. Needs APITokenStorage (and
+	// DeviceCodeStorage for Device).
+	APITokens *APITokensConfig
+
 	// WebAuthn enables passkey registration + discoverable login when non-nil.
 	// RPID and RPOrigins are mandatory per spec. Leave nil to keep v0.4 behavior.
 	WebAuthn *WebAuthnConfig
+
+	// OAuth tunes OAuth login hardening: state store, return-to allow-list
+	// and signup policy. Nil keeps the defaults documented on OAuthConfig.
+	OAuth *OAuthConfig
+
+	// AuthEventSink, when set, receives every security-relevant
+	// authentication event (login, MFA, password, passkey, TOTP, session,
+	// token) as a PII-minimal AuthEvent. Independent of Config.Audit.
+	AuthEventSink AuthEventSink
 
 	// TOTP enables time-based second-factor enrollment + verification when non-nil.
 	// Requires Config.EncryptionKey (already required by v0.3 OAuth) so the stored
@@ -139,6 +193,11 @@ type Config struct {
 	// AgentSecretLength=32.
 	AgentIdentity *AgentConfig
 
+	// RevocationBus carries revocation events to long-lived connections.
+	// Defaults to an in-process bus; supply one backed by Postgres NOTIFY or
+	// Redis when streams and revokes can land on different processes.
+	RevocationBus RevocationBus
+
 	// AccountUX (v2.0 phase 6) mounts /account/agents and /account/delegations
 	// when true. Requires AgentIdentity to be configured. Routes are gated by
 	// session cookie auth only (no special permission): they manage the
@@ -175,6 +234,20 @@ type Config struct {
 	// active organization to it. Removes the SQL-seeding friction
 	// consumers previously hit on first signup. Nil = no auto-provisioning.
 	Tenancy *TenancyConfig
+
+	// LoginThrottle tunes password-login backoff, per-user lockout and the
+	// per-user TOTP/recovery-code attempt limit. Nil selects safe defaults
+	// (enabled); set LoginThrottle.Disabled to opt out.
+	LoginThrottle *LoginThrottleConfig
+
+	// Bootstrap, when non-nil, closes public signup and requires a one-time
+	// setup token to create the first user. Needs a storage implementing
+	// UserCountStorage.
+	Bootstrap *BootstrapConfig
+
+	// EmailNFKC additionally applies Unicode NFKC folding when canonicalizing
+	// email addresses. Trimming and lowercasing always apply.
+	EmailNFKC bool
 }
 
 // PasswordPolicyConfig holds optional password-verification extensions.
@@ -188,6 +261,17 @@ type PasswordPolicyConfig struct {
 	// the OnLegacyHashAccepted callback so they can update storage
 	// asynchronously. Set to false (default) in all non-migration deployments.
 	AllowLegacyBcrypt bool
+
+	// MinLength is the minimum password length in bytes. Default 12.
+	MinLength int
+
+	// MaxBytes is the maximum password length in bytes. Longer passwords are
+	// rejected with CodeWeakPassword (HTTP 400). Default 72, the bcrypt limit.
+	MaxBytes int
+
+	// BreachChecker, when set, rejects passwords found in a breach corpus on
+	// signup and password change. Lookup errors fail open. Default nil (off).
+	BreachChecker BreachChecker
 
 	// OnLegacyHashAccepted is called (in the background) whenever a bcrypt
 	// hash is successfully verified and the password has been re-hashed. The
@@ -211,6 +295,15 @@ type TheAuth struct {
 	rateLimitPerIP    int
 	rateLimitPerEmail int
 	trustedProxies    []netip.Prefix
+	trustedOrigins    []string
+	csrfDisabled      bool
+	apiTokens         *apiTokenService
+	revocations       RevocationBus
+
+	storageRaw any
+	emailNorm  emailnorm.Normalizer
+	throttle   *throttle.Limiter
+	bootstrap  *bootstrapGate
 
 	// dcrRegistrationTokenHashes is the sha256-hashed set of operator
 	// initial access tokens accepted by POST /oauth/register when DCR is
@@ -228,6 +321,7 @@ type TheAuth struct {
 	encryptionKey     []byte
 	postLoginRedirect string
 	oauthSvc          *internaloauth.Service
+	authEventSink     AuthEventSink
 
 	// WebAuthn (v0.5). webauthnCfg is the original Config.WebAuthn pointer
 	// kept as a nil-signal for mount() and to give the handler access to
@@ -316,6 +410,7 @@ type TheAuth struct {
 	// goroutines + audit writer goroutine) and declares its own minimal
 	// Storage interface. Root methods on *TheAuth forward to these so the
 	// public surface is byte-stable.
+	sx          *sessionExt
 	passwordSvc *password.Service
 	totpSvc     *internaltotp.Service
 	webauthnSvc *internalwebauthn.Service
@@ -338,8 +433,20 @@ func New(cfg Config) (*TheAuth, error) {
 	if err != nil {
 		return nil, err
 	}
+	if cfg.CoreStorage != nil {
+		cfg.Storage = assembleStorage(cfg.CoreStorage)
+	}
+	sx, err := newSessionExt(&cfg)
+	if err != nil {
+		return nil, err
+	}
 
 	permCatalog, permIndex, defaultSeeds, err := validateRBAC(cfg.RBAC)
+	if err != nil {
+		return nil, err
+	}
+
+	trustedOrigins, err := normalizeOrigins(cfg.TrustedOrigins)
 	if err != nil {
 		return nil, err
 	}
@@ -350,17 +457,24 @@ func New(cfg Config) (*TheAuth, error) {
 		baseURL:                    cfg.BaseURL,
 		signingKey:                 cfg.SigningKey,
 		sessionTTL:                 cfg.SessionTTL,
+		sx:                         sx,
 		magicLinkTTL:               cfg.MagicLinkTTL,
 		cookieName:                 cfg.CookieName,
+		revocations:                cfg.RevocationBus,
 		secureCookie:               cfg.SecureCookie,
 		rateLimitPerIP:             cfg.RateLimitPerIP,
 		rateLimitPerEmail:          cfg.RateLimitPerEmail,
 		trustedProxies:             append([]netip.Prefix(nil), cfg.TrustedProxies...),
+		trustedOrigins:             trustedOrigins,
+		csrfDisabled:               cfg.DisableCSRFProtection,
+		storageRaw:                 cfg.storageRaw,
+		emailNorm:                  newEmailNormalizer(cfg.EmailNFKC),
 		dcrRegistrationTokenHashes: dcrTokenHashes,
 		providers:                  providers,
 		encryptionKey:              cfg.EncryptionKey,
 		postLoginRedirect:          cfg.PostLoginRedirect,
 		webauthnCfg:                cfg.WebAuthn,
+		authEventSink:              cfg.AuthEventSink,
 		totpCfg:                    cfg.TOTP,
 		orgsCfg:                    cfg.Organizations,
 		samlCfg:                    cfg.SAML,
@@ -377,8 +491,14 @@ func New(cfg Config) (*TheAuth, error) {
 		lifecycle:                  coalesceLifecycleHooks(cfg.LifecycleHooks),
 		tenancyCfg:                 cfg.Tenancy,
 	}
+	if a.revocations == nil {
+		a.revocations = NewMemoryRevocationBus()
+	}
 
 	if err := wireServices(a, cfg, providers, sp); err != nil {
+		return nil, err
+	}
+	if a.apiTokens, err = newAPITokenService(a, cfg.APITokens, cfg.storageRaw); err != nil {
 		return nil, err
 	}
 	return a, nil

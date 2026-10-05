@@ -16,11 +16,13 @@ import (
 
 	"github.com/glincker/theauth-go/internal/httpx"
 	"github.com/glincker/theauth-go/internal/models"
+	"github.com/glincker/theauth-go/internal/oauth"
 	"github.com/go-chi/chi/v5"
 )
 
-// oauthStateCookieName is the short-lived CSRF state cookie set at
-// /start and compared at /callback.
+// oauthStateCookieName is the short-lived browser-binding cookie set at
+// /start; its value is a secret distinct from the state parameter and is
+// verified server-side at /callback.
 const oauthStateCookieName = "theauth_oauth_state"
 
 // oauthStateCookieTTL caps the time between /start and provider
@@ -32,8 +34,8 @@ const oauthStateCookieTTL = 10 * time.Minute
 // CallbackOAuth wrappers) so this package does not import root.
 type Service interface {
 	HasProvider(name string) bool
-	Start(ctx context.Context, providerName string) (authURL, state string, err error)
-	Callback(ctx context.Context, providerName, code, state, userAgent, ip string) (sessionToken string, err error)
+	Start(ctx context.Context, providerName, returnTo string) (oauth.StartResult, error)
+	Callback(ctx context.Context, providerName, code, state, binding, userAgent, ip string) (oauth.CallbackResult, error)
 }
 
 // SessionCookieConfig is the session cookie shape used after a
@@ -72,21 +74,21 @@ func (h *Handler) handleStart(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "unknown provider", http.StatusNotFound)
 		return
 	}
-	authURL, state, err := h.svc.Start(r.Context(), name)
+	res, err := h.svc.Start(r.Context(), name, r.URL.Query().Get("return_to"))
 	if err != nil {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
 	http.SetCookie(w, &http.Cookie{
 		Name:     oauthStateCookieName,
-		Value:    state,
+		Value:    res.Binding,
 		Path:     "/",
 		HttpOnly: true,
 		Secure:   h.sessionCookie.SecureFlag,
 		SameSite: http.SameSiteLaxMode,
 		Expires:  time.Now().Add(oauthStateCookieTTL),
 	})
-	http.Redirect(w, r, authURL, http.StatusFound)
+	http.Redirect(w, r, res.AuthURL, http.StatusFound)
 }
 
 func (h *Handler) handleCallback(w http.ResponseWriter, r *http.Request) {
@@ -107,7 +109,7 @@ func (h *Handler) handleCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	cookie, err := r.Cookie(oauthStateCookieName)
-	if err != nil || cookie.Value == "" || cookie.Value != state {
+	if err != nil || cookie.Value == "" {
 		http.Error(w, "state mismatch", http.StatusBadRequest)
 		return
 	}
@@ -121,7 +123,7 @@ func (h *Handler) handleCallback(w http.ResponseWriter, r *http.Request) {
 		SameSite: http.SameSiteLaxMode,
 	})
 
-	sessToken, err := h.svc.Callback(r.Context(), name, code, state, r.UserAgent(), httpx.ClientIP(r))
+	res, err := h.svc.Callback(r.Context(), name, code, state, cookie.Value, r.UserAgent(), httpx.ClientIP(r))
 	if err != nil {
 		var conflictRedirect *models.OAuthConflictRedirectError
 		if errors.As(err, &conflictRedirect) {
@@ -131,8 +133,12 @@ func (h *Handler) handleCallback(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "oauth callback failed", http.StatusBadRequest)
 		return
 	}
-	h.setSessionCookie(w, sessToken)
-	http.Redirect(w, r, h.postLoginRedirect, http.StatusFound)
+	h.setSessionCookie(w, res.SessionToken)
+	dest := h.postLoginRedirect
+	if res.ReturnTo != "" {
+		dest = res.ReturnTo
+	}
+	http.Redirect(w, r, dest, http.StatusFound)
 }
 
 func (h *Handler) setSessionCookie(w http.ResponseWriter, token string) {

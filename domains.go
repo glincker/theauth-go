@@ -53,6 +53,10 @@ func SessionFromContext(ctx context.Context) (*Session, bool) {
 // the v0.3+ public surface byte-stable.
 type Provider = internaloauth.Provider
 
+// NonceProvider is the optional Provider extension for OIDC providers that
+// validate an ID token nonce. The OAuth service detects it automatically.
+type NonceProvider = internaloauth.NonceProvider
+
 // ProviderToken is the normalized shape of an OAuth token exchange response.
 // Providers vary in which fields they populate (e.g. GitHub typically omits
 // RefreshToken and ExpiresAt for "no-expiry" tokens). Storage encrypts the

@@ -10,10 +10,12 @@ package oauth
 
 import (
 	"context"
+	"crypto/sha256"
+	"crypto/subtle"
 	"errors"
 	"fmt"
 	"log/slog"
-	"sync"
+	"strings"
 	"time"
 
 	"github.com/glincker/theauth-go/crypto"
@@ -22,23 +24,8 @@ import (
 	"github.com/glincker/theauth-go/internal/ulid"
 )
 
-// oauthStateTTL is how long a state token from /start is considered valid
-// at /callback. The OAuth round-trip (user agent -> provider -> redirect)
-// rarely exceeds a minute or two; 10 minutes is a comfortable upper bound.
-const oauthStateTTL = 10 * time.Minute
-
-// oauthStateGCEvery is how often the GC goroutine sweeps the state map for
-// expired entries. Keeping it short caps the worst-case footprint under
-// burst load.
-const oauthStateGCEvery = time.Minute
-
-// oauthState is the per-flow context stored between /start and /callback.
-type oauthState struct {
-	codeVerifier string
-	redirectURI  string
-	provider     string
-	createdAt    time.Time
-}
+// defaultStateTTL is how long a flow may take between /start and /callback.
+const defaultStateTTL = 10 * time.Minute
 
 // Provider is the contract every OAuth 2.0 / OIDC provider implements. Each
 // concrete provider lives in its own sub-package under provider/<name>/ so
@@ -70,6 +57,15 @@ type Provider interface {
 	UserInfo(ctx context.Context, token *ProviderToken) (*ProviderUser, error)
 }
 
+// NonceProvider is implemented by OIDC providers. The service generates a
+// nonce per flow, passes it into the authorization URL, and the provider
+// must verify it against the ID token during the code exchange.
+type NonceProvider interface {
+	Provider
+	AuthURLWithNonce(state, codeChallenge, nonce, redirectURI string, scopes []string) string
+	ExchangeCodeWithNonce(ctx context.Context, code, codeVerifier, redirectURI, nonce string) (*ProviderToken, error)
+}
+
 // ProviderToken is the normalized shape of an OAuth token exchange response.
 // Providers vary in which fields they populate (e.g. GitHub typically omits
 // RefreshToken and ExpiresAt for "no-expiry" tokens). Storage encrypts the
@@ -80,6 +76,9 @@ type ProviderToken struct {
 	ExpiresAt    time.Time
 	Scope        string
 	TokenType    string
+	// IDToken is the verified OIDC ID token, set only by providers that
+	// validate it (see NonceProvider). Empty otherwise.
+	IDToken string
 }
 
 // ProviderUser is the normalized shape of a provider's userinfo response.
@@ -139,6 +138,47 @@ type ConflictPayload struct {
 	Scope           string
 }
 
+// SignupPolicy values mirror the root OAuthSignupPolicy strings.
+const (
+	SignupOpen           = "open"
+	SignupClosed         = "closed"
+	SignupAllowedDomains = "allowed_domains"
+	SignupInvite         = "invite"
+)
+
+// Errors returned by Callback. Handlers map every one to a generic failure.
+var (
+	ErrStateInvalid        = errors.New("theauth: oauth state invalid")
+	ErrSignupNotAllowed    = errors.New("theauth: oauth signup not allowed")
+	ErrUnverifiedEmailLink = errors.New("theauth: oauth email unverified for existing account")
+)
+
+// Config is the optional hardening configuration for a Service.
+type Config struct {
+	StateStore          StateStore
+	StateTTL            time.Duration
+	AllowedReturnTo     []string
+	Signup              string
+	AllowedEmailDomains []string
+	InviteCheck         func(ctx context.Context, email string) (bool, error)
+}
+
+// StartResult is what Start hands the HTTP layer.
+type StartResult struct {
+	AuthURL string
+	// State is the opaque value sent to the provider.
+	State string
+	// Binding is the secret the HTTP layer must set as an HttpOnly cookie
+	// and present again at Callback; it ties the flow to this browser.
+	Binding string
+}
+
+// CallbackResult is what Callback hands the HTTP layer on success.
+type CallbackResult struct {
+	SessionToken string
+	ReturnTo     string
+}
+
 // Service owns the OAuth start/callback state machine.
 type Service struct {
 	providers       map[string]Provider
@@ -147,8 +187,10 @@ type Service struct {
 	encKey          []byte
 	sessions        SessionIssuer
 	auditEm         audit.Emitter
-	states          sync.Map // map[string]*oauthState
-	stopGC          chan struct{}
+	states          StateStore
+	ownedStates     *MemoryStateStore
+	stateTTL        time.Duration
+	cfg             Config
 	onOAuthConflict func(ctx context.Context, p ConflictPayload) (string, error) // may be nil
 }
 
@@ -158,8 +200,9 @@ type Service struct {
 // the 32-byte AES key for token encryption; sessions mints sessions at
 // callback success; em records audit events. onConflict is the optional hook
 // called when a sign-in email matches an existing user registered via a
-// different provider; when nil the flow proceeds normally.
-func New(providers map[string]Provider, storage Storage, baseURL string, encKey []byte, sessions SessionIssuer, em audit.Emitter, onConflict func(ctx context.Context, p ConflictPayload) (string, error)) *Service {
+// different provider; when nil the flow proceeds normally. cfg may be the
+// zero value.
+func New(providers map[string]Provider, storage Storage, baseURL string, encKey []byte, sessions SessionIssuer, em audit.Emitter, onConflict func(ctx context.Context, p ConflictPayload) (string, error), cfg Config) *Service {
 	if em == nil {
 		em = audit.NoopEmitter{}
 	}
@@ -170,19 +213,29 @@ func New(providers map[string]Provider, storage Storage, baseURL string, encKey 
 		encKey:          encKey,
 		sessions:        sessions,
 		auditEm:         em,
-		stopGC:          make(chan struct{}),
+		states:          cfg.StateStore,
+		stateTTL:        cfg.StateTTL,
+		cfg:             cfg,
 		onOAuthConflict: onConflict,
 	}
-	go s.gcLoop()
+	if s.stateTTL <= 0 {
+		s.stateTTL = defaultStateTTL
+	}
+	if s.states == nil {
+		s.ownedStates = NewMemoryStateStore()
+		s.states = s.ownedStates
+	}
+	if s.cfg.Signup == "" {
+		s.cfg.Signup = SignupOpen
+	}
 	return s
 }
 
-// Stop signals the GC goroutine to exit. Safe to call multiple times.
+// Stop releases the default in-memory state store's sweeper. Safe to call
+// multiple times. A caller-supplied StateStore is not touched.
 func (s *Service) Stop() {
-	select {
-	case <-s.stopGC:
-	default:
-		close(s.stopGC)
+	if s.ownedStates != nil {
+		s.ownedStates.Close()
 	}
 }
 
@@ -192,87 +245,150 @@ func (s *Service) HasProvider(name string) bool {
 	return ok
 }
 
-// Start generates state + PKCE verifier, records them for the upcoming
-// callback, and returns the provider's authorization URL plus the raw state
-// string (which the handler sets as a short-lived CSRF cookie).
-func (s *Service) Start(_ context.Context, providerName string) (authURL, state string, err error) {
+// Start generates state, a PKCE verifier, a browser-binding secret and (for
+// OIDC providers) a nonce, records them, and returns the provider's
+// authorization URL. returnTo is honored only when it matches the
+// configured allow-list.
+func (s *Service) Start(ctx context.Context, providerName, returnTo string) (StartResult, error) {
 	p, ok := s.providers[providerName]
 	if !ok {
-		return "", "", fmt.Errorf("theauth: unknown provider %q", providerName)
+		return StartResult{}, fmt.Errorf("theauth: unknown provider %q", providerName)
 	}
-	state, err = crypto.NewToken()
+	state, err := crypto.NewToken()
 	if err != nil {
-		return "", "", err
+		return StartResult{}, err
+	}
+	binding, err := crypto.NewToken()
+	if err != nil {
+		return StartResult{}, err
 	}
 	verifier, err := crypto.NewCodeVerifier()
 	if err != nil {
-		return "", "", err
+		return StartResult{}, err
 	}
 	challenge := crypto.CodeChallenge(verifier)
 	redirectURI := s.baseURL + "/auth/providers/" + providerName + "/callback"
-	s.states.Store(state, &oauthState{
-		codeVerifier: verifier,
-		redirectURI:  redirectURI,
-		provider:     providerName,
-		createdAt:    time.Now(),
-	})
-	authURL = p.AuthURL(state, challenge, redirectURI, nil)
-	return authURL, state, nil
+	st := State{
+		Provider:     providerName,
+		CodeVerifier: verifier,
+		RedirectURI:  redirectURI,
+		ReturnTo:     MatchReturnTo(returnTo, s.cfg.AllowedReturnTo),
+		BindingHash:  bindingHash(binding),
+		CreatedAt:    time.Now(),
+	}
+	var authURL string
+	if np, ok := p.(NonceProvider); ok {
+		if st.Nonce, err = crypto.NewToken(); err != nil {
+			return StartResult{}, err
+		}
+		authURL = np.AuthURLWithNonce(state, challenge, st.Nonce, redirectURI, nil)
+	} else {
+		authURL = p.AuthURL(state, challenge, redirectURI, nil)
+	}
+	if err := s.states.Put(ctx, state, st, s.stateTTL); err != nil {
+		return StartResult{}, fmt.Errorf("theauth: store oauth state: %w", err)
+	}
+	return StartResult{AuthURL: authURL, State: state, Binding: binding}, nil
 }
 
-// Callback completes the OAuth flow: looks up the state stored at /start,
-// exchanges the code, fetches user info, finds-or-creates the local user,
-// upserts the OAuthAccount with encrypted tokens, and issues a session.
-// Returns the raw session token, the resolved user, and a created flag
-// reporting whether the user row was newly created during this call
-// (v2.5: lets the root forwarder distinguish OnSignup from OnSignin
-// dispatch).
-func (s *Service) Callback(ctx context.Context, providerName, code, state, userAgent, ip string) (sessionToken string, user *models.User, created bool, err error) {
+func bindingHash(binding string) []byte {
+	h := sha256.Sum256([]byte(binding))
+	return h[:]
+}
+
+// MatchReturnTo returns candidate when it matches an allow-list entry, else
+// "". Entries are exact absolute URLs or "/" paths; a trailing "*" makes an
+// entry a prefix match. Protocol-relative and backslash forms never match.
+func MatchReturnTo(candidate string, allow []string) string {
+	if candidate == "" || len(allow) == 0 || strings.ContainsAny(candidate, "\\\r\n") {
+		return ""
+	}
+	if strings.HasPrefix(candidate, "//") {
+		return ""
+	}
+	for _, e := range allow {
+		if prefix, ok := strings.CutSuffix(e, "*"); ok {
+			if strings.HasPrefix(candidate, prefix) && sameKind(candidate, prefix) {
+				return candidate
+			}
+		} else if candidate == e {
+			return candidate
+		}
+	}
+	return ""
+}
+
+func sameKind(candidate, prefix string) bool {
+	return strings.HasPrefix(candidate, "/") == strings.HasPrefix(prefix, "/") && prefix != ""
+}
+
+// Callback completes the OAuth flow: consumes the state stored at /start,
+// checks it is bound to the browser presenting binding, exchanges the code,
+// fetches user info, finds-or-creates the local user under the signup
+// policy, upserts the OAuthAccount with encrypted tokens, and issues a
+// session. created reports whether the user row was newly created during
+// this call (lets the root forwarder distinguish OnSignup from OnSignin).
+func (s *Service) Callback(ctx context.Context, providerName, code, state, binding, userAgent, ip string) (res CallbackResult, user *models.User, created bool, err error) {
 	p, ok := s.providers[providerName]
 	if !ok {
-		return "", nil, false, fmt.Errorf("theauth: unknown provider %q", providerName)
+		return CallbackResult{}, nil, false, fmt.Errorf("theauth: unknown provider %q", providerName)
 	}
-	raw, ok := s.states.LoadAndDelete(state)
-	if !ok {
-		return "", nil, false, errors.New("theauth: oauth state unknown or expired")
+	st, err := s.states.Take(ctx, state)
+	if err != nil {
+		s.emitFailure(ctx, providerName, "state_unknown")
+		return CallbackResult{}, nil, false, fmt.Errorf("%w: %v", ErrStateInvalid, err)
 	}
-	st, ok := raw.(*oauthState)
-	if !ok {
-		return "", nil, false, errors.New("theauth: oauth state corrupted")
+	if st.Provider != providerName {
+		s.emitFailure(ctx, providerName, "state_provider_mismatch")
+		return CallbackResult{}, nil, false, fmt.Errorf("%w: provider mismatch", ErrStateInvalid)
 	}
-	if st.provider != providerName {
-		return "", nil, false, errors.New("theauth: oauth state provider mismatch")
+	if time.Since(st.CreatedAt) > s.stateTTL {
+		s.emitFailure(ctx, providerName, "state_expired")
+		return CallbackResult{}, nil, false, fmt.Errorf("%w: expired", ErrStateInvalid)
 	}
-	if time.Since(st.createdAt) > oauthStateTTL {
-		return "", nil, false, errors.New("theauth: oauth state expired")
+	if binding == "" || subtle.ConstantTimeCompare(bindingHash(binding), st.BindingHash) != 1 {
+		s.emitFailure(ctx, providerName, "state_binding_mismatch")
+		return CallbackResult{}, nil, false, fmt.Errorf("%w: browser binding mismatch", ErrStateInvalid)
 	}
 
-	tok, err := p.ExchangeCode(ctx, code, st.codeVerifier, st.redirectURI)
+	var tok *ProviderToken
+	if np, ok := p.(NonceProvider); ok {
+		tok, err = np.ExchangeCodeWithNonce(ctx, code, st.CodeVerifier, st.RedirectURI, st.Nonce)
+	} else {
+		tok, err = p.ExchangeCode(ctx, code, st.CodeVerifier, st.RedirectURI)
+	}
 	if err != nil {
-		return "", nil, false, fmt.Errorf("theauth: ExchangeCode: %w", err)
+		s.emitFailure(ctx, providerName, "exchange_failed")
+		return CallbackResult{}, nil, false, fmt.Errorf("theauth: ExchangeCode: %w", err)
 	}
 	pu, err := p.UserInfo(ctx, tok)
+	if err == nil && pu != nil {
+		pu.Email = strings.ToLower(strings.TrimSpace(pu.Email))
+	}
 	if err != nil {
-		return "", nil, false, fmt.Errorf("theauth: UserInfo: %w", err)
+		return CallbackResult{}, nil, false, fmt.Errorf("theauth: UserInfo: %w", err)
 	}
 	if pu == nil || pu.ID == "" {
-		return "", nil, false, errors.New("theauth: provider returned empty user id")
+		return CallbackResult{}, nil, false, errors.New("theauth: provider returned empty user id")
 	}
 
 	resolved, branch, err := s.findOrCreateUser(ctx, providerName, pu)
 	if err != nil {
-		return "", nil, false, err
+		if errors.Is(err, ErrSignupNotAllowed) || errors.Is(err, ErrUnverifiedEmailLink) {
+			s.emitFailure(ctx, providerName, "signup_refused")
+		}
+		return CallbackResult{}, nil, false, err
 	}
 
 	accessEnc, err := crypto.Encrypt(s.encKey, []byte(tok.AccessToken))
 	if err != nil {
-		return "", nil, false, fmt.Errorf("theauth: encrypt access token: %w", err)
+		return CallbackResult{}, nil, false, fmt.Errorf("theauth: encrypt access token: %w", err)
 	}
 	var refreshEnc []byte
 	if tok.RefreshToken != "" {
 		refreshEnc, err = crypto.Encrypt(s.encKey, []byte(tok.RefreshToken))
 		if err != nil {
-			return "", nil, false, fmt.Errorf("theauth: encrypt refresh token: %w", err)
+			return CallbackResult{}, nil, false, fmt.Errorf("theauth: encrypt refresh token: %w", err)
 		}
 	}
 	var expiresAt *time.Time
@@ -299,9 +415,9 @@ func (s *Service) Callback(ctx context.Context, providerName, code, state, userA
 		}
 		redirectURL, hookErr := s.onOAuthConflict(ctx, p)
 		if hookErr != nil {
-			return "", nil, false, fmt.Errorf("theauth: onOAuthConflict hook: %w", hookErr)
+			return CallbackResult{}, nil, false, fmt.Errorf("theauth: onOAuthConflict hook: %w", hookErr)
 		}
-		return "", nil, false, &models.OAuthConflictRedirectError{URL: redirectURL}
+		return CallbackResult{}, nil, false, &models.OAuthConflictRedirectError{URL: redirectURL}
 	}
 
 	now := time.Now()
@@ -318,12 +434,12 @@ func (s *Service) Callback(ctx context.Context, providerName, code, state, userA
 		CreatedAt:       now,
 		UpdatedAt:       now,
 	}); err != nil {
-		return "", nil, false, fmt.Errorf("theauth: upsert oauth account: %w", err)
+		return CallbackResult{}, nil, false, fmt.Errorf("theauth: upsert oauth account: %w", err)
 	}
 
 	sessToken, _, err := s.sessions.Issue(ctx, *resolved, userAgent, ip)
 	if err != nil {
-		return "", nil, false, err
+		return CallbackResult{}, nil, false, err
 	}
 	s.auditEm.EmitAudit(ctx, "oauth_account.linked", models.TargetRef{Type: "oauth_account", ID: oauthRowID.String()}, map[string]any{
 		"provider": providerName,
@@ -332,7 +448,7 @@ func (s *Service) Callback(ctx context.Context, providerName, code, state, userA
 		"auth_method": "oauth:" + providerName,
 	})
 	slog.Info("theauth: oauth signin", "provider", providerName, "user_id", resolved.ID.String())
-	return sessToken, resolved, branch == brandNewUser, nil
+	return CallbackResult{SessionToken: sessToken, ReturnTo: st.ReturnTo}, resolved, branch == brandNewUser, nil
 }
 
 // findOrCreateUser implements the three-branch resolution: (1) existing
@@ -354,6 +470,9 @@ func (s *Service) findOrCreateUser(ctx context.Context, providerName string, pu 
 	if pu.Email != "" {
 		u, err := s.storage.UserByEmail(ctx, pu.Email)
 		if err == nil && u != nil {
+			if !pu.EmailVerified {
+				return nil, 0, ErrUnverifiedEmailLink
+			}
 			return u, foundByEmail, nil
 		}
 		if err != nil && !errors.Is(err, models.ErrStorageNotFound) {
@@ -361,6 +480,9 @@ func (s *Service) findOrCreateUser(ctx context.Context, providerName string, pu 
 		}
 	}
 
+	if err := s.checkSignup(ctx, pu); err != nil {
+		return nil, 0, err
+	}
 	now := time.Now()
 	newUser := models.User{
 		ID:        ulid.New(),
@@ -380,22 +502,41 @@ func (s *Service) findOrCreateUser(ctx context.Context, providerName string, pu 
 	return &created, brandNewUser, nil
 }
 
-// gcLoop sweeps expired entries from s.states.
-func (s *Service) gcLoop() {
-	t := time.NewTicker(oauthStateGCEvery)
-	defer t.Stop()
-	for {
-		select {
-		case <-s.stopGC:
-			return
-		case now := <-t.C:
-			cutoff := now.Add(-oauthStateTTL)
-			s.states.Range(func(k, v any) bool {
-				if st, ok := v.(*oauthState); ok && st.createdAt.Before(cutoff) {
-					s.states.Delete(k)
-				}
-				return true
-			})
+// checkSignup applies the configured new-user policy to a verified identity.
+func (s *Service) checkSignup(ctx context.Context, pu *ProviderUser) error {
+	switch s.cfg.Signup {
+	case SignupClosed:
+		return ErrSignupNotAllowed
+	case SignupAllowedDomains:
+		at := strings.LastIndex(pu.Email, "@")
+		if !pu.EmailVerified || at < 0 {
+			return ErrSignupNotAllowed
+		}
+		domain := pu.Email[at+1:]
+		for _, d := range s.cfg.AllowedEmailDomains {
+			if strings.EqualFold(strings.TrimSpace(d), domain) {
+				return nil
+			}
+		}
+		return ErrSignupNotAllowed
+	case SignupInvite:
+		if !pu.EmailVerified || s.cfg.InviteCheck == nil {
+			return ErrSignupNotAllowed
+		}
+		ok, err := s.cfg.InviteCheck(ctx, pu.Email)
+		if err != nil {
+			return fmt.Errorf("theauth: invite check: %w", err)
+		}
+		if !ok {
+			return ErrSignupNotAllowed
 		}
 	}
+	return nil
+}
+
+func (s *Service) emitFailure(ctx context.Context, providerName, reason string) {
+	s.auditEm.EmitAudit(ctx, "login.failed", models.TargetRef{}, map[string]any{
+		"auth_method": "oauth:" + providerName,
+		"reason":      reason,
+	})
 }

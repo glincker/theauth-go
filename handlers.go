@@ -6,13 +6,16 @@ import (
 	"errors"
 	"io"
 	"log/slog"
+	"math"
 	"net/http"
 	"net/mail"
-	"strings"
+	"strconv"
 	"time"
 
 	ashandlers "github.com/glincker/theauth-go/internal/as/handlers"
+	"github.com/glincker/theauth-go/internal/httpx"
 	"github.com/glincker/theauth-go/internal/models"
+	internaloauth "github.com/glincker/theauth-go/internal/oauth"
 	oauthhandlers "github.com/glincker/theauth-go/internal/oauth/handlers"
 	passwordhandlers "github.com/glincker/theauth-go/internal/password/handlers"
 	totphandlers "github.com/glincker/theauth-go/internal/totp/handlers"
@@ -32,11 +35,24 @@ import (
 //	POST   /auth/email-password/reset             consume a reset token + set new password (rate-limited)
 //	GET    /auth/me                               return the authenticated user (RequireAuth)
 //	DELETE /auth/sessions/current                 revoke the current session (RequireAuth)
+//	GET    /auth/sessions                         list the caller's sessions (SessionManagementStorage)
+//	DELETE /auth/sessions/{id}                    revoke one of the caller's sessions
+//	POST   /auth/sessions/revoke-others           revoke every session but the current one
+//	POST   /auth/step-up                          elevate the session (password, totp or passkey)
+//	POST   /auth/password/change                  change password, rotate the session
+//	POST   /auth/session-link/consume             exchange a session link (Config.SessionLinks)
 //
 // Default rate limits: 5/min per source IP on every credential endpoint, plus
 // 3/min per email on signin + forgot (most attack-surface). All limits are
 // in-memory + per-process; replace at the LB layer for multi-instance deploys.
 func (a *TheAuth) Mount(r chi.Router) {
+	r.Group(func(r chi.Router) {
+		r.Use(a.securityMiddleware, a.auditContextMiddleware)
+		a.mountRoutes(r)
+	})
+}
+
+func (a *TheAuth) mountRoutes(r chi.Router) {
 	// Build limiter middlewares once so the same buckets persist across all
 	// routes mounted at this point. Re-mounting builds a fresh set.
 	ipLimit := a.RateLimitByIP(a.rateLimitPerIP)
@@ -47,6 +63,9 @@ func (a *TheAuth) Mount(r chi.Router) {
 		// allowing enumeration of registered email addresses. Apply the same
 		// per-IP and per-email caps used by the password endpoints.
 		r.With(ipLimit, emailLimit).Post("/magic-link", a.handleMagicLinkRequest)
+		if a.bootstrap != nil {
+			r.Get("/bootstrap/status", a.handleBootstrapStatus)
+		}
 		r.Get("/magic-link/verify", a.handleMagicLinkVerify)
 
 		r.Route("/email-password", func(r chi.Router) {
@@ -82,6 +101,14 @@ func (a *TheAuth) Mount(r chi.Router) {
 			a.mountSAML(r)
 		}
 
+		if a.apiTokens != nil {
+			a.mountAPITokens(r, ipLimit)
+			if a.apiTokens.dev != nil {
+				a.mountDevice(r, ipLimit)
+			}
+		}
+
+		a.mountSessionManagement(r, ipLimit)
 		r.With(a.RequireAuth()).Delete("/sessions/current", a.handleSessionDelete)
 		r.With(a.RequireAuth()).Get("/me", a.handleMe)
 	})
@@ -119,17 +146,17 @@ func (a *TheAuth) handleMagicLinkRequest(w http.ResponseWriter, r *http.Request)
 		Email string `json:"email"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.Email == "" {
-		http.Error(w, "invalid body", http.StatusBadRequest)
+		httpx.Error(w, http.StatusBadRequest, "invalid body")
 		return
 	}
-	addr, err := mail.ParseAddress(body.Email)
+	addr, err := mail.ParseAddress(a.normalizeEmail(body.Email))
 	if err != nil {
-		http.Error(w, "invalid email", http.StatusBadRequest)
+		httpx.Error(w, http.StatusBadRequest, "invalid email")
 		return
 	}
-	email := strings.ToLower(strings.TrimSpace(addr.Address))
+	email := a.normalizeEmail(addr.Address)
 	if err := a.requestMagicLink(r.Context(), email); err != nil {
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		httpx.Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 	w.WriteHeader(http.StatusOK)
@@ -139,7 +166,7 @@ func (a *TheAuth) handleMagicLinkRequest(w http.ResponseWriter, r *http.Request)
 func (a *TheAuth) handleMagicLinkVerify(w http.ResponseWriter, r *http.Request) {
 	token := r.URL.Query().Get("token")
 	if token == "" {
-		http.Error(w, "missing token", http.StatusBadRequest)
+		httpx.Error(w, http.StatusBadRequest, "missing token")
 		return
 	}
 	sessToken, _, err := a.consumeMagicLink(r.Context(), token)
@@ -163,7 +190,7 @@ func (a *TheAuth) handleMagicLinkVerify(w http.ResponseWriter, r *http.Request) 
 func (a *TheAuth) handleMe(w http.ResponseWriter, r *http.Request) {
 	user, ok := UserFromContext(r.Context())
 	if !ok {
-		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		httpx.Error(w, http.StatusUnauthorized, "unauthorized")
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
@@ -173,11 +200,11 @@ func (a *TheAuth) handleMe(w http.ResponseWriter, r *http.Request) {
 func (a *TheAuth) handleSessionDelete(w http.ResponseWriter, r *http.Request) {
 	sess, ok := SessionFromContext(r.Context())
 	if !ok {
-		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		httpx.Error(w, http.StatusUnauthorized, "unauthorized")
 		return
 	}
 	if err := a.storage.RevokeSession(r.Context(), sess.ID); err != nil {
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		httpx.Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 	a.EmitAudit(r.Context(), "user.logout", TargetRef{Type: "session", ID: sess.ID.String()}, nil)
@@ -206,8 +233,13 @@ func errToHTTP(w http.ResponseWriter, err error) {
 			writeJSONError(w, http.StatusConflict, te.Code, te.Message)
 		case CodeInvalidCredentials:
 			writeJSONError(w, http.StatusUnauthorized, te.Code, te.Message)
-		case CodeRateLimited:
+		case CodeRateLimited, CodeAccountLocked:
+			if te.RetryAfter > 0 {
+				w.Header().Set("Retry-After", strconv.Itoa(int(math.Ceil(te.RetryAfter.Seconds()))))
+			}
 			writeJSONError(w, http.StatusTooManyRequests, te.Code, te.Message)
+		case CodeSignupClosed, CodeSetupTokenInvalid:
+			writeJSONError(w, http.StatusForbidden, te.Code, te.Message)
 		case CodePasswordResetExpired, CodePasswordResetInvalid:
 			writeJSONError(w, http.StatusUnauthorized, te.Code, te.Message)
 		case CodeInvalidTOTP, CodeWebAuthn:
@@ -228,16 +260,15 @@ func errToHTTP(w http.ResponseWriter, err error) {
 		errors.Is(err, ErrMagicLinkExpired),
 		errors.Is(err, ErrMagicLinkUsed),
 		errors.Is(err, ErrSessionExpired):
-		http.Error(w, err.Error(), http.StatusUnauthorized)
+		httpx.Error(w, http.StatusUnauthorized, err.Error())
 	case errors.Is(err, ErrUserNotFound):
-		http.Error(w, err.Error(), http.StatusNotFound)
+		httpx.Error(w, http.StatusNotFound, err.Error())
 	default:
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		httpx.Error(w, http.StatusInternalServerError, "internal error")
 	}
 }
 
 // writeJSONError emits the v0.2+ error response shape: {"code":"...","message":"..."}.
-// Old (v0.1) error responses still use plain-text http.Error for backward compat.
 func writeJSONError(w http.ResponseWriter, status int, code, message string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
@@ -275,16 +306,16 @@ func (s oauthServiceAdapter) HasProvider(name string) bool {
 
 // Start delegates the /auth/providers/{name}/start flow to
 // *TheAuth.startOAuth.
-func (s oauthServiceAdapter) Start(ctx context.Context, providerName string) (string, string, error) {
-	return s.a.startOAuth(ctx, providerName)
+func (s oauthServiceAdapter) Start(ctx context.Context, providerName, returnTo string) (internaloauth.StartResult, error) {
+	return s.a.startOAuth(ctx, providerName, returnTo)
 }
 
 // Callback delegates the /auth/providers/{name}/callback flow to
 // *TheAuth.callbackOAuth, discarding the *User return (the handler
 // only needs the session token).
-func (s oauthServiceAdapter) Callback(ctx context.Context, providerName, code, state, ua, ip string) (string, error) {
-	tok, _, err := s.a.callbackOAuth(ctx, providerName, code, state, ua, ip)
-	return tok, err
+func (s oauthServiceAdapter) Callback(ctx context.Context, providerName, code, state, binding, ua, ip string) (internaloauth.CallbackResult, error) {
+	res, _, err := s.a.callbackOAuth(ctx, providerName, code, state, binding, ua, ip)
+	return res, err
 }
 
 // passwordServiceAdapter implements internal/password/handlers.Service on
@@ -343,11 +374,27 @@ func (s totpServiceAdapter) FinishEnrollment(ctx context.Context, userID ULID, e
 }
 
 func (s totpServiceAdapter) Verify(ctx context.Context, pendingSessionToken, code string) (string, Session, error) {
-	return s.a.VerifyTOTP(ctx, pendingSessionToken, code)
+	_, sess, err := s.a.VerifyTOTP(ctx, pendingSessionToken, code)
+	if err != nil {
+		return "", Session{}, err
+	}
+	return s.a.RotateSession(ctx, sess)
 }
 
 func (s totpServiceAdapter) ConsumeRecoveryCode(ctx context.Context, pendingSessionToken, code string) (string, Session, error) {
-	return s.a.ConsumeRecoveryCode(ctx, pendingSessionToken, code)
+	_, sess, err := s.a.ConsumeRecoveryCode(ctx, pendingSessionToken, code)
+	if err != nil {
+		return "", Session{}, err
+	}
+	return s.a.RotateSession(ctx, sess)
+}
+
+func (s totpServiceAdapter) Status(ctx context.Context, userID ULID) (TOTPStatus, error) {
+	return s.a.TOTPStatus(ctx, userID)
+}
+
+func (s totpServiceAdapter) RegenerateRecoveryCodes(ctx context.Context, userID ULID) ([]string, error) {
+	return s.a.RegenerateRecoveryCodes(ctx, userID)
 }
 
 func (s totpServiceAdapter) Delete(ctx context.Context, userID ULID) error {
@@ -399,6 +446,10 @@ func (s webauthnServiceAdapter) FinishLogin(ctx context.Context, challengeToken 
 
 func (s webauthnServiceAdapter) ListCredentials(ctx context.Context, userID ULID) ([]WebAuthnCredential, error) {
 	return s.a.webauthnSvc.ListCredentials(ctx, userID)
+}
+
+func (s webauthnServiceAdapter) RenameCredential(ctx context.Context, id, userID ULID, name string) error {
+	return s.a.webauthnSvc.RenameCredential(ctx, id, userID, name)
 }
 
 func (s webauthnServiceAdapter) DeleteCredential(ctx context.Context, id, userID ULID) error {

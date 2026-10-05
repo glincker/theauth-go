@@ -84,13 +84,13 @@ func (h *Handler) handleConnectionCreate(w http.ResponseWriter, r *http.Request)
 	}
 	var body samlConnectionBody
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<16)).Decode(&body); err != nil {
-		http.Error(w, "invalid body", http.StatusBadRequest)
+		httpx.Error(w, http.StatusBadRequest, "invalid body")
 		return
 	}
 	in := body.toInput(orgID)
 	conn, err := h.connSvc.Create(r.Context(), in)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		httpx.Error(w, http.StatusBadRequest, err.Error())
 		return
 	}
 	httpx.WriteJSON(w, http.StatusCreated, conn)
@@ -107,7 +107,7 @@ func (h *Handler) handleConnectionList(w http.ResponseWriter, r *http.Request) {
 	}
 	conns, err := h.connSvc.List(r.Context(), orgID)
 	if err != nil {
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		httpx.Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 	httpx.WriteJSON(w, http.StatusOK, conns)
@@ -125,7 +125,7 @@ func (h *Handler) handleConnectionGet(w http.ResponseWriter, r *http.Request) {
 	}
 	conn, err := h.connSvc.ByID(r.Context(), id)
 	if err != nil || conn.OrganizationID != orgID {
-		http.Error(w, "not found", http.StatusNotFound)
+		httpx.Error(w, http.StatusNotFound, "not found")
 		return
 	}
 	httpx.WriteJSON(w, http.StatusOK, conn)
@@ -143,13 +143,13 @@ func (h *Handler) handleConnectionUpdate(w http.ResponseWriter, r *http.Request)
 	}
 	var body samlConnectionBody
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<16)).Decode(&body); err != nil {
-		http.Error(w, "invalid body", http.StatusBadRequest)
+		httpx.Error(w, http.StatusBadRequest, "invalid body")
 		return
 	}
 	in := body.toInput(orgID)
 	conn, err := h.connSvc.Update(r.Context(), id, in)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		httpx.Error(w, http.StatusBadRequest, err.Error())
 		return
 	}
 	httpx.WriteJSON(w, http.StatusOK, conn)
@@ -166,7 +166,7 @@ func (h *Handler) handleConnectionDelete(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	if err := h.connSvc.Delete(r.Context(), id); err != nil {
-		http.Error(w, "not found", http.StatusNotFound)
+		httpx.Error(w, http.StatusNotFound, "not found")
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)

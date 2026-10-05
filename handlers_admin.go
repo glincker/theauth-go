@@ -66,7 +66,7 @@ func (a *TheAuth) mountAdmin(r chi.Router) {
 		pathPrefix = a.adminCfg.PathPrefix
 	}
 	h := adminhandlers.New(
-		a.storage,
+		adminSessionStorage{Storage: a.storage, mgmt: a.sx.mgmt},
 		adminRBACAdapter{a: a},
 		adminAuditAdapter{a: a},
 		pathPrefix,
@@ -167,4 +167,20 @@ func (a *TheAuth) mountAdminAgents(r chi.Router) {
 	h.Mount(r, func(permission string) func(http.Handler) http.Handler {
 		return a.RequirePermission(permission)
 	})
+}
+
+// adminSessionStorage layers the optional session list onto the full Storage,
+// which assembled storages would otherwise hide from a type assertion.
+type adminSessionStorage struct {
+	Storage
+	mgmt SessionManagementStorage
+}
+
+// ListUserSessions returns the user's live sessions, or nil when the storage
+// has no SessionManagementStorage.
+func (s adminSessionStorage) ListUserSessions(ctx context.Context, userID models.ULID) ([]models.Session, error) {
+	if s.mgmt == nil {
+		return nil, nil
+	}
+	return s.mgmt.ListUserSessions(ctx, userID)
 }

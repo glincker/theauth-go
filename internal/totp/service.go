@@ -28,7 +28,9 @@ import (
 	"github.com/glincker/theauth-go/crypto"
 	"github.com/glincker/theauth-go/internal/audit"
 	"github.com/glincker/theauth-go/internal/models"
+	"github.com/glincker/theauth-go/internal/throttle"
 	"github.com/glincker/theauth-go/internal/ulid"
+	"github.com/pquerna/otp"
 	"github.com/pquerna/otp/totp"
 )
 
@@ -114,10 +116,17 @@ type Service struct {
 	auditEm       audit.Emitter
 	cfg           *Config
 	encryptionKey []byte
+	recovery      RecoveryStore
 
 	// enrollments is the in-memory map of in-flight enrollments keyed by
 	// the EnrollmentID returned from BeginEnrollment.
 	enrollments sync.Map
+
+	// limiter caps TOTP and recovery-code guesses per user. Nil disables it.
+	limiter *throttle.Limiter
+	// replay persists the last used time-step; nil falls back to lastSteps.
+	replay    ReplayStore
+	lastSteps sync.Map // models.ULID -> int64, process-local fallback
 	// pendingFailures tracks per-session failure counts for the verify
 	// and recovery-code paths.
 	pendingFailures sync.Map
@@ -144,6 +153,98 @@ func NewService(storage Storage, sessions SessionValidator, em audit.Emitter, cf
 		cfg:           cfg,
 		encryptionKey: encryptionKey,
 	}
+}
+
+// ReplayStore persists the last used TOTP time-step per user.
+type ReplayStore interface {
+	AdvanceTOTPStep(ctx context.Context, userID models.ULID, step int64) (bool, error)
+}
+
+// SetHardening wires the per-user attempt limiter and the durable replay
+// store. Both may be nil. Call before the service handles requests.
+func (s *Service) SetHardening(limiter *throttle.Limiter, replay ReplayStore) {
+	s.limiter = limiter
+	s.replay = replay
+}
+
+const totpPeriod = 30
+
+// matchStep returns the time-step whose code equals code within one period
+// of skew, or false when none matches.
+func matchStep(code, secret string, now time.Time) (int64, bool) {
+	for _, off := range []int{0, -1, 1} {
+		t := now.Add(time.Duration(off*totpPeriod) * time.Second)
+		ok, err := totp.ValidateCustom(code, secret, t, totp.ValidateOpts{
+			Period: totpPeriod, Skew: 0, Digits: otp.DigitsSix, Algorithm: otp.AlgorithmSHA1,
+		})
+		if err == nil && ok {
+			return t.Unix() / totpPeriod, true
+		}
+	}
+	return 0, false
+}
+
+// advanceStep records step as used and reports false when it was already
+// used or is older than the last accepted step.
+func (s *Service) advanceStep(ctx context.Context, userID models.ULID, step int64) (bool, error) {
+	if s.replay != nil {
+		ok, err := s.replay.AdvanceTOTPStep(ctx, userID, step)
+		if err != nil {
+			return false, fmt.Errorf("theauth: record totp step: %w", err)
+		}
+		return ok, nil
+	}
+	for {
+		cur, loaded := s.lastSteps.LoadOrStore(userID, step)
+		if !loaded {
+			return true, nil
+		}
+		last, _ := cur.(int64)
+		if step <= last {
+			return false, nil
+		}
+		if s.lastSteps.CompareAndSwap(userID, cur, step) {
+			return true, nil
+		}
+	}
+}
+
+func (s *Service) checkMFA(ctx context.Context, userID models.ULID) error {
+	if s.limiter == nil {
+		return nil
+	}
+	if err := s.limiter.CheckMFA(ctx, userID.String()); err != nil {
+		return throttleErr(err)
+	}
+	return nil
+}
+
+func (s *Service) mfaFailed(ctx context.Context, userID models.ULID) {
+	if s.limiter == nil {
+		return
+	}
+	if err := s.limiter.RecordMFAFailure(ctx, userID.String()); err != nil {
+		slog.Warn("theauth: record mfa failure", "err", err.Error(), "user_id", userID.String())
+	}
+}
+
+func (s *Service) mfaSucceeded(ctx context.Context, userID models.ULID) {
+	if s.limiter == nil {
+		return
+	}
+	if err := s.limiter.RecordMFASuccess(ctx, userID.String()); err != nil {
+		slog.Warn("theauth: clear mfa failures", "err", err.Error(), "user_id", userID.String())
+	}
+}
+
+func throttleErr(err error) error {
+	var be *throttle.BlockedError
+	if errors.As(err, &be) {
+		e := models.NewError(models.CodeAccountLocked, "too many failed attempts, try again later", nil)
+		e.RetryAfter = be.RetryAfter
+		return e
+	}
+	return fmt.Errorf("theauth: mfa throttle: %w", err)
 }
 
 // Start spawns the enrollment GC goroutine. Idempotent: a second call is
@@ -365,18 +466,33 @@ func (s *Service) Verify(ctx context.Context, pendingSessionToken, code string) 
 	if sess.AuthLevel != models.AuthLevelPending2FA {
 		return "", models.Session{}, models.NewError(models.CodeInvalidCredentials, "session is not pending 2fa", nil)
 	}
+	if err := s.checkMFA(ctx, sess.UserID); err != nil {
+		return "", models.Session{}, err
+	}
 	secret, err := s.decryptSecret(ctx, sess.UserID)
 	if err != nil {
 		return "", models.Session{}, err
 	}
-	if !totp.Validate(code, secret) {
+	step, valid := matchStep(code, secret, time.Now())
+	if valid {
+		fresh, aerr := s.advanceStep(ctx, sess.UserID, step)
+		if aerr != nil {
+			return "", models.Session{}, aerr
+		}
+		valid = fresh
+	}
+	if !valid {
+		s.mfaFailed(ctx, sess.UserID)
+		s.emitMFA(ctx, sess.UserID, "totp", false)
 		s.recordPendingFailure(ctx, sess.ID, sess.UserID)
 		return "", models.Session{}, models.NewError(models.CodeInvalidTOTP, "invalid code", nil)
 	}
+	s.mfaSucceeded(ctx, sess.UserID)
 	s.clearPendingFailure(sess.ID)
 	if err := s.storage.UpdateSessionAuthLevel(ctx, sess.ID, models.AuthLevelFull); err != nil {
 		return "", models.Session{}, err
 	}
+	s.emitMFA(ctx, sess.UserID, "totp", true)
 	updated := *sess
 	updated.AuthLevel = models.AuthLevelFull
 	return pendingSessionToken, updated, nil
@@ -392,17 +508,24 @@ func (s *Service) ConsumeRecoveryCode(ctx context.Context, pendingSessionToken, 
 	if sess.AuthLevel != models.AuthLevelPending2FA {
 		return "", models.Session{}, models.NewError(models.CodeInvalidCredentials, "session is not pending 2fa", nil)
 	}
+	if err := s.checkMFA(ctx, sess.UserID); err != nil {
+		return "", models.Session{}, err
+	}
 	if err := s.storage.ConsumeRecoveryCode(ctx, sess.UserID, code, time.Now()); err != nil {
 		if errors.Is(err, models.ErrStorageNotFound) {
+			s.mfaFailed(ctx, sess.UserID)
+			s.emitMFA(ctx, sess.UserID, "recovery_code", false)
 			s.recordPendingFailure(ctx, sess.ID, sess.UserID)
 			return "", models.Session{}, models.NewError(models.CodeInvalidTOTP, "invalid recovery code", nil)
 		}
 		return "", models.Session{}, err
 	}
+	s.mfaSucceeded(ctx, sess.UserID)
 	s.clearPendingFailure(sess.ID)
 	if err := s.storage.UpdateSessionAuthLevel(ctx, sess.ID, models.AuthLevelFull); err != nil {
 		return "", models.Session{}, err
 	}
+	s.emitMFA(ctx, sess.UserID, "recovery_code", true)
 	updated := *sess
 	updated.AuthLevel = models.AuthLevelFull
 	return pendingSessionToken, updated, nil

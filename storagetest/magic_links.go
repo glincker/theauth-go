@@ -10,7 +10,7 @@ import (
 	"github.com/glincker/theauth-go/storage"
 )
 
-func testMagicLinks(t *testing.T, store theauth.Storage) {
+func testMagicLinks(t *testing.T, store theauth.MagicLinkStorage) {
 	t.Helper()
 	ctx := context.Background()
 

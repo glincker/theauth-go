@@ -8,6 +8,7 @@ import (
 	"encoding/pem"
 	"errors"
 	"log/slog"
+	"strings"
 	"time"
 
 	"github.com/glincker/theauth-go/crypto"
@@ -46,6 +47,7 @@ type samlParsed struct {
 // applyConfigDefaults fills in zero-value Config fields with library
 // defaults. Must be called before any validation or wiring.
 func applyConfigDefaults(cfg *Config) {
+	applySessionDefaults(cfg)
 	if cfg.SessionTTL == 0 {
 		cfg.SessionTTL = 24 * time.Hour
 	}
@@ -90,16 +92,19 @@ func applyConfigDefaults(cfg *Config) {
 // defaults. Returns the pre-parsed SAML keypair (non-nil only when
 // cfg.SAML != nil), the parsed provider map, and the pre-hashed DCR tokens.
 func validateConfig(cfg *Config) (providers map[string]Provider, sp samlParsed, dcrTokenHashes [][32]byte, err error) {
-	if cfg.Storage == nil {
-		return nil, samlParsed{}, nil, errors.New("theauth: Config.Storage is required")
+	if err := selectStorage(cfg); err != nil {
+		return nil, samlParsed{}, nil, err
 	}
 	if cfg.BaseURL == "" {
 		return nil, samlParsed{}, nil, errors.New("theauth: Config.BaseURL is required")
 	}
 
 	// M3 (security audit 2026-06-21): warn when SecureCookie is false.
-	if !cfg.SecureCookie && !cfg.SuppressSecureCookieWarning {
-		slog.Warn("SecureCookie: false is deprecated; v3.0 will default to true. Set Config.SuppressSecureCookieWarning=true to suppress this warning in dev.")
+	if !cfg.SecureCookie && !cfg.SuppressSecureCookieWarning && !strings.HasPrefix(strings.ToLower(cfg.BaseURL), "https://") {
+		slog.Warn("SecureCookie: false with a non-https BaseURL; cookies are Secure only when the request arrives over TLS or via a trusted proxy. Set Config.SuppressSecureCookieWarning=true to suppress this warning in dev.")
+	}
+	if cfg.RateLimitPerIP > 0 && len(cfg.TrustedProxies) == 0 && !cfg.SuppressTrustedProxiesWarning {
+		slog.Warn("TrustedProxies is empty: behind a reverse proxy every client shares one per-IP rate-limit bucket. List the proxy CIDRs in Config.TrustedProxies, or set Config.SuppressTrustedProxiesWarning=true if exposed directly.")
 	}
 
 	// OAuth providers: need a 32-byte key, unique names.
@@ -170,7 +175,7 @@ func validateConfig(cfg *Config) (providers map[string]Provider, sp samlParsed, 
 		if err := validateASConfig(cfg.AuthorizationServer, cfg.EncryptionKey); err != nil {
 			return nil, samlParsed{}, nil, err
 		}
-		if _, ok := cfg.Storage.(OAuthServerStorage); !ok {
+		if _, ok := cfg.storageRaw.(OAuthServerStorage); !ok {
 			return nil, samlParsed{}, nil, ErrStorageMissingOAuthMethods
 		}
 	}
@@ -197,6 +202,10 @@ func validateConfig(cfg *Config) (providers map[string]Provider, sp samlParsed, 
 			}
 			dcrTokenHashes = append(dcrTokenHashes, sha256.Sum256([]byte(tok)))
 		}
+	}
+
+	if err := checkStorageCapabilities(cfg); err != nil {
+		return nil, samlParsed{}, nil, err
 	}
 
 	return providers, sp, dcrTokenHashes, nil
@@ -275,7 +284,7 @@ func wireServices(a *TheAuth, cfg Config, providers map[string]Provider, sp saml
 
 	// v2.0 authorization server + agent identity + delegation.
 	if cfg.AuthorizationServer != nil {
-		oss := cfg.Storage.(OAuthServerStorage)
+		oss := cfg.storageRaw.(OAuthServerStorage)
 		var policy *internalas.AgentPolicy
 		if cfg.AgentIdentity != nil {
 			policy = &internalas.AgentPolicy{
@@ -284,7 +293,7 @@ func wireServices(a *TheAuth, cfg Config, providers map[string]Provider, sp saml
 			}
 		}
 		var jwtBearerStore internalas.JWTBearerStorageAdapter
-		if jbs, ok := cfg.Storage.(JWTBearerStorage); ok {
+		if jbs, ok := cfg.storageRaw.(JWTBearerStorage); ok {
 			jwtBearerStore = jwtBearerStorageAdapter{jbs}
 		}
 		asCfg := asConfigFromRoot(cfg.AuthorizationServer)
@@ -326,6 +335,7 @@ func wireServices(a *TheAuth, cfg Config, providers map[string]Provider, sp saml
 	// Core services (session, magic link, SCIM, organizations, RBAC).
 	permCatalog, permIndex, defaultSeeds := a.permCatalog, a.permIndex, a.defaultRoleSeeds
 	a.sessionSvc = session.New(cfg.Storage, cfg.SessionTTL)
+	a.sx.install(a.sessionSvc)
 	a.magicSvc = magiclink.New(cfg.Storage, cfg.EmailSender, cfg.BaseURL, cfg.MagicLinkTTL, a.sessionSvc, a)
 	a.scimSvc = internalscim.NewService(cfg.Storage, scimConfigFromRoot(cfg.SCIM))
 	a.orgsSvc = organizations.New(cfg.Storage, orgsConfigFromRoot(cfg.Organizations))
@@ -333,11 +343,42 @@ func wireServices(a *TheAuth, cfg Config, providers map[string]Provider, sp saml
 
 	// High-complexity services: TOTP before password (password depends on
 	// totpSvc as its PendingTOTPIssuer).
+	a.throttle = cfg.LoginThrottle.limiter()
+	var gate *bootstrapGate
+	if cfg.Bootstrap != nil {
+		counter, ok := cfg.storageRaw.(UserCountStorage)
+		if !ok {
+			return missingCapability("UserCountStorage (required by Config.Bootstrap)")
+		}
+		g, gerr := newBootstrapGate(cfg.Bootstrap, counter, a.throttle)
+		if gerr != nil {
+			return gerr
+		}
+		gate = g
+		a.bootstrap = g
+		a.magicSvc.SetHardening(a.emailNorm, g)
+	} else {
+		a.magicSvc.SetHardening(a.emailNorm, nil)
+	}
 	a.totpSvc = internaltotp.NewService(cfg.Storage, a.sessionSvc, a, totpConfigFromRoot(cfg.TOTP), cfg.EncryptionKey)
-	pwSvc, err := password.NewService(cfg.Storage, cfg.EmailSender, a.sessionSvc, a.magicSvc, a.totpSvc, a, password.Config{
+	replay, _ := cfg.storageRaw.(internaltotp.ReplayStore)
+	a.totpSvc.SetHardening(a.throttle, replay)
+	if rc, ok := cfg.storageRaw.(RecoveryCodeStorage); ok {
+		a.totpSvc.SetRecoveryStore(rc)
+	}
+	pwCfg := password.Config{
 		BaseURL:     cfg.BaseURL,
 		TOTPEnabled: cfg.TOTP != nil,
-	})
+		MinLength:   cfg.PasswordPolicy.MinLength,
+		MaxBytes:    cfg.PasswordPolicy.MaxBytes,
+		Breach:      cfg.PasswordPolicy.BreachChecker,
+		Email:       a.emailNorm,
+		Throttle:    a.throttle,
+	}
+	if gate != nil {
+		pwCfg.Gate = gate
+	}
+	pwSvc, err := password.NewService(cfg.Storage, cfg.EmailSender, a.sessionSvc, a.magicSvc, a.totpSvc, a, pwCfg)
 	if err != nil {
 		return err
 	}
@@ -346,8 +387,15 @@ func wireServices(a *TheAuth, cfg Config, providers map[string]Provider, sp saml
 	if err != nil {
 		return err
 	}
+	if rn, ok := cfg.storageRaw.(WebAuthnRenameStorage); ok {
+		waSvc.SetRenamer(rn)
+	}
 	a.webauthnSvc = waSvc
-	a.samlSvc = internalsaml.NewService(cfg.Storage, a.sessionSvc, a, samlConfigFromRoot(cfg.SAML, sp.cert, sp.key))
+	samlCfg := samlConfigFromRoot(cfg.SAML, sp.cert, sp.key)
+	if samlCfg != nil {
+		samlCfg.Email = a.emailNorm
+	}
+	a.samlSvc = internalsaml.NewService(cfg.Storage, a.sessionSvc, a, samlCfg)
 
 	// Wire OAuth provider service. The GC goroutine is started inside
 	// internaloauth.New so there is no separate Start call needed.
@@ -378,6 +426,7 @@ func wireServices(a *TheAuth, cfg Config, providers map[string]Provider, sp saml
 			oauthSessionAdapter{svc: a.sessionSvc},
 			a,
 			onConflict,
+			oauthConfigFromRoot(cfg.OAuth),
 		)
 	}
 
@@ -454,6 +503,9 @@ func webauthnConfigFromRoot(c *WebAuthnConfig) *internalwebauthn.Config {
 		RPDisplayName: c.RPDisplayName,
 		RPOrigins:     append([]string(nil), c.RPOrigins...),
 		ChallengeTTL:  c.ChallengeTTL,
+
+		RequireUserVerification: c.RequireUserVerification,
+		CloneWarning:            string(c.CloneWarning),
 	}
 }
 

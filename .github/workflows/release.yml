@@ -10,6 +10,9 @@ permissions:
   id-token: write      # Sigstore OIDC token for keyless cosign signing
   attestations: write  # SLSA provenance attestations
 
+env:
+  GOWORK: off
+
 jobs:
   release:
     runs-on: ubuntu-latest

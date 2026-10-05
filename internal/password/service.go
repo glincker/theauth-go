@@ -29,7 +29,9 @@ import (
 	"github.com/glincker/theauth-go/crypto"
 	"github.com/glincker/theauth-go/email"
 	"github.com/glincker/theauth-go/internal/audit"
+	"github.com/glincker/theauth-go/internal/emailnorm"
 	"github.com/glincker/theauth-go/internal/models"
+	"github.com/glincker/theauth-go/internal/throttle"
 	"github.com/glincker/theauth-go/internal/ulid"
 )
 
@@ -105,6 +107,19 @@ type Config struct {
 	// TOTPEnabled mirrors root cfg.TOTP != nil. When false, Signin never
 	// peeks at TOTPSecretByUserID and always mints a full session.
 	TOTPEnabled bool
+
+	// MinLength and MaxBytes bound accepted passwords; zero selects
+	// MinPasswordLength and DefaultMaxPasswordBytes.
+	MinLength int
+	MaxBytes  int
+	// Breach is consulted on signup and password changes. Nil disables it.
+	Breach BreachChecker
+	// Email canonicalizes addresses at every entry point.
+	Email emailnorm.Normalizer
+	// Throttle, when non-nil, gates Signin before any credential work.
+	Throttle *throttle.Limiter
+	// Gate, when non-nil, decides whether Signup may proceed.
+	Gate SignupGate
 }
 
 // Service holds the dependencies needed for password flows.
@@ -163,7 +178,11 @@ func (s *Service) DummyHash() string {
 
 // normalizeEmail trims and lowercases an email for storage-side uniqueness.
 func normalizeEmail(e string) string {
-	return strings.ToLower(strings.TrimSpace(e))
+	return emailnorm.Normalizer{}.Normalize(e)
+}
+
+func (s *Service) normalizeEmail(e string) string {
+	return s.cfg.Email.Normalize(e)
 }
 
 // ValidateEmail wraps mail.ParseAddress and returns the normalized form
@@ -181,14 +200,21 @@ func ValidateEmail(raw string) (string, error) {
 // session. Also fires a magic-link verification email (best-effort).
 // Returns CodeEmailTaken if the email is already registered, CodeWeakPassword
 // if the password is below MinPasswordLength, and surfaces storage errors as-is.
-func (s *Service) Signup(ctx context.Context, emailAddr, password string) (*models.User, string, error) {
-	addr, err := mail.ParseAddress(emailAddr)
+func (s *Service) Signup(ctx context.Context, emailAddr, password string) (created *models.User, sessionToken string, err error) {
+	addr, err := mail.ParseAddress(s.normalizeEmail(emailAddr))
 	if err != nil {
 		return nil, "", models.NewError(models.CodeInvalidCredentials, "invalid email", err)
 	}
-	emailAddr = normalizeEmail(addr.Address)
-	if len(password) < MinPasswordLength {
-		return nil, "", models.NewError(models.CodeWeakPassword, fmt.Sprintf("password must be at least %d characters", MinPasswordLength), nil)
+	emailAddr = s.normalizeEmail(addr.Address)
+	if err := s.ValidatePassword(ctx, password); err != nil {
+		return nil, "", err
+	}
+	if s.cfg.Gate != nil {
+		done, gerr := s.cfg.Gate.Begin(ctx)
+		if gerr != nil {
+			return nil, "", gerr
+		}
+		defer func() { done(created) }()
 	}
 
 	if existing, err := s.storage.UserByEmail(ctx, emailAddr); err == nil && existing != nil {
@@ -242,7 +268,10 @@ func (s *Service) Signup(ctx context.Context, emailAddr, password string) (*mode
 // a step indicator: when the user has a confirmed TOTP secret the step is
 // "totp_required" and the session is pending_2fa instead of full.
 func (s *Service) Signin(ctx context.Context, emailAddr, password, userAgent, ip string) (string, *models.User, SigninStep, error) {
-	emailAddr = normalizeEmail(emailAddr)
+	emailAddr = s.normalizeEmail(emailAddr)
+	if err := s.checkThrottle(ctx, ip, emailAddr); err != nil {
+		return "", nil, "", err
+	}
 	user, hash, err := s.storage.UserByEmailWithPassword(ctx, emailAddr)
 	if errors.Is(err, models.ErrStorageNotFound) {
 		// security audit M6 (2026-06-20): pay the Argon2id verify cost
@@ -251,6 +280,8 @@ func (s *Service) Signin(ctx context.Context, emailAddr, password, userAgent, ip
 		// The dummy hash mints once at NewService time; the verify
 		// result is ignored.
 		_, _ = crypto.VerifyPassword(password, s.dummyHash)
+		s.recordFailure(ctx, ip, emailAddr)
+		s.emitLoginFailed(ctx, nil, userAgent, ip, "unknown_user")
 		return "", nil, "", models.NewError(models.CodeInvalidCredentials, "invalid email or password", nil)
 	}
 	if err != nil {
@@ -261,6 +292,8 @@ func (s *Service) Signin(ctx context.Context, emailAddr, password, userAgent, ip
 		// Pay the verify cost against the dummy hash so the timing matches
 		// the genuine wrong-password branch (security audit M6).
 		_, _ = crypto.VerifyPassword(password, s.dummyHash)
+		s.recordFailure(ctx, ip, emailAddr)
+		s.emitLoginFailed(ctx, &user.ID, userAgent, ip, "no_password")
 		return "", nil, "", models.NewError(models.CodeInvalidCredentials, "invalid email or password", nil)
 	}
 	ok, err := crypto.VerifyPassword(password, hash)
@@ -270,8 +303,11 @@ func (s *Service) Signin(ctx context.Context, emailAddr, password, userAgent, ip
 		return "", nil, "", err
 	}
 	if !ok {
+		s.recordFailure(ctx, ip, emailAddr)
+		s.emitLoginFailed(ctx, &user.ID, userAgent, ip, "bad_password")
 		return "", nil, "", models.NewError(models.CodeInvalidCredentials, "invalid email or password", nil)
 	}
+	s.recordSuccess(ctx, ip, emailAddr)
 	// v0.5 step-up: when TOTP is enrolled and confirmed for this user, mint
 	// a pending_2fa session instead of a full one. The caller (the HTTP
 	// handler) renders {"step":"totp_required"} so the client knows to
@@ -314,7 +350,7 @@ func (s *Service) RequestReset(ctx context.Context, emailAddr string) error {
 // one is minted, "" when the email does not exist (so tests can assert the
 // silent-no-op behavior). Production code calls RequestReset.
 func (s *Service) RequestResetForTest(ctx context.Context, emailAddr string) (string, error) {
-	emailAddr = normalizeEmail(emailAddr)
+	emailAddr = s.normalizeEmail(emailAddr)
 	user, err := s.storage.UserByEmail(ctx, emailAddr)
 	if errors.Is(err, models.ErrStorageNotFound) {
 		// Silent success; do not disclose whether the email is registered.
@@ -363,8 +399,8 @@ func (s *Service) Reset(ctx context.Context, token, newPassword string) (models.
 	if token == "" {
 		return models.ULID{}, models.NewError(models.CodePasswordResetInvalid, "missing token", nil)
 	}
-	if len(newPassword) < MinPasswordLength {
-		return models.ULID{}, models.NewError(models.CodeWeakPassword, fmt.Sprintf("password must be at least %d characters", MinPasswordLength), nil)
+	if err := s.ValidatePassword(ctx, newPassword); err != nil {
+		return models.ULID{}, err
 	}
 
 	rt, err := s.storage.ConsumePasswordResetToken(ctx, crypto.HashToken(token))
@@ -397,4 +433,13 @@ func (s *Service) Reset(ctx context.Context, token, newPassword string) (models.
 	s.auditEm.EmitAudit(ctx, "password.changed", models.TargetRef{Type: "user", ID: rt.UserID.String()}, nil)
 	slog.Info("theauth: password reset", "user_id", rt.UserID.String())
 	return rt.UserID, nil
+}
+
+func (s *Service) emitLoginFailed(ctx context.Context, userID *models.ULID, userAgent, ip, reason string) {
+	target := models.TargetRef{}
+	if userID != nil {
+		target = models.TargetRef{Type: "user", ID: userID.String()}
+	}
+	s.auditEm.EmitAudit(audit.WithAuditMetadata(ctx, audit.AuditMetadata{IP: ip, UserAgent: userAgent}),
+		"login.failed", target, map[string]any{"auth_method": "password", "reason": reason})
 }

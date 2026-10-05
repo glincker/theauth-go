@@ -452,9 +452,12 @@ func (a *TheAuth) FinishPasskeyLogin(ctx context.Context, challengeToken string,
 // been called EmitAudit is also a silent no-op. Forwards to
 // auditSvc.Emit.
 func (a *TheAuth) EmitAudit(ctx context.Context, action string, target TargetRef, metadata map[string]any) {
+	a.dispatchAuthEvent(ctx, action, target, metadata)
+	a.revocationFromAudit(ctx, action, target, metadata)
 	if a.auditSvc == nil {
 		return
 	}
+	metadata = withActorChain(ctx, metadata)
 	var actorUser *ULID
 	if u, ok := UserFromContext(ctx); ok && u != nil {
 		id := u.ID
@@ -482,7 +485,11 @@ func (a *TheAuth) QueryAudit(ctx context.Context, q AuditQuery) ([]AuditEvent, s
 // (confirm the session belongs to the caller, or the caller is an admin)
 // before calling this, RevokeSession itself does no ownership check.
 func (a *TheAuth) RevokeSession(ctx context.Context, id ULID) error {
-	return a.storage.RevokeSession(ctx, id)
+	if err := a.storage.RevokeSession(ctx, id); err != nil {
+		return err
+	}
+	a.EmitAudit(ctx, "session.revoked", TargetRef{Type: "session", ID: id.String()}, nil)
+	return nil
 }
 
 // RevokeUserSessions revokes every session belonging to userID. Callers
@@ -490,7 +497,11 @@ func (a *TheAuth) RevokeSession(ctx context.Context, id ULID) error {
 // re-issue or otherwise except that session themselves, this revokes
 // unconditionally.
 func (a *TheAuth) RevokeUserSessions(ctx context.Context, userID ULID) error {
-	return a.storage.RevokeUserSessions(ctx, userID)
+	if err := a.storage.RevokeUserSessions(ctx, userID); err != nil {
+		return err
+	}
+	a.EmitAudit(ctx, "session.revoked", TargetRef{Type: "user", ID: userID.String()}, map[string]any{"scope": "all"})
+	return nil
 }
 
 // SessionByID returns a session's current state (including RevokedAt and

@@ -32,6 +32,13 @@ covered by the same SemVer guarantees from this point forward.
   zero-dependency Go module: a consumer pulling this package does NOT
   transitively pull theauth core or the storage adapters).
 
+## Experimental packages
+
+- `github.com/glincker/theauth-go/storage/sqlite`: separate Go module backed
+  by `modernc.org/sqlite`. Core, OAuthAccount, WebAuthn, TOTP and Audit
+  capabilities only. Its migrations are append-only like the other adapters.
+  Promoted to stable once organizations and RBAC land.
+
 ## Stable packages (v2.3 additions)
 
 The v2.0 surface above is unchanged. v2.3 adds the following packages for
@@ -57,6 +64,17 @@ point forward.
   after each successful `InsertAuditEvents` call.
 - `Stats.AuditSinkFailed uint64`: monotonically non-decreasing counter
   incremented once per failing sink per batch. Existing fields are unchanged.
+
+## Additive surface (auth hardening)
+
+New, non-breaking: `Config.OAuth`, `Config.AuthEventSink`, `OAuthConfig`,
+`OAuthStateStore`, `OAuthState`, `OAuthSignupPolicy`, `NonceProvider`,
+`AuthEvent`, `AuthEventType`, `AuthEventSink`, `AuthEventChannelSink`,
+`WebAuthnConfig.RequireUserVerification`, `WebAuthnConfig.CloneWarning`,
+`WebAuthnRenameStorage`, `RecoveryCodeStorage`,
+`(*TheAuth).RecordTokenMinted`, `RecordTokenRevoked`, `TOTPStatus`,
+`RegenerateRecoveryCodes`, `RenamePasskey`, and the package
+`github.com/glincker/theauth-go/provider/oidc`.
 
 ## Stable surface
 
@@ -204,6 +222,16 @@ separate optional interface (for example `StorageWithSessionList`) and the
 library uses a type assertion to detect support at runtime. The base
 `Storage` interface only grows in a v2.0 release.
 
+`Storage` is the embedding of the capability interfaces declared in
+`storage_caps.go`. Its method set is frozen by a test; a new method goes
+into the capability it belongs to only in a major release, otherwise behind
+a new optional interface.
+
+Session management follows this rule: `SessionManagementStorage` and
+`SessionLinkStorage` (storage_sessions.go) are optional capabilities outside
+`Storage`; see `docs/SESSIONS.md`. The new `Session` fields `LastSeenAt`,
+`ElevatedUntil` and `CredentialID` are additive.
+
 ## Special rule: database migrations
 
 Postgres migrations under `storage/postgres/migrations/` are append-only.
@@ -321,6 +349,20 @@ or `AccountUX` continue to see the v1.0 surface unchanged.
   RFC 7807; the `code` extension namespace is reserved by this library and
   may grow with new codes in additive minor releases.
 
+## Auth hardening additions (additive)
+
+New exported symbols, none changing existing signatures: `LoginThrottleConfig`,
+`LoginThrottleStore`, `LoginThrottleEntry`, `NewMemoryLoginThrottleStore`,
+`BootstrapConfig`, `BreachChecker`, `HIBPBreachChecker`, `TOTPReplayStorage`,
+`UserCountStorage` (optional capabilities, not part of `Storage`),
+`Config.LoginThrottle`, `Config.Bootstrap`, `Config.EmailNFKC`,
+`PasswordPolicyConfig.MinLength/MaxBytes/BreachChecker`, `TheAuth.UserCount`,
+`SetupToken`, `NormalizeEmail`, `ResetPasswordAdmin`, `UnlockUser`,
+`TheAuthError.RetryAfter`, and error codes `CodeAccountLocked`,
+`CodeSignupClosed`, `CodeSetupTokenInvalid`, `CodeBadRequest`,
+`CodeUnauthorized`, `CodeForbidden`, `CodeNotFound`, `CodeConflict`,
+`CodeInternal`. See `docs/AUTH-HARDENING.md`.
+
 ## What changes without a major bump
 
 - Bug fixes that preserve documented behavior.
@@ -342,3 +384,11 @@ or `AccountUX` continue to see the v1.0 surface unchanged.
   append-only).
 - Changing the semantics of an existing `Stats` field.
 - Adding UPDATE or DELETE to the audit interface.
+
+## API tokens and device grant (additive)
+
+`Config.APITokens`, `APITokensConfig`, `DeviceConfig`, `APIToken`, `DeviceCode`,
+`Principal`, the `APITokenStorage` and `DeviceCodeStorage` capability
+interfaces, `RequireAbility`, and the `/auth/tokens` and `/auth/device/*`
+routes are additive and covered by the same SemVer guarantees. The `Storage`
+method set is unchanged.

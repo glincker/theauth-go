@@ -98,7 +98,7 @@ func (h *Handler) Mount(r chi.Router, requireAuth func(http.Handler) http.Handle
 func (h *Handler) handleCreate(w http.ResponseWriter, r *http.Request) {
 	user, _ := h.userFromCtx(r)
 	if user == nil {
-		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		httpx.Error(w, http.StatusUnauthorized, "unauthorized")
 		return
 	}
 	var body struct {
@@ -106,16 +106,16 @@ func (h *Handler) handleCreate(w http.ResponseWriter, r *http.Request) {
 		Slug string `json:"slug"`
 	}
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<14)).Decode(&body); err != nil {
-		http.Error(w, "invalid body", http.StatusBadRequest)
+		httpx.Error(w, http.StatusBadRequest, "invalid body")
 		return
 	}
 	org, err := h.svc.Create(r.Context(), body.Name, body.Slug, user.ID)
 	if err != nil {
 		if errors.Is(err, models.ErrSlugTaken) {
-			http.Error(w, "slug already taken", http.StatusConflict)
+			httpx.Error(w, http.StatusConflict, "slug already taken")
 			return
 		}
-		http.Error(w, "invalid organization", http.StatusBadRequest)
+		httpx.Error(w, http.StatusBadRequest, "invalid organization")
 		return
 	}
 	httpx.WriteJSON(w, http.StatusCreated, org)
@@ -124,12 +124,12 @@ func (h *Handler) handleCreate(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) handleList(w http.ResponseWriter, r *http.Request) {
 	user, _ := h.userFromCtx(r)
 	if user == nil {
-		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		httpx.Error(w, http.StatusUnauthorized, "unauthorized")
 		return
 	}
 	orgs, err := h.svc.ListUserOrganizations(r.Context(), user.ID)
 	if err != nil {
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		httpx.Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 	httpx.WriteJSON(w, http.StatusOK, orgs)
@@ -146,7 +146,7 @@ func (h *Handler) handleGet(w http.ResponseWriter, r *http.Request) {
 	}
 	org, err := h.svc.ByID(r.Context(), id)
 	if err != nil {
-		http.Error(w, "not found", http.StatusNotFound)
+		httpx.Error(w, http.StatusNotFound, "not found")
 		return
 	}
 	httpx.WriteJSON(w, http.StatusOK, org)
@@ -166,16 +166,16 @@ func (h *Handler) handleAddMember(w http.ResponseWriter, r *http.Request) {
 		Role   string `json:"role"`
 	}
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<14)).Decode(&body); err != nil {
-		http.Error(w, "invalid body", http.StatusBadRequest)
+		httpx.Error(w, http.StatusBadRequest, "invalid body")
 		return
 	}
 	uid, err := ulid.Parse(body.UserID)
 	if err != nil {
-		http.Error(w, "invalid user id", http.StatusBadRequest)
+		httpx.Error(w, http.StatusBadRequest, "invalid user id")
 		return
 	}
 	if err := h.svc.AddMember(r.Context(), id, uid, body.Role); err != nil {
-		http.Error(w, "invalid role", http.StatusBadRequest)
+		httpx.Error(w, http.StatusBadRequest, "invalid role")
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -193,10 +193,10 @@ func (h *Handler) handleRemoveMember(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := h.svc.RemoveMember(r.Context(), id, uid); err != nil {
 		if errors.Is(err, models.ErrLastOwner) {
-			http.Error(w, "cannot remove the last owner", http.StatusConflict)
+			httpx.Error(w, http.StatusConflict, "cannot remove the last owner")
 			return
 		}
-		http.Error(w, "not found", http.StatusNotFound)
+		httpx.Error(w, http.StatusNotFound, "not found")
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -214,7 +214,7 @@ func (h *Handler) handleActivate(w http.ResponseWriter, r *http.Request) {
 	}
 	orgID := id
 	if err := h.svc.SetActive(r.Context(), sess.ID, &orgID); err != nil {
-		http.Error(w, "not found", http.StatusNotFound)
+		httpx.Error(w, http.StatusNotFound, "not found")
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -223,11 +223,11 @@ func (h *Handler) handleActivate(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) handleClearActive(w http.ResponseWriter, r *http.Request) {
 	sess, _ := h.sessFromCtx(r)
 	if sess == nil {
-		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		httpx.Error(w, http.StatusUnauthorized, "unauthorized")
 		return
 	}
 	if err := h.svc.SetActive(r.Context(), sess.ID, nil); err != nil {
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		httpx.Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)

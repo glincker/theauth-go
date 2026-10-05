@@ -8,7 +8,7 @@ import (
 	"github.com/glincker/theauth-go"
 )
 
-func testAuditEvents(t *testing.T, store theauth.Storage) {
+func testAuditEvents(t *testing.T, store AuditSuiteStorage) {
 	t.Helper()
 	ctx := context.Background()
 

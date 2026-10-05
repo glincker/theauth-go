@@ -10,7 +10,7 @@ import (
 	"github.com/glincker/theauth-go/storage"
 )
 
-func testSessions(t *testing.T, store theauth.Storage) {
+func testSessions(t *testing.T, store SessionSuiteStorage) {
 	t.Helper()
 	ctx := context.Background()
 

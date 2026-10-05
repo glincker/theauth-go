@@ -11,7 +11,9 @@ package session
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
+	"sync"
 	"time"
 
 	"github.com/glincker/theauth-go/crypto"
@@ -39,6 +41,74 @@ type Storage interface {
 type Service struct {
 	storage Storage
 	ttl     time.Duration
+	policy  Policy
+	gate    touchGate
+}
+
+// Toucher persists a session's last-seen time.
+type Toucher interface {
+	TouchSession(ctx context.Context, id models.ULID, at time.Time) error
+}
+
+// Revoker revokes one session by id.
+type Revoker interface {
+	RevokeSession(ctx context.Context, id models.ULID) error
+}
+
+// CredentialChecker reports whether the upstream credential a session is tied
+// to is still valid. It returns models.ErrCredentialRevoked when it is not;
+// any other error is treated as transient and fails the validation closed.
+type CredentialChecker interface {
+	CheckCredential(ctx context.Context, credentialID string) error
+}
+
+// Policy configures idle timeout, last-seen throttling and credential
+// re-checks. The zero value keeps the original absolute-TTL-only behavior.
+type Policy struct {
+	IdleTimeout   time.Duration
+	TouchInterval time.Duration
+	Toucher       Toucher
+	Revoker       Revoker
+	Credentials   CredentialChecker
+}
+
+// SetPolicy installs the policy. Call before the Service is shared.
+func (s *Service) SetPolicy(p Policy) { s.policy = p }
+
+// touchGate admits at most one last-seen write per session per interval in
+// this process, so concurrent requests do not each write.
+type touchGate struct {
+	mu   sync.Mutex
+	last map[models.ULID]time.Time
+}
+
+func (g *touchGate) allow(id models.ULID, now time.Time, interval time.Duration) bool {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if g.last == nil {
+		g.last = make(map[models.ULID]time.Time)
+	}
+	if t, ok := g.last[id]; ok && now.Sub(t) < interval {
+		return false
+	}
+	g.last[id] = now
+	if len(g.last) > 4096 {
+		for k, t := range g.last {
+			if now.Sub(t) >= interval {
+				delete(g.last, k)
+			}
+		}
+	}
+	return true
+}
+
+// IssueOptions customizes Service.IssueWith.
+type IssueOptions struct {
+	UserAgent    string
+	IP           string
+	CredentialID string
+	// TTL overrides the service default when positive.
+	TTL time.Duration
 }
 
 // New constructs a session Service.
@@ -50,19 +120,30 @@ func New(storage Storage, ttl time.Duration) *Service {
 // Session row, and returns the raw token. The raw token is what the caller
 // puts in a cookie / sends to the user; the hash is what's persisted.
 func (s *Service) Issue(ctx context.Context, user models.User, userAgent, ip string) (token string, sess models.Session, err error) {
+	return s.IssueWith(ctx, user, IssueOptions{UserAgent: userAgent, IP: ip})
+}
+
+// IssueWith is Issue with per-session options.
+func (s *Service) IssueWith(ctx context.Context, user models.User, opts IssueOptions) (token string, sess models.Session, err error) {
 	token, err = crypto.NewToken()
 	if err != nil {
 		return "", models.Session{}, err
 	}
 	now := time.Now()
+	ttl := s.ttl
+	if opts.TTL > 0 {
+		ttl = opts.TTL
+	}
 	sess = models.Session{
-		ID:        ulid.New(),
-		UserID:    user.ID,
-		TokenHash: crypto.HashToken(token),
-		UserAgent: userAgent,
-		IP:        ip,
-		CreatedAt: now,
-		ExpiresAt: now.Add(s.ttl),
+		ID:           ulid.New(),
+		UserID:       user.ID,
+		TokenHash:    crypto.HashToken(token),
+		UserAgent:    opts.UserAgent,
+		IP:           opts.IP,
+		CreatedAt:    now,
+		LastSeenAt:   now,
+		ExpiresAt:    now.Add(ttl),
+		CredentialID: opts.CredentialID,
 	}
 	sess, err = s.storage.CreateSession(ctx, sess)
 	if err != nil {
@@ -77,6 +158,16 @@ func (s *Service) Issue(ctx context.Context, user models.User, userAgent, ip str
 // Returns models.ErrInvalidToken for missing/unknown tokens and
 // models.ErrSessionExpired for expired or revoked sessions.
 func (s *Service) Validate(ctx context.Context, token string) (*models.Session, *models.User, error) {
+	return s.validate(ctx, token, true)
+}
+
+// Check is Validate without the last-seen update, for liveness probes such as
+// long-lived stream re-checks that must not count as user activity.
+func (s *Service) Check(ctx context.Context, token string) (*models.Session, *models.User, error) {
+	return s.validate(ctx, token, false)
+}
+
+func (s *Service) validate(ctx context.Context, token string, touch bool) (*models.Session, *models.User, error) {
 	if token == "" {
 		return nil, nil, models.ErrInvalidToken
 	}
@@ -87,12 +178,54 @@ func (s *Service) Validate(ctx context.Context, token string) (*models.Session, 
 	if err != nil {
 		return nil, nil, err
 	}
-	if sess.Expired(time.Now()) {
+	now := time.Now()
+	if sess.Expired(now) {
 		return nil, nil, models.ErrSessionExpired
+	}
+	last := sess.LastSeenAt
+	if last.IsZero() {
+		last = sess.CreatedAt
+	}
+	if s.policy.IdleTimeout > 0 && now.Sub(last) >= s.policy.IdleTimeout {
+		return nil, nil, models.ErrSessionExpired
+	}
+	if sess.CredentialID != "" {
+		if err := s.checkCredential(ctx, sess); err != nil {
+			return nil, nil, err
+		}
 	}
 	user, err := s.storage.UserByID(ctx, sess.UserID)
 	if err != nil {
 		return nil, nil, err
 	}
+	if touch && s.policy.Toucher != nil && s.policy.TouchInterval > 0 &&
+		now.Sub(last) >= s.policy.TouchInterval && s.gate.allow(sess.ID, now, s.policy.TouchInterval) {
+		if err := s.policy.Toucher.TouchSession(ctx, sess.ID, now); err != nil {
+			slog.Warn("theauth: session last-seen update failed", "session_id", sess.ID.String(), "err", err.Error())
+		} else {
+			sess.LastSeenAt = now
+		}
+	}
 	return sess, user, nil
+}
+
+// checkCredential fails closed: a session tied to a credential is unusable
+// when no checker is configured or the checker cannot answer.
+func (s *Service) checkCredential(ctx context.Context, sess *models.Session) error {
+	if s.policy.Credentials == nil {
+		return models.ErrSessionExpired
+	}
+	err := s.policy.Credentials.CheckCredential(ctx, sess.CredentialID)
+	if err == nil {
+		return nil
+	}
+	if !errors.Is(err, models.ErrCredentialRevoked) {
+		return fmt.Errorf("theauth: check session credential: %w", err)
+	}
+	if s.policy.Revoker != nil {
+		if rerr := s.policy.Revoker.RevokeSession(ctx, sess.ID); rerr != nil {
+			slog.Warn("theauth: revoke session after credential revocation failed", "session_id", sess.ID.String(), "err", rerr.Error())
+		}
+	}
+	return models.ErrSessionExpired
 }

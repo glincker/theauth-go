@@ -210,6 +210,7 @@ func (s *Service) LinkPasswordToCurrentUser(ctx context.Context, sessionToken, p
 	if err := s.storage.SetUserPassword(ctx, sess.UserID, hash); err != nil {
 		return fmt.Errorf("identitylink: set user password: %w", err)
 	}
+	s.auditEm.EmitAudit(ctx, "password.changed", models.TargetRef{Type: "user", ID: sess.UserID.String()}, nil)
 
 	s.auditEm.EmitAudit(ctx, "identity.linked", models.TargetRef{Type: "user", ID: sess.UserID.String()}, map[string]any{
 		"method": "password",
