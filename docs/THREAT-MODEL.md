@@ -12,7 +12,7 @@
 2. [Components in Scope](#components-in-scope)
 3. [Out of Scope](#out-of-scope)
 4. [Authorization Server (AS)](#authorization-server-as)
-5. [Resource Server / mcpresource](#resource-server--mcpresource)
+5. [Resource Server / mcpresource](#resource-server-mcpresource)
 6. [Storage Backend](#storage-backend)
 7. [Authentication Flows](#authentication-flows)
 8. [Grant Types](#grant-types)
