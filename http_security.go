@@ -12,8 +12,8 @@ const secureCookieAttr = "Secure"
 
 // Handler returns a stdlib http.Handler serving every route Mount would
 // register, for consumers on net/http's ServeMux without chi. Routes keep
-// their canonical paths (/auth/..., /oauth/...); to serve under a prefix,
-// wrap with http.StripPrefix.
+// their configured paths (Config.PathPrefix, default /auth/..., and /oauth/...),
+// so no http.StripPrefix is needed when the prefix matches the mount point.
 func (a *TheAuth) Handler() http.Handler {
 	r := chi.NewRouter()
 	a.Mount(r)

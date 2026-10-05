@@ -31,6 +31,7 @@ import (
 	"github.com/glincker/theauth-go/internal/audit"
 	"github.com/glincker/theauth-go/internal/emailnorm"
 	"github.com/glincker/theauth-go/internal/models"
+	"github.com/glincker/theauth-go/internal/pathprefix"
 	"github.com/glincker/theauth-go/internal/throttle"
 	"github.com/glincker/theauth-go/internal/ulid"
 )
@@ -104,6 +105,8 @@ type PendingTOTPIssuer interface {
 type Config struct {
 	// BaseURL prefixes the reset link in outbound email. Required.
 	BaseURL string
+	// PathPrefix is the route prefix of the reset link. Empty means "/auth".
+	PathPrefix string
 	// TOTPEnabled mirrors root cfg.TOTP != nil. When false, Signin never
 	// peeks at TOTPSecretByUserID and always mints a full session.
 	TOTPEnabled bool
@@ -377,7 +380,7 @@ func (s *Service) RequestResetForTest(ctx context.Context, emailAddr string) (st
 		return "", err
 	}
 
-	link := fmt.Sprintf("%s/auth/email-password/reset?token=%s", s.cfg.BaseURL, token)
+	link := fmt.Sprintf("%s%s/email-password/reset?token=%s", s.cfg.BaseURL, pathprefix.Normalize(s.cfg.PathPrefix), token)
 	body := fmt.Sprintf("Reset your password: %s\n\nExpires in %s.", link, PasswordResetTTL)
 	if err := s.sender.Send(ctx, emailAddr, "Reset your password", body); err != nil {
 		// Best effort; token already minted. Log and continue.
