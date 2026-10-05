@@ -16,9 +16,8 @@ name: Dependabot auto-merge
 #     read release notes before shipping a version bump on anything touching
 #     the auth library's security boundary, regardless of semver band.
 #
-# See docs/superpowers/specs/2026-07-13-dependabot-auto-merge-design.md for
-# the full design rationale. Modeled on GLINCKER/thesvg's
-# dependabot-auto-merge.yml, adapted for this repo's security-sensitive deps.
+# Modeled on GLINCKER/thesvg's dependabot-auto-merge.yml, adapted for this
+# repo's security-sensitive deps.
 
 on:
   pull_request:
