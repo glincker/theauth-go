@@ -47,3 +47,13 @@ tmp/
 # separate, public, committed LLM-facing doc served on theauth.dev)
 /CLAUDE.md
 /AGENTS.md
+
+# AI-assistant and local process artifacts (never commit)
+docs/superpowers/
+.claude/
+.superpowers/
+.cursor/
+.aider*
+.windsurf/
+*.local.md
+docs-local/
