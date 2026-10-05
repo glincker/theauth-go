@@ -1,5 +1,5 @@
-github.com/beevik/etree v1.7.1 h1:xBlSFAjlMfZkrCNKCEdZ2MSN9pfQYeRBaISDnAVi4Ek=
-github.com/beevik/etree v1.7.1/go.mod h1:bh4zJxiIr62SOf9pRzN7UUYaEDa9HEKafK25+sLc0Gc=
+github.com/beevik/etree v1.8.1 h1:MchsAnqPGCGsfQezhwcouHPlAHlcAOqWpyCVZoyWfjU=
+github.com/beevik/etree v1.8.1/go.mod h1:bh4zJxiIr62SOf9pRzN7UUYaEDa9HEKafK25+sLc0Gc=
 github.com/boombuler/barcode v1.0.1-0.20190219062509-6c824513bacc h1:biVzkmvwrH8WK8raXaxBx6fRVTlJILwEwQGL1I/ByEI=
 github.com/boombuler/barcode v1.0.1-0.20190219062509-6c824513bacc/go.mod h1:paBWMcWSl3LHKBqUq+rly7CNSldXjb2rDl3JlRe0mD8=
 github.com/crewjam/saml v0.5.1 h1:g+mfp0CrLuLRZCK793PgJcZeg5dS/0CDwoeAX2zcwNI=
@@ -11,6 +11,8 @@ github.com/fxamacker/cbor/v2 v2.9.3 h1:oQBnFATpNdY8gJHTndDDv5Xl4QqNaz51G5LLEPhng
 github.com/fxamacker/cbor/v2 v2.9.3/go.mod h1:vM4b+DJCtHn+zz7h3FFp/hDAI9WNWCsZj23V5ytsSxQ=
 github.com/glincker/theauth-go/mcpresource v0.0.0-20260622181835-520da3c8360d h1:HWzPcgyK5d/ouk8esXdeqXYXZTLyVs2nhQK42pSI0zo=
 github.com/glincker/theauth-go/mcpresource v0.0.0-20260622181835-520da3c8360d/go.mod h1:VY/t7oCkMZ7V0ORrjlrKvmjt4CvmZn3fSuhGqnEIxJE=
+github.com/glincker/theauth-go/v2 v2.6.0 h1:H058WO4PMuorIcRSQrjAeH3VCeGNuQA7NwPhkdzrTMY=
+github.com/glincker/theauth-go/v2 v2.6.0/go.mod h1:Rv8LSD9tdN9FwrRoYZqKxz+KU3yiHJH1DxH5x3OwG84=
 github.com/go-chi/chi/v5 v5.3.2 h1:5YQkICvTCSZ25hoRsyJazN0scjzKGiu4VAUc7H1o1nY=
 github.com/go-chi/chi/v5 v5.3.2/go.mod h1:R+tYY2hNuVUUjxoPtqUdgBqevM9s9njzkTLutVsOCto=
 github.com/go-webauthn/webauthn v0.13.4 h1:q68qusWPcqHbg9STSxBLBHnsKaLxNO0RnVKaAqMuAuQ=
@@ -70,6 +72,8 @@ golang.org/x/sync v0.23.0 h1:KameEIfc1IkluZyXWLn39Wd4tURc6GbCiISGiZm2bQk=
 golang.org/x/sync v0.23.0/go.mod h1:sUUOizhqBxiL6pEWpqNLUiaJn1ShEbZ6BBqskPbjZm0=
 golang.org/x/sys v0.48.0 h1:bbX/i/6MgT9BVLM9RT1thmxL04yeTAhbEz4SyadbXoo=
 golang.org/x/sys v0.48.0/go.mod h1:hNLxWAXmnKAxqDtdwIYC4bM9oQPEecfsnNMuSxOs3og=
+golang.org/x/text v0.40.0 h1:Ub2Z6/xjgF1WrYQz2nuITOEegKFtiIy+rieRJ5lHZKs=
+golang.org/x/text v0.40.0/go.mod h1:hpnzDAfGV753zIKo+wk3u1bVKCGPbrnF7+7LBF/UHVY=
 golang.org/x/time v0.15.0 h1:bbrp8t3bGUeFOx08pvsMYRTCVSMk89u4tKbNOZbp88U=
 golang.org/x/time v0.15.0/go.mod h1:Y4YMaQmXwGQZoFaVFk4YpCt4FLQMYKZe9oeV/f4MSno=
 golang.org/x/tools v0.50.0 h1:c2ifzfcuY7L90lZ2aKd8S4K2NpASF08SZx9ZuJkHmSU=
