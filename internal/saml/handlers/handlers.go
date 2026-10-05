@@ -81,7 +81,7 @@ func (h *Handler) handleLogin(w http.ResponseWriter, r *http.Request) {
 	}
 	redirect, err := h.svc.BeginLogin(r.Context(), id, relay)
 	if err != nil {
-		http.Error(w, "saml login failed", http.StatusBadRequest)
+		httpx.Error(w, http.StatusBadRequest, "saml login failed")
 		return
 	}
 	http.Redirect(w, r, redirect, http.StatusFound)
@@ -93,12 +93,12 @@ func (h *Handler) handleACS(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := r.ParseForm(); err != nil {
-		http.Error(w, "invalid form", http.StatusBadRequest)
+		httpx.Error(w, http.StatusBadRequest, "invalid form")
 		return
 	}
 	samlResponse := r.FormValue("SAMLResponse")
 	if samlResponse == "" {
-		http.Error(w, "missing SAMLResponse", http.StatusBadRequest)
+		httpx.Error(w, http.StatusBadRequest, "missing SAMLResponse")
 		return
 	}
 	relayState := r.FormValue("RelayState")
@@ -106,11 +106,11 @@ func (h *Handler) handleACS(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		switch {
 		case errors.Is(err, saml.ErrSAMLUnsignedAssertion), errors.Is(err, saml.ErrSAMLMissingEmail):
-			http.Error(w, err.Error(), http.StatusForbidden)
+			httpx.Error(w, http.StatusForbidden, err.Error())
 		case errors.Is(err, saml.ErrSAMLInvalidAssertion):
-			http.Error(w, "invalid saml assertion", http.StatusForbidden)
+			httpx.Error(w, http.StatusForbidden, "invalid saml assertion")
 		default:
-			http.Error(w, "internal error", http.StatusInternalServerError)
+			httpx.Error(w, http.StatusInternalServerError, "internal error")
 		}
 		return
 	}
@@ -136,7 +136,7 @@ func (h *Handler) handleMetadata(w http.ResponseWriter, r *http.Request) {
 	}
 	xmlBytes, err := h.svc.MetadataXML(r.Context(), id)
 	if err != nil {
-		http.Error(w, "not found", http.StatusNotFound)
+		httpx.Error(w, http.StatusNotFound, "not found")
 		return
 	}
 	w.Header().Set("Content-Type", "application/samlmetadata+xml")
@@ -148,7 +148,7 @@ func (h *Handler) handleMetadata(w http.ResponseWriter, r *http.Request) {
 func pathULID(w http.ResponseWriter, r *http.Request, name string) (models.ULID, bool) {
 	id, err := httpx.ParseULIDParam(chi.URLParam(r, name))
 	if err != nil {
-		http.Error(w, "invalid "+name, http.StatusBadRequest)
+		httpx.Error(w, http.StatusBadRequest, "invalid "+name)
 		return models.ULID{}, false
 	}
 	return id, true

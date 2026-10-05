@@ -150,7 +150,7 @@ func (h *Handler) handleRegisterFinish(w http.ResponseWriter, r *http.Request) {
 	user, _ := h.userFromCtx(r)
 	chal, err := r.Cookie(webauthnChallengeCookieName)
 	if err != nil || chal.Value == "" {
-		http.Error(w, "missing challenge cookie", http.StatusBadRequest)
+		httpx.Error(w, http.StatusBadRequest, "missing challenge cookie")
 		return
 	}
 	h.clearChallengeCookie(w)
@@ -180,7 +180,7 @@ func (h *Handler) handleLoginBegin(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) handleLoginFinish(w http.ResponseWriter, r *http.Request) {
 	chal, err := r.Cookie(webauthnChallengeCookieName)
 	if err != nil || chal.Value == "" {
-		http.Error(w, "missing challenge cookie", http.StatusBadRequest)
+		httpx.Error(w, http.StatusBadRequest, "missing challenge cookie")
 		return
 	}
 	h.clearChallengeCookie(w)
@@ -211,7 +211,7 @@ func (h *Handler) handleCredentialsDelete(w http.ResponseWriter, r *http.Request
 	idStr := chi.URLParam(r, "id")
 	id, err := httpx.ParseULIDParam(idStr)
 	if err != nil {
-		http.Error(w, "invalid credential id", http.StatusBadRequest)
+		httpx.Error(w, http.StatusBadRequest, "invalid credential id")
 		return
 	}
 	if err := h.svc.DeleteCredential(r.Context(), id, user.ID); err != nil {

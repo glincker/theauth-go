@@ -19,6 +19,9 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
+// SetupTokenHeader carries the first-run setup token on signup requests.
+const SetupTokenHeader = "X-Setup-Token"
+
 // Service is the password surface this package's HTTP handlers need. The
 // root *theauth.TheAuth constructs an adapter satisfying this interface
 // (rather than passing *password.Service directly) so Signup/Signin/Reset
@@ -71,29 +74,34 @@ func (h *Handler) Mount(r chi.Router, ipLimit, emailLimit func(http.Handler) htt
 // decodeCredsBody reads the standard {email, password} JSON body with
 // a 16 KiB cap. Returns ok=false after writing a 400 response if
 // parsing fails.
-func decodeCredsBody(w http.ResponseWriter, r *http.Request) (email, pw string, ok bool) {
+func decodeCredsBody(w http.ResponseWriter, r *http.Request) (email, pw, setupToken string, ok bool) {
 	r.Body = http.MaxBytesReader(w, r.Body, 1<<14)
 	var body struct {
-		Email    string `json:"email"`
-		Password string `json:"password"`
+		Email      string `json:"email"`
+		Password   string `json:"password"`
+		SetupToken string `json:"setupToken"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		http.Error(w, "invalid body", http.StatusBadRequest)
-		return "", "", false
+		httpx.Error(w, http.StatusBadRequest, "invalid body")
+		return "", "", "", false
 	}
 	if body.Email == "" || body.Password == "" {
-		http.Error(w, "email and password are required", http.StatusBadRequest)
-		return "", "", false
+		httpx.Error(w, http.StatusBadRequest, "email and password are required")
+		return "", "", "", false
 	}
-	return body.Email, body.Password, true
+	return body.Email, body.Password, body.SetupToken, true
 }
 
 func (h *Handler) handleSignup(w http.ResponseWriter, r *http.Request) {
-	email, pw, ok := decodeCredsBody(w, r)
+	email, pw, setupToken, ok := decodeCredsBody(w, r)
 	if !ok {
 		return
 	}
-	_, sessToken, err := h.svc.Signup(r.Context(), email, pw)
+	if hdr := r.Header.Get(SetupTokenHeader); hdr != "" {
+		setupToken = hdr
+	}
+	ctx := password.WithSignupMeta(r.Context(), password.SignupMeta{SetupToken: setupToken, IP: httpx.ClientIP(r)})
+	_, sessToken, err := h.svc.Signup(ctx, email, pw)
 	if err != nil {
 		httpx.ErrToHTTP(w, err)
 		return
@@ -105,7 +113,7 @@ func (h *Handler) handleSignup(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) handleSignin(w http.ResponseWriter, r *http.Request) {
-	email, pw, ok := decodeCredsBody(w, r)
+	email, pw, _, ok := decodeCredsBody(w, r)
 	if !ok {
 		return
 	}
@@ -132,7 +140,7 @@ func (h *Handler) handleForgot(w http.ResponseWriter, r *http.Request) {
 		Email string `json:"email"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.Email == "" {
-		http.Error(w, "invalid body", http.StatusBadRequest)
+		httpx.Error(w, http.StatusBadRequest, "invalid body")
 		return
 	}
 	if err := h.svc.RequestReset(r.Context(), body.Email); err != nil {
@@ -151,11 +159,11 @@ func (h *Handler) handleReset(w http.ResponseWriter, r *http.Request) {
 		NewPassword string `json:"newPassword"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		http.Error(w, "invalid body", http.StatusBadRequest)
+		httpx.Error(w, http.StatusBadRequest, "invalid body")
 		return
 	}
 	if body.Token == "" || body.NewPassword == "" {
-		http.Error(w, "token and newPassword are required", http.StatusBadRequest)
+		httpx.Error(w, http.StatusBadRequest, "token and newPassword are required")
 		return
 	}
 	if err := h.svc.Reset(r.Context(), body.Token, body.NewPassword); err != nil {

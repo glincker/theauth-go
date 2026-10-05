@@ -10,6 +10,7 @@ import (
 	internalas "github.com/glincker/theauth-go/internal/as"
 	internalaudit "github.com/glincker/theauth-go/internal/audit"
 	"github.com/glincker/theauth-go/internal/delegation"
+	"github.com/glincker/theauth-go/internal/emailnorm"
 	"github.com/glincker/theauth-go/internal/identitylink"
 	"github.com/glincker/theauth-go/internal/magiclink"
 	internaloauth "github.com/glincker/theauth-go/internal/oauth"
@@ -19,6 +20,7 @@ import (
 	internalsaml "github.com/glincker/theauth-go/internal/saml"
 	internalscim "github.com/glincker/theauth-go/internal/scim"
 	"github.com/glincker/theauth-go/internal/session"
+	"github.com/glincker/theauth-go/internal/throttle"
 	internaltotp "github.com/glincker/theauth-go/internal/totp"
 	internalwebauthn "github.com/glincker/theauth-go/internal/webauthn"
 )
@@ -199,6 +201,20 @@ type Config struct {
 	// active organization to it. Removes the SQL-seeding friction
 	// consumers previously hit on first signup. Nil = no auto-provisioning.
 	Tenancy *TenancyConfig
+
+	// LoginThrottle tunes password-login backoff, per-user lockout and the
+	// per-user TOTP/recovery-code attempt limit. Nil selects safe defaults
+	// (enabled); set LoginThrottle.Disabled to opt out.
+	LoginThrottle *LoginThrottleConfig
+
+	// Bootstrap, when non-nil, closes public signup and requires a one-time
+	// setup token to create the first user. Needs a storage implementing
+	// UserCountStorage.
+	Bootstrap *BootstrapConfig
+
+	// EmailNFKC additionally applies Unicode NFKC folding when canonicalizing
+	// email addresses. Trimming and lowercasing always apply.
+	EmailNFKC bool
 }
 
 // PasswordPolicyConfig holds optional password-verification extensions.
@@ -212,6 +228,17 @@ type PasswordPolicyConfig struct {
 	// the OnLegacyHashAccepted callback so they can update storage
 	// asynchronously. Set to false (default) in all non-migration deployments.
 	AllowLegacyBcrypt bool
+
+	// MinLength is the minimum password length in bytes. Default 12.
+	MinLength int
+
+	// MaxBytes is the maximum password length in bytes. Longer passwords are
+	// rejected with CodeWeakPassword (HTTP 400). Default 72, the bcrypt limit.
+	MaxBytes int
+
+	// BreachChecker, when set, rejects passwords found in a breach corpus on
+	// signup and password change. Lookup errors fail open. Default nil (off).
+	BreachChecker BreachChecker
 
 	// OnLegacyHashAccepted is called (in the background) whenever a bcrypt
 	// hash is successfully verified and the password has been re-hashed. The
@@ -237,6 +264,10 @@ type TheAuth struct {
 	trustedProxies    []netip.Prefix
 	trustedOrigins    []string
 	csrfDisabled      bool
+	storageRaw        any
+	emailNorm         emailnorm.Normalizer
+	throttle          *throttle.Limiter
+	bootstrap         *bootstrapGate
 
 	// dcrRegistrationTokenHashes is the sha256-hashed set of operator
 	// initial access tokens accepted by POST /oauth/register when DCR is
@@ -392,6 +423,8 @@ func New(cfg Config) (*TheAuth, error) {
 		trustedProxies:             append([]netip.Prefix(nil), cfg.TrustedProxies...),
 		trustedOrigins:             trustedOrigins,
 		csrfDisabled:               cfg.DisableCSRFProtection,
+		storageRaw:                 cfg.storageRaw,
+		emailNorm:                  newEmailNormalizer(cfg.EmailNFKC),
 		dcrRegistrationTokenHashes: dcrTokenHashes,
 		providers:                  providers,
 		encryptionKey:              cfg.EncryptionKey,

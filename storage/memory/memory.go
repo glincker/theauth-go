@@ -23,6 +23,7 @@ type Store struct {
 	webauthnCreds map[theauth.ULID]theauth.WebAuthnCredential
 	totpSecrets   map[theauth.ULID]theauth.TOTPSecret
 	recoveryCodes map[theauth.ULID]theauth.RecoveryCode
+	totpSteps     map[theauth.ULID]int64
 	// v0.7 multi-tenancy + SAML + SCIM. Held in a sidecar so the existing
 	// New() literal stays compact; see memory_v07.go for details.
 	v07 *v07State
@@ -50,6 +51,7 @@ func New() *Store {
 		webauthnCreds:  map[theauth.ULID]theauth.WebAuthnCredential{},
 		totpSecrets:    map[theauth.ULID]theauth.TOTPSecret{},
 		recoveryCodes:  map[theauth.ULID]theauth.RecoveryCode{},
+		totpSteps:      map[theauth.ULID]int64{},
 	}
 }
 

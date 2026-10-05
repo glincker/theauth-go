@@ -91,7 +91,7 @@ func (h *Handler) handleEnrollFinish(w http.ResponseWriter, r *http.Request) {
 		Code         string `json:"code"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.EnrollmentID == "" || body.Code == "" {
-		http.Error(w, "invalid body", http.StatusBadRequest)
+		httpx.Error(w, http.StatusBadRequest, "invalid body")
 		return
 	}
 	rc, err := h.svc.FinishEnrollment(r.Context(), user.ID, body.EnrollmentID, body.Code)
@@ -109,7 +109,7 @@ func (h *Handler) handleEnrollFinish(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) handleVerify(w http.ResponseWriter, r *http.Request) {
 	cookie, err := r.Cookie(h.cookie.Name)
 	if err != nil || cookie.Value == "" {
-		http.Error(w, "missing session", http.StatusUnauthorized)
+		httpx.Error(w, http.StatusUnauthorized, "missing session")
 		return
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, 1<<14)
@@ -117,7 +117,7 @@ func (h *Handler) handleVerify(w http.ResponseWriter, r *http.Request) {
 		Code string `json:"code"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.Code == "" {
-		http.Error(w, "invalid body", http.StatusBadRequest)
+		httpx.Error(w, http.StatusBadRequest, "invalid body")
 		return
 	}
 	tok, _, err := h.svc.Verify(r.Context(), cookie.Value, body.Code)
@@ -133,7 +133,7 @@ func (h *Handler) handleVerify(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) handleRecovery(w http.ResponseWriter, r *http.Request) {
 	cookie, err := r.Cookie(h.cookie.Name)
 	if err != nil || cookie.Value == "" {
-		http.Error(w, "missing session", http.StatusUnauthorized)
+		httpx.Error(w, http.StatusUnauthorized, "missing session")
 		return
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, 1<<14)
@@ -141,7 +141,7 @@ func (h *Handler) handleRecovery(w http.ResponseWriter, r *http.Request) {
 		Code string `json:"code"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.Code == "" {
-		http.Error(w, "invalid body", http.StatusBadRequest)
+		httpx.Error(w, http.StatusBadRequest, "invalid body")
 		return
 	}
 	tok, _, err := h.svc.ConsumeRecoveryCode(r.Context(), cookie.Value, body.Code)

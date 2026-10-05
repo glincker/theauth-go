@@ -326,6 +326,20 @@ or `AccountUX` continue to see the v1.0 surface unchanged.
   RFC 7807; the `code` extension namespace is reserved by this library and
   may grow with new codes in additive minor releases.
 
+## Auth hardening additions (additive)
+
+New exported symbols, none changing existing signatures: `LoginThrottleConfig`,
+`LoginThrottleStore`, `LoginThrottleEntry`, `NewMemoryLoginThrottleStore`,
+`BootstrapConfig`, `BreachChecker`, `HIBPBreachChecker`, `TOTPReplayStorage`,
+`UserCountStorage` (optional capabilities, not part of `Storage`),
+`Config.LoginThrottle`, `Config.Bootstrap`, `Config.EmailNFKC`,
+`PasswordPolicyConfig.MinLength/MaxBytes/BreachChecker`, `TheAuth.UserCount`,
+`SetupToken`, `NormalizeEmail`, `ResetPasswordAdmin`, `UnlockUser`,
+`TheAuthError.RetryAfter`, and error codes `CodeAccountLocked`,
+`CodeSignupClosed`, `CodeSetupTokenInvalid`, `CodeBadRequest`,
+`CodeUnauthorized`, `CodeForbidden`, `CodeNotFound`, `CodeConflict`,
+`CodeInternal`. See `docs/AUTH-HARDENING.md`.
+
 ## What changes without a major bump
 
 - Bug fixes that preserve documented behavior.

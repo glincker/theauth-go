@@ -1,6 +1,9 @@
 package models
 
-import "errors"
+import (
+	"errors"
+	"time"
+)
 
 // Sentinel errors that the storage layer and service code share. These names
 // are re-exported from the root package (github.com/glincker/theauth-go)
@@ -263,6 +266,9 @@ type TheAuthError struct {
 	Code    string
 	Message string
 	Inner   error
+	// RetryAfter, when positive, tells HTTP handlers how long the caller
+	// should wait before retrying (sent as a Retry-After header).
+	RetryAfter time.Duration
 }
 
 // NewError constructs a TheAuthError with the supplied code, message, and

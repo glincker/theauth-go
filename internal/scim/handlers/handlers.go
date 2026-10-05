@@ -18,6 +18,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/glincker/theauth-go/internal/emailnorm"
 	"github.com/glincker/theauth-go/internal/httpx"
 	"github.com/glincker/theauth-go/internal/models"
 	internalscim "github.com/glincker/theauth-go/internal/scim"
@@ -66,6 +67,7 @@ type TokenService interface {
 type Config struct {
 	BaseURL     string
 	MaxPageSize int
+	Email       emailnorm.Normalizer
 }
 
 // AuditEmitter is the audit emit shim. Implemented by root so the
@@ -290,9 +292,9 @@ func (h *Handler) handleUserCreate(w http.ResponseWriter, r *http.Request) {
 		writeSCIMError(w, http.StatusBadRequest, "invalidValue", "userName is required")
 		return
 	}
-	email := strings.ToLower(body.UserName)
+	email := h.cfg.Email.Normalize(body.UserName)
 	if e := internalscim.ParsePrimaryEmail(body.Emails); e != "" {
-		email = e
+		email = h.cfg.Email.Normalize(e)
 	}
 
 	if body.ExternalID != "" {
@@ -622,12 +624,12 @@ func (h *Handler) handleTokenCreate(w http.ResponseWriter, r *http.Request) {
 		Name string `json:"name"`
 	}
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<14)).Decode(&body); err != nil {
-		http.Error(w, "invalid body", http.StatusBadRequest)
+		httpx.Error(w, http.StatusBadRequest, "invalid body")
 		return
 	}
 	token, rec, err := h.tokenSvc.CreateToken(r.Context(), orgID, body.Name)
 	if err != nil {
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		httpx.Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 	httpx.WriteJSON(w, http.StatusCreated, struct {
@@ -654,7 +656,7 @@ func (h *Handler) handleTokenList(w http.ResponseWriter, r *http.Request) {
 	}
 	tokens, err := h.tokenSvc.ListTokens(r.Context(), orgID)
 	if err != nil {
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		httpx.Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 	httpx.WriteJSON(w, http.StatusOK, tokens)
@@ -671,7 +673,7 @@ func (h *Handler) handleTokenDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := h.tokenSvc.RevokeToken(r.Context(), id); err != nil {
-		http.Error(w, "not found", http.StatusNotFound)
+		httpx.Error(w, http.StatusNotFound, "not found")
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
