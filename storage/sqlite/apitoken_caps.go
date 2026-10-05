@@ -17,7 +17,7 @@ var (
 	_ theauth.DeviceCodeStorage = (*Store)(nil)
 )
 
-const apiTokenCols = `id, owner_id, owner_kind, name, abilities, token_hash, hint, created_at, expires_at, last_used_at, revoked_at`
+const apiTokenCols = `id, owner_id, owner_kind, name, abilities, token_hash, hint, created_at, expires_at, last_used_at, revoked_at, kind, agent_name, delegated_by`
 
 const deviceCols = `id, device_code_hash, user_code, status, client_name, requested_abilities, approved_abilities,
 approver_id, requester_ip, requester_ua, interval_seconds, last_polled_at, created_at, expires_at`
@@ -44,11 +44,13 @@ func decodeList(s string) ([]string, error) {
 func scanAPIToken(r scanner) (theauth.APIToken, error) {
 	var (
 		id, owner, kind, name, abilities, hint string
+		tokKind, agentName                     string
 		hash                                   []byte
 		created                                int64
 		expires, used, revoked                 sql.NullInt64
+		delegated                              sql.NullString
 	)
-	if err := r.Scan(&id, &owner, &kind, &name, &abilities, &hash, &hint, &created, &expires, &used, &revoked); err != nil {
+	if err := r.Scan(&id, &owner, &kind, &name, &abilities, &hash, &hint, &created, &expires, &used, &revoked, &tokKind, &agentName, &delegated); err != nil {
 		return theauth.APIToken{}, err
 	}
 	tid, err := parseID(id)
@@ -63,8 +65,13 @@ func scanAPIToken(r scanner) (theauth.APIToken, error) {
 	if err != nil {
 		return theauth.APIToken{}, err
 	}
+	delegatedBy, err := parseIDPtr(delegated)
+	if err != nil {
+		return theauth.APIToken{}, err
+	}
 	return theauth.APIToken{
 		ID: tid, OwnerID: oid, OwnerKind: kind, Name: name, Abilities: ab, TokenHash: hash, Hint: hint,
+		Kind: tokKind, AgentName: agentName, DelegatedBy: delegatedBy,
 		CreatedAt: fromMicro(created), ExpiresAt: fromNullMicro(expires),
 		LastUsedAt: fromNullMicro(used), RevokedAt: fromNullMicro(revoked),
 	}, nil
@@ -77,11 +84,12 @@ func (s *Store) InsertAPIToken(ctx context.Context, t theauth.APIToken) (theauth
 		return theauth.APIToken{}, wrap("insert api token", err)
 	}
 	out, err := scanAPIToken(s.db.QueryRowContext(ctx, s.q(`
-INSERT INTO theauth_api_tokens (id, owner_id, owner_kind, name, abilities, token_hash, hint, created_at, expires_at, last_used_at, revoked_at)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+INSERT INTO theauth_api_tokens (id, owner_id, owner_kind, name, abilities, token_hash, hint, created_at, expires_at, last_used_at, revoked_at, kind, agent_name, delegated_by)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 RETURNING `+apiTokenCols),
 		idStr(t.ID), idStr(t.OwnerID), t.OwnerKind, t.Name, abilities, t.TokenHash, t.Hint,
-		toMicro(orNow(t.CreatedAt)), toNullMicro(t.ExpiresAt), toNullMicro(t.LastUsedAt), toNullMicro(t.RevokedAt)))
+		toMicro(orNow(t.CreatedAt)), toNullMicro(t.ExpiresAt), toNullMicro(t.LastUsedAt), toNullMicro(t.RevokedAt),
+		t.Kind, t.AgentName, idPtrStr(t.DelegatedBy)))
 	if err != nil {
 		return theauth.APIToken{}, wrap("insert api token", err)
 	}
