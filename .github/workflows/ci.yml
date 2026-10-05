@@ -12,6 +12,8 @@ jobs:
   test:
     if: github.event_name != 'schedule'
     runs-on: ubuntu-latest
+    env:
+      GOWORK: off
     services:
       postgres:
         image: postgres:16
@@ -58,6 +60,8 @@ jobs:
   fuzz:
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
+    env:
+      GOWORK: off
     strategy:
       fail-fast: false
       matrix:
@@ -84,6 +88,8 @@ jobs:
   lint:
     if: github.event_name != 'schedule'
     runs-on: ubuntu-latest
+    env:
+      GOWORK: off
     steps:
       - uses: actions/checkout@v7
         with:
@@ -96,3 +102,14 @@ jobs:
         with:
           version: v2.12.2
           args: --timeout=3m --new-from-rev=origin/main
+
+  sqlite:
+    if: github.event_name != 'schedule'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version: "1.26"
+      - run: go vet ./storage/sqlite/...
+      - run: go test -race -timeout=300s ./storage/sqlite/...

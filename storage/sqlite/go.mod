@@ -1,6 +1,6 @@
 module github.com/glincker/theauth-go/storage/sqlite
 
-go 1.25.0
+go 1.26.0
 
 require (
 	github.com/glincker/theauth-go v0.0.0
