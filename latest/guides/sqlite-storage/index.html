@@ -1454,6 +1454,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#importing-existing-data-in-one-transaction" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Importing existing data in one transaction
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#shared-login-throttle" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2393,6 +2404,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#importing-existing-data-in-one-transaction" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Importing existing data in one transaction
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#shared-login-throttle" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2572,9 +2594,57 @@
 <a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="p">}()</span>
 </code></pre></div>
 <p>It deletes sessions, magic links and password reset tokens whose expiry has passed, in one transaction, and reports the counts.</p>
+<h2 id="importing-existing-data-in-one-transaction">Importing existing data in one transaction<a class="headerlink" href="#importing-existing-data-in-one-transaction" title="Permanent link">&para;</a></h2>
+<p><code>sqlite.NewTx(tx)</code> binds a Store to a transaction you own, so a backfill of legacy users, API tokens, passkeys and TOTP secrets commits or rolls back as one unit. This works even when your <code>*sql.DB</code> has <code>SetMaxOpenConns(1)</code>, because the Store never asks the pool for a second connection. Methods that need several statements use SAVEPOINTs inside your transaction instead of starting their own.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="k">if</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">sqlite</span><span class="p">.</span><span class="nx">Migrate</span><span class="p">(</span><span class="nx">ctx</span><span class="p">,</span><span class="w"> </span><span class="nx">db</span><span class="p">);</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="kc">nil</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="c1">// before the transaction</span>
+<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="nx">err</span>
+<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="p">}</span>
+<a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="nx">tx</span><span class="p">,</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">db</span><span class="p">.</span><span class="nx">BeginTx</span><span class="p">(</span><span class="nx">ctx</span><span class="p">,</span><span class="w"> </span><span class="kc">nil</span><span class="p">)</span>
+<a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="k">if</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="kc">nil</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a><span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="nx">err</span>
+<a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a><span class="p">}</span>
+<a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a><span class="k">defer</span><span class="w"> </span><span class="nx">tx</span><span class="p">.</span><span class="nx">Rollback</span><span class="p">()</span><span class="w"> </span><span class="c1">// no-op after Commit</span>
+<a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a>
+<a id="__codelineno-5-10" name="__codelineno-5-10" href="#__codelineno-5-10"></a><span class="nx">st</span><span class="p">,</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">sqlite</span><span class="p">.</span><span class="nx">NewTx</span><span class="p">(</span><span class="nx">tx</span><span class="p">)</span>
+<a id="__codelineno-5-11" name="__codelineno-5-11" href="#__codelineno-5-11"></a><span class="k">if</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="kc">nil</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-5-12" name="__codelineno-5-12" href="#__codelineno-5-12"></a><span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="nx">err</span>
+<a id="__codelineno-5-13" name="__codelineno-5-13" href="#__codelineno-5-13"></a><span class="p">}</span>
+<a id="__codelineno-5-14" name="__codelineno-5-14" href="#__codelineno-5-14"></a><span class="nx">u</span><span class="p">,</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">theauth</span><span class="p">.</span><span class="nx">ImportUserTo</span><span class="p">(</span><span class="nx">ctx</span><span class="p">,</span><span class="w"> </span><span class="nx">st</span><span class="p">,</span><span class="w"> </span><span class="nx">theauth</span><span class="p">.</span><span class="nx">ImportedUser</span><span class="p">{</span>
+<a id="__codelineno-5-15" name="__codelineno-5-15" href="#__codelineno-5-15"></a><span class="w">    </span><span class="nx">Email</span><span class="p">:</span><span class="w"> </span><span class="s">"ada@example.com"</span><span class="p">,</span><span class="w"> </span><span class="nx">PasswordHash</span><span class="p">:</span><span class="w"> </span><span class="nx">legacyArgon2idHash</span><span class="p">,</span><span class="w"> </span><span class="nx">CreatedAt</span><span class="p">:</span><span class="w"> </span><span class="nx">legacyCreated</span><span class="p">,</span>
+<a id="__codelineno-5-16" name="__codelineno-5-16" href="#__codelineno-5-16"></a><span class="p">})</span>
+<a id="__codelineno-5-17" name="__codelineno-5-17" href="#__codelineno-5-17"></a><span class="k">if</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="kc">nil</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="o">!</span><span class="nx">errors</span><span class="p">.</span><span class="nx">Is</span><span class="p">(</span><span class="nx">err</span><span class="p">,</span><span class="w"> </span><span class="nx">theauth</span><span class="p">.</span><span class="nx">ErrImportDuplicate</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-5-18" name="__codelineno-5-18" href="#__codelineno-5-18"></a><span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="nx">err</span>
+<a id="__codelineno-5-19" name="__codelineno-5-19" href="#__codelineno-5-19"></a><span class="p">}</span>
+<a id="__codelineno-5-20" name="__codelineno-5-20" href="#__codelineno-5-20"></a><span class="nx">_</span><span class="p">,</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">theauth</span><span class="p">.</span><span class="nx">ImportAPITokenTo</span><span class="p">(</span><span class="nx">ctx</span><span class="p">,</span><span class="w"> </span><span class="nx">st</span><span class="p">,</span><span class="w"> </span><span class="nx">theauth</span><span class="p">.</span><span class="nx">ImportedToken</span><span class="p">{</span>
+<a id="__codelineno-5-21" name="__codelineno-5-21" href="#__codelineno-5-21"></a><span class="w">    </span><span class="nx">OwnerID</span><span class="p">:</span><span class="w"> </span><span class="nx">u</span><span class="p">.</span><span class="nx">ID</span><span class="p">,</span><span class="w"> </span><span class="nx">Name</span><span class="p">:</span><span class="w"> </span><span class="s">"ci"</span><span class="p">,</span><span class="w"> </span><span class="nx">Abilities</span><span class="p">:</span><span class="w"> </span><span class="p">[]</span><span class="kt">string</span><span class="p">{</span><span class="s">"read"</span><span class="p">},</span><span class="w"> </span><span class="nx">TokenHash</span><span class="p">:</span><span class="w"> </span><span class="nx">sha256OfRawToken</span><span class="p">[:],</span>
+<a id="__codelineno-5-22" name="__codelineno-5-22" href="#__codelineno-5-22"></a><span class="p">})</span>
+<a id="__codelineno-5-23" name="__codelineno-5-23" href="#__codelineno-5-23"></a><span class="k">if</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="kc">nil</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-5-24" name="__codelineno-5-24" href="#__codelineno-5-24"></a><span class="w">    </span><span class="nx">err</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">theauth</span><span class="p">.</span><span class="nx">ImportTOTPSecretTo</span><span class="p">(</span><span class="nx">ctx</span><span class="p">,</span><span class="w"> </span><span class="nx">st</span><span class="p">,</span><span class="w"> </span><span class="nx">encryptionKey</span><span class="p">,</span><span class="w"> </span><span class="nx">theauth</span><span class="p">.</span><span class="nx">ImportedTOTP</span><span class="p">{</span>
+<a id="__codelineno-5-25" name="__codelineno-5-25" href="#__codelineno-5-25"></a><span class="w">        </span><span class="nx">UserID</span><span class="p">:</span><span class="w"> </span><span class="nx">u</span><span class="p">.</span><span class="nx">ID</span><span class="p">,</span><span class="w"> </span><span class="nx">Secret</span><span class="p">:</span><span class="w"> </span><span class="s">"JBSWY3DPEHPK3PXP"</span><span class="p">,</span>
+<a id="__codelineno-5-26" name="__codelineno-5-26" href="#__codelineno-5-26"></a><span class="w">    </span><span class="p">})</span>
+<a id="__codelineno-5-27" name="__codelineno-5-27" href="#__codelineno-5-27"></a><span class="p">}</span>
+<a id="__codelineno-5-28" name="__codelineno-5-28" href="#__codelineno-5-28"></a><span class="k">if</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="kc">nil</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-5-29" name="__codelineno-5-29" href="#__codelineno-5-29"></a><span class="w">    </span><span class="nx">_</span><span class="p">,</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">theauth</span><span class="p">.</span><span class="nx">ImportWebAuthnCredentialTo</span><span class="p">(</span><span class="nx">ctx</span><span class="p">,</span><span class="w"> </span><span class="nx">st</span><span class="p">,</span><span class="w"> </span><span class="nx">theauth</span><span class="p">.</span><span class="nx">ImportedWebAuthnCredential</span><span class="p">{</span>
+<a id="__codelineno-5-30" name="__codelineno-5-30" href="#__codelineno-5-30"></a><span class="w">        </span><span class="nx">UserID</span><span class="p">:</span><span class="w"> </span><span class="nx">u</span><span class="p">.</span><span class="nx">ID</span><span class="p">,</span><span class="w"> </span><span class="nx">CredentialID</span><span class="p">:</span><span class="w"> </span><span class="nx">credID</span><span class="p">,</span><span class="w"> </span><span class="nx">PublicKey</span><span class="p">:</span><span class="w"> </span><span class="nx">cosePub</span><span class="p">,</span><span class="w"> </span><span class="nx">SignCount</span><span class="p">:</span><span class="w"> </span><span class="mi">7</span><span class="p">,</span><span class="w"> </span><span class="nx">Transports</span><span class="p">:</span><span class="w"> </span><span class="p">[]</span><span class="kt">string</span><span class="p">{</span><span class="s">"internal"</span><span class="p">},</span>
+<a id="__codelineno-5-31" name="__codelineno-5-31" href="#__codelineno-5-31"></a><span class="w">    </span><span class="p">})</span>
+<a id="__codelineno-5-32" name="__codelineno-5-32" href="#__codelineno-5-32"></a><span class="p">}</span>
+<a id="__codelineno-5-33" name="__codelineno-5-33" href="#__codelineno-5-33"></a><span class="k">if</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="kc">nil</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-5-34" name="__codelineno-5-34" href="#__codelineno-5-34"></a><span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="nx">err</span>
+<a id="__codelineno-5-35" name="__codelineno-5-35" href="#__codelineno-5-35"></a><span class="p">}</span>
+<a id="__codelineno-5-36" name="__codelineno-5-36" href="#__codelineno-5-36"></a><span class="k">return</span><span class="w"> </span><span class="nx">tx</span><span class="p">.</span><span class="nx">Commit</span><span class="p">()</span>
+</code></pre></div>
+<p>Rules for the pattern:</p>
+<ul>
+<li>Build a short-lived Store with <code>NewTx</code> and use the package-level <code>Import*To</code> helpers. Do not build a <code>TheAuth</code> on it: a <code>TheAuth</code> outlives the transaction. <code>(*TheAuth).ImportUser</code>, <code>ImportTOTPSecret</code>, <code>ImportWebAuthnCredential</code> and <code>ImportAPIToken</code> exist for the case where you import through a live instance.</li>
+<li><code>ImportTOTPSecretTo</code> takes the plaintext base32 secret and encrypts it with the same key as enrollment, so pass <code>Config.EncryptionKey</code>. The secret is never logged.</li>
+<li>Recovery codes are not importable. Their hashes are salted by the library, so imported users must regenerate them.</li>
+<li>Password hashes are stored verbatim. Bcrypt hashes verify only when <code>PasswordPolicy.AllowLegacyBcrypt</code> is set.</li>
+<li>Every helper validates input and returns <code>ErrImportInvalid</code> (wrapped) for bad data and <code>ErrImportDuplicate</code> when the record exists, so a re-run can skip what is already imported.</li>
+<li><code>Migrate</code> takes a <code>*sql.DB</code> and cannot run inside a transaction. <code>SweepExpired</code> works on a transaction-bound Store but belongs on a normal Store after the commit. Stop using the Store once the transaction ends.</li>
+</ul>
 <h2 id="shared-login-throttle">Shared login throttle<a class="headerlink" href="#shared-login-throttle" title="Permanent link">&para;</a></h2>
 <p><code>store.ThrottleStore()</code> returns a <code>LoginThrottleStore</code> backed by the same database, so several processes share failure counters. It also implements <code>LoginThrottleCASStore</code>: the limiter re-reads and retries when another process changed an entry first, instead of overwriting it, so no failure is lost. Entries are not removed on read; call <code>ThrottleStore().SweepExpired(ctx, time.Now())</code> from the same ticker as <code>SweepExpired</code>.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="nx">Config</span><span class="p">.</span><span class="nx">LoginThrottle</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="o">&amp;</span><span class="nx">theauth</span><span class="p">.</span><span class="nx">LoginThrottleConfig</span><span class="p">{</span><span class="nx">Store</span><span class="p">:</span><span class="w"> </span><span class="nx">store</span><span class="p">.</span><span class="nx">ThrottleStore</span><span class="p">()}</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="nx">Config</span><span class="p">.</span><span class="nx">LoginThrottle</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="o">&amp;</span><span class="nx">theauth</span><span class="p">.</span><span class="nx">LoginThrottleConfig</span><span class="p">{</span><span class="nx">Store</span><span class="p">:</span><span class="w"> </span><span class="nx">store</span><span class="p">.</span><span class="nx">ThrottleStore</span><span class="p">()}</span>
 </code></pre></div>
 <h2 id="upgrading">Upgrading<a class="headerlink" href="#upgrading" title="Permanent link">&para;</a></h2>
 <p>Migrations <code>0006</code> to <code>0008</code> add session columns and tables (<code>last_seen_at</code>, <code>elevated_until</code>, <code>credential_id</code>, session links), API tokens, device codes, the TOTP step table and the throttle table. Existing sessions read back with a zero <code>LastSeenAt</code>. Run <code>Migrate</code> (or fold the new files into your migrator) before deploying.</p>
