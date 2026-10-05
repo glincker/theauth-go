@@ -25,6 +25,7 @@ import (
 	"github.com/glincker/theauth-go/internal/audit"
 	"github.com/glincker/theauth-go/internal/emailnorm"
 	"github.com/glincker/theauth-go/internal/models"
+	"github.com/glincker/theauth-go/internal/pathprefix"
 	"github.com/glincker/theauth-go/internal/ulid"
 )
 
@@ -52,6 +53,7 @@ type Service struct {
 	storage  Storage
 	sender   email.Sender
 	baseURL  string
+	prefix   string
 	ttl      time.Duration
 	sessions SessionIssuer
 	auditEm  audit.Emitter
@@ -70,6 +72,9 @@ func (s *Service) SetHardening(norm emailnorm.Normalizer, gate SignupGate) {
 	s.norm = norm
 	s.gate = gate
 }
+
+// SetPathPrefix sets the route prefix used in emailed links. Empty keeps the default.
+func (s *Service) SetPathPrefix(p string) { s.prefix = pathprefix.Normalize(p) }
 
 // New constructs a magiclink Service.
 func New(storage Storage, sender email.Sender, baseURL string, ttl time.Duration, sessions SessionIssuer, em audit.Emitter) *Service {
@@ -113,7 +118,7 @@ func (s *Service) RequestForTest(ctx context.Context, emailAddr string) (string,
 	if err := s.storage.CreateMagicLink(ctx, ml); err != nil {
 		return "", err
 	}
-	link := fmt.Sprintf("%s/auth/magic-link/verify?token=%s", s.baseURL, token)
+	link := fmt.Sprintf("%s%s/magic-link/verify?token=%s", s.baseURL, pathprefix.Normalize(s.prefix), token)
 	body := fmt.Sprintf("Click to sign in: %s\n\nExpires in %s.", link, s.ttl)
 	if err := s.sender.Send(ctx, emailAddr, "Sign in to TheAuth", body); err != nil {
 		return "", err

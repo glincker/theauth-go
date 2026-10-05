@@ -8,6 +8,58 @@ adheres to [Semantic Versioning](https://semver.org/) from v1.0 forward.
 
 ### Added
 
+- **Legacy API token acceptance.** `APITokensConfig.AcceptUnprefixed` accepts
+  unprefixed bearer tokens by SHA-256 hash, and `ImportAPIToken` inserts an
+  existing token record by hash without seeing the secret.
+
+- **`Config.PathPrefix`.** Serve the auth routes under a custom prefix (default
+  `/auth`, validated) with no `http.StripPrefix`. OAuth redirect URIs, magic and
+  reset links, the WebAuthn challenge cookie path and the authorization server
+  login URL follow it. `clientauth` takes the same prefix via `AuthPath`.
+
+- **`Config.ProviderResolver`.** Resolve OAuth/OIDC providers per request for
+  runtime add, edit and remove, with `ProviderResolverFirst`,
+  `ProviderResolverTTL`, `(*TheAuth).InvalidateProvider` and `ListProviders`.
+  Names are validated and resolver errors fail closed.
+
+- **Device pending list.** `GET /auth/device/requests` lists pending device
+  requests (no codes or hashes) and `POST /auth/device/requests/{id}/approve|deny`
+  decides one by ID, session only, with the same capping and atomicity as the
+  user code route. New optional `DeviceCodeLister` storage extension for memory,
+  SQLite, Postgres and MySQL, plus `ListDeviceRequests` and
+  `DecideDeviceRequestByID`.
+  These routes are restricted by default: the session must hold
+  `APITokensConfig.DeviceRequestsAbility` (empty means root) or the host sets
+  `DeviceRequestsAnySignedInUser`. Others get 403 `auth.forbidden`. The by-code
+  route is unchanged.
+
+- **Security doctor.** `(*TheAuth).Doctor` reports posture findings (open signup,
+  bootstrap gate, proxies, cookies, CSRF, throttle, password and session policy,
+  token hygiene, encryption key, audit, WebAuthn RP ID) with stable IDs and
+  severities. `GET /auth/admin/doctor` serves it to root callers, and
+  `cmd/theauth-doctor` prints it with `--format json` and `--fail-on` for CI.
+  See `docs/SECURITY-DOCTOR.md`.
+
+- **`policy` package.** Dependency-free JSON policy engine (allow/deny
+  statements, action and resource globs with `{var}` substitution, equality,
+  in-list, CIDR and time-window conditions), explicit-deny-wins and
+  default-deny evaluation with an auditable `Decision`, `RequirePolicy`
+  middleware (403 `policy.denied`, `policy.decision` audit event), optional
+  `policy.Storage` capability with a memory store and `storagetest.RunPolicy`,
+  and token permission boundaries that only narrow. New
+  `TheAuth.AuthenticatePrincipal`. See the Policy Engine guide.
+
+- **Postgres and MySQL capability parity.** Both adapters now implement
+  `APITokenStorage`, `DeviceCodeStorage`, `SessionManagementStorage`,
+  `SessionLinkStorage`, `TOTPReplayStorage`, `UserCountStorage` and a shared
+  `Store.ThrottleStore` (`LoginThrottleCASStore`), so tokens, device login,
+  session management and closed signup work on them. Migration 0018 in each
+  adapter; atomic single-use claims. MySQL `CreateUser` now defaults zero
+  `CreatedAt` and `UpdatedAt` instead of failing.
+- **Token self-service routes.** `GET /auth/tokens/current` describes the
+  presented API bearer token and `DELETE /auth/tokens/current` revokes it, so
+  `clientauth` `Whoami` and `Logout` work against a real server. Bearer-only,
+  own record only, no secret or hash in responses.
 - **SQLite capability parity.** `storage/sqlite` now implements
   `APITokenStorage`, `DeviceCodeStorage`, `SessionManagementStorage`,
   `SessionLinkStorage`, `TOTPReplayStorage`, `UserCountStorage`,
@@ -216,6 +268,12 @@ adheres to [Semantic Versioning](https://semver.org/) from v1.0 forward.
   login-time reconciliation write for legacy WebAuthn credentials. Implemented
   across the Postgres, MySQL, and in-memory backends and covered by the shared
   `storagetest` conformance suite.
+
+### Fixed
+
+- `PasswordPolicy.AllowLegacyBcrypt` is now honored at signin, step-up and
+  password change, with rehash to Argon2id on success. With it off, a bcrypt
+  hash returns invalid credentials instead of a 500.
 
 ## [2.5.0] - 2026-07-14
 

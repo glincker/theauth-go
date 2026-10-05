@@ -43,6 +43,11 @@ func testPool(t *testing.T) *pgxpool.Pool {
 	// (v0.5 + v0.7 reference users; v0.7 SAML/SCIM reference organizations).
 	_, _ = pool.Exec(context.Background(), `
 		DROP TABLE IF EXISTS theauth_schema_migrations CASCADE;
+		DROP TABLE IF EXISTS throttle_entries CASCADE;
+		DROP TABLE IF EXISTS totp_last_steps CASCADE;
+		DROP TABLE IF EXISTS device_codes CASCADE;
+		DROP TABLE IF EXISTS api_tokens CASCADE;
+		DROP TABLE IF EXISTS session_links CASCADE;
 		DROP TABLE IF EXISTS pushed_authorization_requests CASCADE;
 		DROP TABLE IF EXISTS backchannel_requests CASCADE;
 		DROP TABLE IF EXISTS delegation_grants CASCADE;
@@ -365,6 +370,8 @@ func TestPostgresStoreContract(t *testing.T) {
 	store := New(pool)
 	storagetest.Run(t, store)
 	storagetest.RunMFACaps(t, store)
+	storagetest.RunAPITokens(t, store)
+	storagetest.RunDeviceCodes(t, store)
 
 	t.Run("UpdateAgentLastActiveUnknownID", func(t *testing.T) {
 		if err := store.UpdateAgentLastActive(context.Background(), ulid.New(), time.Now()); !errors.Is(err, storage.ErrNotFound) {

@@ -144,4 +144,59 @@ func testDeviceCodes(t *testing.T, store theauth.DeviceCodeStorage) {
 			t.Fatalf("purged row still present: %v", err)
 		}
 	})
+
+	t.Run("list pending excludes expired and decided and hides the hash", func(t *testing.T) {
+		lister, ok := store.(theauth.DeviceCodeLister)
+		if !ok {
+			t.Skip("storage does not implement DeviceCodeLister")
+		}
+		pending := newTestDevice("LP"+suffix, "dev-lp-"+suffix, now)
+		pending.RequesterIP, pending.RequesterUA = "203.0.113.9", "curl/8"
+		expired := newTestDevice("LE"+suffix, "dev-le-"+suffix, now.Add(-time.Hour))
+		approved := newTestDevice("LA"+suffix, "dev-la-"+suffix, now)
+		denied := newTestDevice("LD"+suffix, "dev-ld-"+suffix, now)
+		redeemed := newTestDevice("LR"+suffix, "dev-lr-"+suffix, now)
+		for _, d := range []theauth.DeviceCode{pending, expired, approved, denied, redeemed} {
+			if err := store.InsertDeviceCode(ctx, d); err != nil {
+				t.Fatalf("InsertDeviceCode: %v", err)
+			}
+		}
+		dec := theauth.DeviceDecision{Approve: true, ApproverID: approver, Abilities: []string{"read"}}
+		if err := store.DecideDeviceCode(ctx, approved.UserCode, dec, now); err != nil {
+			t.Fatal(err)
+		}
+		if err := store.DecideDeviceCode(ctx, denied.UserCode, theauth.DeviceDecision{ApproverID: approver}, now); err != nil {
+			t.Fatal(err)
+		}
+		if err := store.DecideDeviceCode(ctx, redeemed.UserCode, dec, now); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := store.ClaimDeviceCode(ctx, redeemed.DeviceCodeHash, now); err != nil {
+			t.Fatal(err)
+		}
+		got, err := lister.ListPendingDeviceCodes(ctx, theauth.DevicePendingFilter{Now: now, Limit: 500})
+		if err != nil {
+			t.Fatalf("ListPendingDeviceCodes: %v", err)
+		}
+		ids := map[theauth.ULID]theauth.DeviceCode{}
+		for _, d := range got {
+			ids[d.ID] = d
+			if len(d.DeviceCodeHash) != 0 {
+				t.Fatalf("list leaked a device code hash: %+v", d)
+			}
+		}
+		p, ok := ids[pending.ID]
+		if !ok || p.RequesterIP != "203.0.113.9" || p.RequesterUA != "curl/8" || p.ClientName != "cli" || len(p.RequestedAbilities) != 2 {
+			t.Fatalf("pending request missing or incomplete: %+v", p)
+		}
+		for name, d := range map[string]theauth.DeviceCode{"expired": expired, "approved": approved, "denied": denied, "redeemed": redeemed} {
+			if _, found := ids[d.ID]; found {
+				t.Fatalf("%s request listed as pending", name)
+			}
+		}
+		one, err := lister.ListPendingDeviceCodes(ctx, theauth.DevicePendingFilter{Now: now, Limit: 1})
+		if err != nil || len(one) != 1 {
+			t.Fatalf("limit 1: %d rows, %v", len(one), err)
+		}
+	})
 }

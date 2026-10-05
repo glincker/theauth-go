@@ -8,6 +8,7 @@ The repository ships runnable example applications covering every framework inte
 | [`examples/gin-app/`](https://github.com/glincker/theauth-go/tree/main/examples/gin-app) | Drop-in with Gin |
 | [`examples/echo-app/`](https://github.com/glincker/theauth-go/tree/main/examples/echo-app) | Drop-in with Echo |
 | [`examples/stdlib-app/`](https://github.com/glincker/theauth-go/tree/main/examples/stdlib-app) | Pure `net/http`, no framework |
+| [`examples/single-binary-sqlite/`](https://github.com/glincker/theauth-go/tree/main/examples/single-binary-sqlite) | One static binary, embedded SQLite, setup token, API tokens, device-login CLI, smoke test (Go 1.26) |
 | [`examples/oauth-multi-provider/`](https://github.com/glincker/theauth-go/tree/main/examples/oauth-multi-provider) | GitHub + Google + Microsoft + Discord in one app |
 | [`examples/oauth-apple/`](https://github.com/glincker/theauth-go/tree/main/examples/oauth-apple) | Sign in with Apple |
 | [`examples/oauth-facebook/`](https://github.com/glincker/theauth-go/tree/main/examples/oauth-facebook) | Facebook OAuth 2.0 |

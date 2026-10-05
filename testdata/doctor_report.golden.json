@@ -1,0 +1,20 @@
+{
+  "generatedAt": "2026-01-02T03:04:05Z",
+  "summary": {
+    "critical": 0,
+    "high": 1,
+    "info": 0,
+    "low": 0,
+    "medium": 0
+  },
+  "findings": [
+    {
+      "id": "csrf.disabled",
+      "severity": "high",
+      "title": "CSRF protection is disabled",
+      "detail": "detail",
+      "remediation": "fix",
+      "docsAnchor": "security-doctor.md#csrf-disabled"
+    }
+  ]
+}

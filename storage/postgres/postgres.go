@@ -92,25 +92,6 @@ func rowToUser(r sqlcgen.User) theauth.User {
 	}
 }
 
-func rowToSession(r sqlcgen.Session) theauth.Session {
-	s := theauth.Session{
-		ID:        pgUUIDToULID(r.ID),
-		UserID:    pgUUIDToULID(r.UserID),
-		TokenHash: r.TokenHash,
-		UserAgent: r.UserAgent,
-		IP:        pgIPToStr(r.Ip),
-		CreatedAt: tsToTime(r.CreatedAt),
-		ExpiresAt: tsToTime(r.ExpiresAt),
-		RevokedAt: tsToTimePtr(r.RevokedAt),
-		AuthLevel: r.AuthLevel,
-	}
-	if r.ActiveOrganizationID.Valid {
-		id := pgUUIDToULID(r.ActiveOrganizationID)
-		s.ActiveOrganizationID = &id
-	}
-	return s
-}
-
 func rowToMagicLink(r sqlcgen.MagicLink) theauth.MagicLink {
 	return theauth.MagicLink{
 		ID:        pgUUIDToULID(r.ID),
@@ -208,46 +189,6 @@ func (s *Store) MarkEmailVerified(ctx context.Context, userID theauth.ULID) erro
 }
 
 // ---------- Sessions ----------
-
-func (s *Store) CreateSession(ctx context.Context, sess theauth.Session) (theauth.Session, error) {
-	row, err := s.q.CreateSession(ctx, sqlcgen.CreateSessionParams{
-		ID:        ulidToPgUUID(sess.ID),
-		UserID:    ulidToPgUUID(sess.UserID),
-		TokenHash: sess.TokenHash,
-		UserAgent: sess.UserAgent,
-		Ip:        ipStrToPg(sess.IP),
-		CreatedAt: timeToTs(sess.CreatedAt),
-		ExpiresAt: timeToTs(sess.ExpiresAt),
-	})
-	if err != nil {
-		return theauth.Session{}, err
-	}
-	return rowToSession(row), nil
-}
-
-func (s *Store) SessionByTokenHash(ctx context.Context, hash []byte) (*theauth.Session, error) {
-	row, err := s.q.SessionByTokenHash(ctx, hash)
-	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, storage.ErrNotFound
-		}
-		return nil, err
-	}
-	sess := rowToSession(row)
-	return &sess, nil
-}
-
-func (s *Store) SessionByID(ctx context.Context, id theauth.ULID) (*theauth.Session, error) {
-	row, err := s.q.SessionByID(ctx, ulidToPgUUID(id))
-	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, storage.ErrNotFound
-		}
-		return nil, err
-	}
-	sess := rowToSession(row)
-	return &sess, nil
-}
 
 func (s *Store) RevokeSession(ctx context.Context, id theauth.ULID) error {
 	if err := s.q.RevokeSession(ctx, ulidToPgUUID(id)); err != nil {
@@ -388,27 +329,6 @@ func (s *Store) OAuthAccountByProviderUserID(ctx context.Context, provider, prov
 }
 
 // ---------- Sessions (v0.5 step-up) ----------
-
-func (s *Store) CreateSessionWithAuthLevel(ctx context.Context, sess theauth.Session) (theauth.Session, error) {
-	level := sess.AuthLevel
-	if level == "" {
-		level = theauth.AuthLevelFull
-	}
-	row, err := s.q.CreateSessionWithAuthLevel(ctx, sqlcgen.CreateSessionWithAuthLevelParams{
-		ID:        ulidToPgUUID(sess.ID),
-		UserID:    ulidToPgUUID(sess.UserID),
-		TokenHash: sess.TokenHash,
-		UserAgent: sess.UserAgent,
-		Ip:        ipStrToPg(sess.IP),
-		CreatedAt: timeToTs(sess.CreatedAt),
-		ExpiresAt: timeToTs(sess.ExpiresAt),
-		AuthLevel: level,
-	})
-	if err != nil {
-		return theauth.Session{}, err
-	}
-	return rowToSession(row), nil
-}
 
 func (s *Store) UpdateSessionAuthLevel(ctx context.Context, id theauth.ULID, level string) error {
 	if err := s.q.UpdateSessionAuthLevel(ctx, sqlcgen.UpdateSessionAuthLevelParams{

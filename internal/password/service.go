@@ -31,6 +31,7 @@ import (
 	"github.com/glincker/theauth-go/internal/audit"
 	"github.com/glincker/theauth-go/internal/emailnorm"
 	"github.com/glincker/theauth-go/internal/models"
+	"github.com/glincker/theauth-go/internal/pathprefix"
 	"github.com/glincker/theauth-go/internal/throttle"
 	"github.com/glincker/theauth-go/internal/ulid"
 )
@@ -104,6 +105,8 @@ type PendingTOTPIssuer interface {
 type Config struct {
 	// BaseURL prefixes the reset link in outbound email. Required.
 	BaseURL string
+	// PathPrefix is the route prefix of the reset link. Empty means "/auth".
+	PathPrefix string
 	// TOTPEnabled mirrors root cfg.TOTP != nil. When false, Signin never
 	// peeks at TOTPSecretByUserID and always mints a full session.
 	TOTPEnabled bool
@@ -120,6 +123,8 @@ type Config struct {
 	Throttle *throttle.Limiter
 	// Gate, when non-nil, decides whether Signup may proceed.
 	Gate SignupGate
+	// AllowLegacyBcrypt accepts bcrypt hashes at signin and rehashes them to Argon2id.
+	AllowLegacyBcrypt bool
 }
 
 // Service holds the dependencies needed for password flows.
@@ -296,7 +301,7 @@ func (s *Service) Signin(ctx context.Context, emailAddr, password, userAgent, ip
 		s.emitLoginFailed(ctx, &user.ID, userAgent, ip, "no_password")
 		return "", nil, "", models.NewError(models.CodeInvalidCredentials, "invalid email or password", nil)
 	}
-	ok, err := crypto.VerifyPassword(password, hash)
+	ok, newHash, err := VerifyCredential(password, hash, s.cfg.AllowLegacyBcrypt)
 	if err != nil {
 		// Malformed stored hash; server-side fault, not a credential miss.
 		slog.Error("theauth: stored password hash unparseable", "user_id", user.ID.String(), "err", err.Error())
@@ -308,6 +313,9 @@ func (s *Service) Signin(ctx context.Context, emailAddr, password, userAgent, ip
 		return "", nil, "", models.NewError(models.CodeInvalidCredentials, "invalid email or password", nil)
 	}
 	s.recordSuccess(ctx, ip, emailAddr)
+	if newHash != "" {
+		UpgradeHash(ctx, s.storage.SetUserPassword, user.ID, newHash)
+	}
 	// v0.5 step-up: when TOTP is enrolled and confirmed for this user, mint
 	// a pending_2fa session instead of a full one. The caller (the HTTP
 	// handler) renders {"step":"totp_required"} so the client knows to
@@ -377,7 +385,7 @@ func (s *Service) RequestResetForTest(ctx context.Context, emailAddr string) (st
 		return "", err
 	}
 
-	link := fmt.Sprintf("%s/auth/email-password/reset?token=%s", s.cfg.BaseURL, token)
+	link := fmt.Sprintf("%s%s/email-password/reset?token=%s", s.cfg.BaseURL, pathprefix.Normalize(s.cfg.PathPrefix), token)
 	body := fmt.Sprintf("Reset your password: %s\n\nExpires in %s.", link, PasswordResetTTL)
 	if err := s.sender.Send(ctx, emailAddr, "Reset your password", body); err != nil {
 		// Best effort; token already minted. Log and continue.

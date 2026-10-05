@@ -68,6 +68,7 @@ nav:
       - Storage Backends: getting-started/storage-backends.md
       - Example Apps: getting-started/example-apps.md
   - Concepts:
+      - Capability Interfaces and Storage: concepts/capability-interfaces.md
       - OAuth 2.1 Primer: concepts/oauth21-primer.md
       - MCP Authorization: concepts/mcp-authorization.md
       - Authorization Server: concepts/authorization-server.md
@@ -80,10 +81,16 @@ nav:
       - Enable WebAuthn Passkeys: guides/webauthn-passkeys.md
       - API Tokens and Device Login: guides/api-tokens.md
       - CLI Login: guides/cli-login.md
+      - Path Prefix and Dynamic Providers: guides/path-prefix-and-dynamic-providers.md
+      - Policy Engine: guides/policy-engine.md
+
+      - Auth for a Single-Binary Go App: guides/single-binary-go-app.md
+      - Migrate from Hand-Rolled Sessions: guides/migrate-from-hand-rolled-sessions.md
       - OAuth Hardening and Auth Events: guides/oauth-hardening-and-auth-events.md
       - Wire OpenTelemetry Tracing: guides/opentelemetry-tracing.md
       - Stream Audit Logs to Splunk: guides/audit-log-splunk.md
       - Use the SQLite Backend: guides/sqlite-storage.md
+      - Use the Postgres or MySQL Backend: guides/postgres-mysql-storage.md
       - Write a Custom Storage Backend: guides/custom-storage-backend.md
       - Migrate from Cognito: guides/migrate-from-cognito.md
       - Migrate from Auth0: guides/migrate-from-auth0.md

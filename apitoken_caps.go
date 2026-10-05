@@ -123,3 +123,18 @@ type DeviceCodeStorage interface {
 	// DeleteExpiredDeviceCodes removes requests that expired before the cutoff.
 	DeleteExpiredDeviceCodes(ctx context.Context, before time.Time) (int, error)
 }
+
+// DevicePendingFilter bounds ListPendingDeviceCodes. Now is the instant that
+// decides which requests count as unexpired; Limit caps the rows (default 100).
+type DevicePendingFilter struct {
+	Now   time.Time
+	Limit int
+}
+
+// DeviceCodeLister is the optional DeviceCodeStorage extension behind the
+// pending request list. ListPendingDeviceCodes returns pending, unexpired
+// requests newest first with DeviceCodeHash left empty; UserCode is filled for
+// the service layer and must never be sent to clients.
+type DeviceCodeLister interface {
+	ListPendingDeviceCodes(ctx context.Context, f DevicePendingFilter) ([]DeviceCode, error)
+}

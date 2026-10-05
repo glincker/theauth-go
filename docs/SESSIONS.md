@@ -2,7 +2,7 @@
 
 Optional features layered on the opaque session. All of them need a storage
 that implements `SessionManagementStorage` (and `SessionLinkStorage` for
-links); the memory adapter does. `New` returns `ErrStorageMissingCapability`
+links); the memory, SQLite, Postgres and MySQL adapters do. `New` returns `ErrStorageMissingCapability`
 when a configured feature lacks its capability.
 
 ## Config
@@ -90,4 +90,4 @@ applies it to a request. It fails closed on any validation error.
 `storagetest.RunSessionManagement` covers list, monotonic touch, bulk revoke,
 elevation and single-use link consumption (including a concurrent-consume
 race). `storagetest.Run` includes it when the backend implements both
-capabilities. The Postgres and MySQL adapters do not implement them yet.
+capabilities. The Postgres and MySQL adapters implement them (migration 0018).

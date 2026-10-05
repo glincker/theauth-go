@@ -60,6 +60,12 @@ FROM users`
 // ---------- Users ----------
 
 func (s *Store) CreateUser(ctx context.Context, u theauth.User) (theauth.User, error) {
+	if u.CreatedAt.IsZero() {
+		u.CreatedAt = time.Now()
+	}
+	if u.UpdatedAt.IsZero() {
+		u.UpdatedAt = u.CreatedAt
+	}
 	_, err := s.db.ExecContext(ctx, `
 INSERT INTO users (id, email, email_verified_at, name, avatar_url, created_at, updated_at,
                    external_id, given_name, family_name, display_name)

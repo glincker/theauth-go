@@ -58,7 +58,7 @@ func (a *TheAuth) mountRoutes(r chi.Router) {
 	ipLimit := a.RateLimitByIP(a.rateLimitPerIP)
 	emailLimit := a.RateLimitByEmail(a.rateLimitPerEmail)
 
-	r.Route("/auth", func(r chi.Router) {
+	r.Route(a.pathPrefix, func(r chi.Router) {
 		// security re-audit L1 (2026-06-22): /auth/magic-link was unrate-limited,
 		// allowing enumeration of registered email addresses. Apply the same
 		// per-IP and per-email caps used by the password endpoints.
@@ -74,7 +74,7 @@ func (a *TheAuth) mountRoutes(r chi.Router) {
 
 		// OAuth providers (v0.3). Only mounted when at least one provider
 		// is registered; the routes 404 cleanly otherwise.
-		if len(a.providers) > 0 {
+		if a.oauthSvc != nil {
 			a.mountOAuth(r, ipLimit)
 		}
 
@@ -103,6 +103,7 @@ func (a *TheAuth) mountRoutes(r chi.Router) {
 
 		if a.apiTokens != nil {
 			a.mountAPITokens(r, ipLimit)
+			a.mountDoctor(r, ipLimit)
 			if a.apiTokens.dev != nil {
 				a.mountDevice(r, ipLimit)
 			}
@@ -300,8 +301,14 @@ type oauthServiceAdapter struct{ a *TheAuth }
 
 // HasProvider reports whether the named provider is registered.
 func (s oauthServiceAdapter) HasProvider(name string) bool {
-	_, ok := s.a.providers[name]
+	ok, _ := s.LookupProvider(context.Background(), name)
 	return ok
+}
+
+// LookupProvider reports whether the named provider exists, consulting a
+// ProviderResolver when one is configured.
+func (s oauthServiceAdapter) LookupProvider(ctx context.Context, name string) (bool, error) {
+	return s.a.oauthSvc.LookupProvider(ctx, name)
 }
 
 // Start delegates the /auth/providers/{name}/start flow to
@@ -465,6 +472,7 @@ func (a *TheAuth) mountWebAuthn(r chi.Router, ipLimit func(http.Handler) http.Ha
 			TTL:        a.sessionTTL,
 		},
 		webauthnhandlers.ChallengeCookieConfig{
+			Path:       a.pathPrefix + "/webauthn",
 			SecureFlag: a.secureCookie,
 			TTL:        a.webauthnCfg.ChallengeTTL,
 		},
