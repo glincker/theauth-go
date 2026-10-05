@@ -1,15 +1,5 @@
 package theauth
 
-// enterprise.go consolidates the v0.7 to v1.0 enterprise surface
-// (SCIM tokens, organizations + membership, RBAC permission catalog
-// and forwarders, agent delegations) into a single file. PR I
-// (2026-06-22) merged the prior forwarders_enterprise.go and rbac.go
-// files here so the repository root has fewer files and the README
-// renders above the fold on GitHub. The RBAC permission catalog,
-// validation, and per-request cache live in the second half; every
-// forwarder method is a thin thunk over the matching internal/<flow>
-// Service. Public API surface and signatures are byte-stable.
-
 import (
 	"context"
 	"errors"

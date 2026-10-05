@@ -7,16 +7,18 @@ first `/v2` release.
 
 ## Rules
 
-- Root files are the public face: `doc.go`, `theauth.go`, `wiring.go`,
-  `config*.go`, `errors.go`, `models.go`, `storage*.go`, `handlers.go`,
-  `middleware.go`, plus one thin facade per feature. A facade only holds
+- The root holds at most 15 Go files: `doc.go`, `theauth.go`, `wiring.go`,
+  `mounts.go`, `handlers.go`, `middleware.go`, `models.go`, `errors.go`,
+  `config.go`, `storage.go`, `sessions.go`, `forwarders.go`, `enterprise.go`,
+  `apitokens.go` (API tokens, device grant, revocation) and `observability.go`
+  (audit, auth events, tracing, metrics, doctor). A facade only holds
   `(*TheAuth)` methods, aliases and adapters, because Go methods must live in
   the receiver's package.
 - Names that adapters or callers use stay at the root as type aliases or
   re-exported values, so `errors.Is` and type assertions keep working.
 - Black-box tests live in `integration/`. White-box tests live with the code
   they test. Test-only access to unexported root behavior goes through
-  `internal/testhooks`, registered by `testhooks.go`, so no public API is added.
+  `internal/testhooks`, registered in `theauth.go`, so no public API is added.
 - Internal packages never import the root. The root passes narrow interfaces
   (for example `apitokens.Host`) in.
 
@@ -31,16 +33,23 @@ first `/v2` release.
 | `revocation.go` | `internal/revocation` (bus, target, watcher); root facade `revocation.go` |
 | `doctor.go`, `doctor_checks.go`, `doctor_handler.go`, `doctor_internal_test.go` | `internal/doctor` (pure checks over `Input`); root facade `doctor.go` gathers the input |
 | `import.go` | `internal/importer`; root facade `import.go` |
-| `bootstrap.go`, `hardening.go` | `internal/bootstrap`; config pieces in `config_security.go`; methods in `forwarders.go` |
+| `bootstrap.go`, `hardening.go` | `internal/bootstrap`; config pieces in `config.go`; methods in `forwarders.go` |
 | `middleware_ratelimit.go`, `http_security.go` | `internal/ratelimit`, `internal/httpsec`; wrappers merged into `middleware.go` |
 | `authevents.go`, `observability.go` redaction | `internal/authevents`, `internal/audit/redact.go` |
 | RBAC catalog in `enterprise.go` | `internal/rbac/catalog.go` |
 | `errors_hardening.go`, `storage_hardening.go` | merged into `errors.go`, `storage_caps.go` |
 | `domains.go` | merged into `models.go` |
-| `as.go` | `config_as.go` |
+| `as.go` | `config.go` |
 | `handlers_sessions.go`, `service_sessions.go` | `sessions.go` |
 | `handlers_admin.go`, `handlers_domains.go` | `mounts.go` |
-| `storage_sessions.go`, `storage_unsupported.go` | `storage_caps_sessions.go`, `storage_caps_unsupported.go` |
+| `storage_sessions.go`, `storage_unsupported.go` | `storage.go` (capability interfaces); stub types in `internal/storagestub` |
+| `config_as.go`, `config_oauth.go`, `config_security.go` | `config.go` |
+| `storage_caps*.go`, `import.go` | `storage.go` |
+| `testhooks.go` | `theauth.go` |
+| `services.go` | `forwarders.go` |
+| `revocation.go` | `apitokens.go` |
+| `authevents.go`, `doctor.go` | `observability.go` |
+| `storage_caps_unsupported.go` | `internal/storagestub` |
 | `sqlc.yaml` | `storage/postgres/sqlc.yaml` |
 
 ## Not moved
@@ -57,4 +66,4 @@ first `/v2` release.
 
 The exported root API was diffed before and after with `go/types` (names,
 struct fields, method sets): no difference other than the printed name of the
-alias target. The Test function count is unchanged (868).
+alias target. The Test function count is unchanged (870).

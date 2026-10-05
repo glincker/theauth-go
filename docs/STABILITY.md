@@ -223,12 +223,12 @@ library uses a type assertion to detect support at runtime. The base
 `Storage` interface only grows in a v2.0 release.
 
 `Storage` is the embedding of the capability interfaces declared in
-`storage_caps.go`. Its method set is frozen by a test; a new method goes
+`storage.go`. Its method set is frozen by a test; a new method goes
 into the capability it belongs to only in a major release, otherwise behind
 a new optional interface.
 
 Session management follows this rule: `SessionManagementStorage` and
-`SessionLinkStorage` (storage_caps.go) are optional capabilities outside
+`SessionLinkStorage` (storage.go) are optional capabilities outside
 `Storage`; see `docs/SESSIONS.md`. The new `Session` fields `LastSeenAt`,
 `ElevatedUntil` and `CredentialID` are additive.
 

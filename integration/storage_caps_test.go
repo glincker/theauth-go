@@ -13,7 +13,7 @@ import (
 	"github.com/glincker/theauth-go/v2/storage/memory"
 )
 
-// allCapabilities lists every capability interface; keep in sync with storage_caps.go.
+// allCapabilities lists every capability interface; keep in sync with storage.go.
 type allCapabilities interface {
 	theauth.UserStorage
 	theauth.SessionStorage
