@@ -78,6 +78,7 @@ nav:
   - Guides:
       - Add an OAuth Provider: guides/add-oauth-provider.md
       - Enable WebAuthn Passkeys: guides/webauthn-passkeys.md
+      - API Tokens and Device Login: guides/api-tokens.md
       - Wire OpenTelemetry Tracing: guides/opentelemetry-tracing.md
       - Stream Audit Logs to Splunk: guides/audit-log-splunk.md
       - Use the SQLite Backend: guides/sqlite-storage.md
