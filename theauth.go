@@ -280,9 +280,9 @@ type PasswordPolicyConfig struct {
 	// AllowLegacyBcrypt enables the bcrypt fallback in VerifyPassword. When
 	// true, hashes starting with "$2a$", "$2b$", or "$2x$" are verified with
 	// golang.org/x/crypto/bcrypt. On a successful match the password is
-	// transparently re-hashed with Argon2id; callers receive the new hash via
-	// the OnLegacyHashAccepted callback so they can update storage
-	// asynchronously. With false, a bcrypt hash fails as invalid credentials. Set to false (default) in all non-migration deployments.
+	// transparently re-hashed with Argon2id and persisted by the library;
+	// hosts that mirror hashes can observe it via OnLegacyHashAccepted.
+	// With false, a bcrypt hash fails as invalid credentials. Set to false (default) in all non-migration deployments.
 	AllowLegacyBcrypt bool
 
 	// MinLength is the minimum password length in bytes. Default 12.
@@ -296,11 +296,13 @@ type PasswordPolicyConfig struct {
 	// signup and password change. Lookup errors fail open. Default nil (off).
 	BreachChecker BreachChecker
 
-	// OnLegacyHashAccepted is called (in the background) whenever a bcrypt
-	// hash is successfully verified and the password has been re-hashed. The
-	// caller receives (userID string, newArgon2idHash string). Persist the new
-	// hash to storage to complete the upgrade. If nil, upgrades are silently
-	// discarded (not recommended for production migration windows).
+	// OnLegacyHashAccepted is invoked after the library has persisted the new
+	// Argon2id hash for a user who signed in or stepped up with a legacy
+	// bcrypt hash, from a separate goroutine, with (userID, newArgon2idHash).
+	// A host that mirrors password hashes can update its own copy. The
+	// library does not need it to work, so leaving it nil is fine. It is not
+	// called if the rehash or persist failed, a panic in it is recovered and
+	// logged, and it never blocks or fails the login.
 	OnLegacyHashAccepted func(userID string, newArgon2idHash string)
 }
 
@@ -311,6 +313,7 @@ type TheAuth struct {
 	emailSender       email.Sender
 	baseURL           string
 	allowLegacyBcrypt bool
+	onLegacyHash      func(userID, newArgon2idHash string)
 	pathPrefix        string
 	signingKey        ed25519.PrivateKey
 	sessionTTL        time.Duration
@@ -483,6 +486,7 @@ func New(cfg Config) (*TheAuth, error) {
 		emailSender:                cfg.EmailSender,
 		baseURL:                    cfg.BaseURL,
 		allowLegacyBcrypt:          cfg.PasswordPolicy.AllowLegacyBcrypt,
+		onLegacyHash:               cfg.PasswordPolicy.OnLegacyHashAccepted,
 		pathPrefix:                 pathprefix.Normalize(cfg.PathPrefix),
 		signingKey:                 cfg.SigningKey,
 		sessionTTL:                 cfg.SessionTTL,

@@ -379,15 +379,16 @@ func wireServices(a *TheAuth, cfg Config, providers map[string]Provider, sp saml
 		a.totpSvc.SetRecoveryStore(rc)
 	}
 	pwCfg := password.Config{
-		BaseURL:           cfg.BaseURL,
-		PathPrefix:        a.pathPrefix,
-		TOTPEnabled:       cfg.TOTP != nil,
-		MinLength:         cfg.PasswordPolicy.MinLength,
-		MaxBytes:          cfg.PasswordPolicy.MaxBytes,
-		AllowLegacyBcrypt: cfg.PasswordPolicy.AllowLegacyBcrypt,
-		Breach:            cfg.PasswordPolicy.BreachChecker,
-		Email:             a.emailNorm,
-		Throttle:          a.throttle,
+		BaseURL:              cfg.BaseURL,
+		PathPrefix:           a.pathPrefix,
+		TOTPEnabled:          cfg.TOTP != nil,
+		MinLength:            cfg.PasswordPolicy.MinLength,
+		MaxBytes:             cfg.PasswordPolicy.MaxBytes,
+		AllowLegacyBcrypt:    cfg.PasswordPolicy.AllowLegacyBcrypt,
+		OnLegacyHashAccepted: cfg.PasswordPolicy.OnLegacyHashAccepted,
+		Breach:               cfg.PasswordPolicy.BreachChecker,
+		Email:                a.emailNorm,
+		Throttle:             a.throttle,
 	}
 	if gate != nil {
 		pwCfg.Gate = gate

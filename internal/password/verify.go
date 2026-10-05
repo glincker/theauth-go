@@ -2,6 +2,7 @@ package password
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 
 	"github.com/glincker/theauth-go/v2/crypto"
@@ -24,9 +25,27 @@ func VerifyCredential(plain, stored string, allowLegacy bool) (ok bool, newHash 
 	return ok, newHash, err
 }
 
-// UpgradeHash persists a rehashed password; a storage failure is logged, never returned.
-func UpgradeHash(ctx context.Context, set func(context.Context, models.ULID, string) error, userID models.ULID, newHash string) {
+// UpgradeHash persists a rehashed password and reports whether it was stored; a storage failure is logged, never returned.
+func UpgradeHash(ctx context.Context, set func(context.Context, models.ULID, string) error, userID models.ULID, newHash string) bool {
 	if err := set(ctx, userID, newHash); err != nil {
 		slog.Error("theauth: persist upgraded password hash failed", "user_id", userID.String(), "err", err.Error())
+		return false
 	}
+	return true
+}
+
+// UpgradeAndNotify persists newHash, then invokes cb (if set) on its own goroutine.
+func UpgradeAndNotify(ctx context.Context, set func(context.Context, models.ULID, string) error, cb func(userID, newHash string), userID models.ULID, newHash string) {
+	if !UpgradeHash(ctx, set, userID, newHash) || cb == nil {
+		return
+	}
+	id := userID.String()
+	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				slog.Error("theauth: OnLegacyHashAccepted callback panicked", "user_id", id, "panic", fmt.Sprint(r))
+			}
+		}()
+		cb(id, newHash)
+	}()
 }

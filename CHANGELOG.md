@@ -6,6 +6,10 @@ adheres to [Semantic Versioning](https://semver.org/) from v1.0 forward.
 
 ## [Unreleased]
 
+### Fixed
+
+- `PasswordPolicy.OnLegacyHashAccepted` is now invoked (in a goroutine, after the new Argon2id hash is persisted) on signin and step-up; it was declared but never called.
+
 ## [2.6.0] - 2026-10-05
 
 ### Upgrade notes

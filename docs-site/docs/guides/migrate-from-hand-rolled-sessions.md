@@ -51,10 +51,12 @@ Hashes in Argon2id PHC form (`$argon2id$...`) verify as is. bcrypt hashes (`$2a$
 ```go
 PasswordPolicy: theauth.PasswordPolicyConfig{
     AllowLegacyBcrypt: true,
+    // Optional: the library persists the new Argon2id hash itself. Set this
+    // only if you mirror password hashes in your own storage.
     OnLegacyHashAccepted: func(userID, newHash string) {
         id, err := ulid.ParseStrict(userID)
         if err == nil {
-            _ = store.SetUserPassword(context.Background(), id, newHash)
+            _ = mirror.SetUserPassword(context.Background(), id, newHash)
         }
     },
 },
