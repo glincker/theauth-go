@@ -1,11 +1,9 @@
 package theauth
 
 import (
-	"context"
-	"fmt"
 	"time"
 
-	"github.com/glincker/theauth-go/v2/internal/emailnorm"
+	"github.com/glincker/theauth-go/v2/internal/bootstrap"
 	"github.com/glincker/theauth-go/v2/internal/password"
 	"github.com/glincker/theauth-go/v2/internal/throttle"
 )
@@ -87,43 +85,13 @@ func (c *LoginThrottleConfig) limiter() *throttle.Limiter {
 	})
 }
 
-func (a *TheAuth) normalizeEmail(raw string) string { return a.emailNorm.Normalize(raw) }
-
-func newEmailNormalizer(nfkc bool) emailnorm.Normalizer { return emailnorm.Normalizer{NFKC: nfkc} }
-
-// NormalizeEmail returns the canonical form this instance uses for every
-// email lookup: trimmed, lowercased, and NFKC-folded when Config.EmailNFKC is set.
-func (a *TheAuth) NormalizeEmail(raw string) string { return a.normalizeEmail(raw) }
-
-// ResetPasswordAdmin sets a new password for the user with the given email
-// without a reset token, revokes their sessions and clears login and MFA
-// lockouts. It enforces the configured password policy and is meant for a
-// recover-admin command run by someone with host access.
-func (a *TheAuth) ResetPasswordAdmin(ctx context.Context, emailAddr, newPassword string) error {
-	userID, err := a.passwordSvc.AdminSetPassword(ctx, emailAddr, newPassword)
-	if err != nil {
-		return err
-	}
-	if user, uerr := a.storage.UserByID(ctx, userID); uerr == nil {
-		a.fireOnPasswordChange(ctx, user)
-	}
-	return nil
-}
-
-// UnlockUser clears the login lockout and MFA lockout for the user with the
-// given email so they can try again immediately.
-func (a *TheAuth) UnlockUser(ctx context.Context, emailAddr string) error {
-	if a.throttle == nil {
-		return nil
-	}
-	canon := a.normalizeEmail(emailAddr)
-	user, err := a.storage.UserByEmail(ctx, canon)
-	userID := ""
-	if err == nil && user != nil {
-		userID = user.ID.String()
-	}
-	if err := a.throttle.UnlockIdentifier(ctx, canon, userID); err != nil {
-		return fmt.Errorf("theauth: unlock user: %w", err)
-	}
-	return nil
-}
+// BootstrapConfig closes public signup and gates creation of the first user
+// behind a one-time setup token. The storage must implement UserCountStorage.
+//
+// While no user exists, password signup requires the token in the
+// X-Setup-Token header or a "setupToken" body field. After the first user
+// exists, signup is refused with CodeSignupClosed unless
+// OpenSignupAfterFirstUser is set. Magic-link account creation follows the
+// same rule but can never present a token, so the first admin must sign up
+// with a password. Granting the new user an admin role is left to OnFirstUser.
+type BootstrapConfig = bootstrap.Config

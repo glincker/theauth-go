@@ -1,24 +1,22 @@
-package theauth
+// Package bootstrap gates creation of the first user behind a one-time setup token.
+package bootstrap
 
 import (
 	"context"
 	"crypto/sha256"
 	"crypto/subtle"
-	"encoding/json"
 	"fmt"
 	"log/slog"
-	"net/http"
 	"sync"
 	"sync/atomic"
 
 	"github.com/glincker/theauth-go/v2/crypto"
-	"github.com/glincker/theauth-go/v2/internal/httpx"
 	"github.com/glincker/theauth-go/v2/internal/models"
 	"github.com/glincker/theauth-go/v2/internal/password"
 	"github.com/glincker/theauth-go/v2/internal/throttle"
 )
 
-// BootstrapConfig closes public signup and gates creation of the first user
+// Config closes public signup and gates creation of the first user
 // behind a one-time setup token. The storage must implement UserCountStorage.
 //
 // While no user exists, password signup requires the token in the
@@ -27,7 +25,7 @@ import (
 // OpenSignupAfterFirstUser is set. Magic-link account creation follows the
 // same rule but can never present a token, so the first admin must sign up
 // with a password. Granting the new user an admin role is left to OnFirstUser.
-type BootstrapConfig struct {
+type Config struct {
 	// SetupToken is the operator-supplied token. When empty a random one is
 	// generated at startup (if no user exists yet) and logged once.
 	SetupToken string
@@ -38,15 +36,15 @@ type BootstrapConfig struct {
 	SuppressSetupTokenLog bool
 	// OnFirstUser runs after the first user is created, for example to
 	// grant the super admin role. Errors are logged and do not fail signup.
-	OnFirstUser func(ctx context.Context, user *User) error
+	OnFirstUser func(ctx context.Context, user *models.User) error
 }
 
-type bootstrapGate struct {
-	counter   UserCountStorage
+type Gate struct {
+	counter   UserCounter
 	tokenHash [sha256.Size]byte
 	hasToken  bool
 	open      bool
-	onFirst   func(ctx context.Context, user *User) error
+	onFirst   func(ctx context.Context, user *models.User) error
 	limiter   *throttle.Limiter
 	token     string
 
@@ -54,8 +52,13 @@ type bootstrapGate struct {
 	hasUsers atomic.Bool
 }
 
-func newBootstrapGate(cfg *BootstrapConfig, counter UserCountStorage, limiter *throttle.Limiter) (*bootstrapGate, error) {
-	g := &bootstrapGate{counter: counter, open: cfg.OpenSignupAfterFirstUser, onFirst: cfg.OnFirstUser, limiter: limiter}
+// UserCounter is the storage capability the gate needs.
+type UserCounter interface {
+	CountUsers(ctx context.Context) (int, error)
+}
+
+func New(cfg *Config, counter UserCounter, limiter *throttle.Limiter) (*Gate, error) {
+	g := &Gate{counter: counter, open: cfg.OpenSignupAfterFirstUser, onFirst: cfg.OnFirstUser, limiter: limiter}
 	n, err := counter.CountUsers(context.Background())
 	if err != nil {
 		return nil, fmt.Errorf("theauth: bootstrap: count users: %w", err)
@@ -80,7 +83,7 @@ func newBootstrapGate(cfg *BootstrapConfig, counter UserCountStorage, limiter *t
 	return g, nil
 }
 
-func (g *bootstrapGate) closedErr() error {
+func (g *Gate) closedErr() error {
 	if g.open {
 		return nil
 	}
@@ -88,7 +91,7 @@ func (g *bootstrapGate) closedErr() error {
 }
 
 // Begin implements password.SignupGate and magiclink.SignupGate.
-func (g *bootstrapGate) Begin(ctx context.Context) (func(*models.User), error) {
+func (g *Gate) Begin(ctx context.Context) (func(*models.User), error) {
 	noop := func(*models.User) {}
 	if g.hasUsers.Load() {
 		return noop, g.closedErr()
@@ -138,40 +141,12 @@ func (g *bootstrapGate) Begin(ctx context.Context) (func(*models.User), error) {
 	}, nil
 }
 
-// UserCount returns the number of user records. It needs a storage that
-// implements UserCountStorage.
-func (a *TheAuth) UserCount(ctx context.Context) (int, error) {
-	c, ok := a.storageRaw.(UserCountStorage)
-	if !ok {
-		return 0, fmt.Errorf("%w: UserCountStorage", ErrStorageMissingCapability)
-	}
-	n, err := c.CountUsers(ctx)
-	if err != nil {
-		return 0, fmt.Errorf("theauth: count users: %w", err)
-	}
-	return n, nil
-}
-
-// SetupToken returns the pending first-run setup token, or "" when
-// Config.Bootstrap is unset or the first user already exists.
-func (a *TheAuth) SetupToken() string {
-	g := a.bootstrap
+// Token returns the pending setup token, or "" once the first user exists.
+func (g *Gate) Token() string {
 	if g == nil || g.hasUsers.Load() {
 		return ""
 	}
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	return g.token
-}
-
-func (a *TheAuth) handleBootstrapStatus(w http.ResponseWriter, r *http.Request) {
-	n, err := a.UserCount(r.Context())
-	if err != nil {
-		httpx.Error(w, http.StatusInternalServerError, "internal error")
-		return
-	}
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(struct {
-		NeedsSetup bool `json:"needsSetup"`
-	}{NeedsSetup: n == 0})
 }

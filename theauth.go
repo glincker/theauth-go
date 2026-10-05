@@ -5,6 +5,8 @@ import (
 	"net/netip"
 	"time"
 
+	"github.com/glincker/theauth-go/v2/internal/bootstrap"
+
 	"github.com/glincker/theauth-go/v2/email"
 	"github.com/glincker/theauth-go/v2/internal/agent"
 	"github.com/glincker/theauth-go/v2/internal/apitokens"
@@ -12,6 +14,7 @@ import (
 	internalaudit "github.com/glincker/theauth-go/v2/internal/audit"
 	"github.com/glincker/theauth-go/v2/internal/delegation"
 	"github.com/glincker/theauth-go/v2/internal/emailnorm"
+	"github.com/glincker/theauth-go/v2/internal/httpsec"
 	"github.com/glincker/theauth-go/v2/internal/identitylink"
 	"github.com/glincker/theauth-go/v2/internal/magiclink"
 	internaloauth "github.com/glincker/theauth-go/v2/internal/oauth"
@@ -324,7 +327,7 @@ type TheAuth struct {
 	doctorCfg  Config
 	emailNorm  emailnorm.Normalizer
 	throttle   *throttle.Limiter
-	bootstrap  *bootstrapGate
+	bootstrap  *bootstrap.Gate
 
 	// dcrRegistrationTokenHashes is the sha256-hashed set of operator
 	// initial access tokens accepted by POST /oauth/register when DCR is
@@ -468,7 +471,7 @@ func New(cfg Config) (*TheAuth, error) {
 		return nil, err
 	}
 
-	trustedOrigins, err := normalizeOrigins(cfg.TrustedOrigins)
+	trustedOrigins, err := httpsec.NormalizeOrigins(cfg.TrustedOrigins)
 	if err != nil {
 		return nil, err
 	}

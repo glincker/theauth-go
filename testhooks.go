@@ -5,18 +5,9 @@ import (
 	"time"
 
 	"github.com/glincker/theauth-go/v2/internal/identitylink"
+	"github.com/glincker/theauth-go/v2/internal/ratelimit"
 	"github.com/glincker/theauth-go/v2/internal/testhooks"
 )
-
-type keyedLimiterHandle struct{ inner *keyedLimiter }
-
-func (k keyedLimiterHandle) Allow(key string) bool { return k.inner.Allow(key) }
-func (k keyedLimiterHandle) Stop()                 { k.inner.Stop() }
-func (k keyedLimiterHandle) EntryCount() int {
-	k.inner.mu.RLock()
-	defer k.inner.mu.RUnlock()
-	return len(k.inner.limits)
-}
 
 func init() {
 	testhooks.ValidateEmail = validateEmail
@@ -47,7 +38,7 @@ func init() {
 		return a.(*TheAuth).resetPassword(ctx, token, pw)
 	}
 	testhooks.NewKeyedLimiter = func(perMinute int, evictAfter, tick time.Duration) testhooks.Limiter {
-		return keyedLimiterHandle{newKeyedLimiterWith(perMinute, evictAfter, tick)}
+		return ratelimit.NewWith(perMinute, evictAfter, tick)
 	}
 	testhooks.LinkOAuth = func(a any, ctx context.Context, sessionToken, provider, pid string) error {
 		return a.(*TheAuth).identityLinkSvc.LinkOAuthToCurrentUser(ctx, sessionToken, provider, pid, nil, nil, nil, "")

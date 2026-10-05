@@ -1,4 +1,4 @@
-package theauth
+package doctor
 
 import (
 	"fmt"
@@ -45,15 +45,15 @@ func DoctorFindingIDs() []string {
 	}
 }
 
-var doctorChecks = []func(doctorInput) []Finding{
+var doctorChecks = []func(Input) []Finding{
 	checkSignupOpen, checkBootstrap, checkTrustedProxies, checkSecureCookie, checkCSRF,
 	checkThrottle, checkPasswordPolicy, checkMFA, checkSessionLifetime, checkTokens,
 	checkUnpruned, checkEncryptionKey, checkAudit, checkWebAuthnRPID, checkRedirects,
 }
 
-func checkSignupOpen(in doctorInput) []Finding {
+func checkSignupOpen(in Input) []Finding {
 	passwordOpen := !in.BootstrapOn || in.BootstrapOpen
-	oauthOpen := in.HasProviders && in.OAuthSignupPolicy == OAuthSignupOpen
+	oauthOpen := in.HasProviders && in.OAuthSignupOpen
 	if !passwordOpen && !oauthOpen {
 		return nil
 	}
@@ -70,7 +70,7 @@ func checkSignupOpen(in doctorInput) []Finding {
 		"Set Config.Bootstrap to close signup, or set OAuthConfig.Signup to allowed_domains or invite.")}
 }
 
-func checkBootstrap(in doctorInput) []Finding {
+func checkBootstrap(in Input) []Finding {
 	if in.BootstrapOn || in.UserCount != 0 {
 		return nil
 	}
@@ -80,7 +80,7 @@ func checkBootstrap(in doctorInput) []Finding {
 		"Set Config.Bootstrap so the first admin needs a one-time setup token.")}
 }
 
-func checkTrustedProxies(in doctorInput) []Finding {
+func checkTrustedProxies(in Input) []Finding {
 	if in.TrustedProxies > 0 || (in.RateLimitPerIP <= 0 && in.ThrottleDisabled) {
 		return nil
 	}
@@ -90,7 +90,7 @@ func checkTrustedProxies(in doctorInput) []Finding {
 		"List your proxy CIDRs in Config.TrustedProxies. Leave it empty only when exposed directly.")}
 }
 
-func checkSecureCookie(in doctorInput) []Finding {
+func checkSecureCookie(in Input) []Finding {
 	host, https := baseHost(in.BaseURL)
 	if in.SecureCookie || https || isLocalHost(host) {
 		return nil
@@ -101,7 +101,7 @@ func checkSecureCookie(in doctorInput) []Finding {
 		"Serve over https and set Config.SecureCookie to true.")}
 }
 
-func checkCSRF(in doctorInput) []Finding {
+func checkCSRF(in Input) []Finding {
 	if !in.CSRFDisabled {
 		return nil
 	}
@@ -111,7 +111,7 @@ func checkCSRF(in doctorInput) []Finding {
 		"Remove Config.DisableCSRFProtection and list real origins in Config.TrustedOrigins.")}
 }
 
-func checkThrottle(in doctorInput) []Finding {
+func checkThrottle(in Input) []Finding {
 	if in.ThrottleDisabled {
 		return []Finding{fnd(DoctorThrottleDisabled, SeverityHigh,
 			"Login throttle is disabled",
@@ -137,7 +137,7 @@ func checkThrottle(in doctorInput) []Finding {
 		"Use the defaults (3, 10, 5) or stricter.")}
 }
 
-func checkPasswordPolicy(in doctorInput) []Finding {
+func checkPasswordPolicy(in Input) []Finding {
 	var out []Finding
 	if in.PasswordMinLength < 12 {
 		out = append(out, fnd(DoctorPasswordMinLength, SeverityMedium,
@@ -154,7 +154,7 @@ func checkPasswordPolicy(in doctorInput) []Finding {
 	return out
 }
 
-func checkMFA(in doctorInput) []Finding {
+func checkMFA(in Input) []Finding {
 	var out []Finding
 	if !in.TOTPEnabled && !in.WebAuthnEnabled {
 		out = append(out, fnd(DoctorNoSecondFactor, SeverityMedium,
@@ -171,7 +171,7 @@ func checkMFA(in doctorInput) []Finding {
 	return out
 }
 
-func checkSessionLifetime(in doctorInput) []Finding {
+func checkSessionLifetime(in Input) []Finding {
 	var out []Finding
 	if in.SessionTTL > 30*24*time.Hour {
 		out = append(out, fnd(DoctorSessionTTLLong, SeverityMedium,
@@ -188,7 +188,7 @@ func checkSessionLifetime(in doctorInput) []Finding {
 	return out
 }
 
-func checkTokens(in doctorInput) []Finding {
+func checkTokens(in Input) []Finding {
 	if !in.TokensKnown {
 		return nil
 	}
@@ -220,7 +220,7 @@ func checkTokens(in doctorInput) []Finding {
 	return out
 }
 
-func checkUnpruned(in doctorInput) []Finding {
+func checkUnpruned(in Input) []Finding {
 	var out []Finding
 	if in.TokensExpired > 0 {
 		out = append(out, fnd(DoctorTokensUnpruned, SeverityInfo,
@@ -237,7 +237,7 @@ func checkUnpruned(in doctorInput) []Finding {
 	return out
 }
 
-func checkEncryptionKey(in doctorInput) []Finding {
+func checkEncryptionKey(in Input) []Finding {
 	if in.EncryptionKeyLen == 32 {
 		return nil
 	}
@@ -251,7 +251,7 @@ func checkEncryptionKey(in doctorInput) []Finding {
 		"Set Config.EncryptionKey to 32 random bytes from a secret store.")}
 }
 
-func checkAudit(in doctorInput) []Finding {
+func checkAudit(in Input) []Finding {
 	if in.AuditConfigured && in.AuditSinkCount > 0 {
 		return nil
 	}
@@ -264,7 +264,7 @@ func checkAudit(in doctorInput) []Finding {
 		"Set Config.Audit with at least one AuditSink.")}
 }
 
-func checkWebAuthnRPID(in doctorInput) []Finding {
+func checkWebAuthnRPID(in Input) []Finding {
 	if !in.WebAuthnConfigured {
 		return nil
 	}
@@ -282,7 +282,7 @@ func checkWebAuthnRPID(in doctorInput) []Finding {
 		"Set WebAuthnConfig.RPID to the BaseURL host or its registrable parent.")}
 }
 
-func checkRedirects(in doctorInput) []Finding {
+func checkRedirects(in Input) []Finding {
 	if !in.HasProviders && !in.HasSAML || in.OAuthReturnTo > 0 {
 		return nil
 	}

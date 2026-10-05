@@ -14,11 +14,16 @@ package theauth
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"log/slog"
+	"net/http"
 	"time"
+
+	"github.com/glincker/theauth-go/v2/internal/emailnorm"
+	"github.com/glincker/theauth-go/v2/internal/httpx"
 
 	"github.com/glincker/theauth-go/v2/internal/apitokens"
 	internalas "github.com/glincker/theauth-go/v2/internal/as"
@@ -704,4 +709,77 @@ func (a *TheAuth) StartAuthorize(ctx context.Context, req AuthorizeRequest, user
 // pointer so existing errors.Is callers keep working.
 func IsLoginRequired(err error) bool {
 	return internalas.IsLoginRequired(err)
+}
+
+func (a *TheAuth) normalizeEmail(raw string) string { return a.emailNorm.Normalize(raw) }
+
+func newEmailNormalizer(nfkc bool) emailnorm.Normalizer { return emailnorm.Normalizer{NFKC: nfkc} }
+
+// NormalizeEmail returns the canonical form this instance uses for every
+// email lookup: trimmed, lowercased, and NFKC-folded when Config.EmailNFKC is set.
+func (a *TheAuth) NormalizeEmail(raw string) string { return a.normalizeEmail(raw) }
+
+// ResetPasswordAdmin sets a new password for the user with the given email
+// without a reset token, revokes their sessions and clears login and MFA
+// lockouts. It enforces the configured password policy and is meant for a
+// recover-admin command run by someone with host access.
+func (a *TheAuth) ResetPasswordAdmin(ctx context.Context, emailAddr, newPassword string) error {
+	userID, err := a.passwordSvc.AdminSetPassword(ctx, emailAddr, newPassword)
+	if err != nil {
+		return err
+	}
+	if user, uerr := a.storage.UserByID(ctx, userID); uerr == nil {
+		a.fireOnPasswordChange(ctx, user)
+	}
+	return nil
+}
+
+// UnlockUser clears the login lockout and MFA lockout for the user with the
+// given email so they can try again immediately.
+func (a *TheAuth) UnlockUser(ctx context.Context, emailAddr string) error {
+	if a.throttle == nil {
+		return nil
+	}
+	canon := a.normalizeEmail(emailAddr)
+	user, err := a.storage.UserByEmail(ctx, canon)
+	userID := ""
+	if err == nil && user != nil {
+		userID = user.ID.String()
+	}
+	if err := a.throttle.UnlockIdentifier(ctx, canon, userID); err != nil {
+		return fmt.Errorf("theauth: unlock user: %w", err)
+	}
+	return nil
+}
+
+// UserCount returns the number of user records. It needs a storage that
+// implements UserCountStorage.
+func (a *TheAuth) UserCount(ctx context.Context) (int, error) {
+	c, ok := a.storageRaw.(UserCountStorage)
+	if !ok {
+		return 0, fmt.Errorf("%w: UserCountStorage", ErrStorageMissingCapability)
+	}
+	n, err := c.CountUsers(ctx)
+	if err != nil {
+		return 0, fmt.Errorf("theauth: count users: %w", err)
+	}
+	return n, nil
+}
+
+// SetupToken returns the pending first-run setup token, or "" when
+// Config.Bootstrap is unset or the first user already exists.
+func (a *TheAuth) SetupToken() string {
+	return a.bootstrap.Token()
+}
+
+func (a *TheAuth) handleBootstrapStatus(w http.ResponseWriter, r *http.Request) {
+	n, err := a.UserCount(r.Context())
+	if err != nil {
+		httpx.Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(struct {
+		NeedsSetup bool `json:"needsSetup"`
+	}{NeedsSetup: n == 0})
 }

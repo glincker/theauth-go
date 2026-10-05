@@ -2,71 +2,62 @@ package theauth
 
 import (
 	"context"
-	"fmt"
+	"encoding/json"
 	"log/slog"
-	"net/url"
-	"sort"
-	"strings"
+	"net/http"
 	"time"
+
+	"github.com/glincker/theauth-go/v2/internal/doctor"
+	"github.com/go-chi/chi/v5"
 )
 
 // Severity ranks a doctor finding.
-type Severity string
+type Severity = doctor.Severity
 
 // Doctor severities, most serious first.
 const (
-	SeverityCritical Severity = "critical"
-	SeverityHigh     Severity = "high"
-	SeverityMedium   Severity = "medium"
-	SeverityLow      Severity = "low"
-	SeverityInfo     Severity = "info"
+	SeverityCritical = doctor.SeverityCritical
+	SeverityHigh     = doctor.SeverityHigh
+	SeverityMedium   = doctor.SeverityMedium
+	SeverityLow      = doctor.SeverityLow
+	SeverityInfo     = doctor.SeverityInfo
 )
 
-// Rank orders severities, higher is more serious. Unknown values rank 0.
-func (s Severity) Rank() int {
-	switch s {
-	case SeverityCritical:
-		return 5
-	case SeverityHigh:
-		return 4
-	case SeverityMedium:
-		return 3
-	case SeverityLow:
-		return 2
-	case SeverityInfo:
-		return 1
-	}
-	return 0
-}
-
-// Finding is one security-posture observation. Detail carries counts and
-// settings only, never secrets, tokens or user identifiers.
-type Finding struct {
-	ID          string   `json:"id"`
-	Severity    Severity `json:"severity"`
-	Title       string   `json:"title"`
-	Detail      string   `json:"detail"`
-	Remediation string   `json:"remediation"`
-	DocsAnchor  string   `json:"docsAnchor"`
-}
+// Finding is one security-posture observation.
+type Finding = doctor.Finding
 
 // Report is the result of TheAuth.Doctor.
-type Report struct {
-	GeneratedAt time.Time        `json:"generatedAt"`
-	Summary     map[Severity]int `json:"summary"`
-	Findings    []Finding        `json:"findings"`
-}
+type Report = doctor.Report
 
-// MaxSeverity returns the highest severity present, or "" for a clean report.
-func (r Report) MaxSeverity() Severity {
-	var max Severity
-	for _, f := range r.Findings {
-		if f.Severity.Rank() > max.Rank() {
-			max = f.Severity
-		}
-	}
-	return max
-}
+// Doctor finding IDs. They are stable and appear in docs/SECURITY-DOCTOR.md.
+const (
+	DoctorSignupOpen        = doctor.DoctorSignupOpen
+	DoctorBootstrapOff      = doctor.DoctorBootstrapOff
+	DoctorTrustedProxies    = doctor.DoctorTrustedProxies
+	DoctorSecureCookie      = doctor.DoctorSecureCookie
+	DoctorCSRFDisabled      = doctor.DoctorCSRFDisabled
+	DoctorThrottleDisabled  = doctor.DoctorThrottleDisabled
+	DoctorThrottleLax       = doctor.DoctorThrottleLax
+	DoctorPasswordMinLength = doctor.DoctorPasswordMinLength
+	DoctorPasswordNoBreach  = doctor.DoctorPasswordNoBreach
+	DoctorAdminNoTOTP       = doctor.DoctorAdminNoTOTP
+	DoctorNoSecondFactor    = doctor.DoctorNoSecondFactor
+	DoctorSessionTTLLong    = doctor.DoctorSessionTTLLong
+	DoctorSessionNoIdle     = doctor.DoctorSessionNoIdle
+	DoctorTokenNoExpiry     = doctor.DoctorTokenNoExpiry
+	DoctorTokenLongExpiry   = doctor.DoctorTokenLongExpiry
+	DoctorTokenRoot         = doctor.DoctorTokenRoot
+	DoctorAgentTokenLong    = doctor.DoctorAgentTokenLong
+	DoctorTokensUnpruned    = doctor.DoctorTokensUnpruned
+	DoctorSessionsUnpruned  = doctor.DoctorSessionsUnpruned
+	DoctorEncryptionKey     = doctor.DoctorEncryptionKey
+	DoctorAuditSink         = doctor.DoctorAuditSink
+	DoctorWebAuthnRPID      = doctor.DoctorWebAuthnRPID
+	DoctorRedirectAllowList = doctor.DoctorRedirectAllowList
+)
+
+// DoctorFindingIDs lists every finding ID a check can emit.
+func DoctorFindingIDs() []string { return doctor.DoctorFindingIDs() }
 
 // DoctorAdminLister is the optional storage capability that lets Doctor check
 // second-factor coverage for administrators.
@@ -82,92 +73,16 @@ type DoctorSessionCounter interface {
 	CountExpiredSessions(ctx context.Context, before time.Time) (int, error)
 }
 
-const unknownCount = -1
-
-// doctorInput is the pure-data view of config and storage that checks read.
-// Counts of unknownCount mean the storage capability is unavailable.
-type doctorInput struct {
-	Now time.Time
-
-	BaseURL      string
-	SecureCookie bool
-
-	RateLimitPerIP, RateLimitPerEmail int
-	TrustedProxies                    int
-	CSRFDisabled                      bool
-
-	ThrottleDisabled bool
-	GraceFailures    int
-	UserMaxFailures  int
-	MFAMaxFailures   int
-
-	PasswordMinLength int
-	HasBreachChecker  bool
-
-	BootstrapOn       bool
-	BootstrapOpen     bool
-	UserCount         int
-	OAuthSignupPolicy OAuthSignupPolicy
-	OAuthDomains      int
-	HasProviders      bool
-	HasSAML           bool
-	OAuthReturnTo     int
-
-	TOTPEnabled     bool
-	WebAuthnEnabled bool
-	AdminCount      int
-	AdminsWithoutMF int
-
-	SessionTTL  time.Duration
-	IdleTimeout time.Duration
-
-	TokensKnown        bool
-	TokensNoExpiry     int
-	TokensBeyondYear   int
-	TokensRoot         int
-	AgentTokensLong    int
-	TokensExpired      int
-	SessionsExpired    int
-	EncryptionKeyLen   int
-	EncryptionNeeded   bool
-	AuditConfigured    bool
-	AuditSinkCount     int
-	WebAuthnRPID       string
-	WebAuthnOrigins    []string
-	WebAuthnConfigured bool
-}
-
 // Doctor inspects the live Config and storage and reports security-posture
 // findings, most serious first. It never mutates state and never includes
 // secrets in the report.
 func (a *TheAuth) Doctor(ctx context.Context) Report {
-	return buildReport(a.gatherDoctorInput(ctx, time.Now().UTC()))
+	return doctor.Build(a.gatherDoctorInput(ctx, time.Now().UTC()))
 }
 
-func buildReport(in doctorInput) Report {
-	var out []Finding
-	for _, c := range doctorChecks {
-		out = append(out, c(in)...)
-	}
-	sort.SliceStable(out, func(i, j int) bool {
-		if ri, rj := out[i].Severity.Rank(), out[j].Severity.Rank(); ri != rj {
-			return ri > rj
-		}
-		return out[i].ID < out[j].ID
-	})
-	sum := map[Severity]int{SeverityCritical: 0, SeverityHigh: 0, SeverityMedium: 0, SeverityLow: 0, SeverityInfo: 0}
-	for _, f := range out {
-		sum[f.Severity]++
-	}
-	if out == nil {
-		out = []Finding{}
-	}
-	return Report{GeneratedAt: in.Now, Summary: sum, Findings: out}
-}
-
-func (a *TheAuth) gatherDoctorInput(ctx context.Context, now time.Time) doctorInput {
+func (a *TheAuth) gatherDoctorInput(ctx context.Context, now time.Time) doctor.Input {
 	cfg := a.doctorCfg
-	in := doctorInput{
+	in := doctor.Input{
 		Now:               now,
 		BaseURL:           cfg.BaseURL,
 		SecureCookie:      cfg.SecureCookie,
@@ -178,16 +93,16 @@ func (a *TheAuth) gatherDoctorInput(ctx context.Context, now time.Time) doctorIn
 		PasswordMinLength: cfg.PasswordPolicy.MinLength,
 		HasBreachChecker:  cfg.PasswordPolicy.BreachChecker != nil,
 		BootstrapOn:       cfg.Bootstrap != nil,
-		UserCount:         unknownCount,
+		UserCount:         doctor.UnknownCount,
 		HasProviders:      len(cfg.Providers) > 0,
 		HasSAML:           cfg.SAML != nil,
 		TOTPEnabled:       cfg.TOTP != nil,
 		WebAuthnEnabled:   cfg.WebAuthn != nil,
-		AdminCount:        unknownCount,
-		AdminsWithoutMF:   unknownCount,
+		AdminCount:        doctor.UnknownCount,
+		AdminsWithoutMF:   doctor.UnknownCount,
 		SessionTTL:        cfg.SessionTTL,
 		IdleTimeout:       cfg.SessionIdleTimeout,
-		SessionsExpired:   unknownCount,
+		SessionsExpired:   doctor.UnknownCount,
 		EncryptionKeyLen:  len(cfg.EncryptionKey),
 		EncryptionNeeded:  len(cfg.Providers) > 0 || cfg.TOTP != nil,
 		AuditConfigured:   cfg.Audit != nil,
@@ -214,10 +129,10 @@ func (a *TheAuth) gatherDoctorInput(ctx context.Context, now time.Time) doctorIn
 			in.MFAMaxFailures = t.MFAMaxFailures
 		}
 	}
-	in.OAuthSignupPolicy = OAuthSignupOpen
+	in.OAuthSignupOpen = true
 	if o := cfg.OAuth; o != nil {
 		if o.Signup != "" {
-			in.OAuthSignupPolicy = o.Signup
+			in.OAuthSignupOpen = o.Signup == OAuthSignupOpen
 		}
 		in.OAuthDomains = len(o.AllowedEmailDomains)
 		in.OAuthReturnTo = len(o.AllowedReturnTo)
@@ -231,7 +146,7 @@ func (a *TheAuth) gatherDoctorInput(ctx context.Context, now time.Time) doctorIn
 	return in
 }
 
-func (a *TheAuth) gatherStorageFacts(ctx context.Context, in *doctorInput) {
+func (a *TheAuth) gatherStorageFacts(ctx context.Context, in *doctor.Input) {
 	raw := a.storageRaw
 	if c, ok := raw.(UserCountStorage); ok {
 		if n, err := c.CountUsers(ctx); err == nil {
@@ -250,7 +165,7 @@ func (a *TheAuth) gatherStorageFacts(ctx context.Context, in *doctorInput) {
 	if a.apiTokens != nil {
 		if toks, err := a.apiTokens.ListAll(ctx); err == nil {
 			in.TokensKnown = true
-			tallyTokens(in, toks)
+			doctor.TallyTokens(in, toks)
 		} else {
 			slog.Warn("theauth: doctor: list api tokens failed", "err", err.Error())
 		}
@@ -260,7 +175,7 @@ func (a *TheAuth) gatherStorageFacts(ctx context.Context, in *doctorInput) {
 	}
 }
 
-func (a *TheAuth) tallyAdminMFA(ctx context.Context, in *doctorInput, l DoctorAdminLister) {
+func (a *TheAuth) tallyAdminMFA(ctx context.Context, in *doctor.Input, l DoctorAdminLister) {
 	ts, ok := a.storageRaw.(TOTPStorage)
 	if !ok {
 		return
@@ -280,52 +195,14 @@ func (a *TheAuth) tallyAdminMFA(ctx context.Context, in *doctorInput, l DoctorAd
 	}
 }
 
-func tallyTokens(in *doctorInput, toks []APIToken) {
-	for _, t := range toks {
-		if t.RevokedAt != nil {
-			continue
-		}
-		expired := t.ExpiresAt != nil && !in.Now.Before(*t.ExpiresAt)
-		if expired {
-			in.TokensExpired++
-			continue
-		}
-		if t.ExpiresAt == nil {
-			in.TokensNoExpiry++
-		} else if t.ExpiresAt.Sub(t.CreatedAt) > 365*24*time.Hour {
-			in.TokensBeyondYear++
-		}
-		if t.Kind == APITokenKindAgent && (t.ExpiresAt == nil || t.ExpiresAt.Sub(t.CreatedAt) > 24*time.Hour) {
-			in.AgentTokensLong++
-		}
-		for _, ab := range t.Abilities {
-			if ab == AbilityRoot {
-				in.TokensRoot++
-				break
-			}
-		}
-	}
+// mountDoctor serves GET /auth/admin/doctor for callers holding the root
+// ability, via session or API bearer token.
+func (a *TheAuth) mountDoctor(r chi.Router, ipLimit func(http.Handler) http.Handler) {
+	r.With(ipLimit, a.RequireAbility(AbilityRoot)).Get("/admin/doctor", a.handleDoctor)
 }
 
-func baseHost(baseURL string) (host string, https bool) {
-	u, err := url.Parse(baseURL)
-	if err != nil {
-		return "", false
-	}
-	return strings.ToLower(u.Hostname()), strings.EqualFold(u.Scheme, "https")
-}
-
-func isLocalHost(h string) bool {
-	return h == "localhost" || h == "::1" || strings.HasSuffix(h, ".localhost") || strings.HasPrefix(h, "127.")
-}
-
-func fnd(id string, sev Severity, title, detail, fix string) Finding {
-	return Finding{ID: id, Severity: sev, Title: title, Detail: detail, Remediation: fix, DocsAnchor: "security-doctor.md#" + strings.ReplaceAll(strings.ToLower(id), ".", "-")}
-}
-
-func plural(n int, one string) string {
-	if n == 1 {
-		return fmt.Sprintf("%d %s", n, one)
-	}
-	return fmt.Sprintf("%d %ss", n, one)
+func (a *TheAuth) handleDoctor(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", "no-store")
+	_ = json.NewEncoder(w).Encode(a.Doctor(r.Context()))
 }
