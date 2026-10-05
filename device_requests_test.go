@@ -6,6 +6,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/glincker/theauth-go"
 )
 
 type pendingRow struct {
@@ -49,7 +51,7 @@ func TestDevicePendingList(t *testing.T) {
 			t.Fatalf("redeem: %d %v", status, out)
 		}
 
-		code, body, rows := e.listRequests("bob")
+		code, body, rows := e.listRequests("admin")
 		if code != 200 || len(rows) != 1 {
 			t.Fatalf("list: %d rows=%d body=%s", code, len(rows), body)
 		}
@@ -67,7 +69,7 @@ func TestDevicePendingList(t *testing.T) {
 		}
 
 		e.advance(11 * time.Minute)
-		if _, _, rows := e.listRequests("bob"); len(rows) != 0 {
+		if _, _, rows := e.listRequests("admin"); len(rows) != 0 {
 			t.Fatalf("expired request still listed: %+v", rows)
 		}
 	})
@@ -99,7 +101,7 @@ func TestDevicePendingList(t *testing.T) {
 }
 
 func TestDeviceApproveByIDMatchesUserCode(t *testing.T) {
-	e := newTokenEnv(t, nil)
+	e := newTokenEnv(t, func(c *theauth.APITokensConfig) { c.DeviceRequestsAnySignedInUser = true })
 	e.addUser("admin", "root")
 	e.addUser("bob", "read")
 
@@ -191,5 +193,71 @@ func TestDeviceConcurrentApproveDenyOneWins(t *testing.T) {
 		if approvedWon && status != 200 || !approvedWon && out["error"] != "access_denied" {
 			t.Fatalf("round %d: winner %v but poll gave %d %v", round, codes, status, out)
 		}
+	}
+}
+
+func TestDeviceRequestsAccessControl(t *testing.T) {
+	type routeFn func(id string) (method, path string)
+	routes := map[string]routeFn{
+		"list":    func(string) (string, string) { return "GET", "/auth/device/requests" },
+		"approve": func(id string) (string, string) { return "POST", "/auth/device/requests/" + id + "/approve" },
+		"deny":    func(id string) (string, string) { return "POST", "/auth/device/requests/" + id + "/deny" },
+	}
+	cases := []struct {
+		name   string
+		mutate func(*theauth.APITokensConfig)
+		who    string
+		want   map[string]int
+	}{
+		{"default non-privileged", nil, "bob", map[string]int{"list": 403, "approve": 403, "deny": 403}},
+		{"default root", nil, "admin", map[string]int{"list": 200, "approve": 204, "deny": 204}},
+		{"configured ability holder", func(c *theauth.APITokensConfig) { c.DeviceRequestsAbility = "devices:review" }, "carol", map[string]int{"list": 200, "approve": 204, "deny": 204}},
+		{"configured ability non-holder", func(c *theauth.APITokensConfig) { c.DeviceRequestsAbility = "devices:review" }, "bob", map[string]int{"list": 403, "approve": 403, "deny": 403}},
+		{"opt-in any signed-in user", func(c *theauth.APITokensConfig) { c.DeviceRequestsAnySignedInUser = true }, "bob", map[string]int{"list": 200, "approve": 204, "deny": 204}},
+	}
+	for _, tc := range cases {
+		for name, route := range routes {
+			t.Run(tc.name+"/"+name, func(t *testing.T) {
+				e := newTokenEnv(t, tc.mutate)
+				e.addUser("admin", "root")
+				e.addUser("bob", "read")
+				e.addUser("carol", "devices:review", "read")
+				e.deviceStart("read")
+				_, _, rows := e.listRequests("admin")
+				if len(rows) != 1 {
+					t.Fatalf("setup: %d rows", len(rows))
+				}
+				method, path := route(rows[0].ID)
+				code, body := e.rawDo(method, path, e.cookies[tc.who], "")
+				if code != tc.want[name] {
+					t.Fatalf("%s: %d, want %d (%s)", name, code, tc.want[name], body)
+				}
+				if code == 403 && !strings.Contains(body, "auth.forbidden") {
+					t.Fatalf("403 body lacks auth.forbidden: %s", body)
+				}
+				if code == 403 {
+					if _, _, rows := e.listRequests("admin"); len(rows) != 1 {
+						t.Fatalf("forbidden call changed state: %+v", rows)
+					}
+				}
+			})
+		}
+	}
+}
+
+func TestDeviceRequestsUseCurrentAbilities(t *testing.T) {
+	e := newTokenEnv(t, func(c *theauth.APITokensConfig) { c.DeviceRequestsAbility = "devices:review" })
+	u := e.addUser("carol", "devices:review", "read")
+	e.deviceStart("read")
+	code, _, rows := e.listRequests("carol")
+	if code != 200 || len(rows) != 1 {
+		t.Fatalf("before demotion: %d %+v", code, rows)
+	}
+	e.setAbilities(u, []string{"read"})
+	if code, body := e.rawDo("GET", "/auth/device/requests", e.cookies["carol"], ""); code != 403 {
+		t.Fatalf("after demotion list: %d %s", code, body)
+	}
+	if code, _ := e.rawDo("POST", "/auth/device/requests/"+rows[0].ID+"/approve", e.cookies["carol"], ""); code != 403 {
+		t.Fatalf("after demotion approve: %d", code)
 	}
 }

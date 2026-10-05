@@ -14,6 +14,10 @@ adheres to [Semantic Versioning](https://semver.org/) from v1.0 forward.
   user code route. New optional `DeviceCodeLister` storage extension for memory,
   SQLite, Postgres and MySQL, plus `ListDeviceRequests` and
   `DecideDeviceRequestByID`.
+  These routes are restricted by default: the session must hold
+  `APITokensConfig.DeviceRequestsAbility` (empty means root) or the host sets
+  `DeviceRequestsAnySignedInUser`. Others get 403 `auth.forbidden`. The by-code
+  route is unchanged.
 
 - **Security doctor.** `(*TheAuth).Doctor` reports posture findings (open signup,
   bootstrap gate, proxies, cookies, CSRF, throttle, password and session policy,

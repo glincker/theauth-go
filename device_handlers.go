@@ -21,9 +21,9 @@ func (a *TheAuth) mountDevice(r chi.Router, ipLimit func(http.Handler) http.Hand
 		r.With(ipLimit).Post("/code", a.handleDeviceCode)
 		r.With(pollLimit).Post("/token", a.handleDeviceToken)
 		r.With(a.RequireAuth(), ipLimit).Post("/approve", a.handleDeviceApprove)
-		r.With(a.RequireAuth(), ipLimit).Get("/requests", a.handleDeviceRequests)
-		r.With(a.RequireAuth(), ipLimit).Post("/requests/{id}/approve", a.handleDeviceRequestDecide(true))
-		r.With(a.RequireAuth(), ipLimit).Post("/requests/{id}/deny", a.handleDeviceRequestDecide(false))
+		r.With(a.RequireAuth(), a.requireDeviceReviewer(), ipLimit).Get("/requests", a.handleDeviceRequests)
+		r.With(a.RequireAuth(), a.requireDeviceReviewer(), ipLimit).Post("/requests/{id}/approve", a.handleDeviceRequestDecide(true))
+		r.With(a.RequireAuth(), a.requireDeviceReviewer(), ipLimit).Post("/requests/{id}/deny", a.handleDeviceRequestDecide(false))
 	})
 }
 
@@ -238,5 +238,36 @@ func (a *TheAuth) handleDeviceRequestDecide(approve bool) http.HandlerFunc {
 			return
 		}
 		w.WriteHeader(http.StatusNoContent)
+	}
+}
+
+func (a *TheAuth) requireDeviceReviewer() func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if a.apiTokens == nil || a.apiTokens.cfg.DeviceRequestsAnySignedInUser {
+				next.ServeHTTP(w, r)
+				return
+			}
+			user, ok := UserFromContext(r.Context())
+			if !ok {
+				writeUnauthenticated(w, "auth.unauthenticated", "Missing or invalid session")
+				return
+			}
+			held, err := a.apiTokens.userAbilities(r.Context(), user)
+			if err != nil {
+				slog.Error("theauth: resolve device reviewer abilities failed", "err", err.Error())
+				writeProblemJSON(w, http.StatusInternalServerError, "auth.internal_error", "Authentication failed", "")
+				return
+			}
+			need := a.apiTokens.cfg.DeviceRequestsAbility
+			if need == "" {
+				need = AbilityRoot
+			}
+			if !holdsAbility(held, need) {
+				writeProblemJSON(w, http.StatusForbidden, "auth.forbidden", "Missing required ability: "+need, "")
+				return
+			}
+			next.ServeHTTP(w, r)
+		})
 	}
 }
