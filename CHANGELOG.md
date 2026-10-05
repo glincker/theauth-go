@@ -8,6 +8,14 @@ adheres to [Semantic Versioning](https://semver.org/) from v1.0 forward.
 
 ### Added
 
+- **`policy` package.** Dependency-free JSON policy engine (allow/deny
+  statements, action and resource globs with `{var}` substitution, equality,
+  in-list, CIDR and time-window conditions), explicit-deny-wins and
+  default-deny evaluation with an auditable `Decision`, `RequirePolicy`
+  middleware (403 `policy.denied`, `policy.decision` audit event), optional
+  `policy.Storage` capability with a memory store and `storagetest.RunPolicy`,
+  and token permission boundaries that only narrow. New
+  `TheAuth.AuthenticatePrincipal`. See the Policy Engine guide.
 - **Token self-service routes.** `GET /auth/tokens/current` describes the
   presented API bearer token and `DELETE /auth/tokens/current` revokes it, so
   `clientauth` `Whoami` and `Logout` work against a real server. Bearer-only,
