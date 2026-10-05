@@ -10,7 +10,7 @@ import (
 	"github.com/glincker/theauth-go/storage"
 )
 
-func testPasswords(t *testing.T, store theauth.Storage) {
+func testPasswords(t *testing.T, store PasswordSuiteStorage) {
 	t.Helper()
 	ctx := context.Background()
 

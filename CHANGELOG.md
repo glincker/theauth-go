@@ -27,6 +27,19 @@ adheres to [Semantic Versioning](https://semver.org/) from v1.0 forward.
 
 ### Added
 
+- **Storage capability interfaces and `Config.CoreStorage`.** `Storage` is now
+  the embedding of small capability interfaces (`UserStorage`,
+  `SessionStorage`, `MagicLinkStorage`, `PasswordStorage`,
+  `OAuthAccountStorage`, `WebAuthnStorage`, `TOTPStorage`,
+  `OrganizationStorage`, `SAMLStorage`, `SCIMStorage`, `RBACStorage`,
+  `AuditStorage`) with an identical method set, so existing adapters and
+  callers compile unchanged. `Config.CoreStorage` accepts an adapter that
+  implements only users, sessions, magic links and passwords; `New` returns
+  the new `ErrStorageMissingCapability`, naming the feature and capability,
+  when an enabled feature needs more. `storagetest` gains `RunCore`,
+  `RunWebAuthn`, `RunTOTP`, `RunAudit`, `RunRBAC` and `RunOAuthServer`;
+  `storagetest.Run` still runs everything.
+
 - **`Storage.UpdateWebAuthnBackupFlags`.** New storage method backing the
   login-time reconciliation write for legacy WebAuthn credentials. Implemented
   across the Postgres, MySQL, and in-memory backends and covered by the shared

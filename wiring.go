@@ -90,8 +90,8 @@ func applyConfigDefaults(cfg *Config) {
 // defaults. Returns the pre-parsed SAML keypair (non-nil only when
 // cfg.SAML != nil), the parsed provider map, and the pre-hashed DCR tokens.
 func validateConfig(cfg *Config) (providers map[string]Provider, sp samlParsed, dcrTokenHashes [][32]byte, err error) {
-	if cfg.Storage == nil {
-		return nil, samlParsed{}, nil, errors.New("theauth: Config.Storage is required")
+	if err := selectStorage(cfg); err != nil {
+		return nil, samlParsed{}, nil, err
 	}
 	if cfg.BaseURL == "" {
 		return nil, samlParsed{}, nil, errors.New("theauth: Config.BaseURL is required")
@@ -170,7 +170,7 @@ func validateConfig(cfg *Config) (providers map[string]Provider, sp samlParsed, 
 		if err := validateASConfig(cfg.AuthorizationServer, cfg.EncryptionKey); err != nil {
 			return nil, samlParsed{}, nil, err
 		}
-		if _, ok := cfg.Storage.(OAuthServerStorage); !ok {
+		if _, ok := cfg.storageRaw.(OAuthServerStorage); !ok {
 			return nil, samlParsed{}, nil, ErrStorageMissingOAuthMethods
 		}
 	}
@@ -197,6 +197,10 @@ func validateConfig(cfg *Config) (providers map[string]Provider, sp samlParsed, 
 			}
 			dcrTokenHashes = append(dcrTokenHashes, sha256.Sum256([]byte(tok)))
 		}
+	}
+
+	if err := checkStorageCapabilities(cfg); err != nil {
+		return nil, samlParsed{}, nil, err
 	}
 
 	return providers, sp, dcrTokenHashes, nil
@@ -275,7 +279,7 @@ func wireServices(a *TheAuth, cfg Config, providers map[string]Provider, sp saml
 
 	// v2.0 authorization server + agent identity + delegation.
 	if cfg.AuthorizationServer != nil {
-		oss := cfg.Storage.(OAuthServerStorage)
+		oss := cfg.storageRaw.(OAuthServerStorage)
 		var policy *internalas.AgentPolicy
 		if cfg.AgentIdentity != nil {
 			policy = &internalas.AgentPolicy{
@@ -284,7 +288,7 @@ func wireServices(a *TheAuth, cfg Config, providers map[string]Provider, sp saml
 			}
 		}
 		var jwtBearerStore internalas.JWTBearerStorageAdapter
-		if jbs, ok := cfg.Storage.(JWTBearerStorage); ok {
+		if jbs, ok := cfg.storageRaw.(JWTBearerStorage); ok {
 			jwtBearerStore = jwtBearerStorageAdapter{jbs}
 		}
 		asCfg := asConfigFromRoot(cfg.AuthorizationServer)

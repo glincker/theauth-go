@@ -25,12 +25,18 @@ import (
 
 // Config holds the wiring for a TheAuth instance.
 //
-// Storage and BaseURL are required. Everything else has sensible defaults
+// BaseURL and exactly one of Storage or CoreStorage are required. Everything else has sensible defaults
 // applied by New: SessionTTL=24h, MagicLinkTTL=15m, CookieName="theauth_session",
 // EmailSender=email.Noop{}. SigningKey is reserved for future JWT signing (v0.2+);
 // v0.1 uses opaque tokens and leaves the field nil.
 type Config struct {
-	Storage      Storage
+	Storage Storage
+	// CoreStorage is the alternative to Storage for adapters that implement
+	// only the capabilities the enabled features need. It must cover users,
+	// sessions, magic links and passwords; New returns
+	// ErrStorageMissingCapability when an enabled feature needs more.
+	CoreStorage  CoreStorage
+	storageRaw   any
 	EmailSender  email.Sender
 	BaseURL      string
 	SigningKey   ed25519.PrivateKey
@@ -337,6 +343,9 @@ func New(cfg Config) (*TheAuth, error) {
 	providers, sp, dcrTokenHashes, err := validateConfig(&cfg)
 	if err != nil {
 		return nil, err
+	}
+	if cfg.CoreStorage != nil {
+		cfg.Storage = assembleStorage(cfg.CoreStorage)
 	}
 
 	permCatalog, permIndex, defaultSeeds, err := validateRBAC(cfg.RBAC)

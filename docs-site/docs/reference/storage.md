@@ -17,6 +17,24 @@ The base `Storage` interface is frozen at v1.0. Adding a method to it is a v2.0 
 All adapters expose `New(...)` constructors that return a `*Store` satisfying
 `theauth.Storage`.
 
+## Capability interfaces and `CoreStorage`
+
+`Storage` is the embedding of small capability interfaces, so an adapter can implement only what the enabled features need.
+
+| Interface | Needed when |
+|---|---|
+| `UserStorage`, `SessionStorage`, `MagicLinkStorage`, `PasswordStorage` | Always (together they are `CoreStorage`) |
+| `OAuthAccountStorage` | `Config.Providers` or `Config.AccountUX` |
+| `WebAuthnStorage` | `Config.WebAuthn` or `Config.AccountUX` |
+| `TOTPStorage` | `Config.TOTP` or `Config.AccountUX` |
+| `OrganizationStorage` | `Config.Organizations` |
+| `SAMLStorage` | `Config.SAML` |
+| `SCIMStorage` | `Config.SCIM` |
+| `RBACStorage` | `Config.RBAC` |
+| `AuditStorage` | `Config.Audit` |
+
+Set `Config.CoreStorage` instead of `Config.Storage` (exactly one of the two) to use a smaller adapter. `New` asserts each enabled feature's capability and returns `ErrStorageMissingCapability`, naming the feature and interface, when it is missing. Verify an adapter per capability with `storagetest.RunCore`, `RunWebAuthn`, `RunTOTP`, `RunAudit`, `RunRBAC` and `RunOAuthServer`; `storagetest.Run` runs them all.
+
 ## Extension interface: `OAuthServerStorage`
 
 When `Config.AuthorizationServer` is set, the storage adapter must also satisfy `OAuthServerStorage`. This interface adds methods for OAuth clients, authorization codes, refresh tokens, JWKS keys, agents, and delegation grants.

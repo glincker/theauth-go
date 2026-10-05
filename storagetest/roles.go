@@ -10,7 +10,7 @@ import (
 	"github.com/glincker/theauth-go/storage"
 )
 
-func testRoles(t *testing.T, store theauth.Storage) {
+func testRoles(t *testing.T, store RBACSuiteStorage) {
 	t.Helper()
 	ctx := context.Background()
 

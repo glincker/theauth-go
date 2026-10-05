@@ -10,7 +10,7 @@ import (
 	"github.com/glincker/theauth-go/storage"
 )
 
-func testWebAuthnCredentials(t *testing.T, store theauth.Storage) {
+func testWebAuthnCredentials(t *testing.T, store WebAuthnSuiteStorage) {
 	t.Helper()
 	ctx := context.Background()
 

@@ -235,3 +235,23 @@ func TestMemoryExpiredMagicLinkNotConsumed(t *testing.T) {
 func TestMemoryStoreContract(t *testing.T) {
 	storagetest.Run(t, New())
 }
+
+type coreOnlyStore struct{ theauth.CoreStorage }
+
+// TestMemoryCapabilityContracts runs each per-capability entry point on its own fresh store.
+func TestMemoryCapabilityContracts(t *testing.T) {
+	tests := []struct {
+		name string
+		run  func(*testing.T)
+	}{
+		{"core", func(t *testing.T) { storagetest.RunCore(t, coreOnlyStore{New()}) }},
+		{"webauthn", func(t *testing.T) { storagetest.RunWebAuthn(t, New()) }},
+		{"totp", func(t *testing.T) { storagetest.RunTOTP(t, New()) }},
+		{"audit", func(t *testing.T) { storagetest.RunAudit(t, New()) }},
+		{"rbac", func(t *testing.T) { storagetest.RunRBAC(t, New()) }},
+		{"oauth server", func(t *testing.T) { storagetest.RunOAuthServer(t, New()) }},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, tc.run)
+	}
+}

@@ -204,6 +204,11 @@ separate optional interface (for example `StorageWithSessionList`) and the
 library uses a type assertion to detect support at runtime. The base
 `Storage` interface only grows in a v2.0 release.
 
+`Storage` is the embedding of the capability interfaces declared in
+`storage_caps.go`. Its method set is frozen by a test; a new method goes
+into the capability it belongs to only in a major release, otherwise behind
+a new optional interface.
+
 ## Special rule: database migrations
 
 Postgres migrations under `storage/postgres/migrations/` are append-only.
