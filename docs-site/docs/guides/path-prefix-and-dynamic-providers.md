@@ -48,6 +48,48 @@ clientauth.DeviceLogin(ctx, clientauth.DeviceOptions{
 })
 ```
 
+## Custom OAuth redirect URI
+
+By default the redirect URI sent to a provider is
+`BaseURL + prefix + /providers/{name}/callback`. An app migrating from another
+auth stack often has different callback URLs already registered at Google,
+GitHub, Microsoft or an OIDC issuer. `OAuthConfig.RedirectURI` overrides the
+value without touching the registered URLs.
+
+```go
+a, err := theauth.New(theauth.Config{
+    // ...
+    OAuth: &theauth.OAuthConfig{
+        RedirectURIAllowedHosts: []string{"app.example.com"},
+        RedirectURI: func(r *http.Request, provider string) (string, error) {
+            return "https://app.example.com/api/v1/auth/oauth/" + provider + "/callback", nil
+        },
+    },
+})
+```
+
+The hook takes the request so an app can derive the URI per request, and runs
+once at start. The result is stored with the flow state and reused verbatim at
+code exchange, so concurrent flows never share a value. With the hook unset,
+behavior is unchanged.
+
+The result must be an absolute URL with no fragment or userinfo. `https` is
+required, except `http` on a loopback host or when
+`OAuthConfig.AllowInsecureRedirectURI` is set (development only). Any hook
+error or invalid value fails the start with a 500: no redirect, no state.
+
+!!! warning "Do not trust the Host header"
+    Building the URI from `r.Host` or `X-Forwarded-Host` lets a spoofed header
+    steer the authorization code to another host. Prefer a fixed URI, and set
+    `RedirectURIAllowedHosts` (matched case-insensitively against the host or
+    host:port) so any other host fails closed.
+
+If your app serves its own callback route at a different path, call
+`(*TheAuth).OAuthStart(r, provider, returnTo)` and
+`(*TheAuth).OAuthCallback(r, provider, code, state, binding)`. You set the
+binding cookie from `OAuthStartResult.Binding` and the session cookie from
+`OAuthCallbackResult.SessionToken`. The built-in routes keep working.
+
 ## Dynamic providers
 
 `Config.ProviderResolver` supplies providers that are not known at startup.

@@ -300,8 +300,8 @@ func (s oauthServiceAdapter) LookupProvider(ctx context.Context, name string) (b
 
 // Start delegates the /auth/providers/{name}/start flow to
 // *TheAuth.startOAuth.
-func (s oauthServiceAdapter) Start(ctx context.Context, providerName, returnTo string) (internaloauth.StartResult, error) {
-	return s.a.startOAuth(ctx, providerName, returnTo)
+func (s oauthServiceAdapter) Start(ctx context.Context, r *http.Request, providerName, returnTo string) (internaloauth.StartResult, error) {
+	return s.a.startOAuth(ctx, r, providerName, returnTo)
 }
 
 // Callback delegates the /auth/providers/{name}/callback flow to

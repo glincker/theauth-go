@@ -34,7 +34,7 @@ const oauthStateCookieTTL = 10 * time.Minute
 // CallbackOAuth wrappers) so this package does not import root.
 type Service interface {
 	HasProvider(name string) bool
-	Start(ctx context.Context, providerName, returnTo string) (oauth.StartResult, error)
+	Start(ctx context.Context, r *http.Request, providerName, returnTo string) (oauth.StartResult, error)
 	Callback(ctx context.Context, providerName, code, state, binding, userAgent, ip string) (oauth.CallbackResult, error)
 }
 
@@ -99,7 +99,7 @@ func (h *Handler) handleStart(w http.ResponseWriter, r *http.Request) {
 	if !h.providerOK(w, r, name) {
 		return
 	}
-	res, err := h.svc.Start(r.Context(), name, r.URL.Query().Get("return_to"))
+	res, err := h.svc.Start(r.Context(), r, name, r.URL.Query().Get("return_to"))
 	if err != nil {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return

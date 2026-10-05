@@ -2,6 +2,7 @@ package theauth
 
 import (
 	"context"
+	"net/http"
 	"time"
 
 	internalas "github.com/glincker/theauth-go/v2/internal/as"
@@ -807,6 +808,23 @@ type OAuthConfig struct {
 	// InviteCheck is required for OAuthSignupInvite. It receives the
 	// provider-verified, lower-cased email.
 	InviteCheck func(ctx context.Context, email string) (bool, error)
+	// RedirectURI, when set, builds the redirect_uri sent to the provider
+	// instead of BaseURL + prefix + "/providers/{name}/callback". Use it to
+	// keep callback URLs already registered at the provider. r is the
+	// request that began the flow. The value is stored with the state and
+	// reused verbatim at code exchange. It must be an absolute https URL
+	// (http only for loopback or with AllowInsecureRedirectURI) with no
+	// fragment or userinfo; any error fails the start. Deriving the host
+	// from an unvalidated Host or X-Forwarded-Host header is unsafe: set
+	// RedirectURIAllowedHosts. Experimental.
+	RedirectURI func(r *http.Request, provider string) (string, error)
+	// RedirectURIAllowedHosts, when non-empty, restricts the host (or
+	// host:port) RedirectURI may return; anything else fails closed.
+	// Experimental.
+	RedirectURIAllowedHosts []string
+	// AllowInsecureRedirectURI permits an http:// RedirectURI result on a
+	// non-loopback host. For development only. Experimental.
+	AllowInsecureRedirectURI bool
 }
 
 func oauthConfigFromRoot(c *OAuthConfig, prefix string) internaloauth.Config {
@@ -821,6 +839,10 @@ func oauthConfigFromRoot(c *OAuthConfig, prefix string) internaloauth.Config {
 		Signup:              string(c.Signup),
 		AllowedEmailDomains: append([]string(nil), c.AllowedEmailDomains...),
 		InviteCheck:         c.InviteCheck,
+
+		RedirectURI:              c.RedirectURI,
+		RedirectURIAllowedHosts:  append([]string(nil), c.RedirectURIAllowedHosts...),
+		AllowInsecureRedirectURI: c.AllowInsecureRedirectURI,
 	}
 }
 
