@@ -23,7 +23,7 @@ func (s *Store) InsertAuditEvents(ctx context.Context, events []theauth.AuditEve
 	if len(events) == 0 {
 		return nil
 	}
-	return s.inTx(ctx, "insert audit events", func(tx *sql.Tx) error {
+	return s.inTx(ctx, "insert audit events", func(tx DBTX) error {
 		stmt, err := tx.PrepareContext(ctx, s.q(`
 INSERT INTO theauth_audit_events
 	(id, organization_id, actor_user_id, actor_session_id, action, target_type, target_id,

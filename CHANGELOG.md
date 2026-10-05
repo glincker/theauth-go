@@ -23,6 +23,9 @@ adheres to [Semantic Versioning](https://semver.org/) from v1.0 forward.
 
 ### Added
 
+- **`sqlite.NewTx` binds the SQLite Store to a caller's `*sql.Tx`** (SAVEPOINTs, no nested transactions), plus `ImportUserTo`, `ImportAPITokenTo`, `ImportTOTPSecretTo` and `ImportWebAuthnCredentialTo` (and `TheAuth` method forms) for one-transaction backfills.
+- Plaintext TOTP secrets are encrypted on import like enrollment; recovery codes must be regenerated. See the SQLite guide.
+
 - **Legacy API token acceptance.** `APITokensConfig.AcceptUnprefixed` accepts
   unprefixed bearer tokens by SHA-256 hash, and `ImportAPIToken` inserts an
   existing token record by hash without seeing the secret.

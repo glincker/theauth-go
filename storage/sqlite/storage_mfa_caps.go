@@ -2,7 +2,6 @@ package sqlite
 
 import (
 	"context"
-	"database/sql"
 
 	"github.com/glincker/theauth-go/v2"
 )
@@ -35,7 +34,7 @@ func (s *Store) CountUnusedRecoveryCodes(ctx context.Context, userID theauth.ULI
 
 // ReplaceRecoveryCodes atomically swaps every recovery code of userID for codes.
 func (s *Store) ReplaceRecoveryCodes(ctx context.Context, userID theauth.ULID, codes []theauth.RecoveryCode) error {
-	return s.inTx(ctx, "replace recovery codes", func(tx *sql.Tx) error {
+	return s.inTx(ctx, "replace recovery codes", func(tx DBTX) error {
 		if _, err := tx.ExecContext(ctx,
 			s.q(`DELETE FROM theauth_totp_recovery_codes WHERE user_id = ?`), idStr(userID)); err != nil {
 			return err

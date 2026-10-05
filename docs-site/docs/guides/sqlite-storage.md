@@ -73,6 +73,58 @@ go func() {
 
 It deletes sessions, magic links and password reset tokens whose expiry has passed, in one transaction, and reports the counts.
 
+## Importing existing data in one transaction
+
+`sqlite.NewTx(tx)` binds a Store to a transaction you own, so a backfill of legacy users, API tokens, passkeys and TOTP secrets commits or rolls back as one unit. This works even when your `*sql.DB` has `SetMaxOpenConns(1)`, because the Store never asks the pool for a second connection. Methods that need several statements use SAVEPOINTs inside your transaction instead of starting their own.
+
+```go
+if err := sqlite.Migrate(ctx, db); err != nil { // before the transaction
+    return err
+}
+tx, err := db.BeginTx(ctx, nil)
+if err != nil {
+    return err
+}
+defer tx.Rollback() // no-op after Commit
+
+st, err := sqlite.NewTx(tx)
+if err != nil {
+    return err
+}
+u, err := theauth.ImportUserTo(ctx, st, theauth.ImportedUser{
+    Email: "ada@example.com", PasswordHash: legacyArgon2idHash, CreatedAt: legacyCreated,
+})
+if err != nil && !errors.Is(err, theauth.ErrImportDuplicate) {
+    return err
+}
+_, err = theauth.ImportAPITokenTo(ctx, st, theauth.ImportedToken{
+    OwnerID: u.ID, Name: "ci", Abilities: []string{"read"}, TokenHash: sha256OfRawToken[:],
+})
+if err == nil {
+    err = theauth.ImportTOTPSecretTo(ctx, st, encryptionKey, theauth.ImportedTOTP{
+        UserID: u.ID, Secret: "JBSWY3DPEHPK3PXP",
+    })
+}
+if err == nil {
+    _, err = theauth.ImportWebAuthnCredentialTo(ctx, st, theauth.ImportedWebAuthnCredential{
+        UserID: u.ID, CredentialID: credID, PublicKey: cosePub, SignCount: 7, Transports: []string{"internal"},
+    })
+}
+if err != nil {
+    return err
+}
+return tx.Commit()
+```
+
+Rules for the pattern:
+
+- Build a short-lived Store with `NewTx` and use the package-level `Import*To` helpers. Do not build a `TheAuth` on it: a `TheAuth` outlives the transaction. `(*TheAuth).ImportUser`, `ImportTOTPSecret`, `ImportWebAuthnCredential` and `ImportAPIToken` exist for the case where you import through a live instance.
+- `ImportTOTPSecretTo` takes the plaintext base32 secret and encrypts it with the same key as enrollment, so pass `Config.EncryptionKey`. The secret is never logged.
+- Recovery codes are not importable. Their hashes are salted by the library, so imported users must regenerate them.
+- Password hashes are stored verbatim. Bcrypt hashes verify only when `PasswordPolicy.AllowLegacyBcrypt` is set.
+- Every helper validates input and returns `ErrImportInvalid` (wrapped) for bad data and `ErrImportDuplicate` when the record exists, so a re-run can skip what is already imported.
+- `Migrate` takes a `*sql.DB` and cannot run inside a transaction. `SweepExpired` works on a transaction-bound Store but belongs on a normal Store after the commit. Stop using the Store once the transaction ends.
+
 ## Shared login throttle
 
 `store.ThrottleStore()` returns a `LoginThrottleStore` backed by the same database, so several processes share failure counters. It also implements `LoginThrottleCASStore`: the limiter re-reads and retries when another process changed an entry first, instead of overwriting it, so no failure is lost. Entries are not removed on read; call `ThrottleStore().SweepExpired(ctx, time.Now())` from the same ticker as `SweepExpired`.

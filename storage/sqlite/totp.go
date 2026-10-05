@@ -59,7 +59,7 @@ FROM theauth_totp_secrets WHERE user_id = ?`), idStr(userID)).Scan(&id, &enc, &c
 
 // DeleteTOTPSecret removes the user's secret and recovery codes.
 func (s *Store) DeleteTOTPSecret(ctx context.Context, userID theauth.ULID) error {
-	return s.inTx(ctx, "delete totp secret", func(tx *sql.Tx) error {
+	return s.inTx(ctx, "delete totp secret", func(tx DBTX) error {
 		if _, err := tx.ExecContext(ctx,
 			s.q(`DELETE FROM theauth_totp_recovery_codes WHERE user_id = ?`), idStr(userID)); err != nil {
 			return err
@@ -74,7 +74,7 @@ func (s *Store) MoveTOTPSecret(ctx context.Context, primaryID, secondaryID theau
 	if primaryID == secondaryID {
 		return nil
 	}
-	return s.inTx(ctx, "move totp secret", func(tx *sql.Tx) error {
+	return s.inTx(ctx, "move totp secret", func(tx DBTX) error {
 		if _, err := tx.ExecContext(ctx, s.q(`
 DELETE FROM theauth_totp_secrets WHERE user_id = ?
 AND EXISTS (SELECT 1 FROM theauth_totp_secrets WHERE user_id = ?)`),
@@ -92,7 +92,7 @@ func (s *Store) InsertRecoveryCodes(ctx context.Context, codes []theauth.Recover
 	if len(codes) == 0 {
 		return nil
 	}
-	return s.inTx(ctx, "insert recovery codes", func(tx *sql.Tx) error {
+	return s.inTx(ctx, "insert recovery codes", func(tx DBTX) error {
 		stmt, err := tx.PrepareContext(ctx, s.q(`
 INSERT INTO theauth_totp_recovery_codes (id, user_id, code_hash, created_at) VALUES (?, ?, ?, ?)`))
 		if err != nil {

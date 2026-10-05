@@ -2,7 +2,6 @@ package sqlite
 
 import (
 	"context"
-	"database/sql"
 	"time"
 )
 
@@ -20,7 +19,7 @@ type SweepResult struct {
 func (s *Store) SweepExpired(ctx context.Context, now time.Time) (SweepResult, error) {
 	var res SweepResult
 	cutoff := toMicro(now)
-	err := s.inTx(ctx, "sweep expired", func(tx *sql.Tx) error {
+	err := s.inTx(ctx, "sweep expired", func(tx DBTX) error {
 		targets := []struct {
 			table string
 			out   *int64
