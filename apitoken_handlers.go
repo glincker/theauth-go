@@ -12,14 +12,22 @@ import (
 	oulid "github.com/oklog/ulid/v2"
 )
 
-// mountAPITokens registers /auth/tokens. All routes need a full session: a
-// token cannot mint or revoke tokens, which blocks escalation chains.
+// mountAPITokens registers /auth/tokens. List, mint and revoke-by-id need a
+// full session: a token cannot mint or revoke tokens, which blocks escalation
+// chains. Only /tokens/current is bearer-only and touches the caller's own record.
 func (a *TheAuth) mountAPITokens(r chi.Router, ipLimit func(http.Handler) http.Handler) {
 	r.Route("/tokens", func(r chi.Router) {
-		r.Use(a.RequireAuth())
-		r.With(ipLimit).Post("/", a.handleTokenCreate)
-		r.Get("/", a.handleTokenList)
-		r.Delete("/{id}", a.handleTokenRevoke)
+		r.Group(func(r chi.Router) {
+			r.Use(ipLimit, a.requireBearerToken)
+			r.Get("/current", a.handleTokenCurrent)
+			r.Delete("/current", a.handleTokenCurrentRevoke)
+		})
+		r.Group(func(r chi.Router) {
+			r.Use(a.RequireAuth())
+			r.With(ipLimit).Post("/", a.handleTokenCreate)
+			r.Get("/", a.handleTokenList)
+			r.Delete("/{id}", a.handleTokenRevoke)
+		})
 	})
 }
 

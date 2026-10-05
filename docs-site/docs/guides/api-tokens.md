@@ -49,6 +49,8 @@ r.With(a.RequireAbility("deploy")).Post("/deploy", handler)
 | `POST /auth/tokens` | session | Mint `{name, abilities, expires_in}`. Cannot exceed the caller's abilities. Admins may add `service_account: true` and optional `owner_id`. |
 | `GET /auth/tokens` | session | List your tokens. Admins: `?all=true` or `?owner_id=`. |
 | `DELETE /auth/tokens/{id}` | session | Revoke your token. Admins may revoke any. Others get 404. |
+| `GET /auth/tokens/current` | bearer | Describe the presented token: id, name, kind, agentName, abilities as currently effective after owner clamping, ownerId, ownerKind, createdAt, expiresAt, lastUsedAt. Never the secret or hash. Needs no ability. Session cookie gets 403. |
+| `DELETE /auth/tokens/current` | bearer | Revoke the presented token (204), emit the token revoked audit event and the revocation bus event. The token is dead afterwards, so a repeat call gets 401. Needs no ability. Session cookie gets 403. |
 
 Token management is session only, so a token cannot mint or revoke tokens.
 

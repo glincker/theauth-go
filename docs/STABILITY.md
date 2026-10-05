@@ -389,6 +389,7 @@ New exported symbols, none changing existing signatures: `LoginThrottleConfig`,
 
 `Config.APITokens`, `APITokensConfig`, `DeviceConfig`, `APIToken`, `DeviceCode`,
 `Principal`, the `APITokenStorage` and `DeviceCodeStorage` capability
-interfaces, `RequireAbility`, and the `/auth/tokens` and `/auth/device/*`
+interfaces, `RequireAbility`, and the `/auth/tokens` (including the
+bearer-only `GET` and `DELETE /auth/tokens/current`) and `/auth/device/*`
 routes are additive and covered by the same SemVer guarantees. The `Storage`
 method set is unchanged.

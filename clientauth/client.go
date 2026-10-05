@@ -112,11 +112,16 @@ func sameOrigin(server string, req *http.Request) bool {
 
 // Identity describes the stored token as the server sees it.
 type Identity struct {
-	ID        string     `json:"id"`
-	OwnerID   string     `json:"ownerId"`
-	Name      string     `json:"name"`
-	Abilities []string   `json:"abilities"`
-	ExpiresAt *time.Time `json:"expiresAt"`
+	ID         string     `json:"id"`
+	OwnerID    string     `json:"ownerId"`
+	OwnerKind  string     `json:"ownerKind"`
+	Name       string     `json:"name"`
+	Kind       string     `json:"kind"`
+	AgentName  string     `json:"agentName"`
+	Abilities  []string   `json:"abilities"`
+	CreatedAt  time.Time  `json:"createdAt"`
+	ExpiresAt  *time.Time `json:"expiresAt"`
+	LastUsedAt *time.Time `json:"lastUsedAt"`
 }
 
 // Whoami asks the server which token and owner the stored credential maps to.
