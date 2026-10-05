@@ -595,7 +595,7 @@ var errHandleRejected = errors.New("theauth: user handle not accepted")
 // The returned handle is non-nil only for the foreign-handle path.
 func (s *Service) loginOwner(ctx context.Context, rawID, userHandle []byte) (models.ULID, *models.User, []byte, error) {
 	var uid models.ULID
-	var lookupErr error = errors.New("theauth: unexpected user handle length")
+	lookupErr := errors.New("theauth: unexpected user handle length")
 	if len(userHandle) == 16 {
 		copy(uid[:], userHandle)
 		u, err := s.storage.UserByID(ctx, uid)
