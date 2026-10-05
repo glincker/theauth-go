@@ -540,6 +540,34 @@ func TestResetPasswordAdmin(t *testing.T) {
 	_ = u
 }
 
+func TestResetPasswordAdminClearsLoginBackoffAcrossIPs(t *testing.T) {
+	a, _ := hardenedAuth(t, func(c *theauth.Config) {
+		c.LoginThrottle = &theauth.LoginThrottleConfig{GraceFailures: 1, BaseDelay: time.Hour, MaxDelay: time.Hour, UserMaxFailures: 1000}
+	})
+	ctx := context.Background()
+	if _, _, err := testutil.SignupWithPasswordForTest(a, ctx, "boff@h.com", validPassword); err != nil {
+		t.Fatal(err)
+	}
+	ips := []string{"1.1.1.1", "2.2.2.2"}
+	for _, ip := range ips {
+		for i := 0; i < 3; i++ {
+			_, _, _ = testutil.SigninWithPasswordForTest(a, ctx, "boff@h.com", "bad-bad-bad-bad-bad", "ua", ip)
+		}
+		_, _, err := testutil.SigninWithPasswordForTest(a, ctx, "boff@h.com", validPassword, "ua", ip)
+		if codeOf(t, err) != theauth.CodeRateLimited {
+			t.Fatalf("ip %s must be in backoff before reset: %v", ip, err)
+		}
+	}
+	if err := a.ResetPasswordAdmin(ctx, "boff@h.com", "brand-new-passphrase-1"); err != nil {
+		t.Fatal(err)
+	}
+	for _, ip := range ips {
+		if _, _, err := testutil.SigninWithPasswordForTest(a, ctx, "boff@h.com", "brand-new-passphrase-1", "ua", ip); err != nil {
+			t.Fatalf("ip %s still blocked after admin reset: %v", ip, err)
+		}
+	}
+}
+
 func TestPlainTextErrorsAreNowJSON(t *testing.T) {
 	a, _ := hardenedAuth(t, func(c *theauth.Config) {
 		c.WebAuthn = nil

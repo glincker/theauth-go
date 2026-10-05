@@ -191,3 +191,43 @@ func TestMemoryStoreCompareAndSwap(t *testing.T) {
 		}
 	}
 }
+
+type plainStore struct{ Store }
+
+func TestClearLoginBackoff(t *testing.T) {
+	ctx := context.Background()
+	cfg := Config{GraceFailures: 1, BaseDelay: time.Hour, MaxDelay: time.Hour, UserMaxFailures: 1000}
+	tests := []struct {
+		name      string
+		supported bool
+		wantFree  bool
+	}{
+		{"store with deleter clears every ip", true, true},
+		{"store without deleter is a no-op", false, false},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			l, _, st := newTest(cfg)
+			if !tc.supported {
+				l.store = plainStore{st}
+			}
+			for _, ip := range []string{"1.1.1.1", "2.2.2.2"} {
+				for i := 0; i < 3; i++ {
+					_ = l.RecordLoginFailure(ctx, ip, "a@b.c")
+				}
+			}
+			_ = l.RecordLoginFailure(ctx, "1.1.1.1", "other@b.c")
+			if err := l.ClearLoginBackoff(ctx, "a@b.c"); err != nil {
+				t.Fatal(err)
+			}
+			for _, ip := range []string{"1.1.1.1", "2.2.2.2"} {
+				if got := l.CheckLogin(ctx, ip, "a@b.c") == nil; got != tc.wantFree {
+					t.Fatalf("ip %s free=%v want %v", ip, got, tc.wantFree)
+				}
+			}
+			if _, ok, _ := st.Get(ctx, loginKey("1.1.1.1", "other@b.c")); !ok {
+				t.Fatal("other identifier entry must be kept")
+			}
+		})
+	}
+}

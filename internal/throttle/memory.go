@@ -2,6 +2,7 @@ package throttle
 
 import (
 	"context"
+	"strings"
 	"sync"
 	"time"
 )
@@ -65,6 +66,22 @@ func (m *MemoryStore) Delete(_ context.Context, key string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	delete(m.entries, key)
+	return nil
+}
+
+// DeleteLoginEntries removes every login backoff entry whose identifier is ident.
+func (m *MemoryStore) DeleteLoginEntries(_ context.Context, ident string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	for k := range m.entries {
+		rest, ok := strings.CutPrefix(k, LoginKeyPrefix)
+		if !ok {
+			continue
+		}
+		if i := strings.IndexByte(rest, '|'); i >= 0 && rest[i+1:] == ident {
+			delete(m.entries, k)
+		}
+	}
 	return nil
 }
 

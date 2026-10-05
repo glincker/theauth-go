@@ -258,14 +258,14 @@ func (s *Service) Signup(ctx context.Context, emailAddr, password string) (creat
 	// the user has a valid session and just lacks a clickable verify link
 	// until they request a fresh one.
 	if _, err := s.magicLinks.RequestForTest(ctx, emailAddr); err != nil {
-		slog.Warn("theauth: signup verification email failed", "email", emailAddr, "err", err.Error())
+		slog.Warn("theauth: signup verification email failed", "email_ref", emailnorm.LogRef(emailAddr), "err", err.Error())
 	}
 
 	s.auditEm.EmitAudit(ctx, "user.login", models.TargetRef{Type: "user", ID: user.ID.String()}, map[string]any{
 		"auth_method": "password",
 		"email_hash":  hashEmailForAudit(emailAddr),
 	})
-	slog.Info("theauth: password signup", "user_id", user.ID.String(), "email", emailAddr)
+	slog.Info("theauth: password signup", "user_id", user.ID.String())
 	return &user, sessToken, nil
 }
 
@@ -329,7 +329,7 @@ func (s *Service) Signin(ctx context.Context, emailAddr, password, userAgent, ip
 			if err != nil {
 				return "", nil, "", err
 			}
-			slog.Info("theauth: password signin (pending 2fa)", "user_id", user.ID.String(), "email", emailAddr)
+			slog.Info("theauth: password signin (pending 2fa)", "user_id", user.ID.String())
 			return pendTok, user, SigninStepTOTPRequired, nil
 		} else if err != nil && !errors.Is(err, models.ErrStorageNotFound) {
 			return "", nil, "", err
@@ -344,7 +344,7 @@ func (s *Service) Signin(ctx context.Context, emailAddr, password, userAgent, ip
 			"auth_method": "password",
 			"email_hash":  hashEmailForAudit(emailAddr),
 		})
-	slog.Info("theauth: password signin", "user_id", user.ID.String(), "email", emailAddr)
+	slog.Info("theauth: password signin", "user_id", user.ID.String())
 	return sessToken, user, SigninStepFull, nil
 }
 
@@ -364,7 +364,7 @@ func (s *Service) RequestResetForTest(ctx context.Context, emailAddr string) (st
 	user, err := s.storage.UserByEmail(ctx, emailAddr)
 	if errors.Is(err, models.ErrStorageNotFound) {
 		// Silent success; do not disclose whether the email is registered.
-		slog.Info("theauth: password reset requested for unknown email", "email", emailAddr)
+		slog.Info("theauth: password reset requested for unknown email", "email_ref", emailnorm.LogRef(emailAddr))
 		return "", nil
 	}
 	if err != nil {
@@ -391,12 +391,12 @@ func (s *Service) RequestResetForTest(ctx context.Context, emailAddr string) (st
 	body := fmt.Sprintf("Reset your password: %s\n\nExpires in %s.", link, PasswordResetTTL)
 	if err := s.sender.Send(ctx, emailAddr, "Reset your password", body); err != nil {
 		// Best effort; token already minted. Log and continue.
-		slog.Warn("theauth: password reset email send failed", "email", emailAddr, "err", err.Error())
+		slog.Warn("theauth: password reset email send failed", "email_ref", emailnorm.LogRef(emailAddr), "err", err.Error())
 	}
 	s.auditEm.EmitAudit(ctx, "password.reset.requested", models.TargetRef{Type: "user", ID: user.ID.String()}, map[string]any{
 		"email_hash": hashEmailForAudit(emailAddr),
 	})
-	slog.Info("theauth: password reset requested", "user_id", user.ID.String(), "email", emailAddr)
+	slog.Info("theauth: password reset requested", "user_id", user.ID.String())
 	return token, nil
 }
 

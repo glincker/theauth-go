@@ -207,3 +207,31 @@ func TestLegacyTokenImport(t *testing.T) {
 	t.Parallel()
 	storagetest.RunLegacyTokenImport(t, newStore(t))
 }
+
+func TestThrottleStoreDeleteLoginEntries(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	ts := newStore(t).ThrottleStore()
+	e := theauth.LoginThrottleEntry{Failures: 1, ExpiresAt: time.Now().Add(time.Hour).UTC().Truncate(time.Microsecond)}
+	keys := []string{"login:1.1.1.1|a_b@x.com", "login:2.2.2.2|a_b@x.com", "login:1.1.1.1|axb@x.com", "login:1.1.1.1|a%", "user:a_b@x.com"}
+	for _, k := range keys {
+		if err := ts.Set(ctx, k, e); err != nil {
+			t.Fatal(err)
+		}
+	}
+	del, ok := any(ts).(interface {
+		DeleteLoginEntries(context.Context, string) error
+	})
+	if !ok {
+		t.Fatal("ThrottleStore must implement DeleteLoginEntries")
+	}
+	if err := del.DeleteLoginEntries(ctx, "a_b@x.com"); err != nil {
+		t.Fatal(err)
+	}
+	want := map[string]bool{keys[0]: false, keys[1]: false, keys[2]: true, keys[3]: true, keys[4]: true}
+	for k, present := range want {
+		if _, got, err := ts.Get(ctx, k); err != nil || got != present {
+			t.Fatalf("key %q present=%v err=%v, want %v", k, got, err, present)
+		}
+	}
+}

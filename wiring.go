@@ -523,6 +523,7 @@ func webauthnConfigFromRoot(c *WebAuthnConfig) *internalwebauthn.Config {
 
 		RequireUserVerification: c.RequireUserVerification,
 		CloneWarning:            string(c.CloneWarning),
+		UserHandleResolver:      c.UserHandleResolver,
 	}
 }
 
