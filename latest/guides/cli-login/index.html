@@ -16,7 +16,7 @@
         <link rel="prev" href="../api-tokens/">
       
       
-        <link rel="next" href="../oauth-hardening-and-auth-events/">
+        <link rel="next" href="../path-prefix-and-dynamic-providers/">
       
       
         
@@ -279,7 +279,7 @@
     
     
       <li class="md-tabs__item">
-        <a href="../../concepts/oauth21-primer/" class="md-tabs__link">
+        <a href="../../concepts/capability-interfaces/" class="md-tabs__link">
           
   
   
@@ -724,6 +724,34 @@
 
           </label>
           <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../concepts/capability-interfaces/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Capability Interfaces and Storage
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
             
               
                 
@@ -1206,6 +1234,118 @@
   
   
     <li class="md-nav__item">
+      <a href="../path-prefix-and-dynamic-providers/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Path Prefix and Dynamic Providers
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policy-engine/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Policy Engine
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../single-binary-go-app/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Auth for a Single-Binary Go App
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../migrate-from-hand-rolled-sessions/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Migrate from Hand-Rolled Sessions
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../oauth-hardening-and-auth-events/" class="md-nav__link">
         
   
@@ -1298,6 +1438,34 @@
     
   
     Use the SQLite Backend
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../postgres-mysql-storage/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Use the Postgres or MySQL Backend
   
 
     
@@ -2239,10 +2407,7 @@
 </ul>
 <h2 id="whoami-and-logout">Whoami and Logout<a class="headerlink" href="#whoami-and-logout" title="Permanent link">&para;</a></h2>
 <p><code>Client.Whoami</code> and <code>Client.Logout</code> call a bearer-authenticated route (<code>/auth/tokens/current</code> by default, change it with <code>Client.SelfPath</code>), then <code>Logout</code> deletes the local credential even if revocation fails.</p>
-<div class="admonition note">
-<p class="admonition-title">Note</p>
-<p>The server shipped in this version authenticates <code>DELETE /auth/tokens/{id}</code> with a session cookie only, and does not expose the minted token ID to the device client, so a bearer token cannot yet revoke or describe itself. Until the server adds a self-service route, <code>Logout</code> clears the local credential and returns the server error.</p>
-</div>
+<p><code>GET /auth/tokens/current</code> returns the token's own metadata (id, name, kind, agent name, effective abilities, owner, created, expires, last used) and never the secret. <code>DELETE /auth/tokens/current</code> revokes exactly that token and returns 204, after which any further use of it gets 401. Both routes are bearer-only: a session cookie gets 403, and a bearer token still cannot list, mint or revoke any other token.</p>
 <p>A complete CLI is in <code>examples/cli-login</code>.</p>
 
 

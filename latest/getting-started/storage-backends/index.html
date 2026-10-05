@@ -281,7 +281,7 @@
     
     
       <li class="md-tabs__item">
-        <a href="../../concepts/oauth21-primer/" class="md-tabs__link">
+        <a href="../../concepts/capability-interfaces/" class="md-tabs__link">
           
   
   
@@ -904,6 +904,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../../concepts/capability-interfaces/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Capability Interfaces and Storage
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../concepts/oauth21-primer/" class="md-nav__link">
         
   
@@ -1273,6 +1301,118 @@
   
   
     <li class="md-nav__item">
+      <a href="../../guides/path-prefix-and-dynamic-providers/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Path Prefix and Dynamic Providers
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guides/policy-engine/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Policy Engine
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guides/single-binary-go-app/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Auth for a Single-Binary Go App
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guides/migrate-from-hand-rolled-sessions/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Migrate from Hand-Rolled Sessions
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../guides/oauth-hardening-and-auth-events/" class="md-nav__link">
         
   
@@ -1365,6 +1505,34 @@
     
   
     Use the SQLite Backend
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guides/postgres-mysql-storage/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Use the Postgres or MySQL Backend
   
 
     
@@ -2344,7 +2512,7 @@
 
 
 <h1 id="storage-backends">Storage Backends<a class="headerlink" href="#storage-backends" title="Permanent link">&para;</a></h1>
-<p>theauth-go ships three built-in storage adapters. All three implement the same <code>Storage</code> interface, so you can switch between them by changing a single constructor argument.</p>
+<p>theauth-go ships four built-in storage adapters (memory, Postgres, MySQL and, as a separate module, SQLite). See <a href="../../concepts/capability-interfaces/">Capability interfaces</a> for which adapter implements which capability. Memory, Postgres and MySQL implement the full <code>Storage</code> interface and are set as <code>Config.Storage</code>. SQLite implements <code>CoreStorage</code> plus optional capabilities and is set as <code>Config.CoreStorage</code> (see <a href="../../guides/sqlite-storage/">Use the SQLite Backend</a>).</p>
 <h2 id="in-memory-storagememory">In-memory (<code>storage/memory</code>)<a class="headerlink" href="#in-memory-storagememory" title="Permanent link">&para;</a></h2>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">import</span><span class="w"> </span><span class="s">"github.com/glincker/theauth-go/storage/memory"</span>
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>
@@ -2469,7 +2637,7 @@ available.</p>
 <td><code>mysql</code></td>
 </tr>
 <tr>
-<td>Custom database (SQLite, CockroachDB, etc.)</td>
+<td>Custom database (CockroachDB, etc.)</td>
 <td>Implement <code>Storage</code>; see <a href="../../guides/custom-storage-backend/">Write a Custom Storage Backend</a></td>
 </tr>
 </tbody>

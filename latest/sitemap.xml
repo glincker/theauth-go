@@ -13,6 +13,10 @@
          <lastmod>2026-10-05</lastmod>
     </url>
     <url>
+         <loc>https://go.theauth.dev/latest/concepts/capability-interfaces/</loc>
+         <lastmod>2026-10-05</lastmod>
+    </url>
+    <url>
          <loc>https://go.theauth.dev/latest/concepts/ciba/</loc>
          <lastmod>2026-10-05</lastmod>
     </url>
@@ -85,11 +89,31 @@
          <lastmod>2026-10-05</lastmod>
     </url>
     <url>
+         <loc>https://go.theauth.dev/latest/guides/migrate-from-hand-rolled-sessions/</loc>
+         <lastmod>2026-10-05</lastmod>
+    </url>
+    <url>
          <loc>https://go.theauth.dev/latest/guides/oauth-hardening-and-auth-events/</loc>
          <lastmod>2026-10-05</lastmod>
     </url>
     <url>
          <loc>https://go.theauth.dev/latest/guides/opentelemetry-tracing/</loc>
+         <lastmod>2026-10-05</lastmod>
+    </url>
+    <url>
+         <loc>https://go.theauth.dev/latest/guides/path-prefix-and-dynamic-providers/</loc>
+         <lastmod>2026-10-05</lastmod>
+    </url>
+    <url>
+         <loc>https://go.theauth.dev/latest/guides/policy-engine/</loc>
+         <lastmod>2026-10-05</lastmod>
+    </url>
+    <url>
+         <loc>https://go.theauth.dev/latest/guides/postgres-mysql-storage/</loc>
+         <lastmod>2026-10-05</lastmod>
+    </url>
+    <url>
+         <loc>https://go.theauth.dev/latest/guides/single-binary-go-app/</loc>
          <lastmod>2026-10-05</lastmod>
     </url>
     <url>

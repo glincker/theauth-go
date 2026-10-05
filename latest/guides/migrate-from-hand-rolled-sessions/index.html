@@ -10,13 +10,13 @@
       
       
       
-        <link rel="canonical" href="https://go.theauth.dev/latest/security/releases/">
+        <link rel="canonical" href="https://go.theauth.dev/latest/guides/migrate-from-hand-rolled-sessions/">
       
       
-        <link rel="prev" href="../http-security/">
+        <link rel="prev" href="../single-binary-go-app/">
       
       
-        <link rel="next" href="../benchmarks/">
+        <link rel="next" href="../oauth-hardening-and-auth-events/">
       
       
         
@@ -27,7 +27,7 @@
     
     
       
-        <title>Releases and Verification - theauth-go</title>
+        <title>Migrate from Hand-Rolled Sessions - theauth-go</title>
       
     
     
@@ -61,17 +61,17 @@
     
   
 <meta property="og:type" content="website" />
-<meta property="og:title" content="Releases and Verification - theauth-go" />
+<meta property="og:title" content="Migrate from Hand-Rolled Sessions - theauth-go" />
 <meta property="og:description" content="Go auth library covering OAuth 2.1, MCP authorization, agent identities, WebAuthn, SAML, SCIM, and more." />
-<meta property="og:image" content="https://go.theauth.dev/latest/assets/images/social/security/releases.png" />
+<meta property="og:image" content="https://go.theauth.dev/latest/assets/images/social/guides/migrate-from-hand-rolled-sessions.png" />
 <meta property="og:image:type" content="image/png" />
 <meta property="og:image:width" content="1200" />
 <meta property="og:image:height" content="630" />
-<meta property="og:url" content="https://go.theauth.dev/latest/security/releases/" />
+<meta property="og:url" content="https://go.theauth.dev/latest/guides/migrate-from-hand-rolled-sessions/" />
 <meta property="twitter:card" content="summary_large_image" />
-<meta property="twitter:title" content="Releases and Verification - theauth-go" />
+<meta property="twitter:title" content="Migrate from Hand-Rolled Sessions - theauth-go" />
 <meta property="twitter:description" content="Go auth library covering OAuth 2.1, MCP authorization, agent identities, WebAuthn, SAML, SCIM, and more." />
-<meta property="twitter:image" content="https://go.theauth.dev/latest/assets/images/social/security/releases.png" />
+<meta property="twitter:image" content="https://go.theauth.dev/latest/assets/images/social/guides/migrate-from-hand-rolled-sessions.png" />
 </head>
   
   
@@ -91,7 +91,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#releases-and-verification" class="md-skip">
+        <a href="#migrating-from-hand-rolled-sessions" class="md-skip">
           Skip to content
         </a>
       
@@ -131,7 +131,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Releases and Verification
+              Migrate from Hand-Rolled Sessions
             
           </span>
         </div>
@@ -295,11 +295,13 @@
   
   
   
+    
+  
   
     
     
-      <li class="md-tabs__item">
-        <a href="../../guides/add-oauth-provider/" class="md-tabs__link">
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="../add-oauth-provider/" class="md-tabs__link">
           
   
   
@@ -335,13 +337,11 @@
   
   
   
-    
-  
   
     
     
-      <li class="md-tabs__item md-tabs__item--active">
-        <a href="../threat-model/" class="md-tabs__link">
+      <li class="md-tabs__item">
+        <a href="../../security/threat-model/" class="md-tabs__link">
           
   
   
@@ -960,28 +960,31 @@
       
   
   
+    
   
   
+  
     
     
     
     
+      
+        
+        
       
       
         
       
     
     
-    <li class="md-nav__item md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
       
         
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" checked>
         
           
-        
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_4" >
-        
-          
-          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
             
   
   
@@ -999,7 +1002,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="true">
           <label class="md-nav__title" for="__nav_4">
             <span class="md-nav__icon md-icon"></span>
             
@@ -1017,7 +1020,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../guides/add-oauth-provider/" class="md-nav__link">
+      <a href="../add-oauth-provider/" class="md-nav__link">
         
   
   
@@ -1045,7 +1048,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../guides/webauthn-passkeys/" class="md-nav__link">
+      <a href="../webauthn-passkeys/" class="md-nav__link">
         
   
   
@@ -1073,7 +1076,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../guides/api-tokens/" class="md-nav__link">
+      <a href="../api-tokens/" class="md-nav__link">
         
   
   
@@ -1101,7 +1104,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../guides/cli-login/" class="md-nav__link">
+      <a href="../cli-login/" class="md-nav__link">
         
   
   
@@ -1129,7 +1132,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../guides/path-prefix-and-dynamic-providers/" class="md-nav__link">
+      <a href="../path-prefix-and-dynamic-providers/" class="md-nav__link">
         
   
   
@@ -1157,7 +1160,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../guides/policy-engine/" class="md-nav__link">
+      <a href="../policy-engine/" class="md-nav__link">
         
   
   
@@ -1185,7 +1188,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../guides/single-binary-go-app/" class="md-nav__link">
+      <a href="../single-binary-go-app/" class="md-nav__link">
         
   
   
@@ -1210,10 +1213,37 @@
                 
   
   
+    
   
   
-    <li class="md-nav__item">
-      <a href="../../guides/migrate-from-hand-rolled-sessions/" class="md-nav__link">
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Migrate from Hand-Rolled Sessions
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
         
   
   
@@ -1229,6 +1259,125 @@
   
 
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#what-you-get-and-what-changes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What you get, and what changes
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#1-pick-a-storage-backend" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Pick a storage backend
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-import-your-users" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Import your users
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-keep-old-password-hashes-working" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Keep old password hashes working
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-swap-the-middleware" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Swap the middleware
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5-cut-over-sessions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Cut over sessions
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#6-replace-hand-written-checks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Replace hand-written checks
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#7-lock-down-signup-and-add-what-you-were-missing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7. Lock down signup and add what you were missing
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#checklist" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Checklist
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
     </li>
   
 
@@ -1241,7 +1390,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../guides/oauth-hardening-and-auth-events/" class="md-nav__link">
+      <a href="../oauth-hardening-and-auth-events/" class="md-nav__link">
         
   
   
@@ -1269,7 +1418,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../guides/opentelemetry-tracing/" class="md-nav__link">
+      <a href="../opentelemetry-tracing/" class="md-nav__link">
         
   
   
@@ -1297,7 +1446,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../guides/audit-log-splunk/" class="md-nav__link">
+      <a href="../audit-log-splunk/" class="md-nav__link">
         
   
   
@@ -1325,7 +1474,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../guides/sqlite-storage/" class="md-nav__link">
+      <a href="../sqlite-storage/" class="md-nav__link">
         
   
   
@@ -1353,7 +1502,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../guides/postgres-mysql-storage/" class="md-nav__link">
+      <a href="../postgres-mysql-storage/" class="md-nav__link">
         
   
   
@@ -1381,7 +1530,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../guides/custom-storage-backend/" class="md-nav__link">
+      <a href="../custom-storage-backend/" class="md-nav__link">
         
   
   
@@ -1409,7 +1558,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../guides/migrate-from-cognito/" class="md-nav__link">
+      <a href="../migrate-from-cognito/" class="md-nav__link">
         
   
   
@@ -1437,7 +1586,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../guides/migrate-from-auth0/" class="md-nav__link">
+      <a href="../migrate-from-auth0/" class="md-nav__link">
         
   
   
@@ -1698,31 +1847,28 @@
       
   
   
-    
   
   
-  
     
     
     
     
-      
-        
-        
       
       
         
       
     
     
-    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--nested">
       
         
-        
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" checked>
         
           
-          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="">
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
             
   
   
@@ -1740,7 +1886,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="true">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
           <label class="md-nav__title" for="__nav_6">
             <span class="md-nav__icon md-icon"></span>
             
@@ -1758,7 +1904,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../threat-model/" class="md-nav__link">
+      <a href="../../security/threat-model/" class="md-nav__link">
         
   
   
@@ -1786,7 +1932,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../http-security/" class="md-nav__link">
+      <a href="../../security/http-security/" class="md-nav__link">
         
   
   
@@ -1811,37 +1957,10 @@
                 
   
   
-    
   
   
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
-      
-      
-        
-      
-      
-        <label class="md-nav__link md-nav__link--active" for="__toc">
-          
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Releases and Verification
-  
-
-    
-  </span>
-  
-  
-
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
-      <a href="./" class="md-nav__link md-nav__link--active">
+    <li class="md-nav__item">
+      <a href="../../security/releases/" class="md-nav__link">
         
   
   
@@ -1857,120 +1976,6 @@
   
 
       </a>
-      
-        
-
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-    
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#release-process" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Release process
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#verifying-a-release" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Verifying a release
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Verifying a release">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#download-assets" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Download assets
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#verify-the-sbom-signature" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Verify the SBOM signature
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#verify-the-source-archive-signature" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Verify the source archive signature
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#verify-slsa-provenance" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Verify SLSA provenance
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#pre-release-tags" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Pre-release tags
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#rollback" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Rollback
-      
-    </span>
-  </a>
-  
-</li>
-      
-    </ul>
-  
-</nav>
-      
     </li>
   
 
@@ -1983,7 +1988,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../benchmarks/" class="md-nav__link">
+      <a href="../../security/benchmarks/" class="md-nav__link">
         
   
   
@@ -2011,7 +2016,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../compliance-soc2/" class="md-nav__link">
+      <a href="../../security/compliance-soc2/" class="md-nav__link">
         
   
   
@@ -2039,7 +2044,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../compliance-gdpr/" class="md-nav__link">
+      <a href="../../security/compliance-gdpr/" class="md-nav__link">
         
   
   
@@ -2294,10 +2299,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#release-process" class="md-nav__link">
+  <a href="#what-you-get-and-what-changes" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Release process
+        What you get, and what changes
       
     </span>
   </a>
@@ -2305,71 +2310,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#verifying-a-release" class="md-nav__link">
+  <a href="#1-pick-a-storage-backend" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Verifying a release
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Verifying a release">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#download-assets" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Download assets
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#verify-the-sbom-signature" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Verify the SBOM signature
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#verify-the-source-archive-signature" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Verify the source archive signature
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#verify-slsa-provenance" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Verify SLSA provenance
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#pre-release-tags" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Pre-release tags
+        1. Pick a storage backend
       
     </span>
   </a>
@@ -2377,10 +2321,76 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#rollback" class="md-nav__link">
+  <a href="#2-import-your-users" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Rollback
+        2. Import your users
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-keep-old-password-hashes-working" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Keep old password hashes working
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-swap-the-middleware" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Swap the middleware
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5-cut-over-sessions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Cut over sessions
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#6-replace-hand-written-checks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Replace hand-written checks
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#7-lock-down-signup-and-add-what-you-were-missing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7. Lock down signup and add what you were missing
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#checklist" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Checklist
       
     </span>
   </a>
@@ -2430,10 +2440,10 @@
     
     
       <li class="md-path__item">
-        <a href="../threat-model/" class="md-path__link">
+        <a href="../add-oauth-provider/" class="md-path__link">
           
   <span class="md-ellipsis">
-    Security
+    Guides
   </span>
 
         </a>
@@ -2455,64 +2465,108 @@
   
 
 
-<h1 id="releases-and-verification">Releases and Verification<a class="headerlink" href="#releases-and-verification" title="Permanent link">&para;</a></h1>
-<p>Every theauth-go release artifact is signed with <code>cosign</code> keyless signing via
-Sigstore OIDC (GitHub Actions identity). The release workflow also generates a
-CycloneDX SBOM and a SLSA provenance attestation.</p>
-<div class="admonition success">
-<p class="admonition-title">Operational since v2.4.0</p>
-<p>Goreleaser, SBOM generation, cosign keyless signing, and SLSA provenance
-attestation are all fully operational as of the v2.4.0 release (#57). The
-workflow that drives this is
-<a href="https://github.com/glincker/theauth-go/blob/main/.github/workflows/release.yml"><code>.github/workflows/release.yml</code></a>.
-Every tag push since v2.4.0 produces a signed, attested release.</p>
-</div>
-<h2 id="release-process">Release process<a class="headerlink" href="#release-process" title="Permanent link">&para;</a></h2>
-<p>See <a href="https://github.com/glincker/theauth-go/blob/main/docs/RELEASING.md">RELEASING.md</a> in the repository for the full maintainer process. In brief:</p>
+<h1 id="migrating-from-hand-rolled-sessions">Migrating from Hand-Rolled Sessions<a class="headerlink" href="#migrating-from-hand-rolled-sessions" title="Permanent link">&para;</a></h1>
+<p>This guide is for an app that already has its own users table, a password column, and a session cookie it issues itself (a random value in a <code>sessions</code> table, a signed cookie, or a gorilla/scs style store). It replaces the auth plumbing with theauth-go in steps you can ship one at a time. Nothing here needs a flag day.</p>
+<h2 id="what-you-get-and-what-changes">What you get, and what changes<a class="headerlink" href="#what-you-get-and-what-changes" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Hand-rolled</th>
+<th>theauth-go</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Cookie value looked up in your table</td>
+<td>Opaque random token in an <code>HttpOnly</code>, <code>SameSite=Lax</code> cookie (<code>Secure</code> when <code>BaseURL</code> is https). Only its SHA-256 hash is stored</td>
+</tr>
+<tr>
+<td>Your hashing scheme</td>
+<td>Argon2id, 12 character minimum, with an optional bcrypt fallback for legacy hashes</td>
+</tr>
+<tr>
+<td>Ad hoc "log out everywhere"</td>
+<td><code>RevokeUserSessions</code>, <code>POST /auth/sessions/revoke-others</code>, rotation on login, MFA and password change</td>
+</tr>
+<tr>
+<td>Nothing for CLIs</td>
+<td>Scoped API tokens and the RFC 8628 device grant</td>
+</tr>
+<tr>
+<td>Hand-written re-auth checks</td>
+<td><code>RequireRecentAuth</code> with <code>POST /auth/step-up</code> (password, TOTP or passkey)</td>
+</tr>
+<tr>
+<td>Signup left open or guarded by a flag</td>
+<td><code>Config.Bootstrap</code> first-run setup token</td>
+</tr>
+</tbody>
+</table>
+<p>Sessions are server side and opaque. If you currently issue JWTs or signed cookies, existing sessions cannot be honored by theauth-go, so plan for a one-time re-login (step 5).</p>
+<h2 id="1-pick-a-storage-backend">1. Pick a storage backend<a class="headerlink" href="#1-pick-a-storage-backend" title="Permanent link">&para;</a></h2>
+<p>For a single host, use <code>storage/sqlite</code> (Go 1.26). For several instances or organizations, use Postgres. Check <a href="../../concepts/capability-interfaces/">Capability interfaces</a> for the features you need, then create the new tables. theauth-go owns tables prefixed <code>theauth_</code> by default, so they cannot collide with yours:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="k">if</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">sqlitestore</span><span class="p">.</span><span class="nx">Migrate</span><span class="p">(</span><span class="nx">ctx</span><span class="p">,</span><span class="w"> </span><span class="nx">db</span><span class="p">);</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="kc">nil</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="p">...</span><span class="w"> </span><span class="p">}</span>
+</code></pre></div>
+<p>If you run your own migration tool, use <code>sqlitestore.Migrations()</code> or <code>RenderMigrations()</code> and fold the SQL into your numbered history instead.</p>
+<h2 id="2-import-your-users">2. Import your users<a class="headerlink" href="#2-import-your-users" title="Permanent link">&para;</a></h2>
+<p>Create a theauth user per existing row, keeping the email and verified state, then attach the password hash. Use the storage adapter directly, since theauth-go has no public bulk-import API:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="nx">u</span><span class="p">,</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">store</span><span class="p">.</span><span class="nx">CreateUser</span><span class="p">(</span><span class="nx">ctx</span><span class="p">,</span><span class="w"> </span><span class="nx">theauth</span><span class="p">.</span><span class="nx">User</span><span class="p">{</span>
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="w">    </span><span class="nx">ID</span><span class="p">:</span><span class="w">              </span><span class="nx">ulid</span><span class="p">.</span><span class="nx">Make</span><span class="p">(),</span>
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="w">    </span><span class="nx">Email</span><span class="p">:</span><span class="w">           </span><span class="nx">row</span><span class="p">.</span><span class="nx">Email</span><span class="p">,</span>
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="w">    </span><span class="nx">EmailVerifiedAt</span><span class="p">:</span><span class="w"> </span><span class="nx">row</span><span class="p">.</span><span class="nx">VerifiedAt</span><span class="p">,</span>
+<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="w">    </span><span class="nx">Name</span><span class="p">:</span><span class="w">            </span><span class="nx">row</span><span class="p">.</span><span class="nx">Name</span><span class="p">,</span>
+<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="p">})</span>
+<a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="k">if</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="kc">nil</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="p">...</span><span class="w"> </span><span class="p">}</span>
+<a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a><span class="k">if</span><span class="w"> </span><span class="nx">row</span><span class="p">.</span><span class="nx">PasswordHash</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="s">""</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a><span class="w">    </span><span class="nx">err</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">store</span><span class="p">.</span><span class="nx">SetUserPassword</span><span class="p">(</span><span class="nx">ctx</span><span class="p">,</span><span class="w"> </span><span class="nx">u</span><span class="p">.</span><span class="nx">ID</span><span class="p">,</span><span class="w"> </span><span class="nx">row</span><span class="p">.</span><span class="nx">PasswordHash</span><span class="p">)</span>
+<a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a><span class="p">}</span>
+</code></pre></div>
+<p>Keep a mapping from your old integer or UUID key to <code>u.ID</code> (a ULID) and migrate the foreign keys in your own tables.</p>
+<h2 id="3-keep-old-password-hashes-working">3. Keep old password hashes working<a class="headerlink" href="#3-keep-old-password-hashes-working" title="Permanent link">&para;</a></h2>
+<p>Hashes in Argon2id PHC form (<code>$argon2id$...</code>) verify as is. bcrypt hashes (<code>$2a$</code>, <code>$2b$</code>, <code>$2x$</code>) verify only while the migration flag is on, and are upgraded to Argon2id on each successful login:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="nx">PasswordPolicy</span><span class="p">:</span><span class="w"> </span><span class="nx">theauth</span><span class="p">.</span><span class="nx">PasswordPolicyConfig</span><span class="p">{</span>
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="w">    </span><span class="nx">AllowLegacyBcrypt</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="w">    </span><span class="nx">OnLegacyHashAccepted</span><span class="p">:</span><span class="w"> </span><span class="kd">func</span><span class="p">(</span><span class="nx">userID</span><span class="p">,</span><span class="w"> </span><span class="nx">newHash</span><span class="w"> </span><span class="kt">string</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="w">        </span><span class="nx">id</span><span class="p">,</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">ulid</span><span class="p">.</span><span class="nx">ParseStrict</span><span class="p">(</span><span class="nx">userID</span><span class="p">)</span>
+<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="kc">nil</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="w">            </span><span class="nx">_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">store</span><span class="p">.</span><span class="nx">SetUserPassword</span><span class="p">(</span><span class="nx">context</span><span class="p">.</span><span class="nx">Background</span><span class="p">(),</span><span class="w"> </span><span class="nx">id</span><span class="p">,</span><span class="w"> </span><span class="nx">newHash</span><span class="p">)</span>
+<a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="w">        </span><span class="p">}</span>
+<a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="w">    </span><span class="p">},</span>
+<a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a><span class="p">},</span>
+</code></pre></div>
+<p>Turn the flag off once nearly all active users have logged in once. Any other scheme (scrypt, PBKDF2, MD5) is not verified. Send those users through password reset or magic link. The same approach is described for Auth0 in <a href="../migrate-from-auth0/">Migrate from Auth0</a>.</p>
+<p>The default maximum password length is 72 bytes. Users with longer passwords must reset.</p>
+<h2 id="4-swap-the-middleware">4. Swap the middleware<a class="headerlink" href="#4-swap-the-middleware" title="Permanent link">&para;</a></h2>
+<p>Mount the auth routes and replace your session lookup:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="nx">mux</span><span class="p">.</span><span class="nx">Handle</span><span class="p">(</span><span class="s">"/auth/"</span><span class="p">,</span><span class="w"> </span><span class="nx">a</span><span class="p">.</span><span class="nx">Handler</span><span class="p">())</span>
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="nx">protected</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">a</span><span class="p">.</span><span class="nx">RequireAuth</span><span class="p">()</span><span class="w">   </span><span class="c1">// cookie session, 401 when missing</span>
+</code></pre></div>
+<p>Inside handlers, <code>theauth.UserFromContext(r.Context())</code> returns the user. If your handlers read a user from your own context key, write one small adapter middleware that calls <code>UserFromContext</code> and sets your key, so handler code does not change. Route by route is fine: <code>RequireAuth</code> and your old middleware can coexist while you move routes over.</p>
+<p>Replace your own login, logout and signup handlers with <code>/auth/email-password/signup</code>, <code>/auth/email-password/signin</code> and <code>DELETE /auth/sessions/current</code>. Point your form at the new routes. Set <code>CookieName</code> if you want a name other than <code>theauth_session</code>.</p>
+<h2 id="5-cut-over-sessions">5. Cut over sessions<a class="headerlink" href="#5-cut-over-sessions" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Keep your old session table read-only for a short window if you want a grace period: a middleware that accepts either cookie, and for an old-cookie request calls <code>a.IssueSessionByUserID(ctx, userID, userAgent, ip)</code>, which returns a raw session token, and sets it as the cookie value yourself (cookie name <code>CookieName</code>, <code>HttpOnly</code>, <code>SameSite=Lax</code>, <code>Secure</code> over https). Delete that code after your longest old session lifetime.</li>
+<li>Or force a re-login: delete the old cookie, drop the table, and let users sign in once.</li>
+</ul>
+<p>Set <code>SessionTTL</code> (absolute, default 24h) and, if you had idle expiry, <code>SessionIdleTimeout</code> (needs <code>SessionManagementStorage</code>, which memory and SQLite have).</p>
+<h2 id="6-replace-hand-written-checks">6. Replace hand-written checks<a class="headerlink" href="#6-replace-hand-written-checks" title="Permanent link">&para;</a></h2>
+<ul>
+<li>"Re-enter your password for this action": <code>a.RequireRecentAuth(5*time.Minute)</code> on the route, and have the client call <code>POST /auth/step-up</code> first.</li>
+<li>"Log out my other devices": <code>POST /auth/sessions/revoke-others</code>. <code>GET /auth/sessions</code> lists live sessions with masked IPs.</li>
+<li>"Disable this user": call <code>RevokeUserSessions(ctx, userID)</code>. For API tokens, <code>RevokeOwnerAPITokens</code>.</li>
+<li>"Admin only": there is no built-in admin without RBAC. Return roles from <code>APITokensConfig.UserAbilities</code> and guard routes with <code>RequireAbility</code>, or enable RBAC where the backend supports it.</li>
+</ul>
+<h2 id="7-lock-down-signup-and-add-what-you-were-missing">7. Lock down signup and add what you were missing<a class="headerlink" href="#7-lock-down-signup-and-add-what-you-were-missing" title="Permanent link">&para;</a></h2>
+<p>Add <code>Config.Bootstrap</code> so a fresh deployment cannot be claimed by whoever finds it first. Add <code>Config.TOTP</code> and <code>Config.WebAuthn</code> for second factors. Add <code>Config.APITokens</code> with <code>Device</code> if you have or want a CLI. The <a href="../single-binary-go-app/">single-binary guide</a> shows all of these wired together.</p>
+<h2 id="checklist">Checklist<a class="headerlink" href="#checklist" title="Permanent link">&para;</a></h2>
 <ol>
-<li>Update <code>CHANGELOG.md</code>: move entries from <code>[Unreleased]</code> to a versioned section.</li>
-<li>Open and merge a PR for the changelog.</li>
-<li>Tag the release:</li>
+<li>Storage chosen and migrated.</li>
+<li>Users and password hashes imported, ID mapping recorded.</li>
+<li><code>AllowLegacyBcrypt</code> on, with a plan and date to turn it off.</li>
+<li>Routes moved to <code>RequireAuth</code> or <code>RequireAbility</code>.</li>
+<li>Old session mechanism removed after the grace window.</li>
+<li>Signup closed with <code>Bootstrap</code> or an explicit policy.</li>
 </ol>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>git<span class="w"> </span>tag<span class="w"> </span>-a<span class="w"> </span>vX.Y.Z<span class="w"> </span>-m<span class="w"> </span><span class="s2">"theauth-go vX.Y.Z"</span>
-<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>git<span class="w"> </span>push<span class="w"> </span>origin<span class="w"> </span>vX.Y.Z
-</code></pre></div>
-<p>The tag push triggers <code>.github/workflows/release.yml</code>, which runs goreleaser, cosign, and the SLSA attestation step.</p>
-<h2 id="verifying-a-release">Verifying a release<a class="headerlink" href="#verifying-a-release" title="Permanent link">&para;</a></h2>
-<h3 id="download-assets">Download assets<a class="headerlink" href="#download-assets" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>gh<span class="w"> </span>release<span class="w"> </span>download<span class="w"> </span>vX.Y.Z<span class="w"> </span>--repo<span class="w"> </span>glincker/theauth-go<span class="w"> </span>--dir<span class="w"> </span>/tmp/release-check
-</code></pre></div>
-<h3 id="verify-the-sbom-signature">Verify the SBOM signature<a class="headerlink" href="#verify-the-sbom-signature" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>cosign<span class="w"> </span>verify-blob<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="w">  </span>--certificate-identity<span class="w"> </span><span class="s2">"https://github.com/glincker/theauth-go/.github/workflows/release.yml@refs/tags/vX.Y.Z"</span><span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="w">  </span>--certificate-oidc-issuer<span class="w"> </span><span class="s2">"https://token.actions.githubusercontent.com"</span><span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="w">  </span>--signature<span class="w"> </span>/tmp/release-check/theauth-go-vX.Y.Z.tar.gz.sbom.json.sig<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="w">  </span>--certificate<span class="w"> </span>/tmp/release-check/theauth-go-vX.Y.Z.tar.gz.sbom.json.cert<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="w">  </span>/tmp/release-check/theauth-go-vX.Y.Z.tar.gz.sbom.json
-</code></pre></div>
-<h3 id="verify-the-source-archive-signature">Verify the source archive signature<a class="headerlink" href="#verify-the-source-archive-signature" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>cosign<span class="w"> </span>verify-blob<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="w">  </span>--certificate-identity<span class="w"> </span><span class="s2">"https://github.com/glincker/theauth-go/.github/workflows/release.yml@refs/tags/vX.Y.Z"</span><span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="w">  </span>--certificate-oidc-issuer<span class="w"> </span><span class="s2">"https://token.actions.githubusercontent.com"</span><span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="w">  </span>--signature<span class="w"> </span>/tmp/release-check/theauth-go-vX.Y.Z.tar.gz.sig<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="w">  </span>--certificate<span class="w"> </span>/tmp/release-check/theauth-go-vX.Y.Z.tar.gz.cert<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="w">  </span>/tmp/release-check/theauth-go-vX.Y.Z.tar.gz
-</code></pre></div>
-<p>Both commands should print <code>Verified OK</code>.</p>
-<h3 id="verify-slsa-provenance">Verify SLSA provenance<a class="headerlink" href="#verify-slsa-provenance" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>gh<span class="w"> </span>attestation<span class="w"> </span>verify<span class="w"> </span>/tmp/release-check/theauth-go-vX.Y.Z.tar.gz<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="w">  </span>--repo<span class="w"> </span>glincker/theauth-go
-</code></pre></div>
-<h2 id="pre-release-tags">Pre-release tags<a class="headerlink" href="#pre-release-tags" title="Permanent link">&para;</a></h2>
-<p>Tags with <code>-alpha</code>, <code>-beta</code>, or <code>-rc</code> suffixes are published as pre-releases automatically (<code>prerelease: auto</code> in <code>.goreleaser.yml</code>). Follow the same tag procedure; GitHub marks the release as a pre-release.</p>
-<h2 id="rollback">Rollback<a class="headerlink" href="#rollback" title="Permanent link">&para;</a></h2>
-<p>If a bad release is published:</p>
-<ol>
-<li>Delete the tag: <code>git push origin :refs/tags/vX.Y.Z</code></li>
-<li>Delete the GitHub Release: <code>gh release delete vX.Y.Z --repo glincker/theauth-go</code></li>
-<li>Fix the issue, cut a patch release (vX.Y.Z+1), and re-tag.</li>
-</ol>
-<p>Do not reuse a version number after publishing it. Consumers may have cached the module at that version in their module proxy.</p>
 
 
 

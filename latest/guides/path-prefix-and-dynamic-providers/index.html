@@ -10,13 +10,13 @@
       
       
       
-        <link rel="canonical" href="https://go.theauth.dev/latest/security/releases/">
+        <link rel="canonical" href="https://go.theauth.dev/latest/guides/path-prefix-and-dynamic-providers/">
       
       
-        <link rel="prev" href="../http-security/">
+        <link rel="prev" href="../cli-login/">
       
       
-        <link rel="next" href="../benchmarks/">
+        <link rel="next" href="../policy-engine/">
       
       
         
@@ -27,7 +27,7 @@
     
     
       
-        <title>Releases and Verification - theauth-go</title>
+        <title>Path Prefix and Dynamic Providers - theauth-go</title>
       
     
     
@@ -61,17 +61,17 @@
     
   
 <meta property="og:type" content="website" />
-<meta property="og:title" content="Releases and Verification - theauth-go" />
+<meta property="og:title" content="Path Prefix and Dynamic Providers - theauth-go" />
 <meta property="og:description" content="Go auth library covering OAuth 2.1, MCP authorization, agent identities, WebAuthn, SAML, SCIM, and more." />
-<meta property="og:image" content="https://go.theauth.dev/latest/assets/images/social/security/releases.png" />
+<meta property="og:image" content="https://go.theauth.dev/latest/assets/images/social/guides/path-prefix-and-dynamic-providers.png" />
 <meta property="og:image:type" content="image/png" />
 <meta property="og:image:width" content="1200" />
 <meta property="og:image:height" content="630" />
-<meta property="og:url" content="https://go.theauth.dev/latest/security/releases/" />
+<meta property="og:url" content="https://go.theauth.dev/latest/guides/path-prefix-and-dynamic-providers/" />
 <meta property="twitter:card" content="summary_large_image" />
-<meta property="twitter:title" content="Releases and Verification - theauth-go" />
+<meta property="twitter:title" content="Path Prefix and Dynamic Providers - theauth-go" />
 <meta property="twitter:description" content="Go auth library covering OAuth 2.1, MCP authorization, agent identities, WebAuthn, SAML, SCIM, and more." />
-<meta property="twitter:image" content="https://go.theauth.dev/latest/assets/images/social/security/releases.png" />
+<meta property="twitter:image" content="https://go.theauth.dev/latest/assets/images/social/guides/path-prefix-and-dynamic-providers.png" />
 </head>
   
   
@@ -91,7 +91,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#releases-and-verification" class="md-skip">
+        <a href="#custom-path-prefix-and-dynamic-providers" class="md-skip">
           Skip to content
         </a>
       
@@ -131,7 +131,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Releases and Verification
+              Path Prefix and Dynamic Providers
             
           </span>
         </div>
@@ -295,11 +295,13 @@
   
   
   
+    
+  
   
     
     
-      <li class="md-tabs__item">
-        <a href="../../guides/add-oauth-provider/" class="md-tabs__link">
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="../add-oauth-provider/" class="md-tabs__link">
           
   
   
@@ -335,13 +337,11 @@
   
   
   
-    
-  
   
     
     
-      <li class="md-tabs__item md-tabs__item--active">
-        <a href="../threat-model/" class="md-tabs__link">
+      <li class="md-tabs__item">
+        <a href="../../security/threat-model/" class="md-tabs__link">
           
   
   
@@ -960,28 +960,31 @@
       
   
   
+    
   
   
+  
     
     
     
     
+      
+        
+        
       
       
         
       
     
     
-    <li class="md-nav__item md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
       
         
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" checked>
         
           
-        
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_4" >
-        
-          
-          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
             
   
   
@@ -999,7 +1002,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="true">
           <label class="md-nav__title" for="__nav_4">
             <span class="md-nav__icon md-icon"></span>
             
@@ -1017,7 +1020,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../guides/add-oauth-provider/" class="md-nav__link">
+      <a href="../add-oauth-provider/" class="md-nav__link">
         
   
   
@@ -1045,7 +1048,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../guides/webauthn-passkeys/" class="md-nav__link">
+      <a href="../webauthn-passkeys/" class="md-nav__link">
         
   
   
@@ -1073,7 +1076,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../guides/api-tokens/" class="md-nav__link">
+      <a href="../api-tokens/" class="md-nav__link">
         
   
   
@@ -1101,7 +1104,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../guides/cli-login/" class="md-nav__link">
+      <a href="../cli-login/" class="md-nav__link">
         
   
   
@@ -1126,10 +1129,37 @@
                 
   
   
+    
   
   
-    <li class="md-nav__item">
-      <a href="../../guides/path-prefix-and-dynamic-providers/" class="md-nav__link">
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Path Prefix and Dynamic Providers
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
         
   
   
@@ -1145,6 +1175,65 @@
   
 
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#path-prefix" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Path prefix
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Path prefix">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#clientauth" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        clientauth
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#dynamic-providers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Dynamic providers
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
     </li>
   
 
@@ -1157,7 +1246,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../guides/policy-engine/" class="md-nav__link">
+      <a href="../policy-engine/" class="md-nav__link">
         
   
   
@@ -1185,7 +1274,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../guides/single-binary-go-app/" class="md-nav__link">
+      <a href="../single-binary-go-app/" class="md-nav__link">
         
   
   
@@ -1213,7 +1302,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../guides/migrate-from-hand-rolled-sessions/" class="md-nav__link">
+      <a href="../migrate-from-hand-rolled-sessions/" class="md-nav__link">
         
   
   
@@ -1241,7 +1330,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../guides/oauth-hardening-and-auth-events/" class="md-nav__link">
+      <a href="../oauth-hardening-and-auth-events/" class="md-nav__link">
         
   
   
@@ -1269,7 +1358,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../guides/opentelemetry-tracing/" class="md-nav__link">
+      <a href="../opentelemetry-tracing/" class="md-nav__link">
         
   
   
@@ -1297,7 +1386,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../guides/audit-log-splunk/" class="md-nav__link">
+      <a href="../audit-log-splunk/" class="md-nav__link">
         
   
   
@@ -1325,7 +1414,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../guides/sqlite-storage/" class="md-nav__link">
+      <a href="../sqlite-storage/" class="md-nav__link">
         
   
   
@@ -1353,7 +1442,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../guides/postgres-mysql-storage/" class="md-nav__link">
+      <a href="../postgres-mysql-storage/" class="md-nav__link">
         
   
   
@@ -1381,7 +1470,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../guides/custom-storage-backend/" class="md-nav__link">
+      <a href="../custom-storage-backend/" class="md-nav__link">
         
   
   
@@ -1409,7 +1498,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../guides/migrate-from-cognito/" class="md-nav__link">
+      <a href="../migrate-from-cognito/" class="md-nav__link">
         
   
   
@@ -1437,7 +1526,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../guides/migrate-from-auth0/" class="md-nav__link">
+      <a href="../migrate-from-auth0/" class="md-nav__link">
         
   
   
@@ -1698,31 +1787,28 @@
       
   
   
-    
   
   
-  
     
     
     
     
-      
-        
-        
       
       
         
       
     
     
-    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--nested">
       
         
-        
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" checked>
         
           
-          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="">
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
             
   
   
@@ -1740,7 +1826,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="true">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
           <label class="md-nav__title" for="__nav_6">
             <span class="md-nav__icon md-icon"></span>
             
@@ -1758,7 +1844,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../threat-model/" class="md-nav__link">
+      <a href="../../security/threat-model/" class="md-nav__link">
         
   
   
@@ -1786,7 +1872,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../http-security/" class="md-nav__link">
+      <a href="../../security/http-security/" class="md-nav__link">
         
   
   
@@ -1811,37 +1897,10 @@
                 
   
   
-    
   
   
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
-      
-      
-        
-      
-      
-        <label class="md-nav__link md-nav__link--active" for="__toc">
-          
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Releases and Verification
-  
-
-    
-  </span>
-  
-  
-
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
-      <a href="./" class="md-nav__link md-nav__link--active">
+    <li class="md-nav__item">
+      <a href="../../security/releases/" class="md-nav__link">
         
   
   
@@ -1857,120 +1916,6 @@
   
 
       </a>
-      
-        
-
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-    
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#release-process" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Release process
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#verifying-a-release" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Verifying a release
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Verifying a release">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#download-assets" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Download assets
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#verify-the-sbom-signature" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Verify the SBOM signature
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#verify-the-source-archive-signature" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Verify the source archive signature
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#verify-slsa-provenance" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Verify SLSA provenance
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#pre-release-tags" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Pre-release tags
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#rollback" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Rollback
-      
-    </span>
-  </a>
-  
-</li>
-      
-    </ul>
-  
-</nav>
-      
     </li>
   
 
@@ -1983,7 +1928,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../benchmarks/" class="md-nav__link">
+      <a href="../../security/benchmarks/" class="md-nav__link">
         
   
   
@@ -2011,7 +1956,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../compliance-soc2/" class="md-nav__link">
+      <a href="../../security/compliance-soc2/" class="md-nav__link">
         
   
   
@@ -2039,7 +1984,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../compliance-gdpr/" class="md-nav__link">
+      <a href="../../security/compliance-gdpr/" class="md-nav__link">
         
   
   
@@ -2294,66 +2239,22 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#release-process" class="md-nav__link">
+  <a href="#path-prefix" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Release process
+        Path prefix
       
     </span>
   </a>
   
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#verifying-a-release" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Verifying a release
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Verifying a release">
+    <nav class="md-nav" aria-label="Path prefix">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#download-assets" class="md-nav__link">
+  <a href="#clientauth" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Download assets
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#verify-the-sbom-signature" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Verify the SBOM signature
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#verify-the-source-archive-signature" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Verify the source archive signature
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#verify-slsa-provenance" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Verify SLSA provenance
+        clientauth
       
     </span>
   </a>
@@ -2366,21 +2267,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#pre-release-tags" class="md-nav__link">
+  <a href="#dynamic-providers" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Pre-release tags
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#rollback" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Rollback
+        Dynamic providers
       
     </span>
   </a>
@@ -2430,10 +2320,10 @@
     
     
       <li class="md-path__item">
-        <a href="../threat-model/" class="md-path__link">
+        <a href="../add-oauth-provider/" class="md-path__link">
           
   <span class="md-ellipsis">
-    Security
+    Guides
   </span>
 
         </a>
@@ -2455,64 +2345,97 @@
   
 
 
-<h1 id="releases-and-verification">Releases and Verification<a class="headerlink" href="#releases-and-verification" title="Permanent link">&para;</a></h1>
-<p>Every theauth-go release artifact is signed with <code>cosign</code> keyless signing via
-Sigstore OIDC (GitHub Actions identity). The release workflow also generates a
-CycloneDX SBOM and a SLSA provenance attestation.</p>
-<div class="admonition success">
-<p class="admonition-title">Operational since v2.4.0</p>
-<p>Goreleaser, SBOM generation, cosign keyless signing, and SLSA provenance
-attestation are all fully operational as of the v2.4.0 release (#57). The
-workflow that drives this is
-<a href="https://github.com/glincker/theauth-go/blob/main/.github/workflows/release.yml"><code>.github/workflows/release.yml</code></a>.
-Every tag push since v2.4.0 produces a signed, attested release.</p>
-</div>
-<h2 id="release-process">Release process<a class="headerlink" href="#release-process" title="Permanent link">&para;</a></h2>
-<p>See <a href="https://github.com/glincker/theauth-go/blob/main/docs/RELEASING.md">RELEASING.md</a> in the repository for the full maintainer process. In brief:</p>
-<ol>
-<li>Update <code>CHANGELOG.md</code>: move entries from <code>[Unreleased]</code> to a versioned section.</li>
-<li>Open and merge a PR for the changelog.</li>
-<li>Tag the release:</li>
-</ol>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>git<span class="w"> </span>tag<span class="w"> </span>-a<span class="w"> </span>vX.Y.Z<span class="w"> </span>-m<span class="w"> </span><span class="s2">"theauth-go vX.Y.Z"</span>
-<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>git<span class="w"> </span>push<span class="w"> </span>origin<span class="w"> </span>vX.Y.Z
+<h1 id="custom-path-prefix-and-dynamic-providers">Custom Path Prefix and Dynamic Providers<a class="headerlink" href="#custom-path-prefix-and-dynamic-providers" title="Permanent link">&para;</a></h1>
+<p>Two options for apps that already own their public URLs: serve the library under
+a prefix of your choosing, and let OAuth/OIDC providers change at runtime.</p>
+<h2 id="path-prefix">Path prefix<a class="headerlink" href="#path-prefix" title="Permanent link">&para;</a></h2>
+<p><code>Config.PathPrefix</code> sets where <code>Mount</code> and <code>Handler</code> serve the auth routes. The
+default is <code>/auth</code>, so existing apps are unchanged.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nx">a</span><span class="p">,</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">theauth</span><span class="p">.</span><span class="nx">New</span><span class="p">(</span><span class="nx">theauth</span><span class="p">.</span><span class="nx">Config</span><span class="p">{</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="w">    </span><span class="nx">Storage</span><span class="p">:</span><span class="w">    </span><span class="nx">store</span><span class="p">,</span>
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="w">    </span><span class="nx">BaseURL</span><span class="p">:</span><span class="w">    </span><span class="s">"https://app.example.com"</span><span class="p">,</span>
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="w">    </span><span class="nx">PathPrefix</span><span class="p">:</span><span class="w"> </span><span class="s">"/api/v1/auth"</span><span class="p">,</span>
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="p">})</span>
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="nx">mux</span><span class="p">.</span><span class="nx">Handle</span><span class="p">(</span><span class="s">"/"</span><span class="p">,</span><span class="w"> </span><span class="nx">a</span><span class="p">.</span><span class="nx">Handler</span><span class="p">())</span><span class="w"> </span><span class="c1">// no http.StripPrefix needed</span>
 </code></pre></div>
-<p>The tag push triggers <code>.github/workflows/release.yml</code>, which runs goreleaser, cosign, and the SLSA attestation step.</p>
-<h2 id="verifying-a-release">Verifying a release<a class="headerlink" href="#verifying-a-release" title="Permanent link">&para;</a></h2>
-<h3 id="download-assets">Download assets<a class="headerlink" href="#download-assets" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>gh<span class="w"> </span>release<span class="w"> </span>download<span class="w"> </span>vX.Y.Z<span class="w"> </span>--repo<span class="w"> </span>glincker/theauth-go<span class="w"> </span>--dir<span class="w"> </span>/tmp/release-check
+<p>The prefix must start with <code>/</code>, must not end with <code>/</code>, and must not contain a
+query, fragment, wildcard, whitespace or empty/dot segments. Anything else makes
+<code>New</code> return an error.</p>
+<p>Every URL the library generates follows the prefix:</p>
+<table>
+<thead>
+<tr>
+<th>Generated value</th>
+<th>Example with <code>/api/v1/auth</code></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>OAuth redirect URI</td>
+<td><code>https://app.example.com/api/v1/auth/providers/github/callback</code></td>
+</tr>
+<tr>
+<td>Magic link</td>
+<td><code>https://app.example.com/api/v1/auth/magic-link/verify?token=...</code></td>
+</tr>
+<tr>
+<td>Password reset link</td>
+<td><code>https://app.example.com/api/v1/auth/email-password/reset?token=...</code></td>
+</tr>
+<tr>
+<td>WebAuthn challenge cookie <code>Path</code></td>
+<td><code>/api/v1/auth/webauthn</code></td>
+</tr>
+<tr>
+<td>Authorization server default <code>LoginURL</code></td>
+<td><code>/api/v1/auth/login</code></td>
+</tr>
+</tbody>
+</table>
+<p>Register the redirect URI shown above at each identity provider. Routes outside
+the prefix (<code>/oauth/*</code>, <code>/.well-known/*</code>, <code>/scim/v2/*</code>, <code>/admin/v1/*</code>) keep their
+own paths. The device verification page stays at <code>BaseURL + "/device"</code> unless
+<code>DeviceConfig.VerificationURI</code> is set.</p>
+<h3 id="clientauth">clientauth<a class="headerlink" href="#clientauth" title="Permanent link">&para;</a></h3>
+<p><code>clientauth.DeviceOptions.AuthPath</code> and <code>clientauth.Client.AuthPath</code> take the same
+prefix. They default to <code>clientauth.DefaultAuthPath</code> (<code>/auth</code>).</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="nx">clientauth</span><span class="p">.</span><span class="nx">DeviceLogin</span><span class="p">(</span><span class="nx">ctx</span><span class="p">,</span><span class="w"> </span><span class="nx">clientauth</span><span class="p">.</span><span class="nx">DeviceOptions</span><span class="p">{</span>
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="w">    </span><span class="nx">ServerURL</span><span class="p">:</span><span class="w"> </span><span class="s">"https://app.example.com"</span><span class="p">,</span>
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="w">    </span><span class="nx">AuthPath</span><span class="p">:</span><span class="w">  </span><span class="s">"/api/v1/auth"</span><span class="p">,</span>
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="p">})</span>
 </code></pre></div>
-<h3 id="verify-the-sbom-signature">Verify the SBOM signature<a class="headerlink" href="#verify-the-sbom-signature" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>cosign<span class="w"> </span>verify-blob<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="w">  </span>--certificate-identity<span class="w"> </span><span class="s2">"https://github.com/glincker/theauth-go/.github/workflows/release.yml@refs/tags/vX.Y.Z"</span><span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="w">  </span>--certificate-oidc-issuer<span class="w"> </span><span class="s2">"https://token.actions.githubusercontent.com"</span><span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="w">  </span>--signature<span class="w"> </span>/tmp/release-check/theauth-go-vX.Y.Z.tar.gz.sbom.json.sig<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="w">  </span>--certificate<span class="w"> </span>/tmp/release-check/theauth-go-vX.Y.Z.tar.gz.sbom.json.cert<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="w">  </span>/tmp/release-check/theauth-go-vX.Y.Z.tar.gz.sbom.json
+<h2 id="dynamic-providers">Dynamic providers<a class="headerlink" href="#dynamic-providers" title="Permanent link">&para;</a></h2>
+<p><code>Config.ProviderResolver</code> supplies providers that are not known at startup.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="kd">type</span><span class="w"> </span><span class="nx">ProviderResolver</span><span class="w"> </span><span class="kd">interface</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="w">    </span><span class="nx">Resolve</span><span class="p">(</span><span class="nx">ctx</span><span class="w"> </span><span class="nx">context</span><span class="p">.</span><span class="nx">Context</span><span class="p">,</span><span class="w"> </span><span class="nx">name</span><span class="w"> </span><span class="kt">string</span><span class="p">)</span><span class="w"> </span><span class="p">(</span><span class="nx">Provider</span><span class="p">,</span><span class="w"> </span><span class="kt">bool</span><span class="p">,</span><span class="w"> </span><span class="kt">error</span><span class="p">)</span>
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="p">}</span>
 </code></pre></div>
-<h3 id="verify-the-source-archive-signature">Verify the source archive signature<a class="headerlink" href="#verify-the-source-archive-signature" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>cosign<span class="w"> </span>verify-blob<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="w">  </span>--certificate-identity<span class="w"> </span><span class="s2">"https://github.com/glincker/theauth-go/.github/workflows/release.yml@refs/tags/vX.Y.Z"</span><span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="w">  </span>--certificate-oidc-issuer<span class="w"> </span><span class="s2">"https://token.actions.githubusercontent.com"</span><span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="w">  </span>--signature<span class="w"> </span>/tmp/release-check/theauth-go-vX.Y.Z.tar.gz.sig<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="w">  </span>--certificate<span class="w"> </span>/tmp/release-check/theauth-go-vX.Y.Z.tar.gz.cert<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="w">  </span>/tmp/release-check/theauth-go-vX.Y.Z.tar.gz
+<p>Return <code>(nil, false, nil)</code> for an unknown name. A resolver may also implement
+<code>List(ctx) ([]Provider, error)</code>, which <code>(*TheAuth).ListProviders</code> includes.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="nx">a</span><span class="p">,</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">theauth</span><span class="p">.</span><span class="nx">New</span><span class="p">(</span><span class="nx">theauth</span><span class="p">.</span><span class="nx">Config</span><span class="p">{</span>
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="w">    </span><span class="c1">// ...</span>
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="w">    </span><span class="nx">EncryptionKey</span><span class="p">:</span><span class="w">       </span><span class="nx">key</span><span class="p">,</span><span class="w">            </span><span class="c1">// required with a resolver</span>
+<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="w">    </span><span class="nx">ProviderResolver</span><span class="p">:</span><span class="w">    </span><span class="nx">dbResolver</span><span class="p">,</span>
+<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="w">    </span><span class="nx">ProviderResolverTTL</span><span class="p">:</span><span class="w"> </span><span class="mi">30</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="nx">time</span><span class="p">.</span><span class="nx">Second</span><span class="p">,</span>
+<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="p">})</span>
+<a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a>
+<a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a><span class="c1">// After an admin edits or removes a provider:</span>
+<a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a><span class="nx">a</span><span class="p">.</span><span class="nx">InvalidateProvider</span><span class="p">(</span><span class="s">"corp-sso"</span><span class="p">)</span>
 </code></pre></div>
-<p>Both commands should print <code>Verified OK</code>.</p>
-<h3 id="verify-slsa-provenance">Verify SLSA provenance<a class="headerlink" href="#verify-slsa-provenance" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>gh<span class="w"> </span>attestation<span class="w"> </span>verify<span class="w"> </span>/tmp/release-check/theauth-go-vX.Y.Z.tar.gz<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="w">  </span>--repo<span class="w"> </span>glincker/theauth-go
-</code></pre></div>
-<h2 id="pre-release-tags">Pre-release tags<a class="headerlink" href="#pre-release-tags" title="Permanent link">&para;</a></h2>
-<p>Tags with <code>-alpha</code>, <code>-beta</code>, or <code>-rc</code> suffixes are published as pre-releases automatically (<code>prerelease: auto</code> in <code>.goreleaser.yml</code>). Follow the same tag procedure; GitHub marks the release as a pre-release.</p>
-<h2 id="rollback">Rollback<a class="headerlink" href="#rollback" title="Permanent link">&para;</a></h2>
-<p>If a bad release is published:</p>
-<ol>
-<li>Delete the tag: <code>git push origin :refs/tags/vX.Y.Z</code></li>
-<li>Delete the GitHub Release: <code>gh release delete vX.Y.Z --repo glincker/theauth-go</code></li>
-<li>Fix the issue, cut a patch release (vX.Y.Z+1), and re-tag.</li>
-</ol>
-<p>Do not reuse a version number after publishing it. Consumers may have cached the module at that version in their module proxy.</p>
+<p>Behavior:</p>
+<ul>
+<li>Static <code>Providers</code> win. Set <code>ProviderResolverFirst</code> to consult the resolver
+  first, falling back to static providers when it reports not found.</li>
+<li>Names must match <code>^[a-z0-9][a-z0-9_-]{0,62}$</code> before they reach the resolver.
+  Other names get a 404.</li>
+<li>A resolver error fails the flow closed (503 on start, no fallback, not cached).</li>
+<li>The returned provider's <code>Name()</code> must equal the requested name.</li>
+<li><code>ProviderResolverTTL</code> caches answers, including "not found". Zero disables
+  caching. <code>InvalidateProvider</code> drops one entry immediately and also discards any
+  lookup that was in flight.</li>
+<li>State, PKCE, nonce and browser binding are unchanged. A provider removed
+  between start and callback fails the callback.</li>
+</ul>
 
 
 

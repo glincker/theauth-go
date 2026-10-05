@@ -10,13 +10,13 @@
       
       
       
-        <link rel="canonical" href="https://go.theauth.dev/latest/security/releases/">
+        <link rel="canonical" href="https://go.theauth.dev/latest/guides/single-binary-go-app/">
       
       
-        <link rel="prev" href="../http-security/">
+        <link rel="prev" href="../policy-engine/">
       
       
-        <link rel="next" href="../benchmarks/">
+        <link rel="next" href="../migrate-from-hand-rolled-sessions/">
       
       
         
@@ -27,7 +27,7 @@
     
     
       
-        <title>Releases and Verification - theauth-go</title>
+        <title>Auth for a Single-Binary Go App - theauth-go</title>
       
     
     
@@ -61,17 +61,17 @@
     
   
 <meta property="og:type" content="website" />
-<meta property="og:title" content="Releases and Verification - theauth-go" />
+<meta property="og:title" content="Auth for a Single-Binary Go App - theauth-go" />
 <meta property="og:description" content="Go auth library covering OAuth 2.1, MCP authorization, agent identities, WebAuthn, SAML, SCIM, and more." />
-<meta property="og:image" content="https://go.theauth.dev/latest/assets/images/social/security/releases.png" />
+<meta property="og:image" content="https://go.theauth.dev/latest/assets/images/social/guides/single-binary-go-app.png" />
 <meta property="og:image:type" content="image/png" />
 <meta property="og:image:width" content="1200" />
 <meta property="og:image:height" content="630" />
-<meta property="og:url" content="https://go.theauth.dev/latest/security/releases/" />
+<meta property="og:url" content="https://go.theauth.dev/latest/guides/single-binary-go-app/" />
 <meta property="twitter:card" content="summary_large_image" />
-<meta property="twitter:title" content="Releases and Verification - theauth-go" />
+<meta property="twitter:title" content="Auth for a Single-Binary Go App - theauth-go" />
 <meta property="twitter:description" content="Go auth library covering OAuth 2.1, MCP authorization, agent identities, WebAuthn, SAML, SCIM, and more." />
-<meta property="twitter:image" content="https://go.theauth.dev/latest/assets/images/social/security/releases.png" />
+<meta property="twitter:image" content="https://go.theauth.dev/latest/assets/images/social/guides/single-binary-go-app.png" />
 </head>
   
   
@@ -91,7 +91,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#releases-and-verification" class="md-skip">
+        <a href="#auth-for-a-single-binary-go-app" class="md-skip">
           Skip to content
         </a>
       
@@ -131,7 +131,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Releases and Verification
+              Auth for a Single-Binary Go App
             
           </span>
         </div>
@@ -295,11 +295,13 @@
   
   
   
+    
+  
   
     
     
-      <li class="md-tabs__item">
-        <a href="../../guides/add-oauth-provider/" class="md-tabs__link">
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="../add-oauth-provider/" class="md-tabs__link">
           
   
   
@@ -335,13 +337,11 @@
   
   
   
-    
-  
   
     
     
-      <li class="md-tabs__item md-tabs__item--active">
-        <a href="../threat-model/" class="md-tabs__link">
+      <li class="md-tabs__item">
+        <a href="../../security/threat-model/" class="md-tabs__link">
           
   
   
@@ -960,28 +960,31 @@
       
   
   
+    
   
   
+  
     
     
     
     
+      
+        
+        
       
       
         
       
     
     
-    <li class="md-nav__item md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
       
         
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" checked>
         
           
-        
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_4" >
-        
-          
-          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
             
   
   
@@ -999,7 +1002,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="true">
           <label class="md-nav__title" for="__nav_4">
             <span class="md-nav__icon md-icon"></span>
             
@@ -1017,7 +1020,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../guides/add-oauth-provider/" class="md-nav__link">
+      <a href="../add-oauth-provider/" class="md-nav__link">
         
   
   
@@ -1045,7 +1048,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../guides/webauthn-passkeys/" class="md-nav__link">
+      <a href="../webauthn-passkeys/" class="md-nav__link">
         
   
   
@@ -1073,7 +1076,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../guides/api-tokens/" class="md-nav__link">
+      <a href="../api-tokens/" class="md-nav__link">
         
   
   
@@ -1101,7 +1104,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../guides/cli-login/" class="md-nav__link">
+      <a href="../cli-login/" class="md-nav__link">
         
   
   
@@ -1129,7 +1132,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../guides/path-prefix-and-dynamic-providers/" class="md-nav__link">
+      <a href="../path-prefix-and-dynamic-providers/" class="md-nav__link">
         
   
   
@@ -1157,7 +1160,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../guides/policy-engine/" class="md-nav__link">
+      <a href="../policy-engine/" class="md-nav__link">
         
   
   
@@ -1182,10 +1185,37 @@
                 
   
   
+    
   
   
-    <li class="md-nav__item">
-      <a href="../../guides/single-binary-go-app/" class="md-nav__link">
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Auth for a Single-Binary Go App
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
         
   
   
@@ -1201,6 +1231,125 @@
   
 
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#1-open-sqlite-and-migrate" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Open SQLite and migrate
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-configure-theauth-go" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Configure theauth-go
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-mount-on-the-stdlib-mux" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Mount on the stdlib mux
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-first-run" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. First run
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5-mint-a-token" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Mint a token
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#6-sign-a-cli-in-with-the-device-grant" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Sign a CLI in with the device grant
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#7-sensitive-actions-step-up" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7. Sensitive actions: step-up
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#8-housekeeping" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        8. Housekeeping
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#run-the-example" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Run the example
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
     </li>
   
 
@@ -1213,7 +1362,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../guides/migrate-from-hand-rolled-sessions/" class="md-nav__link">
+      <a href="../migrate-from-hand-rolled-sessions/" class="md-nav__link">
         
   
   
@@ -1241,7 +1390,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../guides/oauth-hardening-and-auth-events/" class="md-nav__link">
+      <a href="../oauth-hardening-and-auth-events/" class="md-nav__link">
         
   
   
@@ -1269,7 +1418,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../guides/opentelemetry-tracing/" class="md-nav__link">
+      <a href="../opentelemetry-tracing/" class="md-nav__link">
         
   
   
@@ -1297,7 +1446,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../guides/audit-log-splunk/" class="md-nav__link">
+      <a href="../audit-log-splunk/" class="md-nav__link">
         
   
   
@@ -1325,7 +1474,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../guides/sqlite-storage/" class="md-nav__link">
+      <a href="../sqlite-storage/" class="md-nav__link">
         
   
   
@@ -1353,7 +1502,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../guides/postgres-mysql-storage/" class="md-nav__link">
+      <a href="../postgres-mysql-storage/" class="md-nav__link">
         
   
   
@@ -1381,7 +1530,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../guides/custom-storage-backend/" class="md-nav__link">
+      <a href="../custom-storage-backend/" class="md-nav__link">
         
   
   
@@ -1409,7 +1558,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../guides/migrate-from-cognito/" class="md-nav__link">
+      <a href="../migrate-from-cognito/" class="md-nav__link">
         
   
   
@@ -1437,7 +1586,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../guides/migrate-from-auth0/" class="md-nav__link">
+      <a href="../migrate-from-auth0/" class="md-nav__link">
         
   
   
@@ -1698,31 +1847,28 @@
       
   
   
-    
   
   
-  
     
     
     
     
-      
-        
-        
       
       
         
       
     
     
-    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--nested">
       
         
-        
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" checked>
         
           
-          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="">
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
             
   
   
@@ -1740,7 +1886,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="true">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
           <label class="md-nav__title" for="__nav_6">
             <span class="md-nav__icon md-icon"></span>
             
@@ -1758,7 +1904,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../threat-model/" class="md-nav__link">
+      <a href="../../security/threat-model/" class="md-nav__link">
         
   
   
@@ -1786,7 +1932,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../http-security/" class="md-nav__link">
+      <a href="../../security/http-security/" class="md-nav__link">
         
   
   
@@ -1811,37 +1957,10 @@
                 
   
   
-    
   
   
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
-      
-      
-        
-      
-      
-        <label class="md-nav__link md-nav__link--active" for="__toc">
-          
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Releases and Verification
-  
-
-    
-  </span>
-  
-  
-
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
-      <a href="./" class="md-nav__link md-nav__link--active">
+    <li class="md-nav__item">
+      <a href="../../security/releases/" class="md-nav__link">
         
   
   
@@ -1857,120 +1976,6 @@
   
 
       </a>
-      
-        
-
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-    
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#release-process" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Release process
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#verifying-a-release" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Verifying a release
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Verifying a release">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#download-assets" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Download assets
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#verify-the-sbom-signature" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Verify the SBOM signature
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#verify-the-source-archive-signature" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Verify the source archive signature
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#verify-slsa-provenance" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Verify SLSA provenance
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#pre-release-tags" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Pre-release tags
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#rollback" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Rollback
-      
-    </span>
-  </a>
-  
-</li>
-      
-    </ul>
-  
-</nav>
-      
     </li>
   
 
@@ -1983,7 +1988,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../benchmarks/" class="md-nav__link">
+      <a href="../../security/benchmarks/" class="md-nav__link">
         
   
   
@@ -2011,7 +2016,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../compliance-soc2/" class="md-nav__link">
+      <a href="../../security/compliance-soc2/" class="md-nav__link">
         
   
   
@@ -2039,7 +2044,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../compliance-gdpr/" class="md-nav__link">
+      <a href="../../security/compliance-gdpr/" class="md-nav__link">
         
   
   
@@ -2294,10 +2299,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#release-process" class="md-nav__link">
+  <a href="#1-open-sqlite-and-migrate" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Release process
+        1. Open SQLite and migrate
       
     </span>
   </a>
@@ -2305,71 +2310,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#verifying-a-release" class="md-nav__link">
+  <a href="#2-configure-theauth-go" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Verifying a release
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Verifying a release">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#download-assets" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Download assets
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#verify-the-sbom-signature" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Verify the SBOM signature
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#verify-the-source-archive-signature" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Verify the source archive signature
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#verify-slsa-provenance" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Verify SLSA provenance
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#pre-release-tags" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Pre-release tags
+        2. Configure theauth-go
       
     </span>
   </a>
@@ -2377,10 +2321,76 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#rollback" class="md-nav__link">
+  <a href="#3-mount-on-the-stdlib-mux" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Rollback
+        3. Mount on the stdlib mux
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-first-run" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. First run
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5-mint-a-token" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Mint a token
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#6-sign-a-cli-in-with-the-device-grant" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Sign a CLI in with the device grant
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#7-sensitive-actions-step-up" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7. Sensitive actions: step-up
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#8-housekeeping" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        8. Housekeeping
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#run-the-example" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Run the example
       
     </span>
   </a>
@@ -2430,10 +2440,10 @@
     
     
       <li class="md-path__item">
-        <a href="../threat-model/" class="md-path__link">
+        <a href="../add-oauth-provider/" class="md-path__link">
           
   <span class="md-ellipsis">
-    Security
+    Guides
   </span>
 
         </a>
@@ -2455,64 +2465,97 @@
   
 
 
-<h1 id="releases-and-verification">Releases and Verification<a class="headerlink" href="#releases-and-verification" title="Permanent link">&para;</a></h1>
-<p>Every theauth-go release artifact is signed with <code>cosign</code> keyless signing via
-Sigstore OIDC (GitHub Actions identity). The release workflow also generates a
-CycloneDX SBOM and a SLSA provenance attestation.</p>
-<div class="admonition success">
-<p class="admonition-title">Operational since v2.4.0</p>
-<p>Goreleaser, SBOM generation, cosign keyless signing, and SLSA provenance
-attestation are all fully operational as of the v2.4.0 release (#57). The
-workflow that drives this is
-<a href="https://github.com/glincker/theauth-go/blob/main/.github/workflows/release.yml"><code>.github/workflows/release.yml</code></a>.
-Every tag push since v2.4.0 produces a signed, attested release.</p>
-</div>
-<h2 id="release-process">Release process<a class="headerlink" href="#release-process" title="Permanent link">&para;</a></h2>
-<p>See <a href="https://github.com/glincker/theauth-go/blob/main/docs/RELEASING.md">RELEASING.md</a> in the repository for the full maintainer process. In brief:</p>
-<ol>
-<li>Update <code>CHANGELOG.md</code>: move entries from <code>[Unreleased]</code> to a versioned section.</li>
-<li>Open and merge a PR for the changelog.</li>
-<li>Tag the release:</li>
-</ol>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>git<span class="w"> </span>tag<span class="w"> </span>-a<span class="w"> </span>vX.Y.Z<span class="w"> </span>-m<span class="w"> </span><span class="s2">"theauth-go vX.Y.Z"</span>
-<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>git<span class="w"> </span>push<span class="w"> </span>origin<span class="w"> </span>vX.Y.Z
+<h1 id="auth-for-a-single-binary-go-app">Auth for a Single-Binary Go App<a class="headerlink" href="#auth-for-a-single-binary-go-app" title="Permanent link">&para;</a></h1>
+<p>This guide builds the shape many self-hosted tools have: one static Go binary, one SQLite file, a web UI or API, and a CLI that signs in as the same users. Everything below is implemented by <code>examples/single-binary-sqlite</code>, which also has a smoke test that runs the whole flow.</p>
+<p>You need Go 1.26 or newer. <code>storage/sqlite</code> pulls in <code>modernc.org/sqlite</code>, which declares Go 1.26. The root <code>theauth-go</code> module itself builds on Go 1.25.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>go<span class="w"> </span>get<span class="w"> </span>github.com/glincker/theauth-go
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>go<span class="w"> </span>get<span class="w"> </span>github.com/glincker/theauth-go/storage/sqlite
 </code></pre></div>
-<p>The tag push triggers <code>.github/workflows/release.yml</code>, which runs goreleaser, cosign, and the SLSA attestation step.</p>
-<h2 id="verifying-a-release">Verifying a release<a class="headerlink" href="#verifying-a-release" title="Permanent link">&para;</a></h2>
-<h3 id="download-assets">Download assets<a class="headerlink" href="#download-assets" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>gh<span class="w"> </span>release<span class="w"> </span>download<span class="w"> </span>vX.Y.Z<span class="w"> </span>--repo<span class="w"> </span>glincker/theauth-go<span class="w"> </span>--dir<span class="w"> </span>/tmp/release-check
+<h2 id="1-open-sqlite-and-migrate">1. Open SQLite and migrate<a class="headerlink" href="#1-open-sqlite-and-migrate" title="Permanent link">&para;</a></h2>
+<p>You own the <code>*sql.DB</code>. Foreign keys must be on, and WAL plus a busy timeout are advised:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="nx">db</span><span class="p">,</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">sql</span><span class="p">.</span><span class="nx">Open</span><span class="p">(</span><span class="s">"sqlite"</span><span class="p">,</span>
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="w">    </span><span class="s">"file:app.db?_pragma=foreign_keys(1)&amp;_pragma=busy_timeout(5000)&amp;_pragma=journal_mode(WAL)&amp;_txlock=immediate"</span><span class="p">)</span>
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="k">if</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="kc">nil</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nx">log</span><span class="p">.</span><span class="nx">Fatal</span><span class="p">(</span><span class="nx">err</span><span class="p">)</span><span class="w"> </span><span class="p">}</span>
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="k">if</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">db</span><span class="p">.</span><span class="nx">PingContext</span><span class="p">(</span><span class="nx">ctx</span><span class="p">);</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="kc">nil</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nx">log</span><span class="p">.</span><span class="nx">Fatal</span><span class="p">(</span><span class="nx">err</span><span class="p">)</span><span class="w"> </span><span class="p">}</span>
+<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="k">if</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">sqlitestore</span><span class="p">.</span><span class="nx">Migrate</span><span class="p">(</span><span class="nx">ctx</span><span class="p">,</span><span class="w"> </span><span class="nx">db</span><span class="p">);</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="kc">nil</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nx">log</span><span class="p">.</span><span class="nx">Fatal</span><span class="p">(</span><span class="nx">err</span><span class="p">)</span><span class="w"> </span><span class="p">}</span>
+<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="nx">store</span><span class="p">,</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">sqlitestore</span><span class="p">.</span><span class="nx">New</span><span class="p">(</span><span class="nx">db</span><span class="p">)</span>
 </code></pre></div>
-<h3 id="verify-the-sbom-signature">Verify the SBOM signature<a class="headerlink" href="#verify-the-sbom-signature" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>cosign<span class="w"> </span>verify-blob<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="w">  </span>--certificate-identity<span class="w"> </span><span class="s2">"https://github.com/glincker/theauth-go/.github/workflows/release.yml@refs/tags/vX.Y.Z"</span><span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="w">  </span>--certificate-oidc-issuer<span class="w"> </span><span class="s2">"https://token.actions.githubusercontent.com"</span><span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="w">  </span>--signature<span class="w"> </span>/tmp/release-check/theauth-go-vX.Y.Z.tar.gz.sbom.json.sig<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="w">  </span>--certificate<span class="w"> </span>/tmp/release-check/theauth-go-vX.Y.Z.tar.gz.sbom.json.cert<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="w">  </span>/tmp/release-check/theauth-go-vX.Y.Z.tar.gz.sbom.json
+<p>Import the driver with <code>_ "modernc.org/sqlite"</code>. No cgo is involved, so <code>CGO_ENABLED=0 go build</code> yields a static binary. Details are in <a href="../sqlite-storage/">Use the SQLite Backend</a>.</p>
+<h2 id="2-configure-theauth-go">2. Configure theauth-go<a class="headerlink" href="#2-configure-theauth-go" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="nx">a</span><span class="p">,</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">theauth</span><span class="p">.</span><span class="nx">New</span><span class="p">(</span><span class="nx">theauth</span><span class="p">.</span><span class="nx">Config</span><span class="p">{</span>
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="w">    </span><span class="nx">CoreStorage</span><span class="p">:</span><span class="w">  </span><span class="nx">store</span><span class="p">,</span>
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="w">    </span><span class="nx">BaseURL</span><span class="p">:</span><span class="w">      </span><span class="s">"https://app.example.com"</span><span class="p">,</span>
+<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="w">    </span><span class="nx">Bootstrap</span><span class="p">:</span><span class="w">    </span><span class="o">&amp;</span><span class="nx">theauth</span><span class="p">.</span><span class="nx">BootstrapConfig</span><span class="p">{</span><span class="nx">SetupToken</span><span class="p">:</span><span class="w"> </span><span class="nx">os</span><span class="p">.</span><span class="nx">Getenv</span><span class="p">(</span><span class="s">"SETUP_TOKEN"</span><span class="p">)},</span>
+<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="w">    </span><span class="nx">APITokens</span><span class="p">:</span><span class="w"> </span><span class="o">&amp;</span><span class="nx">theauth</span><span class="p">.</span><span class="nx">APITokensConfig</span><span class="p">{</span>
+<a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="w">        </span><span class="nx">Abilities</span><span class="p">:</span><span class="w"> </span><span class="p">[]</span><span class="kt">string</span><span class="p">{</span><span class="s">"read"</span><span class="p">},</span>
+<a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="w">        </span><span class="nx">UserAbilities</span><span class="p">:</span><span class="w"> </span><span class="kd">func</span><span class="p">(</span><span class="nx">context</span><span class="p">.</span><span class="nx">Context</span><span class="p">,</span><span class="w"> </span><span class="o">*</span><span class="nx">theauth</span><span class="p">.</span><span class="nx">User</span><span class="p">)</span><span class="w"> </span><span class="p">([]</span><span class="kt">string</span><span class="p">,</span><span class="w"> </span><span class="kt">error</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="w">            </span><span class="k">return</span><span class="w"> </span><span class="p">[]</span><span class="kt">string</span><span class="p">{</span><span class="s">"read"</span><span class="p">},</span><span class="w"> </span><span class="kc">nil</span>
+<a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a><span class="w">        </span><span class="p">},</span>
+<a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a><span class="w">        </span><span class="nx">Device</span><span class="p">:</span><span class="w"> </span><span class="o">&amp;</span><span class="nx">theauth</span><span class="p">.</span><span class="nx">DeviceConfig</span><span class="p">{</span>
+<a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a><span class="w">            </span><span class="nx">VerificationURI</span><span class="p">:</span><span class="w">  </span><span class="s">"https://app.example.com/device"</span><span class="p">,</span>
+<a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a><span class="w">            </span><span class="nx">DefaultAbilities</span><span class="p">:</span><span class="w"> </span><span class="p">[]</span><span class="kt">string</span><span class="p">{</span><span class="s">"read"</span><span class="p">},</span>
+<a id="__codelineno-2-13" name="__codelineno-2-13" href="#__codelineno-2-13"></a><span class="w">        </span><span class="p">},</span>
+<a id="__codelineno-2-14" name="__codelineno-2-14" href="#__codelineno-2-14"></a><span class="w">    </span><span class="p">},</span>
+<a id="__codelineno-2-15" name="__codelineno-2-15" href="#__codelineno-2-15"></a><span class="p">})</span>
 </code></pre></div>
-<h3 id="verify-the-source-archive-signature">Verify the source archive signature<a class="headerlink" href="#verify-the-source-archive-signature" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>cosign<span class="w"> </span>verify-blob<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="w">  </span>--certificate-identity<span class="w"> </span><span class="s2">"https://github.com/glincker/theauth-go/.github/workflows/release.yml@refs/tags/vX.Y.Z"</span><span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="w">  </span>--certificate-oidc-issuer<span class="w"> </span><span class="s2">"https://token.actions.githubusercontent.com"</span><span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="w">  </span>--signature<span class="w"> </span>/tmp/release-check/theauth-go-vX.Y.Z.tar.gz.sig<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="w">  </span>--certificate<span class="w"> </span>/tmp/release-check/theauth-go-vX.Y.Z.tar.gz.cert<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="w">  </span>/tmp/release-check/theauth-go-vX.Y.Z.tar.gz
+<ul>
+<li><code>CoreStorage</code> is used because SQLite does not implement organizations, SAML, SCIM or RBAC. Enabling a feature that needs one fails in <code>New</code> with <code>ErrStorageMissingCapability</code>. See <a href="../../concepts/capability-interfaces/">Capability interfaces</a>.</li>
+<li><code>Bootstrap</code> closes public signup until the first user exists. Without <code>SetupToken</code>, a random one is generated and logged once. <code>a.SetupToken()</code> returns it if you would rather print it yourself.</li>
+<li>Without RBAC there is no admin role, so supply <code>UserAbilities</code> yourself. It is evaluated on every request, so changing a user's role narrows their existing tokens at once.</li>
+<li>Local HTTP only: leave <code>BaseURL</code> as <code>http://...</code> and the cookie is not marked <code>Secure</code>. With an <code>https://</code> base URL it is.</li>
+</ul>
+<h2 id="3-mount-on-the-stdlib-mux">3. Mount on the stdlib mux<a class="headerlink" href="#3-mount-on-the-stdlib-mux" title="Permanent link">&para;</a></h2>
+<p><code>a.Handler()</code> returns an <code>http.Handler</code> serving the canonical <code>/auth/...</code> paths, so no router dependency is needed:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="nx">mux</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">http</span><span class="p">.</span><span class="nx">NewServeMux</span><span class="p">()</span>
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="nx">mux</span><span class="p">.</span><span class="nx">Handle</span><span class="p">(</span><span class="s">"/auth/"</span><span class="p">,</span><span class="w"> </span><span class="nx">a</span><span class="p">.</span><span class="nx">Handler</span><span class="p">())</span>
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="nx">mux</span><span class="p">.</span><span class="nx">Handle</span><span class="p">(</span><span class="s">"GET /api/whoami"</span><span class="p">,</span><span class="w"> </span><span class="nx">a</span><span class="p">.</span><span class="nx">RequireAbility</span><span class="p">(</span><span class="s">"read"</span><span class="p">)(</span><span class="nx">http</span><span class="p">.</span><span class="nx">HandlerFunc</span><span class="p">(</span><span class="nx">whoami</span><span class="p">)))</span>
+<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>
+<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="kd">func</span><span class="w"> </span><span class="nx">whoami</span><span class="p">(</span><span class="nx">w</span><span class="w"> </span><span class="nx">http</span><span class="p">.</span><span class="nx">ResponseWriter</span><span class="p">,</span><span class="w"> </span><span class="nx">r</span><span class="w"> </span><span class="o">*</span><span class="nx">http</span><span class="p">.</span><span class="nx">Request</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="w">    </span><span class="nx">p</span><span class="p">,</span><span class="w"> </span><span class="nx">_</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">theauth</span><span class="p">.</span><span class="nx">PrincipalFromContext</span><span class="p">(</span><span class="nx">r</span><span class="p">.</span><span class="nx">Context</span><span class="p">())</span>
+<a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="w">    </span><span class="nx">json</span><span class="p">.</span><span class="nx">NewEncoder</span><span class="p">(</span><span class="nx">w</span><span class="p">).</span><span class="nx">Encode</span><span class="p">(</span><span class="kt">map</span><span class="p">[</span><span class="kt">string</span><span class="p">]</span><span class="kt">any</span><span class="p">{</span><span class="s">"userId"</span><span class="p">:</span><span class="w"> </span><span class="nx">p</span><span class="p">.</span><span class="nx">UserID</span><span class="p">.</span><span class="nx">String</span><span class="p">(),</span><span class="w"> </span><span class="s">"abilities"</span><span class="p">:</span><span class="w"> </span><span class="nx">p</span><span class="p">.</span><span class="nx">Abilities</span><span class="p">})</span>
+<a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a><span class="p">}</span>
 </code></pre></div>
-<p>Both commands should print <code>Verified OK</code>.</p>
-<h3 id="verify-slsa-provenance">Verify SLSA provenance<a class="headerlink" href="#verify-slsa-provenance" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>gh<span class="w"> </span>attestation<span class="w"> </span>verify<span class="w"> </span>/tmp/release-check/theauth-go-vX.Y.Z.tar.gz<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="w">  </span>--repo<span class="w"> </span>glincker/theauth-go
+<p><code>RequireAbility</code> accepts either a session cookie or <code>Authorization: Bearer &lt;token&gt;</code> and returns 403 when the caller lacks the ability. A presented bearer token never falls back to the cookie.</p>
+<h2 id="4-first-run">4. First run<a class="headerlink" href="#4-first-run" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>curl<span class="w"> </span>-c<span class="w"> </span>jar<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </span><span class="nv">$BASE</span>/auth/email-password/signup<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="w">  </span>-H<span class="w"> </span><span class="s2">"X-Setup-Token: </span><span class="nv">$SETUP_TOKEN</span><span class="s2">"</span><span class="w"> </span>-H<span class="w"> </span><span class="s1">'Content-Type: application/json'</span><span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="w">  </span>-d<span class="w"> </span><span class="s1">'{"email":"admin@example.com","password":"a long passphrase here"}'</span>
 </code></pre></div>
-<h2 id="pre-release-tags">Pre-release tags<a class="headerlink" href="#pre-release-tags" title="Permanent link">&para;</a></h2>
-<p>Tags with <code>-alpha</code>, <code>-beta</code>, or <code>-rc</code> suffixes are published as pre-releases automatically (<code>prerelease: auto</code> in <code>.goreleaser.yml</code>). Follow the same tag procedure; GitHub marks the release as a pre-release.</p>
-<h2 id="rollback">Rollback<a class="headerlink" href="#rollback" title="Permanent link">&para;</a></h2>
-<p>If a bad release is published:</p>
-<ol>
-<li>Delete the tag: <code>git push origin :refs/tags/vX.Y.Z</code></li>
-<li>Delete the GitHub Release: <code>gh release delete vX.Y.Z --repo glincker/theauth-go</code></li>
-<li>Fix the issue, cut a patch release (vX.Y.Z+1), and re-tag.</li>
-</ol>
-<p>Do not reuse a version number after publishing it. Consumers may have cached the module at that version in their module proxy.</p>
+<p>The token goes in the <code>X-Setup-Token</code> header or a <code>setupToken</code> body field. After the first user exists, further signups are refused with <code>signup_closed</code> unless <code>OpenSignupAfterFirstUser</code> is set. The first admin must use a password, because magic links cannot carry the token. <code>GET /auth/bootstrap/status</code> returns <code>{"needsSetup": true}</code> until then, which a UI can use to show a setup screen.</p>
+<h2 id="5-mint-a-token">5. Mint a token<a class="headerlink" href="#5-mint-a-token" title="Permanent link">&para;</a></h2>
+<p>A signed-in user mints a scoped token with the built-in route. The secret is returned once:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>curl<span class="w"> </span>-b<span class="w"> </span>jar<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </span><span class="nv">$BASE</span>/auth/tokens<span class="w"> </span>-H<span class="w"> </span><span class="s1">'Content-Type: application/json'</span><span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="w">  </span>-d<span class="w"> </span><span class="s1">'{"name":"ci","abilities":["read"],"expires_in":2592000}'</span>
+<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>curl<span class="w"> </span>-H<span class="w"> </span><span class="s2">"Authorization: Bearer </span><span class="nv">$TOKEN</span><span class="s2">"</span><span class="w"> </span><span class="nv">$BASE</span>/api/whoami
+</code></pre></div>
+<p>A token cannot exceed the abilities its owner holds now. See <a href="../api-tokens/">API Tokens and Device Login</a> for revocation, listing, service accounts and agent tokens (<code>MintAgentToken</code>).</p>
+<h2 id="6-sign-a-cli-in-with-the-device-grant">6. Sign a CLI in with the device grant<a class="headerlink" href="#6-sign-a-cli-in-with-the-device-grant" title="Permanent link">&para;</a></h2>
+<p>On the server, <code>Device</code> enables <code>/auth/device/code</code>, <code>/auth/device/token</code> and <code>/auth/device/approve</code>. You provide the page at <code>VerificationURI</code>: it must sign the user in and post the code to <code>/auth/device/approve</code>. The example ships a 60 line page for this.</p>
+<p>In the CLI, <code>clientauth</code> needs only the standard library:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="nx">store</span><span class="p">,</span><span class="w"> </span><span class="nx">_</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">clientauth</span><span class="p">.</span><span class="nx">NewFileStore</span><span class="p">(</span><span class="s">"mycli"</span><span class="p">)</span>
+<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="nx">cred</span><span class="p">,</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">clientauth</span><span class="p">.</span><span class="nx">DeviceLogin</span><span class="p">(</span><span class="nx">ctx</span><span class="p">,</span><span class="w"> </span><span class="nx">clientauth</span><span class="p">.</span><span class="nx">DeviceOptions</span><span class="p">{</span>
+<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="w">    </span><span class="nx">ServerURL</span><span class="p">:</span><span class="w"> </span><span class="nx">server</span><span class="p">,</span><span class="w"> </span><span class="nx">ClientName</span><span class="p">:</span><span class="w"> </span><span class="s">"mycli"</span><span class="p">,</span><span class="w"> </span><span class="nx">Store</span><span class="p">:</span><span class="w"> </span><span class="nx">store</span><span class="p">,</span>
+<a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="p">})</span>
+<a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="nx">client</span><span class="p">,</span><span class="w"> </span><span class="nx">_</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">clientauth</span><span class="p">.</span><span class="nx">NewClient</span><span class="p">(</span><span class="nx">server</span><span class="p">,</span><span class="w"> </span><span class="nx">store</span><span class="p">)</span>
+<a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a><span class="nx">id</span><span class="p">,</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">client</span><span class="p">.</span><span class="nx">Whoami</span><span class="p">(</span><span class="nx">ctx</span><span class="p">)</span><span class="w">   </span><span class="c1">// GET /auth/tokens/current</span>
+<a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a><span class="nx">err</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">client</span><span class="p">.</span><span class="nx">Logout</span><span class="p">(</span><span class="nx">ctx</span><span class="p">)</span><span class="w">        </span><span class="c1">// revokes server side, then deletes the local copy</span>
+<a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a><span class="nx">req</span><span class="p">,</span><span class="w"> </span><span class="nx">_</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">client</span><span class="p">.</span><span class="nx">NewRequest</span><span class="p">(</span><span class="nx">ctx</span><span class="p">,</span><span class="w"> </span><span class="nx">http</span><span class="p">.</span><span class="nx">MethodGet</span><span class="p">,</span><span class="w"> </span><span class="s">"/api/whoami"</span><span class="p">,</span><span class="w"> </span><span class="kc">nil</span><span class="p">)</span>
+<a id="__codelineno-6-9" name="__codelineno-6-9" href="#__codelineno-6-9"></a><span class="nx">resp</span><span class="p">,</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">client</span><span class="p">.</span><span class="nx">Do</span><span class="p">(</span><span class="nx">req</span><span class="p">)</span><span class="w">     </span><span class="c1">// attaches the bearer token, same origin only</span>
+</code></pre></div>
+<p><code>DeviceLogin</code> prints the code and URL, polls at the server's interval, and backs off on <code>slow_down</code>. See <a href="../cli-login/">CLI Login</a>.</p>
+<h2 id="7-sensitive-actions-step-up">7. Sensitive actions: step-up<a class="headerlink" href="#7-sensitive-actions-step-up" title="Permanent link">&para;</a></h2>
+<p>Session storage in SQLite supports step-up. Guard dangerous routes so a stale session must re-authenticate:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="nx">mux</span><span class="p">.</span><span class="nx">Handle</span><span class="p">(</span><span class="s">"POST /admin/purge"</span><span class="p">,</span><span class="w"> </span><span class="nx">a</span><span class="p">.</span><span class="nx">RequireRecentAuth</span><span class="p">(</span><span class="mi">5</span><span class="o">*</span><span class="nx">time</span><span class="p">.</span><span class="nx">Minute</span><span class="p">)(</span><span class="nx">http</span><span class="p">.</span><span class="nx">HandlerFunc</span><span class="p">(</span><span class="nx">purge</span><span class="p">)))</span>
+</code></pre></div>
+<p>The client calls <code>POST /auth/step-up</code> with <code>{"method":"password","password":"..."}</code> (or TOTP) first. Passkeys (<code>Config.WebAuthn</code>) and TOTP (<code>Config.TOTP</code>, needs <code>EncryptionKey</code>) are available on SQLite too. See <a href="https://github.com/glincker/theauth-go/blob/main/docs/SESSIONS.md">Session management</a>.</p>
+<h2 id="8-housekeeping">8. Housekeeping<a class="headerlink" href="#8-housekeeping" title="Permanent link">&para;</a></h2>
+<p>Expired rows are not deleted on read. Run <code>store.SweepExpired(ctx, time.Now())</code> on a ticker. Revocations (a token, a session, an owner) publish on <code>Config.RevocationBus</code>; the default bus is in-process, which is correct for a single binary. Use <code>a.WatchRevocationMiddleware</code> after <code>RequireAbility</code> on SSE or other long-lived handlers so they drop when the credential is revoked.</p>
+<h2 id="run-the-example">Run the example<a class="headerlink" href="#run-the-example" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="nb">cd</span><span class="w"> </span>examples/single-binary-sqlite
+<a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>go<span class="w"> </span>vet<span class="w"> </span>./...<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span>go<span class="w"> </span><span class="nb">test</span><span class="w"> </span>./...
+<a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="nv">SETUP_TOKEN</span><span class="o">=</span>change-me<span class="w"> </span>go<span class="w"> </span>run<span class="w"> </span>.
+</code></pre></div>
+<p>The test boots the server, creates the first admin, mints a token, runs <code>mycli login</code> headlessly and approves it, then calls the API with the device-issued token and logs out.</p>
 
 
 

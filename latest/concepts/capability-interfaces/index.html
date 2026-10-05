@@ -10,13 +10,13 @@
       
       
       
-        <link rel="canonical" href="https://go.theauth.dev/latest/security/releases/">
+        <link rel="canonical" href="https://go.theauth.dev/latest/concepts/capability-interfaces/">
       
       
-        <link rel="prev" href="../http-security/">
+        <link rel="prev" href="../../getting-started/example-apps/">
       
       
-        <link rel="next" href="../benchmarks/">
+        <link rel="next" href="../oauth21-primer/">
       
       
         
@@ -27,7 +27,7 @@
     
     
       
-        <title>Releases and Verification - theauth-go</title>
+        <title>Capability Interfaces and Storage - theauth-go</title>
       
     
     
@@ -61,17 +61,17 @@
     
   
 <meta property="og:type" content="website" />
-<meta property="og:title" content="Releases and Verification - theauth-go" />
+<meta property="og:title" content="Capability Interfaces and Storage - theauth-go" />
 <meta property="og:description" content="Go auth library covering OAuth 2.1, MCP authorization, agent identities, WebAuthn, SAML, SCIM, and more." />
-<meta property="og:image" content="https://go.theauth.dev/latest/assets/images/social/security/releases.png" />
+<meta property="og:image" content="https://go.theauth.dev/latest/assets/images/social/concepts/capability-interfaces.png" />
 <meta property="og:image:type" content="image/png" />
 <meta property="og:image:width" content="1200" />
 <meta property="og:image:height" content="630" />
-<meta property="og:url" content="https://go.theauth.dev/latest/security/releases/" />
+<meta property="og:url" content="https://go.theauth.dev/latest/concepts/capability-interfaces/" />
 <meta property="twitter:card" content="summary_large_image" />
-<meta property="twitter:title" content="Releases and Verification - theauth-go" />
+<meta property="twitter:title" content="Capability Interfaces and Storage - theauth-go" />
 <meta property="twitter:description" content="Go auth library covering OAuth 2.1, MCP authorization, agent identities, WebAuthn, SAML, SCIM, and more." />
-<meta property="twitter:image" content="https://go.theauth.dev/latest/assets/images/social/security/releases.png" />
+<meta property="twitter:image" content="https://go.theauth.dev/latest/assets/images/social/concepts/capability-interfaces.png" />
 </head>
   
   
@@ -91,7 +91,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#releases-and-verification" class="md-skip">
+        <a href="#capability-interfaces-and-choosing-a-storage-backend" class="md-skip">
           Skip to content
         </a>
       
@@ -131,7 +131,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Releases and Verification
+              Capability Interfaces and Storage
             
           </span>
         </div>
@@ -275,11 +275,13 @@
   
   
   
+    
+  
   
     
     
-      <li class="md-tabs__item">
-        <a href="../../concepts/capability-interfaces/" class="md-tabs__link">
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="./" class="md-tabs__link">
           
   
   
@@ -335,13 +337,11 @@
   
   
   
-    
-  
   
     
     
-      <li class="md-tabs__item md-tabs__item--active">
-        <a href="../threat-model/" class="md-tabs__link">
+      <li class="md-tabs__item">
+        <a href="../../security/threat-model/" class="md-tabs__link">
           
   
   
@@ -675,28 +675,31 @@
       
   
   
+    
   
   
+  
     
     
     
     
+      
+        
+        
       
       
         
       
     
     
-    <li class="md-nav__item md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
       
         
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" checked>
         
           
-        
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3" >
-        
-          
-          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
             
   
   
@@ -714,7 +717,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="true">
           <label class="md-nav__title" for="__nav_3">
             <span class="md-nav__icon md-icon"></span>
             
@@ -729,10 +732,37 @@
                 
   
   
+    
   
   
-    <li class="md-nav__item">
-      <a href="../../concepts/capability-interfaces/" class="md-nav__link">
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Capability Interfaces and Storage
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
         
   
   
@@ -748,6 +778,70 @@
   
 
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#three-ways-to-supply-storage" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Three ways to supply storage
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#capabilities-and-who-implements-them" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Capabilities and who implements them
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#which-feature-needs-which-capability" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Which feature needs which capability
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#choosing-a-backend" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Choosing a backend
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
     </li>
   
 
@@ -760,7 +854,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../concepts/oauth21-primer/" class="md-nav__link">
+      <a href="../oauth21-primer/" class="md-nav__link">
         
   
   
@@ -788,7 +882,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../concepts/mcp-authorization/" class="md-nav__link">
+      <a href="../mcp-authorization/" class="md-nav__link">
         
   
   
@@ -816,7 +910,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../concepts/authorization-server/" class="md-nav__link">
+      <a href="../authorization-server/" class="md-nav__link">
         
   
   
@@ -844,7 +938,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../concepts/resource-server/" class="md-nav__link">
+      <a href="../resource-server/" class="md-nav__link">
         
   
   
@@ -872,7 +966,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../concepts/par-jar/" class="md-nav__link">
+      <a href="../par-jar/" class="md-nav__link">
         
   
   
@@ -900,7 +994,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../concepts/jwt-bearer/" class="md-nav__link">
+      <a href="../jwt-bearer/" class="md-nav__link">
         
   
   
@@ -928,7 +1022,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../concepts/ciba/" class="md-nav__link">
+      <a href="../ciba/" class="md-nav__link">
         
   
   
@@ -1698,31 +1792,28 @@
       
   
   
-    
   
   
-  
     
     
     
     
-      
-        
-        
       
       
         
       
     
     
-    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--nested">
       
         
-        
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" checked>
         
           
-          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="">
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
             
   
   
@@ -1740,7 +1831,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="true">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
           <label class="md-nav__title" for="__nav_6">
             <span class="md-nav__icon md-icon"></span>
             
@@ -1758,7 +1849,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../threat-model/" class="md-nav__link">
+      <a href="../../security/threat-model/" class="md-nav__link">
         
   
   
@@ -1786,7 +1877,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../http-security/" class="md-nav__link">
+      <a href="../../security/http-security/" class="md-nav__link">
         
   
   
@@ -1811,37 +1902,10 @@
                 
   
   
-    
   
   
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
-      
-      
-        
-      
-      
-        <label class="md-nav__link md-nav__link--active" for="__toc">
-          
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Releases and Verification
-  
-
-    
-  </span>
-  
-  
-
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
-      <a href="./" class="md-nav__link md-nav__link--active">
+    <li class="md-nav__item">
+      <a href="../../security/releases/" class="md-nav__link">
         
   
   
@@ -1857,120 +1921,6 @@
   
 
       </a>
-      
-        
-
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-    
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#release-process" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Release process
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#verifying-a-release" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Verifying a release
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Verifying a release">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#download-assets" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Download assets
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#verify-the-sbom-signature" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Verify the SBOM signature
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#verify-the-source-archive-signature" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Verify the source archive signature
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#verify-slsa-provenance" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Verify SLSA provenance
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#pre-release-tags" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Pre-release tags
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#rollback" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Rollback
-      
-    </span>
-  </a>
-  
-</li>
-      
-    </ul>
-  
-</nav>
-      
     </li>
   
 
@@ -1983,7 +1933,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../benchmarks/" class="md-nav__link">
+      <a href="../../security/benchmarks/" class="md-nav__link">
         
   
   
@@ -2011,7 +1961,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../compliance-soc2/" class="md-nav__link">
+      <a href="../../security/compliance-soc2/" class="md-nav__link">
         
   
   
@@ -2039,7 +1989,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../compliance-gdpr/" class="md-nav__link">
+      <a href="../../security/compliance-gdpr/" class="md-nav__link">
         
   
   
@@ -2294,10 +2244,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#release-process" class="md-nav__link">
+  <a href="#three-ways-to-supply-storage" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Release process
+        Three ways to supply storage
       
     </span>
   </a>
@@ -2305,71 +2255,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#verifying-a-release" class="md-nav__link">
+  <a href="#capabilities-and-who-implements-them" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Verifying a release
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Verifying a release">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#download-assets" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Download assets
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#verify-the-sbom-signature" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Verify the SBOM signature
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#verify-the-source-archive-signature" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Verify the source archive signature
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#verify-slsa-provenance" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Verify SLSA provenance
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#pre-release-tags" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Pre-release tags
+        Capabilities and who implements them
       
     </span>
   </a>
@@ -2377,10 +2266,21 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#rollback" class="md-nav__link">
+  <a href="#which-feature-needs-which-capability" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Rollback
+        Which feature needs which capability
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#choosing-a-backend" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Choosing a backend
       
     </span>
   </a>
@@ -2430,10 +2330,10 @@
     
     
       <li class="md-path__item">
-        <a href="../threat-model/" class="md-path__link">
+        <a href="./" class="md-path__link">
           
   <span class="md-ellipsis">
-    Security
+    Concepts
   </span>
 
         </a>
@@ -2455,64 +2355,247 @@
   
 
 
-<h1 id="releases-and-verification">Releases and Verification<a class="headerlink" href="#releases-and-verification" title="Permanent link">&para;</a></h1>
-<p>Every theauth-go release artifact is signed with <code>cosign</code> keyless signing via
-Sigstore OIDC (GitHub Actions identity). The release workflow also generates a
-CycloneDX SBOM and a SLSA provenance attestation.</p>
-<div class="admonition success">
-<p class="admonition-title">Operational since v2.4.0</p>
-<p>Goreleaser, SBOM generation, cosign keyless signing, and SLSA provenance
-attestation are all fully operational as of the v2.4.0 release (#57). The
-workflow that drives this is
-<a href="https://github.com/glincker/theauth-go/blob/main/.github/workflows/release.yml"><code>.github/workflows/release.yml</code></a>.
-Every tag push since v2.4.0 produces a signed, attested release.</p>
-</div>
-<h2 id="release-process">Release process<a class="headerlink" href="#release-process" title="Permanent link">&para;</a></h2>
-<p>See <a href="https://github.com/glincker/theauth-go/blob/main/docs/RELEASING.md">RELEASING.md</a> in the repository for the full maintainer process. In brief:</p>
-<ol>
-<li>Update <code>CHANGELOG.md</code>: move entries from <code>[Unreleased]</code> to a versioned section.</li>
-<li>Open and merge a PR for the changelog.</li>
-<li>Tag the release:</li>
-</ol>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>git<span class="w"> </span>tag<span class="w"> </span>-a<span class="w"> </span>vX.Y.Z<span class="w"> </span>-m<span class="w"> </span><span class="s2">"theauth-go vX.Y.Z"</span>
-<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>git<span class="w"> </span>push<span class="w"> </span>origin<span class="w"> </span>vX.Y.Z
-</code></pre></div>
-<p>The tag push triggers <code>.github/workflows/release.yml</code>, which runs goreleaser, cosign, and the SLSA attestation step.</p>
-<h2 id="verifying-a-release">Verifying a release<a class="headerlink" href="#verifying-a-release" title="Permanent link">&para;</a></h2>
-<h3 id="download-assets">Download assets<a class="headerlink" href="#download-assets" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>gh<span class="w"> </span>release<span class="w"> </span>download<span class="w"> </span>vX.Y.Z<span class="w"> </span>--repo<span class="w"> </span>glincker/theauth-go<span class="w"> </span>--dir<span class="w"> </span>/tmp/release-check
-</code></pre></div>
-<h3 id="verify-the-sbom-signature">Verify the SBOM signature<a class="headerlink" href="#verify-the-sbom-signature" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>cosign<span class="w"> </span>verify-blob<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="w">  </span>--certificate-identity<span class="w"> </span><span class="s2">"https://github.com/glincker/theauth-go/.github/workflows/release.yml@refs/tags/vX.Y.Z"</span><span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="w">  </span>--certificate-oidc-issuer<span class="w"> </span><span class="s2">"https://token.actions.githubusercontent.com"</span><span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="w">  </span>--signature<span class="w"> </span>/tmp/release-check/theauth-go-vX.Y.Z.tar.gz.sbom.json.sig<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="w">  </span>--certificate<span class="w"> </span>/tmp/release-check/theauth-go-vX.Y.Z.tar.gz.sbom.json.cert<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="w">  </span>/tmp/release-check/theauth-go-vX.Y.Z.tar.gz.sbom.json
-</code></pre></div>
-<h3 id="verify-the-source-archive-signature">Verify the source archive signature<a class="headerlink" href="#verify-the-source-archive-signature" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>cosign<span class="w"> </span>verify-blob<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="w">  </span>--certificate-identity<span class="w"> </span><span class="s2">"https://github.com/glincker/theauth-go/.github/workflows/release.yml@refs/tags/vX.Y.Z"</span><span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="w">  </span>--certificate-oidc-issuer<span class="w"> </span><span class="s2">"https://token.actions.githubusercontent.com"</span><span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="w">  </span>--signature<span class="w"> </span>/tmp/release-check/theauth-go-vX.Y.Z.tar.gz.sig<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="w">  </span>--certificate<span class="w"> </span>/tmp/release-check/theauth-go-vX.Y.Z.tar.gz.cert<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="w">  </span>/tmp/release-check/theauth-go-vX.Y.Z.tar.gz
-</code></pre></div>
-<p>Both commands should print <code>Verified OK</code>.</p>
-<h3 id="verify-slsa-provenance">Verify SLSA provenance<a class="headerlink" href="#verify-slsa-provenance" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>gh<span class="w"> </span>attestation<span class="w"> </span>verify<span class="w"> </span>/tmp/release-check/theauth-go-vX.Y.Z.tar.gz<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="w">  </span>--repo<span class="w"> </span>glincker/theauth-go
-</code></pre></div>
-<h2 id="pre-release-tags">Pre-release tags<a class="headerlink" href="#pre-release-tags" title="Permanent link">&para;</a></h2>
-<p>Tags with <code>-alpha</code>, <code>-beta</code>, or <code>-rc</code> suffixes are published as pre-releases automatically (<code>prerelease: auto</code> in <code>.goreleaser.yml</code>). Follow the same tag procedure; GitHub marks the release as a pre-release.</p>
-<h2 id="rollback">Rollback<a class="headerlink" href="#rollback" title="Permanent link">&para;</a></h2>
-<p>If a bad release is published:</p>
-<ol>
-<li>Delete the tag: <code>git push origin :refs/tags/vX.Y.Z</code></li>
-<li>Delete the GitHub Release: <code>gh release delete vX.Y.Z --repo glincker/theauth-go</code></li>
-<li>Fix the issue, cut a patch release (vX.Y.Z+1), and re-tag.</li>
-</ol>
-<p>Do not reuse a version number after publishing it. Consumers may have cached the module at that version in their module proxy.</p>
+<h1 id="capability-interfaces-and-choosing-a-storage-backend">Capability Interfaces and Choosing a Storage Backend<a class="headerlink" href="#capability-interfaces-and-choosing-a-storage-backend" title="Permanent link">&para;</a></h1>
+<p>theauth-go does not require one monolithic storage interface. Persistence is split into small capability interfaces in <code>storage_caps.go</code> and a few optional extensions. A backend implements the ones it can, and <code>New</code> checks that every feature you enabled has the capability it needs. A missing one fails at startup with <code>ErrStorageMissingCapability</code>, not on the first request.</p>
+<h2 id="three-ways-to-supply-storage">Three ways to supply storage<a class="headerlink" href="#three-ways-to-supply-storage" title="Permanent link">&para;</a></h2>
+<ul>
+<li><code>Config.Storage</code> takes the full <code>theauth.Storage</code>: users, sessions, magic links, passwords, OAuth accounts, WebAuthn, TOTP, organizations, SAML, SCIM, RBAC and audit. <code>memory</code>, <code>postgres</code> and <code>mysql</code> satisfy it.</li>
+<li><code>Config.CoreStorage</code> takes <code>theauth.CoreStorage</code>: users, sessions, magic links and passwords only. Anything else the adapter also implements is detected by type assertion. The rest are stubs that return <code>ErrStorageMissingCapability</code>. <code>sqlite</code> is used this way.</li>
+<li>Optional extension interfaces are asserted against the storage you pass. If it implements one, the feature turns on. If not, the feature is off or degrades as noted below.</li>
+</ul>
+<p>Set exactly one of <code>Storage</code> and <code>CoreStorage</code>.</p>
+<h2 id="capabilities-and-who-implements-them">Capabilities and who implements them<a class="headerlink" href="#capabilities-and-who-implements-them" title="Permanent link">&para;</a></h2>
+<p>Verified against the adapters in this repository. "Yes" means the adapter has the methods and, where the repo declares one, a compile-time assertion or a test for it.</p>
+<table>
+<thead>
+<tr>
+<th>Capability</th>
+<th>Interface</th>
+<th>memory</th>
+<th>sqlite</th>
+<th>postgres</th>
+<th>mysql</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Users, sessions, magic links, passwords</td>
+<td><code>CoreStorage</code></td>
+<td>Yes</td>
+<td>Yes</td>
+<td>Yes</td>
+<td>Yes</td>
+</tr>
+<tr>
+<td>OAuth provider accounts</td>
+<td><code>OAuthAccountStorage</code></td>
+<td>Yes</td>
+<td>Yes</td>
+<td>Yes</td>
+<td>Yes</td>
+</tr>
+<tr>
+<td>WebAuthn passkeys</td>
+<td><code>WebAuthnStorage</code></td>
+<td>Yes</td>
+<td>Yes</td>
+<td>Yes</td>
+<td>Yes</td>
+</tr>
+<tr>
+<td>TOTP and recovery codes</td>
+<td><code>TOTPStorage</code></td>
+<td>Yes</td>
+<td>Yes</td>
+<td>Yes</td>
+<td>Yes</td>
+</tr>
+<tr>
+<td>Audit log</td>
+<td><code>AuditStorage</code></td>
+<td>Yes</td>
+<td>Yes</td>
+<td>Yes</td>
+<td>Yes</td>
+</tr>
+<tr>
+<td>User count (first-run <code>Bootstrap</code>)</td>
+<td><code>UserCountStorage</code></td>
+<td>Yes</td>
+<td>Yes</td>
+<td>Yes</td>
+<td>Yes</td>
+</tr>
+<tr>
+<td>Passkey rename</td>
+<td><code>WebAuthnRenameStorage</code></td>
+<td>Yes</td>
+<td>Yes</td>
+<td>Yes</td>
+<td>Yes</td>
+</tr>
+<tr>
+<td>Recovery code count and regenerate</td>
+<td><code>RecoveryCodeStorage</code></td>
+<td>Yes</td>
+<td>Yes</td>
+<td>Yes</td>
+<td>Yes</td>
+</tr>
+<tr>
+<td>Durable TOTP replay protection</td>
+<td><code>TOTPReplayStorage</code></td>
+<td>Yes</td>
+<td>Yes</td>
+<td>Yes</td>
+<td>Yes</td>
+</tr>
+<tr>
+<td>Session list, idle timeout, step-up</td>
+<td><code>SessionManagementStorage</code></td>
+<td>Yes</td>
+<td>Yes</td>
+<td>Yes</td>
+<td>Yes</td>
+</tr>
+<tr>
+<td>Session links</td>
+<td><code>SessionLinkStorage</code></td>
+<td>Yes</td>
+<td>Yes</td>
+<td>Yes</td>
+<td>Yes</td>
+</tr>
+<tr>
+<td>Scoped API tokens</td>
+<td><code>APITokenStorage</code></td>
+<td>Yes</td>
+<td>Yes</td>
+<td>Yes</td>
+<td>Yes</td>
+</tr>
+<tr>
+<td>Device grant (RFC 8628)</td>
+<td><code>DeviceCodeStorage</code></td>
+<td>Yes</td>
+<td>Yes</td>
+<td>Yes</td>
+<td>Yes</td>
+</tr>
+<tr>
+<td>Shared login throttle store</td>
+<td><code>LoginThrottleStore</code></td>
+<td>In-process default</td>
+<td>Yes</td>
+<td>Yes</td>
+<td>Yes</td>
+</tr>
+<tr>
+<td>Organizations, SAML, SCIM, RBAC</td>
+<td><code>OrganizationStorage</code>, <code>SAMLStorage</code>, <code>SCIMStorage</code>, <code>RBACStorage</code></td>
+<td>Yes</td>
+<td>No</td>
+<td>Yes</td>
+<td>Yes</td>
+</tr>
+<tr>
+<td>OAuth 2.1 authorization server, agent identity</td>
+<td><code>OAuthServerStorage</code></td>
+<td>Yes</td>
+<td>No</td>
+<td>Yes</td>
+<td>Yes</td>
+</tr>
+<tr>
+<td>CIBA backchannel auth</td>
+<td><code>CIBAStorage</code></td>
+<td>Yes</td>
+<td>No</td>
+<td>Yes</td>
+<td>No</td>
+</tr>
+<tr>
+<td>Durable JWT-bearer <code>jti</code> replay</td>
+<td><code>JWTBearerStorage</code></td>
+<td>Yes</td>
+<td>No</td>
+<td>No</td>
+<td>No</td>
+</tr>
+<tr>
+<td>Authorization policies (<a href="../../guides/policy-engine/">policy engine</a>)</td>
+<td><code>policy.Storage</code></td>
+<td>Yes</td>
+<td>No</td>
+<td>No</td>
+<td>No</td>
+</tr>
+</tbody>
+</table>
+<p>Postgres and MySQL implement the token, device, session-management, TOTP replay, user-count and throttle capabilities, and the new <code>storagetest</code> suites for them pass against live PostgreSQL 16 and MySQL 8. The older shared contract gate for those two adapters (<code>THEAUTH_PG_CONTRACT</code>, <code>THEAUTH_MYSQL_CONTRACT</code>) is still off in CI because some older subtests fail; see <code>docs/ROADMAP.md</code>. Treat Postgres and MySQL support for the newer features as newly added.</p>
+<p>Notes:</p>
+<ul>
+<li>Without <code>JWTBearerStorage</code>, JWT-bearer replay protection uses an in-process map and is lost on restart. Without <code>CIBAStorage</code>, <code>/oauth/bc-authorize</code> is not mounted.</li>
+<li>Without <code>TOTPReplayStorage</code>, the last used TOTP step is tracked in process memory only.</li>
+<li>Without <code>RecoveryCodeStorage</code> or <code>WebAuthnRenameStorage</code>, the matching routes answer 501 and everything else works.</li>
+<li>The login throttle store is a separate hook, <code>Config.LoginThrottle.Store</code>. SQLite provides <code>Store.ThrottleStore()</code> so several processes on one database share counters. Others use the in-process default or a store you supply.</li>
+</ul>
+<h2 id="which-feature-needs-which-capability">Which feature needs which capability<a class="headerlink" href="#which-feature-needs-which-capability" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>You enable</th>
+<th>Needs</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Email and password, magic link, cookies</td>
+<td><code>CoreStorage</code></td>
+</tr>
+<tr>
+<td><code>Config.Bootstrap</code></td>
+<td><code>UserCountStorage</code></td>
+</tr>
+<tr>
+<td><code>Config.APITokens</code>, <code>RequireAbility</code>, <code>MintAPIToken</code></td>
+<td><code>APITokenStorage</code></td>
+</tr>
+<tr>
+<td><code>APITokensConfig.Device</code>, <code>clientauth.DeviceLogin</code></td>
+<td><code>APITokenStorage</code> and <code>DeviceCodeStorage</code></td>
+</tr>
+<tr>
+<td><code>RequireRecentAuth</code>, <code>POST /auth/step-up</code>, <code>GET /auth/sessions</code>, <code>SessionIdleTimeout</code></td>
+<td><code>SessionManagementStorage</code></td>
+</tr>
+<tr>
+<td><code>Config.SessionLinks</code></td>
+<td><code>SessionLinkStorage</code></td>
+</tr>
+<tr>
+<td><code>Config.WebAuthn</code>, <code>Config.TOTP</code></td>
+<td><code>WebAuthnStorage</code>, <code>TOTPStorage</code> (and <code>EncryptionKey</code> for TOTP)</td>
+</tr>
+<tr>
+<td><code>Config.Organizations</code>, <code>SAML</code>, <code>SCIM</code>, <code>RBAC</code>, <code>Admin</code></td>
+<td>The org, SAML, SCIM and RBAC interfaces</td>
+</tr>
+<tr>
+<td><code>Config.AuthorizationServer</code>, <code>AgentIdentity</code> (OAuth agents)</td>
+<td><code>OAuthServerStorage</code></td>
+</tr>
+</tbody>
+</table>
+<p>Agent tokens minted with <code>MintAgentToken</code> are API tokens (<code>kind=agent</code>), so they need only <code>APITokenStorage</code>, not the OAuth server.</p>
+<h2 id="choosing-a-backend">Choosing a backend<a class="headerlink" href="#choosing-a-backend" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>memory</strong>: tests and demos. State is lost on restart.</li>
+<li><strong>sqlite</strong> (<code>storage/sqlite</code>, separate module, Go 1.26): single-binary and single-host apps, CLIs with a local server, edge boxes. Covers sign-in, passkeys, TOTP, sessions with step-up, API tokens, device login and audit. It has no organizations, SAML, SCIM, RBAC or OAuth authorization server. One process should own the file.</li>
+<li><strong>postgres</strong>: multi-instance production with the full enterprise and OAuth server surface, plus tokens, device login and session management. No durable JWT-bearer <code>jti</code> replay store.</li>
+<li><strong>mysql</strong>: same coverage as Postgres except CIBA.</li>
+</ul>
+<p>Pick by the features you need first, host topology second. SQLite is the fit for a single-binary app without organizations, SAML, SCIM or the authorization server. If you need those, use Postgres or MySQL. You can also implement a capability on your own adapter; see <a href="../../guides/custom-storage-backend/">Write a Custom Storage Backend</a> and run the <code>storagetest</code> suites (<code>RunAPITokens</code>, <code>RunDeviceCodes</code>, <code>RunSessionManagement</code>) against it.</p>
 
 
 

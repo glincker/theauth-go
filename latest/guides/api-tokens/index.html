@@ -279,7 +279,7 @@
     
     
       <li class="md-tabs__item">
-        <a href="../../concepts/oauth21-primer/" class="md-tabs__link">
+        <a href="../../concepts/capability-interfaces/" class="md-tabs__link">
           
   
   
@@ -732,6 +732,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../../concepts/capability-interfaces/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Capability Interfaces and Storage
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../concepts/oauth21-primer/" class="md-nav__link">
         
   
@@ -1160,6 +1188,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Device grant">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#approve-from-a-pending-list" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Approve from a pending list
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -1197,6 +1242,118 @@
     
   
     CLI Login
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../path-prefix-and-dynamic-providers/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Path Prefix and Dynamic Providers
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policy-engine/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Policy Engine
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../single-binary-go-app/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Auth for a Single-Binary Go App
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../migrate-from-hand-rolled-sessions/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Migrate from Hand-Rolled Sessions
   
 
     
@@ -1309,6 +1466,34 @@
     
   
     Use the SQLite Backend
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../postgres-mysql-storage/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Use the Postgres or MySQL Backend
   
 
     
@@ -2150,6 +2335,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Device grant">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#approve-from-a-pending-list" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Approve from a pending list
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -2289,6 +2491,16 @@
 <td>session</td>
 <td>Revoke your token. Admins may revoke any. Others get 404.</td>
 </tr>
+<tr>
+<td><code>GET /auth/tokens/current</code></td>
+<td>bearer</td>
+<td>Describe the presented token: id, name, kind, agentName, abilities as currently effective after owner clamping, ownerId, ownerKind, createdAt, expiresAt, lastUsedAt. Never the secret or hash. Needs no ability. Session cookie gets 403.</td>
+</tr>
+<tr>
+<td><code>DELETE /auth/tokens/current</code></td>
+<td>bearer</td>
+<td>Revoke the presented token (204), emit the token revoked audit event and the revocation bus event. The token is dead afterwards, so a repeat call gets 401. Needs no ability. Session cookie gets 403.</td>
+</tr>
 </tbody>
 </table>
 <p>Token management is session only, so a token cannot mint or revoke tokens.</p>
@@ -2306,9 +2518,16 @@
 <li>Wrong user codes count against a per-approver and per-IP budget (5 per 15 minutes), after which approval returns 429.</li>
 <li>Show the requester IP and user agent from <code>action: info</code> on your approval page.</li>
 </ul>
-<p>Go callers can skip HTTP: <code>StartDeviceAuth</code>, <code>LookupDeviceRequest</code>, <code>DecideDeviceRequest</code>, <code>RedeemDeviceCode</code>, <code>MintAPIToken</code>, <code>AuthenticateAPIToken</code>, <code>ListAPITokens</code>, <code>RevokeAPIToken</code>.</p>
+<h3 id="approve-from-a-pending-list">Approve from a pending list<a class="headerlink" href="#approve-from-a-pending-list" title="Permanent link">&para;</a></h3>
+<p>A dashboard can show pending requests so a signed-in user approves or denies one without typing the code. These routes need a session (bearer tokens get 401) and use the same rate limit as <code>/auth/device/approve</code>:</p>
+<ul>
+<li><code>GET /auth/device/requests</code> returns <code>{"requests": [...]}</code> with <code>id</code>, <code>clientName</code>, <code>requestedAbilities</code>, <code>requesterIp</code>, <code>requesterUserAgent</code>, <code>createdAt</code> and <code>expiresAt</code> for each pending, unexpired request, newest first. It never includes the device code, its hash, or the user code. Show the IP and user agent so people recognize their own request.</li>
+<li><code>POST /auth/device/requests/{id}/approve</code> and <code>POST /auth/device/requests/{id}/deny</code> decide by request ID with the same rules as the code route: atomic, abilities capped to the approver's, <code>root</code> only when requested and held. Approve accepts an optional <code>abilities</code> list to narrow. A <code>device.approved</code> or <code>device.denied</code> audit event is recorded.</li>
+</ul>
+<p>Requests carry no owner, so these routes are restricted by default. The session must hold <code>APITokensConfig.DeviceRequestsAbility</code> (empty means <code>root</code>), checked against the user's current abilities on every request; anyone else gets 403 <code>auth.forbidden</code>. Set it to an ability your app defines to delegate review. <code>DeviceRequestsAnySignedInUser: true</code> opens the routes to every signed-in user, but approving from a list skips the proof of holding the code shown on the device, which makes phishing easier in a multi-user app. <code>POST /auth/device/approve</code> (by user code) is not affected. The list needs the optional <code>DeviceCodeLister</code> storage extension (memory, SQLite, Postgres and MySQL implement it); without it the routes return 404.</p>
+<p>Go callers can skip HTTP: <code>StartDeviceAuth</code>, <code>LookupDeviceRequest</code>, <code>DecideDeviceRequest</code>, <code>ListDeviceRequests</code>, <code>DecideDeviceRequestByID</code>, <code>RedeemDeviceCode</code>, <code>MintAPIToken</code>, <code>AuthenticateAPIToken</code>, <code>ListAPITokens</code>, <code>RevokeAPIToken</code>.</p>
 <h2 id="custom-storage">Custom storage<a class="headerlink" href="#custom-storage" title="Permanent link">&para;</a></h2>
-<p>Implement <code>APITokenStorage</code> and <code>DeviceCodeStorage</code> and run <code>storagetest.RunAPITokens</code> and <code>storagetest.RunDeviceCodes</code>. <code>ClaimDeviceCode</code> and <code>DecideDeviceCode</code> must be single compare-and-set statements. Do not add a foreign key from the token owner to users: service account owners have no user row.</p>
+<p>Implement <code>APITokenStorage</code> and <code>DeviceCodeStorage</code> and optionally <code>DeviceCodeLister</code> for the pending list, and run <code>storagetest.RunAPITokens</code> and <code>storagetest.RunDeviceCodes</code>. <code>ClaimDeviceCode</code> and <code>DecideDeviceCode</code> must be single compare-and-set statements. Do not add a foreign key from the token owner to users: service account owners have no user row.</p>
 
 
 
