@@ -3,7 +3,7 @@ package audit_test
 import (
 	"testing"
 
-	theauth "github.com/glincker/theauth-go"
+	theauth "github.com/glincker/theauth-go/v2"
 )
 
 // TestAuditRedactorAllocPerOp verifies that key matching is case-insensitive

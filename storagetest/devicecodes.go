@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/glincker/theauth-go"
+	"github.com/glincker/theauth-go/v2"
 )
 
 // RunDeviceCodes runs the RFC 8628 device code contract tests.

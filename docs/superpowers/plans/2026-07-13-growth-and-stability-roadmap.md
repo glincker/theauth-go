@@ -391,8 +391,8 @@ import (
 
 	_ "github.com/go-sql-driver/mysql"
 
-	"github.com/glincker/theauth-go/storage/mysql"
-	"github.com/glincker/theauth-go/storagetest"
+	"github.com/glincker/theauth-go/v2/storage/mysql"
+	"github.com/glincker/theauth-go/v2/storagetest"
 )
 ```
 
@@ -411,11 +411,11 @@ import (
 
 	_ "github.com/go-sql-driver/mysql"
 
-	"github.com/glincker/theauth-go"
-	"github.com/glincker/theauth-go/internal/ulid"
-	"github.com/glincker/theauth-go/storage"
-	"github.com/glincker/theauth-go/storage/mysql"
-	"github.com/glincker/theauth-go/storagetest"
+	"github.com/glincker/theauth-go/v2"
+	"github.com/glincker/theauth-go/v2/internal/ulid"
+	"github.com/glincker/theauth-go/v2/storage"
+	"github.com/glincker/theauth-go/v2/storage/mysql"
+	"github.com/glincker/theauth-go/v2/storagetest"
 )
 ```
 
@@ -719,12 +719,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/glincker/theauth-go"
-	"github.com/glincker/theauth-go/internal/audit"
-	"github.com/glincker/theauth-go/internal/ulid"
-	"github.com/glincker/theauth-go/internal/webauthn"
-	"github.com/glincker/theauth-go/storage"
-	"github.com/glincker/theauth-go/storage/memory"
+	"github.com/glincker/theauth-go/v2"
+	"github.com/glincker/theauth-go/v2/internal/audit"
+	"github.com/glincker/theauth-go/v2/internal/ulid"
+	"github.com/glincker/theauth-go/v2/internal/webauthn"
+	"github.com/glincker/theauth-go/v2/storage"
+	"github.com/glincker/theauth-go/v2/storage/memory"
 )
 
 // TestServiceListAndDeleteCredential exercises the two Service methods only
@@ -938,7 +938,7 @@ r := chi.NewRouter()
 a.Mount(r) // /auth/* magic-link, email-password, OAuth, passkeys, TOTP, SAML
 ```
 
-`go get github.com/glincker/theauth-go`. Requires Go 1.25+.
+`go get github.com/glincker/theauth-go/v2`. Requires Go 1.25+.
 ```
 
 - [ ] **Step 2: Copy the same content to the docs site**

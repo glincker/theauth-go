@@ -3,7 +3,7 @@ package as
 import (
 	"errors"
 
-	"github.com/glincker/theauth-go/internal/models"
+	"github.com/glincker/theauth-go/v2/internal/models"
 )
 
 // metadata.go: RFC 8414 authorization server metadata document.

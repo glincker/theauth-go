@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/glincker/theauth-go"
+	"github.com/glincker/theauth-go/v2"
 )
 
 func fakeServer(t *testing.T, rep theauth.Report) *httptest.Server {

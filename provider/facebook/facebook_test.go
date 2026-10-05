@@ -8,8 +8,8 @@ import (
 	"net/url"
 	"testing"
 
-	"github.com/glincker/theauth-go"
-	fbprov "github.com/glincker/theauth-go/provider/facebook"
+	"github.com/glincker/theauth-go/v2"
+	fbprov "github.com/glincker/theauth-go/v2/provider/facebook"
 )
 
 func TestNameIsFacebook(t *testing.T) {

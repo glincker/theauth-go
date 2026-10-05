@@ -5,8 +5,8 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/glincker/theauth-go"
-	"github.com/glincker/theauth-go/internal/ulid"
+	"github.com/glincker/theauth-go/v2"
+	"github.com/glincker/theauth-go/v2/internal/ulid"
 )
 
 // service_token_cache_test.go: regression tests for the client_secret

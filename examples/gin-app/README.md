@@ -55,5 +55,5 @@ make down
   sees.
 - Postgres up but `DATABASE_URL` not set: the example only uses the
   in-memory store. Wire Postgres yourself by importing
-  `github.com/glincker/theauth-go/storage/postgres` and swapping the
+  `github.com/glincker/theauth-go/v2/storage/postgres` and swapping the
   storage adapter in `main.go`.

@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/glincker/theauth-go/internal/models"
+	"github.com/glincker/theauth-go/v2/internal/models"
 )
 
 // Storage is the full persistence contract: the embedding of every capability

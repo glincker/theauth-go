@@ -11,11 +11,11 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/glincker/theauth-go/crypto"
-	"github.com/glincker/theauth-go/internal/httpx"
-	"github.com/glincker/theauth-go/internal/models"
-	"github.com/glincker/theauth-go/internal/password"
-	"github.com/glincker/theauth-go/internal/throttle"
+	"github.com/glincker/theauth-go/v2/crypto"
+	"github.com/glincker/theauth-go/v2/internal/httpx"
+	"github.com/glincker/theauth-go/v2/internal/models"
+	"github.com/glincker/theauth-go/v2/internal/password"
+	"github.com/glincker/theauth-go/v2/internal/throttle"
 )
 
 // BootstrapConfig closes public signup and gates creation of the first user

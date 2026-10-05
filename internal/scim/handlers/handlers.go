@@ -18,11 +18,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/glincker/theauth-go/internal/emailnorm"
-	"github.com/glincker/theauth-go/internal/httpx"
-	"github.com/glincker/theauth-go/internal/models"
-	internalscim "github.com/glincker/theauth-go/internal/scim"
-	"github.com/glincker/theauth-go/internal/ulid"
+	"github.com/glincker/theauth-go/v2/internal/emailnorm"
+	"github.com/glincker/theauth-go/v2/internal/httpx"
+	"github.com/glincker/theauth-go/v2/internal/models"
+	internalscim "github.com/glincker/theauth-go/v2/internal/scim"
+	"github.com/glincker/theauth-go/v2/internal/ulid"
 	"github.com/go-chi/chi/v5"
 	oklogulid "github.com/oklog/ulid/v2"
 )

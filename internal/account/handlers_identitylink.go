@@ -18,10 +18,10 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/glincker/theauth-go/admin"
-	"github.com/glincker/theauth-go/internal/httpx"
-	"github.com/glincker/theauth-go/internal/identitylink"
-	"github.com/glincker/theauth-go/internal/models"
+	"github.com/glincker/theauth-go/v2/admin"
+	"github.com/glincker/theauth-go/v2/internal/httpx"
+	"github.com/glincker/theauth-go/v2/internal/identitylink"
+	"github.com/glincker/theauth-go/v2/internal/models"
 	"github.com/go-chi/chi/v5"
 	"github.com/oklog/ulid/v2"
 )

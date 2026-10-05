@@ -6,7 +6,7 @@ import (
 
 	"golang.org/x/crypto/bcrypt"
 
-	"github.com/glincker/theauth-go/crypto"
+	"github.com/glincker/theauth-go/v2/crypto"
 )
 
 // knownBcryptHash is a bcrypt hash of "correct-horse-battery-staple" at cost 10.

@@ -3,8 +3,8 @@ package main
 import (
 	"fmt"
 
-	"github.com/glincker/theauth-go/cmd/theauth-migrate/internal"
-	"github.com/glincker/theauth-go/storage/memory"
+	"github.com/glincker/theauth-go/v2/cmd/theauth-migrate/internal"
+	"github.com/glincker/theauth-go/v2/storage/memory"
 )
 
 // openStorage returns an internal.Storage implementation for the chosen

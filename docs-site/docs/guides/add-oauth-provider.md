@@ -5,7 +5,7 @@ theauth-go ships 12 built-in OAuth/OIDC providers. Each provider is a separate s
 ## Install a provider
 
 ```bash
-go get github.com/glincker/theauth-go
+go get github.com/glincker/theauth-go/v2
 ```
 
 All provider packages are included in the main module. No separate install is needed.
@@ -14,9 +14,9 @@ All provider packages are included in the main module. No separate install is ne
 
 ```go
 import (
-    "github.com/glincker/theauth-go"
-    "github.com/glincker/theauth-go/provider/github"
-    "github.com/glincker/theauth-go/storage/postgres"
+    "github.com/glincker/theauth-go/v2"
+    "github.com/glincker/theauth-go/v2/provider/github"
+    "github.com/glincker/theauth-go/v2/storage/postgres"
 )
 
 a, _ := theauth.New(theauth.Config{
@@ -35,18 +35,18 @@ a, _ := theauth.New(theauth.Config{
 
 | Provider | Package |
 |---|---|
-| GitHub | `github.com/glincker/theauth-go/provider/github` |
-| Google | `github.com/glincker/theauth-go/provider/google` |
-| Microsoft | `github.com/glincker/theauth-go/provider/microsoft` |
-| Discord | `github.com/glincker/theauth-go/provider/discord` |
-| Apple | `github.com/glincker/theauth-go/provider/apple` |
-| Facebook | `github.com/glincker/theauth-go/provider/facebook` |
-| Slack | `github.com/glincker/theauth-go/provider/slack` |
-| GitLab | `github.com/glincker/theauth-go/provider/gitlab` |
-| Bitbucket | `github.com/glincker/theauth-go/provider/bitbucket` |
-| Twitch | `github.com/glincker/theauth-go/provider/twitch` |
-| LinkedIn | `github.com/glincker/theauth-go/provider/linkedin` |
-| X (Twitter) | `github.com/glincker/theauth-go/provider/x` |
+| GitHub | `github.com/glincker/theauth-go/v2/provider/github` |
+| Google | `github.com/glincker/theauth-go/v2/provider/google` |
+| Microsoft | `github.com/glincker/theauth-go/v2/provider/microsoft` |
+| Discord | `github.com/glincker/theauth-go/v2/provider/discord` |
+| Apple | `github.com/glincker/theauth-go/v2/provider/apple` |
+| Facebook | `github.com/glincker/theauth-go/v2/provider/facebook` |
+| Slack | `github.com/glincker/theauth-go/v2/provider/slack` |
+| GitLab | `github.com/glincker/theauth-go/v2/provider/gitlab` |
+| Bitbucket | `github.com/glincker/theauth-go/v2/provider/bitbucket` |
+| Twitch | `github.com/glincker/theauth-go/v2/provider/twitch` |
+| LinkedIn | `github.com/glincker/theauth-go/v2/provider/linkedin` |
+| X (Twitter) | `github.com/glincker/theauth-go/v2/provider/x` |
 
 Each exposes a `Config` struct and a `New(Config) theauth.Provider` constructor. Each also ships its own runnable example under `examples/oauth-<provider>/` (see [Example Apps](../getting-started/example-apps.md)).
 

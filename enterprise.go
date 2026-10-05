@@ -18,9 +18,9 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/glincker/theauth-go/internal/models"
-	"github.com/glincker/theauth-go/internal/organizations"
-	internalscim "github.com/glincker/theauth-go/internal/scim"
+	"github.com/glincker/theauth-go/v2/internal/models"
+	"github.com/glincker/theauth-go/v2/internal/organizations"
+	internalscim "github.com/glincker/theauth-go/v2/internal/scim"
 )
 
 // ---------- Enterprise forwarders (SCIM tokens, orgs, RBAC, delegations) ----------

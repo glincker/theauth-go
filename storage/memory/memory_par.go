@@ -5,7 +5,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/glincker/theauth-go/storage"
+	"github.com/glincker/theauth-go/v2/storage"
 )
 
 // memory_par.go: in-memory PARStorage implementation for RFC 9126.

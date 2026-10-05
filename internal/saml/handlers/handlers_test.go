@@ -17,11 +17,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/glincker/theauth-go/internal/models"
-	internalsaml "github.com/glincker/theauth-go/internal/saml"
-	"github.com/glincker/theauth-go/internal/saml/handlers"
-	"github.com/glincker/theauth-go/internal/samltest"
-	"github.com/glincker/theauth-go/internal/ulid"
+	"github.com/glincker/theauth-go/v2/internal/models"
+	internalsaml "github.com/glincker/theauth-go/v2/internal/saml"
+	"github.com/glincker/theauth-go/v2/internal/saml/handlers"
+	"github.com/glincker/theauth-go/v2/internal/samltest"
+	"github.com/glincker/theauth-go/v2/internal/ulid"
 	"github.com/go-chi/chi/v5"
 )
 

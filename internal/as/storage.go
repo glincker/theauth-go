@@ -5,7 +5,7 @@
 // RFC 9728), and the RFC 8693 token-exchange grant. Extracted from the
 // root package in PR B of the 2026-06 architecture reorg.
 //
-// The package is internal to github.com/glincker/theauth-go because every
+// The package is internal to github.com/glincker/theauth-go/v2 because every
 // public API surface still routes through *theauth.TheAuth on the root
 // package; the internal/as types are wired in once at TheAuth.New and
 // reached via thin forwarders. Tests live in the root package as
@@ -17,12 +17,12 @@ import (
 	"context"
 	"time"
 
-	"github.com/glincker/theauth-go/internal/models"
+	"github.com/glincker/theauth-go/v2/internal/models"
 )
 
 // Storage is the minimal persistence subset this package needs. Declared
 // here (not imported from root) so internal/as does not import
-// github.com/glincker/theauth-go, which would form an import cycle with the
+// github.com/glincker/theauth-go/v2, which would form an import cycle with the
 // root constructor.
 //
 // Any type satisfying these methods (notably the root theauth.Storage when

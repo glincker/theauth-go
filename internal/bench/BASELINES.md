@@ -25,7 +25,7 @@ go test -bench=. -benchmem -run=^$ -benchtime=3s ./internal/bench/...
 ```
 goos: darwin
 goarch: arm64
-pkg: github.com/glincker/theauth-go/internal/bench
+pkg: github.com/glincker/theauth-go/v2/internal/bench
 cpu: Apple M4 Max
 BenchmarkLoginPassword-14                       122  28268409 ns/op  67139321 B/op  191 allocs/op
 BenchmarkMagicLinkConsume-14                 644880      5077 ns/op      9229 B/op   62 allocs/op

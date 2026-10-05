@@ -16,13 +16,13 @@ import (
 	"net/http"
 	"time"
 
-	accounthandlers "github.com/glincker/theauth-go/internal/account"
-	"github.com/glincker/theauth-go/internal/httpx"
-	"github.com/glincker/theauth-go/internal/identitylink"
-	"github.com/glincker/theauth-go/internal/models"
-	orghandlers "github.com/glincker/theauth-go/internal/organizations/handlers"
-	samlhandlers "github.com/glincker/theauth-go/internal/saml/handlers"
-	scimhandlers "github.com/glincker/theauth-go/internal/scim/handlers"
+	accounthandlers "github.com/glincker/theauth-go/v2/internal/account"
+	"github.com/glincker/theauth-go/v2/internal/httpx"
+	"github.com/glincker/theauth-go/v2/internal/identitylink"
+	"github.com/glincker/theauth-go/v2/internal/models"
+	orghandlers "github.com/glincker/theauth-go/v2/internal/organizations/handlers"
+	samlhandlers "github.com/glincker/theauth-go/v2/internal/saml/handlers"
+	scimhandlers "github.com/glincker/theauth-go/v2/internal/scim/handlers"
 	"github.com/go-chi/chi/v5"
 )
 

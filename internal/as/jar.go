@@ -17,7 +17,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/glincker/theauth-go/internal/models"
+	"github.com/glincker/theauth-go/v2/internal/models"
 )
 
 // jar.go: RFC 9101 JWT-Secured Authorization Requests (JAR).

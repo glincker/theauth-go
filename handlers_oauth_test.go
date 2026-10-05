@@ -9,12 +9,12 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/glincker/theauth-go"
-	discprov "github.com/glincker/theauth-go/provider/discord"
-	ghprov "github.com/glincker/theauth-go/provider/github"
-	googprov "github.com/glincker/theauth-go/provider/google"
-	msprov "github.com/glincker/theauth-go/provider/microsoft"
-	"github.com/glincker/theauth-go/storage/memory"
+	"github.com/glincker/theauth-go/v2"
+	discprov "github.com/glincker/theauth-go/v2/provider/discord"
+	ghprov "github.com/glincker/theauth-go/v2/provider/github"
+	googprov "github.com/glincker/theauth-go/v2/provider/google"
+	msprov "github.com/glincker/theauth-go/v2/provider/microsoft"
+	"github.com/glincker/theauth-go/v2/storage/memory"
 	"github.com/go-chi/chi/v5"
 )
 

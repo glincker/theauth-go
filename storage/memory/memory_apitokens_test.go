@@ -3,7 +3,7 @@ package memory
 import (
 	"testing"
 
-	"github.com/glincker/theauth-go/storagetest"
+	"github.com/glincker/theauth-go/v2/storagetest"
 )
 
 func TestAPITokenContract(t *testing.T) { storagetest.RunAPITokens(t, New()) }

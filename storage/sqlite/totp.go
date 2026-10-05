@@ -5,8 +5,8 @@ import (
 	"database/sql"
 	"time"
 
-	"github.com/glincker/theauth-go"
-	"github.com/glincker/theauth-go/crypto"
+	"github.com/glincker/theauth-go/v2"
+	"github.com/glincker/theauth-go/v2/crypto"
 )
 
 // UpsertPendingTOTPSecret writes an unconfirmed secret and leaves a confirmed one untouched.

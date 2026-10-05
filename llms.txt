@@ -40,4 +40,4 @@ r := chi.NewRouter()
 a.Mount(r) // /auth/* magic-link, email-password, OAuth, passkeys, TOTP, SAML
 ```
 
-`go get github.com/glincker/theauth-go`. Requires Go 1.25+ (`storage/sqlite` requires Go 1.26).
+`go get github.com/glincker/theauth-go/v2`. Requires Go 1.25+ (`storage/sqlite` requires Go 1.26).

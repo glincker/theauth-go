@@ -30,9 +30,9 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/glincker/theauth-go/internal/models"
-	obs "github.com/glincker/theauth-go/internal/observability"
-	"github.com/glincker/theauth-go/internal/ulid"
+	"github.com/glincker/theauth-go/v2/internal/models"
+	obs "github.com/glincker/theauth-go/v2/internal/observability"
+	"github.com/glincker/theauth-go/v2/internal/ulid"
 )
 
 // Storage is the minimal persistence subset the audit writer needs.

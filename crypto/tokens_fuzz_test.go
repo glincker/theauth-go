@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"testing"
 
-	"github.com/glincker/theauth-go/crypto"
+	"github.com/glincker/theauth-go/v2/crypto"
 )
 
 // FuzzTokenHashRoundTrip asserts HashToken is deterministic, returns a

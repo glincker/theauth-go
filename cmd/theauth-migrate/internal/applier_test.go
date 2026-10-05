@@ -7,9 +7,9 @@ import (
 	"testing"
 	"time"
 
-	theauth "github.com/glincker/theauth-go"
-	"github.com/glincker/theauth-go/cmd/theauth-migrate/internal"
-	"github.com/glincker/theauth-go/storage/memory"
+	theauth "github.com/glincker/theauth-go/v2"
+	"github.com/glincker/theauth-go/v2/cmd/theauth-migrate/internal"
+	"github.com/glincker/theauth-go/v2/storage/memory"
 )
 
 func sampleBundle() *internal.Bundle {

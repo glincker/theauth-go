@@ -21,7 +21,7 @@
 }
 </script>
 
-[![Go Reference](https://pkg.go.dev/badge/github.com/glincker/theauth-go.svg)](https://pkg.go.dev/github.com/glincker/theauth-go)
+[![Go Reference](https://pkg.go.dev/badge/github.com/glincker/theauth-go.svg)](https://pkg.go.dev/github.com/glincker/theauth-go/v2)
 [![CI](https://github.com/glincker/theauth-go/actions/workflows/ci.yml/badge.svg)](https://github.com/glincker/theauth-go/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/glincker/theauth-go)](https://github.com/glincker/theauth-go/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/glincker/theauth-go/blob/main/LICENSE)
@@ -33,7 +33,7 @@ Drop it into a `chi` or `net/http` server in under twenty lines. Store sessions 
 ## Install
 
 ```bash
-go get github.com/glincker/theauth-go
+go get github.com/glincker/theauth-go/v2
 ```
 
 Requires **Go 1.25+**.
@@ -46,8 +46,8 @@ package main
 import (
     "net/http"
 
-    "github.com/glincker/theauth-go"
-    "github.com/glincker/theauth-go/storage/memory"
+    "github.com/glincker/theauth-go/v2"
+    "github.com/glincker/theauth-go/v2/storage/memory"
     "github.com/go-chi/chi/v5"
 )
 

@@ -3,7 +3,7 @@ package rbac_test
 import (
 	"testing"
 
-	"github.com/glincker/theauth-go"
+	"github.com/glincker/theauth-go/v2"
 )
 
 // service_rbac_catalog_test.go closes the RBAC matrix gap called out in the

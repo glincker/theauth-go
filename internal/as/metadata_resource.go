@@ -3,7 +3,7 @@ package as
 import (
 	"errors"
 
-	"github.com/glincker/theauth-go/internal/models"
+	"github.com/glincker/theauth-go/v2/internal/models"
 )
 
 // metadata_resource.go: RFC 9728 OAuth 2.0 Protected Resource Metadata.

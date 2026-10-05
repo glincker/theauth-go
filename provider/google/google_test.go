@@ -8,9 +8,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/glincker/theauth-go"
-	googprov "github.com/glincker/theauth-go/provider/google"
-	"github.com/glincker/theauth-go/provider/internal/oauthtest"
+	"github.com/glincker/theauth-go/v2"
+	googprov "github.com/glincker/theauth-go/v2/provider/google"
+	"github.com/glincker/theauth-go/v2/provider/internal/oauthtest"
 )
 
 func TestNameIsGoogle(t *testing.T) {

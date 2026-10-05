@@ -7,11 +7,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/glincker/theauth-go/internal/chain"
-	"github.com/glincker/theauth-go/internal/delegation"
-	"github.com/glincker/theauth-go/internal/jwt"
-	"github.com/glincker/theauth-go/internal/models"
-	"github.com/glincker/theauth-go/internal/ulid"
+	"github.com/glincker/theauth-go/v2/internal/chain"
+	"github.com/glincker/theauth-go/v2/internal/delegation"
+	"github.com/glincker/theauth-go/v2/internal/jwt"
+	"github.com/glincker/theauth-go/v2/internal/models"
+	"github.com/glincker/theauth-go/v2/internal/ulid"
 )
 
 // token_v34.go: v2.0 phase 3 + 4 grants. Adds the OAuth 2.0

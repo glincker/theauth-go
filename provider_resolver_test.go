@@ -9,9 +9,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/glincker/theauth-go"
-	ghprov "github.com/glincker/theauth-go/provider/github"
-	"github.com/glincker/theauth-go/storage/memory"
+	"github.com/glincker/theauth-go/v2"
+	ghprov "github.com/glincker/theauth-go/v2/provider/github"
+	"github.com/glincker/theauth-go/v2/storage/memory"
 )
 
 type mapResolver struct {

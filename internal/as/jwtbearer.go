@@ -38,9 +38,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/glincker/theauth-go/internal/jwt"
-	"github.com/glincker/theauth-go/internal/models"
-	"github.com/glincker/theauth-go/internal/ulid"
+	"github.com/glincker/theauth-go/v2/internal/jwt"
+	"github.com/glincker/theauth-go/v2/internal/models"
+	"github.com/glincker/theauth-go/v2/internal/ulid"
 )
 
 // JWTBearerStorageAdapter is the minimal interface consumed by the AS replay

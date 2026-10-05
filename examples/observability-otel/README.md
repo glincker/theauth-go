@@ -8,7 +8,7 @@ This module is intentionally small (under 100 lines of production code) so consu
 
 ```go
 import (
-    "github.com/glincker/theauth-go"
+    "github.com/glincker/theauth-go/v2"
     otelbridge "github.com/glincker/theauth-go/examples/observability-otel"
     "go.opentelemetry.io/otel"
 )

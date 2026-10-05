@@ -3,7 +3,7 @@ module github.com/glincker/theauth-go/audit/sinks/otlp
 go 1.25.0
 
 require (
-	github.com/glincker/theauth-go v0.0.0
+	github.com/glincker/theauth-go/v2 v2.0.0-00010101000000-000000000000
 	go.opentelemetry.io/proto/otlp v1.11.0
 	google.golang.org/protobuf v1.36.12
 )
@@ -38,4 +38,4 @@ require (
 	google.golang.org/grpc v1.82.1 // indirect
 )
 
-replace github.com/glincker/theauth-go => ../../../
+replace github.com/glincker/theauth-go/v2 => ../../../

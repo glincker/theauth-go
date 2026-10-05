@@ -1,7 +1,7 @@
 package storage
 
 import (
-	"github.com/glincker/theauth-go"
+	"github.com/glincker/theauth-go/v2"
 )
 
 // ErrNotFound is returned by storage adapters when a lookup misses.

@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/glincker/theauth-go/internal/dpop"
-	"github.com/glincker/theauth-go/internal/models"
+	"github.com/glincker/theauth-go/v2/internal/dpop"
+	"github.com/glincker/theauth-go/v2/internal/models"
 )
 
 // dpop.go: glue between the AS token endpoint and the RFC 9449 verifier.

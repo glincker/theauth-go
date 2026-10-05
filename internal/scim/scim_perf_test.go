@@ -9,9 +9,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/glincker/theauth-go/internal/models"
-	"github.com/glincker/theauth-go/internal/scim"
-	"github.com/glincker/theauth-go/internal/ulid"
+	"github.com/glincker/theauth-go/v2/internal/models"
+	"github.com/glincker/theauth-go/v2/internal/scim"
+	"github.com/glincker/theauth-go/v2/internal/ulid"
 )
 
 // countingStorage wraps a minimal in-memory SCIM storage and counts every

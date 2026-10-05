@@ -8,8 +8,8 @@ import (
 	"net/url"
 	"testing"
 
-	"github.com/glincker/theauth-go"
-	liprov "github.com/glincker/theauth-go/provider/linkedin"
+	"github.com/glincker/theauth-go/v2"
+	liprov "github.com/glincker/theauth-go/v2/provider/linkedin"
 )
 
 func TestNameIsLinkedIn(t *testing.T) {

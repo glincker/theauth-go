@@ -58,7 +58,7 @@ A reference Prometheus adapter ships in the repository at `examples/observabilit
 
 ```go
 import (
-    "github.com/glincker/theauth-go"
+    "github.com/glincker/theauth-go/v2"
     prombridge "myapp/internal/prombridge"
     "github.com/prometheus/client_golang/prometheus"
 )

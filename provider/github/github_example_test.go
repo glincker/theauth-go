@@ -3,7 +3,7 @@ package github_test
 import (
 	"fmt"
 
-	"github.com/glincker/theauth-go/provider/github"
+	"github.com/glincker/theauth-go/v2/provider/github"
 )
 
 // ExampleNew constructs a GitHub OAuth provider with the minimum required

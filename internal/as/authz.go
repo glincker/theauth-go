@@ -6,9 +6,9 @@ import (
 	"net/url"
 	"time"
 
-	"github.com/glincker/theauth-go/crypto"
-	"github.com/glincker/theauth-go/internal/models"
-	obs "github.com/glincker/theauth-go/internal/observability"
+	"github.com/glincker/theauth-go/v2/crypto"
+	"github.com/glincker/theauth-go/v2/internal/models"
+	obs "github.com/glincker/theauth-go/v2/internal/observability"
 )
 
 // authz.go: GET /oauth/authorize state machine.

@@ -7,9 +7,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/glincker/theauth-go"
-	"github.com/glincker/theauth-go/internal/ulid"
-	"github.com/glincker/theauth-go/storage"
+	"github.com/glincker/theauth-go/v2"
+	"github.com/glincker/theauth-go/v2/internal/ulid"
+	"github.com/glincker/theauth-go/v2/storage"
 )
 
 // seedOrgAndUser creates an organization, a user, and a member row for

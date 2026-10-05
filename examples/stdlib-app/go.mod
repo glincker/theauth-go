@@ -2,9 +2,9 @@ module github.com/glincker/theauth-go/examples/stdlib-app
 
 go 1.25.0
 
-replace github.com/glincker/theauth-go => ../..
+replace github.com/glincker/theauth-go/v2 => ../..
 
-require github.com/glincker/theauth-go v0.0.0-00010101000000-000000000000
+require github.com/glincker/theauth-go/v2 v2.0.0-00010101000000-000000000000
 
 require (
 	github.com/beevik/etree v1.7.1 // indirect

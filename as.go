@@ -3,8 +3,8 @@ package theauth
 import (
 	"time"
 
-	internalas "github.com/glincker/theauth-go/internal/as"
-	internaldpop "github.com/glincker/theauth-go/internal/dpop"
+	internalas "github.com/glincker/theauth-go/v2/internal/as"
+	internaldpop "github.com/glincker/theauth-go/v2/internal/dpop"
 )
 
 // as.go: AuthorizationServerConfig declaration plus the thin forwarders

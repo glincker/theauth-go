@@ -2,6 +2,67 @@
 
 This document describes the release process for maintainers.
 
+## Module path and sub-module tagging
+
+The root module path is `github.com/glincker/theauth-go/v2` (one `go.mod` at the
+repository root, no `v2` directory). Go requires the `/v2` suffix for major
+version 2 and above, so tags `v2.0.0` to `v2.5.0` were never resolvable. The
+first resolvable tag is `v2.6.0`.
+
+The sub-modules `storage/sqlite`, `mcpresource`, `audit/sinks/otlp` keep
+unversioned paths (major version 0 or 1 needs no suffix) and are tagged with a
+directory prefix. Examples are never tagged. In the repository they require the
+root through a placeholder version plus `go.work`, so local development works
+without any tag.
+
+Tag in this order, from an up to date checkout of the default branch:
+
+```bash
+git fetch origin
+git tag -l 'mcpresource/*' 'storage/*' 'audit/*'   # check the next number first
+
+# 1. root module (signed, annotated)
+git tag -s v2.6.0 -m "v2.6.0"
+git push origin v2.6.0
+
+# 2. wait for proxy.golang.org to serve it
+GOWORK=off GOPROXY=https://proxy.golang.org go list -m github.com/glincker/theauth-go/v2@v2.6.0
+
+# 3. per sub-module: replace the placeholder require, tidy, commit
+for d in storage/sqlite audit/sinks/otlp; do
+  (cd "$d" && GOWORK=off go mod edit -dropreplace=github.com/glincker/theauth-go/v2 \
+     -require=github.com/glincker/theauth-go/v2@v2.6.0 && GOWORK=off go mod tidy)
+done
+git commit -am "chore: pin sub-modules to theauth-go v2.6.0"
+# merge that commit through a PR, then tag the merged commit:
+
+# 4. sub-module tags (mcpresource has no root dependency, tag it any time)
+git tag -s storage/sqlite/v0.1.0 -m "storage/sqlite v0.1.0"
+git tag -s audit/sinks/otlp/v0.1.0 -m "audit/sinks/otlp v0.1.0"
+git tag -s mcpresource/v0.1.0 -m "mcpresource v0.1.0"
+git push origin storage/sqlite/v0.1.0 audit/sinks/otlp/v0.1.0 mcpresource/v0.1.0
+```
+
+Use the next free version for each prefix if earlier tags exist. After
+`mcpresource` is tagged, bump the root `go.mod` require of it from the
+pseudo-version to the tag in the next root release.
+
+Some sub-modules have no `replace` directive today (`storage/sqlite`); after
+step 3 they build with `GOWORK=off` from the proxy. Keep `go.work` for local
+development, and keep the placeholder require in examples (they use `replace`).
+
+### How consumers install
+
+```bash
+go get github.com/glincker/theauth-go/v2
+go get github.com/glincker/theauth-go/storage/sqlite   # optional
+go get github.com/glincker/theauth-go/mcpresource      # optional
+```
+
+Warning: anyone on the old path (including pseudo-versions of
+`github.com/glincker/theauth-go`) must change their imports to the `/v2` path.
+The old path stays frozen at v1.0.0. See `docs-site/docs/migrations/to-v2-module-path.md`.
+
 ## Prerequisites
 
 - Write access to `glincker/theauth-go` on GitHub

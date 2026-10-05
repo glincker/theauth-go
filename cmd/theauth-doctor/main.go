@@ -16,7 +16,7 @@ import (
 	"text/tabwriter"
 	"time"
 
-	"github.com/glincker/theauth-go"
+	"github.com/glincker/theauth-go/v2"
 )
 
 const (

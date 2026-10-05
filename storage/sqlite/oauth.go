@@ -5,7 +5,7 @@ import (
 	"database/sql"
 	"time"
 
-	"github.com/glincker/theauth-go"
+	"github.com/glincker/theauth-go/v2"
 )
 
 const oauthCols = `id, user_id, provider, provider_user_id, access_token_enc, refresh_token_enc,

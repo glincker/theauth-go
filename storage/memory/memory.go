@@ -6,9 +6,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/glincker/theauth-go"
-	"github.com/glincker/theauth-go/crypto"
-	"github.com/glincker/theauth-go/storage"
+	"github.com/glincker/theauth-go/v2"
+	"github.com/glincker/theauth-go/v2/crypto"
+	"github.com/glincker/theauth-go/v2/storage"
 )
 
 type Store struct {

@@ -11,7 +11,7 @@ For the v0.x to v1.0 stability promise see `STABILITY.md`.
 
 **Summary**: PRs #20 through #28 reorganized the root package layout.
 The public surface is **byte-stable**: every exported type, function,
-method, error sentinel, and constant on `github.com/glincker/theauth-go`
+method, error sentinel, and constant on `github.com/glincker/theauth-go/v2`
 keeps its identifier, signature, and method set. Downstream consumers
 compile unchanged after a `go get -u`.
 
@@ -20,7 +20,7 @@ compile unchanged after a `go get -u`.
 In the typical case: nothing.
 
 ```
-go get github.com/glincker/theauth-go@v2.1.0
+go get github.com/glincker/theauth-go/v2@latest
 go mod tidy
 go build ./...
 ```
@@ -35,7 +35,7 @@ build does break.
 
 #### `go doc` output formatting differs slightly
 
-`go doc github.com/glincker/theauth-go` now renders v2.0 types as type
+`go doc github.com/glincker/theauth-go/v2` now renders v2.0 types as type
 aliases:
 
 ```
@@ -46,7 +46,7 @@ type OAuthClient = models.OAuthClient
 
 instead of the inlined struct body. This is the documented Go idiom for
 re-exporting a type from an internal package
-(`github.com/glincker/theauth-go/internal/models` in this case). The
+(`github.com/glincker/theauth-go/v2/internal/models` in this case). The
 identity, fields, methods, and JSON tags are unchanged. pkg.go.dev still
 renders the full struct because it follows the alias.
 
@@ -84,7 +84,7 @@ pattern.
 #### Root file layout reshuffled
 
 If you grep across your dependency tree for symbols defined in
-`github.com/glincker/theauth-go/*.go`, the file each symbol lives in
+`github.com/glincker/theauth-go/v2/*.go`, the file each symbol lives in
 has moved. Examples:
 
 - Password / TOTP / WebAuthn / session / magic-link / audit forwarders

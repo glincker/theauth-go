@@ -1,4 +1,4 @@
-module github.com/glincker/theauth-go
+module github.com/glincker/theauth-go/v2
 
 go 1.25.0
 

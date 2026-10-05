@@ -8,7 +8,7 @@ import (
 	"net"
 	"net/http"
 
-	"github.com/glincker/theauth-go"
+	"github.com/glincker/theauth-go/v2"
 )
 
 // Authenticator resolves the caller; *theauth.TheAuth implements it.

@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/glincker/theauth-go/cmd/theauth-migrate/internal"
+	"github.com/glincker/theauth-go/v2/cmd/theauth-migrate/internal"
 )
 
 func runValidate(args []string) error {

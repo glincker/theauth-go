@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"fmt"
 
-	"github.com/glincker/theauth-go/crypto"
+	"github.com/glincker/theauth-go/v2/crypto"
 )
 
 // ExampleEncrypt shows a round trip with a 32 byte key. The output of

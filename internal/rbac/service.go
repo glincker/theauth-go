@@ -17,9 +17,9 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/glincker/theauth-go/internal/audit"
-	"github.com/glincker/theauth-go/internal/models"
-	"github.com/glincker/theauth-go/internal/ulid"
+	"github.com/glincker/theauth-go/v2/internal/audit"
+	"github.com/glincker/theauth-go/v2/internal/models"
+	"github.com/glincker/theauth-go/v2/internal/ulid"
 )
 
 // Storage is the minimal persistence subset this package needs. Declared

@@ -3,7 +3,7 @@ package as
 import (
 	"context"
 
-	"github.com/glincker/theauth-go/internal/jwt"
+	"github.com/glincker/theauth-go/v2/internal/jwt"
 )
 
 // applyOnTokenIssued runs Cfg.OnTokenIssued (when set) against the claims

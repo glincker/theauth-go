@@ -11,9 +11,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/glincker/theauth-go"
-	"github.com/glincker/theauth-go/storage"
-	sqlcgen "github.com/glincker/theauth-go/storage/postgres/sqlc"
+	"github.com/glincker/theauth-go/v2"
+	"github.com/glincker/theauth-go/v2/storage"
+	sqlcgen "github.com/glincker/theauth-go/v2/storage/postgres/sqlc"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/oklog/ulid/v2"

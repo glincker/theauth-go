@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/glincker/theauth-go"
-	"github.com/glincker/theauth-go/storage"
+	"github.com/glincker/theauth-go/v2"
+	"github.com/glincker/theauth-go/v2/storage"
 )
 
 func testTOTPSecrets(t *testing.T, store TOTPSuiteStorage) {

@@ -14,7 +14,7 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/glincker/theauth-go/internal/models"
+	"github.com/glincker/theauth-go/v2/internal/models"
 	"github.com/go-chi/chi/v5"
 	"github.com/oklog/ulid/v2"
 )

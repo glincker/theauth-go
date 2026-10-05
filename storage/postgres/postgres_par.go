@@ -5,7 +5,7 @@ import (
 	"errors"
 	"time"
 
-	"github.com/glincker/theauth-go/storage"
+	"github.com/glincker/theauth-go/v2/storage"
 	"github.com/jackc/pgx/v5"
 )
 

@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/glincker/theauth-go"
 	sqlitestore "github.com/glincker/theauth-go/storage/sqlite"
+	"github.com/glincker/theauth-go/v2"
 	_ "modernc.org/sqlite"
 )
 

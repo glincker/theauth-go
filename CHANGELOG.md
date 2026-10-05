@@ -6,6 +6,16 @@ adheres to [Semantic Versioning](https://semver.org/) from v1.0 forward.
 
 ## [Unreleased]
 
+### Changed
+
+- **Module path is now `github.com/glincker/theauth-go/v2`; update imports.**
+  The v2.x tags were never resolvable by the Go toolchain because the module
+  path lacked the `/v2` suffix, so `go get github.com/glincker/theauth-go`
+  returned v1.0.0. Breaking for import paths only: the API is unchanged. See
+  [Migrating to /v2](https://github.com/glincker/theauth-go/blob/main/docs-site/docs/migrations/to-v2-module-path.md).
+  The `storage/sqlite`, `mcpresource` and `audit/sinks/otlp` modules keep their
+  paths and now require the v2 root.
+
 ### Added
 
 - **Legacy API token acceptance.** `APITokensConfig.AcceptUnprefixed` accepts

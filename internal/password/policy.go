@@ -12,9 +12,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/glincker/theauth-go/crypto"
-	"github.com/glincker/theauth-go/internal/models"
-	"github.com/glincker/theauth-go/internal/throttle"
+	"github.com/glincker/theauth-go/v2/crypto"
+	"github.com/glincker/theauth-go/v2/internal/models"
+	"github.com/glincker/theauth-go/v2/internal/throttle"
 )
 
 // DefaultMaxPasswordBytes is the longest accepted password: bcrypt, still

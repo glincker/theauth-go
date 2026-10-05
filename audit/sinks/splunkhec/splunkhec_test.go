@@ -10,9 +10,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/glincker/theauth-go/audit/sinks/splunkhec"
-	"github.com/glincker/theauth-go/internal/models"
-	"github.com/glincker/theauth-go/internal/ulid"
+	"github.com/glincker/theauth-go/v2/audit/sinks/splunkhec"
+	"github.com/glincker/theauth-go/v2/internal/models"
+	"github.com/glincker/theauth-go/v2/internal/ulid"
 )
 
 func makeEvent(action string) models.AuditEvent {

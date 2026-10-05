@@ -12,11 +12,11 @@ import (
 
 	_ "github.com/go-sql-driver/mysql"
 
-	"github.com/glincker/theauth-go"
-	"github.com/glincker/theauth-go/internal/ulid"
-	"github.com/glincker/theauth-go/storage"
-	"github.com/glincker/theauth-go/storage/mysql"
-	"github.com/glincker/theauth-go/storagetest"
+	"github.com/glincker/theauth-go/v2"
+	"github.com/glincker/theauth-go/v2/internal/ulid"
+	"github.com/glincker/theauth-go/v2/storage"
+	"github.com/glincker/theauth-go/v2/storage/mysql"
+	"github.com/glincker/theauth-go/v2/storagetest"
 )
 
 // TestMySQLStoreContract runs the full storagetest suite against a live MySQL

@@ -8,8 +8,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/glincker/theauth-go"
-	"github.com/glincker/theauth-go/storage"
+	"github.com/glincker/theauth-go/v2"
+	"github.com/glincker/theauth-go/v2/storage"
 )
 
 // tokenState is usable as a zero value.

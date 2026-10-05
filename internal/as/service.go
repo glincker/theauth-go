@@ -9,12 +9,12 @@ import (
 	"sync"
 	"time"
 
-	"github.com/glincker/theauth-go/internal/audit"
-	"github.com/glincker/theauth-go/internal/cimd"
-	"github.com/glincker/theauth-go/internal/clientauthcache"
-	"github.com/glincker/theauth-go/internal/dpop"
-	"github.com/glincker/theauth-go/internal/models"
-	obs "github.com/glincker/theauth-go/internal/observability"
+	"github.com/glincker/theauth-go/v2/internal/audit"
+	"github.com/glincker/theauth-go/v2/internal/cimd"
+	"github.com/glincker/theauth-go/v2/internal/clientauthcache"
+	"github.com/glincker/theauth-go/v2/internal/dpop"
+	"github.com/glincker/theauth-go/v2/internal/models"
+	obs "github.com/glincker/theauth-go/v2/internal/observability"
 )
 
 // Service bundles the OAuth 2.1 authorization server runtime: JWKS state +

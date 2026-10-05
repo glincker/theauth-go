@@ -13,8 +13,8 @@ import (
 	"testing"
 
 	"github.com/fxamacker/cbor/v2"
-	"github.com/glincker/theauth-go"
-	"github.com/glincker/theauth-go/internal/ulid"
+	"github.com/glincker/theauth-go/v2"
+	"github.com/glincker/theauth-go/v2/internal/ulid"
 )
 
 // This file is the regression suite for the synced-passkey login failure:

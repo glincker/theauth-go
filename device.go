@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/glincker/theauth-go/internal/ulid"
+	"github.com/glincker/theauth-go/v2/internal/ulid"
 )
 
 // DeviceConfig tunes the RFC 8628 device authorization grant.

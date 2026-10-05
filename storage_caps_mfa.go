@@ -3,7 +3,7 @@ package theauth
 import (
 	"context"
 
-	"github.com/glincker/theauth-go/internal/totp"
+	"github.com/glincker/theauth-go/v2/internal/totp"
 )
 
 // WebAuthnRenameStorage is the optional capability behind passkey rename

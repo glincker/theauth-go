@@ -13,9 +13,9 @@ import (
 	"errors"
 	"time"
 
-	"github.com/glincker/theauth-go/internal/agent"
-	internaloauth "github.com/glincker/theauth-go/internal/oauth"
-	internalsaml "github.com/glincker/theauth-go/internal/saml"
+	"github.com/glincker/theauth-go/v2/internal/agent"
+	internaloauth "github.com/glincker/theauth-go/v2/internal/oauth"
+	internalsaml "github.com/glincker/theauth-go/v2/internal/saml"
 )
 
 // ---------- Agent identity (validation + forwarders) ----------

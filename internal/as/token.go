@@ -7,10 +7,10 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/glincker/theauth-go/crypto"
-	"github.com/glincker/theauth-go/internal/jwt"
-	"github.com/glincker/theauth-go/internal/models"
-	"github.com/glincker/theauth-go/internal/ulid"
+	"github.com/glincker/theauth-go/v2/crypto"
+	"github.com/glincker/theauth-go/v2/internal/jwt"
+	"github.com/glincker/theauth-go/v2/internal/models"
+	"github.com/glincker/theauth-go/v2/internal/ulid"
 )
 
 // token.go: the OAuth 2.1 token endpoint multiplexer plus the

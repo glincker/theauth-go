@@ -3,8 +3,8 @@ package theauth_test
 import (
 	"testing"
 
-	"github.com/glincker/theauth-go/storage/memory"
-	"github.com/glincker/theauth-go/storagetest"
+	"github.com/glincker/theauth-go/v2/storage/memory"
+	"github.com/glincker/theauth-go/v2/storagetest"
 )
 
 func TestLegacyTokenImportMemory(t *testing.T) {

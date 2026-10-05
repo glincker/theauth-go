@@ -6,11 +6,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/glincker/theauth-go/crypto"
-	"github.com/glincker/theauth-go/internal/cimd"
-	"github.com/glincker/theauth-go/internal/dpop"
-	"github.com/glincker/theauth-go/internal/models"
-	"github.com/glincker/theauth-go/internal/pathprefix"
+	"github.com/glincker/theauth-go/v2/crypto"
+	"github.com/glincker/theauth-go/v2/internal/cimd"
+	"github.com/glincker/theauth-go/v2/internal/dpop"
+	"github.com/glincker/theauth-go/v2/internal/models"
+	"github.com/glincker/theauth-go/v2/internal/pathprefix"
 )
 
 // Config wires the OAuth 2.1 + MCP authorization server runtime. Mirror of

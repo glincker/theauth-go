@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/glincker/theauth-go/crypto"
+	"github.com/glincker/theauth-go/v2/crypto"
 )
 
 func TestNewCodeVerifierLengthIsRFCCompliant(t *testing.T) {

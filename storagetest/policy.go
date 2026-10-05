@@ -5,7 +5,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/glincker/theauth-go/policy"
+	"github.com/glincker/theauth-go/v2/policy"
 )
 
 const contractDoc = `{"version":"1","statements":[{"id":"s","effect":"allow","actions":["a:*"],"resources":["*"]}]}`

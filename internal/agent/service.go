@@ -18,11 +18,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/glincker/theauth-go/crypto"
-	"github.com/glincker/theauth-go/internal/audit"
-	"github.com/glincker/theauth-go/internal/models"
-	obs "github.com/glincker/theauth-go/internal/observability"
-	"github.com/glincker/theauth-go/internal/ulid"
+	"github.com/glincker/theauth-go/v2/crypto"
+	"github.com/glincker/theauth-go/v2/internal/audit"
+	"github.com/glincker/theauth-go/v2/internal/models"
+	obs "github.com/glincker/theauth-go/v2/internal/observability"
+	"github.com/glincker/theauth-go/v2/internal/ulid"
 	oklogulid "github.com/oklog/ulid/v2"
 )
 
@@ -33,7 +33,7 @@ const ChainDepthCeiling = 3
 
 // Storage is the minimal persistence subset this package needs. Declared
 // here (not imported from root) so internal/agent does not import
-// github.com/glincker/theauth-go.
+// github.com/glincker/theauth-go/v2.
 type Storage interface {
 	InsertOAuthClient(ctx context.Context, c models.OAuthClient) (models.OAuthClient, error)
 	OAuthClientByClientID(ctx context.Context, clientID string) (*models.OAuthClient, error)

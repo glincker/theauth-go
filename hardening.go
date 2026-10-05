@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/glincker/theauth-go/internal/emailnorm"
-	"github.com/glincker/theauth-go/internal/password"
-	"github.com/glincker/theauth-go/internal/throttle"
+	"github.com/glincker/theauth-go/v2/internal/emailnorm"
+	"github.com/glincker/theauth-go/v2/internal/password"
+	"github.com/glincker/theauth-go/v2/internal/throttle"
 )
 
 // LoginThrottleStore persists login and MFA throttle counters. The default

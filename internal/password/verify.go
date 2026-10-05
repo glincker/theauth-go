@@ -4,8 +4,8 @@ import (
 	"context"
 	"log/slog"
 
-	"github.com/glincker/theauth-go/crypto"
-	"github.com/glincker/theauth-go/internal/models"
+	"github.com/glincker/theauth-go/v2/crypto"
+	"github.com/glincker/theauth-go/v2/internal/models"
 )
 
 // VerifyCredential checks plain against a stored hash. A bcrypt hash with

@@ -27,9 +27,9 @@ import (
 	"testing"
 	"time"
 
-	admin "github.com/glincker/theauth-go/internal/admin"
-	"github.com/glincker/theauth-go/internal/models"
-	"github.com/glincker/theauth-go/internal/ulid"
+	admin "github.com/glincker/theauth-go/v2/internal/admin"
+	"github.com/glincker/theauth-go/v2/internal/models"
+	"github.com/glincker/theauth-go/v2/internal/ulid"
 	"github.com/go-chi/chi/v5"
 )
 

@@ -16,14 +16,14 @@ import (
 	"sync"
 	"time"
 
-	"github.com/glincker/theauth-go/crypto"
-	"github.com/glincker/theauth-go/internal/models"
-	"github.com/glincker/theauth-go/internal/ulid"
+	"github.com/glincker/theauth-go/v2/crypto"
+	"github.com/glincker/theauth-go/v2/internal/models"
+	"github.com/glincker/theauth-go/v2/internal/ulid"
 )
 
 // Storage is the minimal persistence subset this package needs. Declared
 // here (not imported from root) so that internal/session does not import
-// github.com/glincker/theauth-go, which would form an import cycle with the
+// github.com/glincker/theauth-go/v2, which would form an import cycle with the
 // root constructor.
 //
 // Any type satisfying these three methods (notably the root theauth.Storage

@@ -5,9 +5,9 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/glincker/theauth-go"
-	internalulid "github.com/glincker/theauth-go/internal/ulid"
-	"github.com/glincker/theauth-go/storage/memory"
+	"github.com/glincker/theauth-go/v2"
+	internalulid "github.com/glincker/theauth-go/v2/internal/ulid"
+	"github.com/glincker/theauth-go/v2/storage/memory"
 )
 
 type rbacFixture struct {

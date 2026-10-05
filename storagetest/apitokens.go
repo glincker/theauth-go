@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/glincker/theauth-go"
+	"github.com/glincker/theauth-go/v2"
 )
 
 // RunAPITokens runs the scoped API token contract tests.

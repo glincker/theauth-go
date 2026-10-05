@@ -4,9 +4,9 @@ import (
 	"context"
 	"net/http"
 
-	adminhandlers "github.com/glincker/theauth-go/internal/admin"
-	agenthandlers "github.com/glincker/theauth-go/internal/agent/handlers"
-	"github.com/glincker/theauth-go/internal/models"
+	adminhandlers "github.com/glincker/theauth-go/v2/internal/admin"
+	agenthandlers "github.com/glincker/theauth-go/v2/internal/agent/handlers"
+	"github.com/glincker/theauth-go/v2/internal/models"
 	"github.com/go-chi/chi/v5"
 )
 

@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/glincker/theauth-go"
-	"github.com/glincker/theauth-go/internal/ulid"
+	"github.com/glincker/theauth-go/v2"
+	"github.com/glincker/theauth-go/v2/internal/ulid"
 )
 
 func TestTheAuth_RevokeSession_Forwards(t *testing.T) {

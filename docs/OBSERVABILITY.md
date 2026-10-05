@@ -14,7 +14,7 @@ The adapter sidesteps that. The library knows the spans it wants to emit and the
 
 ```go
 import (
-    "github.com/glincker/theauth-go"
+    "github.com/glincker/theauth-go/v2"
     otelbridge "github.com/glincker/theauth-go/examples/observability-otel"
     prombridge "github.com/glincker/theauth-go/examples/observability-prom"
     "github.com/prometheus/client_golang/prometheus"

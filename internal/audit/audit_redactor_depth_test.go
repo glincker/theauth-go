@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	theauth "github.com/glincker/theauth-go"
-	"github.com/glincker/theauth-go/storage/memory"
+	theauth "github.com/glincker/theauth-go/v2"
+	"github.com/glincker/theauth-go/v2/storage/memory"
 )
 
 // audit_redactor_depth_test.go closes two gaps the 2026-06-20 reliability

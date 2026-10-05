@@ -3,10 +3,10 @@ package theauth
 import (
 	"errors"
 
-	"github.com/glincker/theauth-go/internal/models"
-	internalsaml "github.com/glincker/theauth-go/internal/saml"
-	internaltotp "github.com/glincker/theauth-go/internal/totp"
-	internalwebauthn "github.com/glincker/theauth-go/internal/webauthn"
+	"github.com/glincker/theauth-go/v2/internal/models"
+	internalsaml "github.com/glincker/theauth-go/v2/internal/saml"
+	internaltotp "github.com/glincker/theauth-go/v2/internal/totp"
+	internalwebauthn "github.com/glincker/theauth-go/v2/internal/webauthn"
 )
 
 // Sentinel errors retained for backward compatibility with v0.1 callers

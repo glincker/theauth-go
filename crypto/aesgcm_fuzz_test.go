@@ -5,7 +5,7 @@ import (
 	"crypto/sha256"
 	"testing"
 
-	"github.com/glincker/theauth-go/crypto"
+	"github.com/glincker/theauth-go/v2/crypto"
 )
 
 // FuzzEncryptDecrypt asserts the round trip invariant

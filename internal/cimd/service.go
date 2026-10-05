@@ -11,8 +11,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/glincker/theauth-go/internal/audit"
-	"github.com/glincker/theauth-go/internal/models"
+	"github.com/glincker/theauth-go/v2/internal/audit"
+	"github.com/glincker/theauth-go/v2/internal/models"
 )
 
 // Default knobs applied when Config zero-values are passed in. The
