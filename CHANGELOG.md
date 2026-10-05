@@ -11,6 +11,17 @@ adheres to [Semantic Versioning](https://semver.org/) from v1.0 forward.
 - **Legacy API token acceptance.** `APITokensConfig.AcceptUnprefixed` accepts
   unprefixed bearer tokens by SHA-256 hash, and `ImportAPIToken` inserts an
   existing token record by hash without seeing the secret.
+
+- **`Config.PathPrefix`.** Serve the auth routes under a custom prefix (default
+  `/auth`, validated) with no `http.StripPrefix`. OAuth redirect URIs, magic and
+  reset links, the WebAuthn challenge cookie path and the authorization server
+  login URL follow it. `clientauth` takes the same prefix via `AuthPath`.
+
+- **`Config.ProviderResolver`.** Resolve OAuth/OIDC providers per request for
+  runtime add, edit and remove, with `ProviderResolverFirst`,
+  `ProviderResolverTTL`, `(*TheAuth).InvalidateProvider` and `ListProviders`.
+  Names are validated and resolver errors fail closed.
+
 - **Security doctor.** `(*TheAuth).Doctor` reports posture findings (open signup,
   bootstrap gate, proxies, cookies, CSRF, throttle, password and session policy,
   token hygiene, encryption key, audit, WebAuthn RP ID) with stable IDs and

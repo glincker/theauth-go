@@ -8,6 +8,7 @@ import (
 	"encoding/pem"
 	"errors"
 	"log/slog"
+	"strconv"
 	"strings"
 	"time"
 
@@ -23,6 +24,7 @@ import (
 	internaloauth "github.com/glincker/theauth-go/internal/oauth"
 	"github.com/glincker/theauth-go/internal/organizations"
 	"github.com/glincker/theauth-go/internal/password"
+	"github.com/glincker/theauth-go/internal/pathprefix"
 	"github.com/glincker/theauth-go/internal/rbac"
 	internalsaml "github.com/glincker/theauth-go/internal/saml"
 	internalscim "github.com/glincker/theauth-go/internal/scim"
@@ -99,6 +101,10 @@ func validateConfig(cfg *Config) (providers map[string]Provider, sp samlParsed, 
 		return nil, samlParsed{}, nil, errors.New("theauth: Config.BaseURL is required")
 	}
 
+	if err := pathprefix.Validate(cfg.PathPrefix); err != nil {
+		return nil, samlParsed{}, nil, errors.New("theauth: Config.PathPrefix " + strconv.Quote(cfg.PathPrefix) + ": " + err.Error())
+	}
+
 	// M3 (security audit 2026-06-21): warn when SecureCookie is false.
 	if !cfg.SecureCookie && !cfg.SuppressSecureCookieWarning && !strings.HasPrefix(strings.ToLower(cfg.BaseURL), "https://") {
 		slog.Warn("SecureCookie: false with a non-https BaseURL; cookies are Secure only when the request arrives over TLS or via a trusted proxy. Set Config.SuppressSecureCookieWarning=true to suppress this warning in dev.")
@@ -109,9 +115,9 @@ func validateConfig(cfg *Config) (providers map[string]Provider, sp samlParsed, 
 
 	// OAuth providers: need a 32-byte key, unique names.
 	providers = map[string]Provider{}
-	if len(cfg.Providers) > 0 {
+	if len(cfg.Providers) > 0 || cfg.ProviderResolver != nil {
 		if len(cfg.EncryptionKey) != crypto.AESKeyLen {
-			return nil, samlParsed{}, nil, errors.New("theauth: Config.EncryptionKey must be 32 bytes when Providers are configured")
+			return nil, samlParsed{}, nil, errors.New("theauth: Config.EncryptionKey must be 32 bytes when Providers or ProviderResolver are configured")
 		}
 		for _, p := range cfg.Providers {
 			if p == nil {
@@ -297,6 +303,9 @@ func wireServices(a *TheAuth, cfg Config, providers map[string]Provider, sp saml
 			jwtBearerStore = jwtBearerStorageAdapter{jbs}
 		}
 		asCfg := asConfigFromRoot(cfg.AuthorizationServer)
+		if asCfg.LoginURL == "" {
+			asCfg.LoginURL = a.pathPrefix + "/login"
+		}
 		if cfg.LifecycleHooks != nil {
 			asCfg.OnTokenIssued = cfg.LifecycleHooks.OnTokenIssued
 		}
@@ -337,6 +346,7 @@ func wireServices(a *TheAuth, cfg Config, providers map[string]Provider, sp saml
 	a.sessionSvc = session.New(cfg.Storage, cfg.SessionTTL)
 	a.sx.install(a.sessionSvc)
 	a.magicSvc = magiclink.New(cfg.Storage, cfg.EmailSender, cfg.BaseURL, cfg.MagicLinkTTL, a.sessionSvc, a)
+	a.magicSvc.SetPathPrefix(a.pathPrefix)
 	a.scimSvc = internalscim.NewService(cfg.Storage, scimConfigFromRoot(cfg.SCIM))
 	a.orgsSvc = organizations.New(cfg.Storage, orgsConfigFromRoot(cfg.Organizations))
 	a.rbacSvc = rbac.New(cfg.Storage, rbacConfigFromValidated(cfg.RBAC, permCatalog, permIndex, defaultSeeds), a)
@@ -368,6 +378,7 @@ func wireServices(a *TheAuth, cfg Config, providers map[string]Provider, sp saml
 	}
 	pwCfg := password.Config{
 		BaseURL:           cfg.BaseURL,
+		PathPrefix:        a.pathPrefix,
 		TOTPEnabled:       cfg.TOTP != nil,
 		MinLength:         cfg.PasswordPolicy.MinLength,
 		MaxBytes:          cfg.PasswordPolicy.MaxBytes,
@@ -400,7 +411,7 @@ func wireServices(a *TheAuth, cfg Config, providers map[string]Provider, sp saml
 
 	// Wire OAuth provider service. The GC goroutine is started inside
 	// internaloauth.New so there is no separate Start call needed.
-	if len(providers) > 0 {
+	if len(providers) > 0 || cfg.ProviderResolver != nil {
 		var onConflict func(ctx context.Context, p internaloauth.ConflictPayload) (string, error)
 		if cfg.LifecycleHooks != nil && cfg.LifecycleHooks.OnOAuthConflict != nil {
 			hook := cfg.LifecycleHooks.OnOAuthConflict
@@ -427,8 +438,10 @@ func wireServices(a *TheAuth, cfg Config, providers map[string]Provider, sp saml
 			oauthSessionAdapter{svc: a.sessionSvc},
 			a,
 			onConflict,
-			oauthConfigFromRoot(cfg.OAuth),
+			oauthConfigFromRoot(cfg.OAuth, a.pathPrefix),
 		)
+		a.providerReg = internaloauth.NewRegistry(providers, cfg.ProviderResolver, cfg.ProviderResolverFirst, cfg.ProviderResolverTTL)
+		a.oauthSvc.SetLookup(a.providerReg)
 	}
 
 	// Wire identity-linking service (v2.3). Always constructed so that the

@@ -10,6 +10,7 @@ import (
 	"github.com/glincker/theauth-go/internal/cimd"
 	"github.com/glincker/theauth-go/internal/dpop"
 	"github.com/glincker/theauth-go/internal/models"
+	"github.com/glincker/theauth-go/internal/pathprefix"
 )
 
 // Config wires the OAuth 2.1 + MCP authorization server runtime. Mirror of
@@ -215,7 +216,7 @@ func Validate(cfg *Config, encryptionKey []byte) error {
 		cfg.Clock = realClock{}
 	}
 	if cfg.LoginURL == "" {
-		cfg.LoginURL = "/auth/login"
+		cfg.LoginURL = pathprefix.Default + "/login"
 	}
 	// security audit H2 (2026-06-20): documented per-IP cap is now
 	// enforced. Defaults: 1 req/min/IP for the anonymous public-MCP

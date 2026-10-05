@@ -21,6 +21,7 @@ import (
 	"github.com/glincker/theauth-go/crypto"
 	"github.com/glincker/theauth-go/internal/audit"
 	"github.com/glincker/theauth-go/internal/models"
+	"github.com/glincker/theauth-go/internal/pathprefix"
 	"github.com/glincker/theauth-go/internal/ulid"
 )
 
@@ -161,6 +162,8 @@ type Config struct {
 	Signup              string
 	AllowedEmailDomains []string
 	InviteCheck         func(ctx context.Context, email string) (bool, error)
+	// PathPrefix is the route prefix of the callback URI. Empty means "/auth".
+	PathPrefix string
 }
 
 // StartResult is what Start hands the HTTP layer.
@@ -181,7 +184,7 @@ type CallbackResult struct {
 
 // Service owns the OAuth start/callback state machine.
 type Service struct {
-	providers       map[string]Provider
+	lookup          ProviderLookup
 	storage         Storage
 	baseURL         string
 	encKey          []byte
@@ -207,7 +210,7 @@ func New(providers map[string]Provider, storage Storage, baseURL string, encKey 
 		em = audit.NoopEmitter{}
 	}
 	s := &Service{
-		providers:       providers,
+		lookup:          staticLookup(providers),
 		storage:         storage,
 		baseURL:         baseURL,
 		encKey:          encKey,
@@ -239,10 +242,31 @@ func (s *Service) Stop() {
 	}
 }
 
+// SetLookup replaces the provider source. Call before the service handles requests.
+func (s *Service) SetLookup(l ProviderLookup) { s.lookup = l }
+
 // HasProvider reports whether the named provider is registered.
 func (s *Service) HasProvider(name string) bool {
-	_, ok := s.providers[name]
+	ok, _ := s.LookupProvider(context.Background(), name)
 	return ok
+}
+
+// LookupProvider reports whether the named provider exists, failing closed
+// with an error when a resolver cannot answer.
+func (s *Service) LookupProvider(ctx context.Context, name string) (bool, error) {
+	_, ok, err := s.lookup.Lookup(ctx, name)
+	return ok, err
+}
+
+func (s *Service) provider(ctx context.Context, name string) (Provider, error) {
+	p, ok, err := s.lookup.Lookup(ctx, name)
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
+		return nil, fmt.Errorf("theauth: unknown provider %q", name)
+	}
+	return p, nil
 }
 
 // Start generates state, a PKCE verifier, a browser-binding secret and (for
@@ -250,9 +274,9 @@ func (s *Service) HasProvider(name string) bool {
 // authorization URL. returnTo is honored only when it matches the
 // configured allow-list.
 func (s *Service) Start(ctx context.Context, providerName, returnTo string) (StartResult, error) {
-	p, ok := s.providers[providerName]
-	if !ok {
-		return StartResult{}, fmt.Errorf("theauth: unknown provider %q", providerName)
+	p, err := s.provider(ctx, providerName)
+	if err != nil {
+		return StartResult{}, err
 	}
 	state, err := crypto.NewToken()
 	if err != nil {
@@ -267,7 +291,7 @@ func (s *Service) Start(ctx context.Context, providerName, returnTo string) (Sta
 		return StartResult{}, err
 	}
 	challenge := crypto.CodeChallenge(verifier)
-	redirectURI := s.baseURL + "/auth/providers/" + providerName + "/callback"
+	redirectURI := s.baseURL + pathprefix.Normalize(s.cfg.PathPrefix) + "/providers/" + providerName + "/callback"
 	st := State{
 		Provider:     providerName,
 		CodeVerifier: verifier,
@@ -329,9 +353,9 @@ func sameKind(candidate, prefix string) bool {
 // session. created reports whether the user row was newly created during
 // this call (lets the root forwarder distinguish OnSignup from OnSignin).
 func (s *Service) Callback(ctx context.Context, providerName, code, state, binding, userAgent, ip string) (res CallbackResult, user *models.User, created bool, err error) {
-	p, ok := s.providers[providerName]
-	if !ok {
-		return CallbackResult{}, nil, false, fmt.Errorf("theauth: unknown provider %q", providerName)
+	p, err := s.provider(ctx, providerName)
+	if err != nil {
+		return CallbackResult{}, nil, false, err
 	}
 	st, err := s.states.Take(ctx, state)
 	if err != nil {

@@ -53,6 +53,15 @@ func SessionFromContext(ctx context.Context) (*Session, bool) {
 // the v0.3+ public surface byte-stable.
 type Provider = internaloauth.Provider
 
+// ProviderResolver supplies OAuth/OIDC providers at request time. Resolve
+// returns (nil, false, nil) for an unknown name and an error when the lookup
+// itself failed. The returned provider's Name() must equal name.
+type ProviderResolver = internaloauth.ProviderResolver
+
+// ProviderLister is optionally implemented by a ProviderResolver so
+// ListProviders can include its providers.
+type ProviderLister = internaloauth.ProviderLister
+
 // NonceProvider is the optional Provider extension for OIDC providers that
 // validate an ID token nonce. The OAuth service detects it automatically.
 type NonceProvider = internaloauth.NonceProvider
