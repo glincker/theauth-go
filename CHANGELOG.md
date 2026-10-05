@@ -17,6 +17,12 @@ adheres to [Semantic Versioning](https://semver.org/) from v1.0 forward.
   throttle counters. New optional `LoginThrottleCASStore` lets the limiter
   retry on conflict across processes instead of last-writer-wins.
 
+- **`clientauth` package.** Client side of the device grant for host CLIs:
+  `DeviceLogin` (polling with `slow_down`, denial and expiry handling), a 0600
+  `FileStore` plus an injectable `KeychainStore`, and a `Client` that attaches
+  the bearer token and returns `ErrReloginRequired` on expiry or 401. See
+  `examples/cli-login` and the CLI Login guide.
+
 ### Security
 
 - **Login throttle.** Password signin is now gated before any credential work
