@@ -15,6 +15,12 @@ const (
 	OwnerKindServiceAccount = "service_account"
 )
 
+// API token kinds. An empty Kind on a stored token means APITokenKindPersonal.
+const (
+	APITokenKindPersonal = "personal"
+	APITokenKindAgent    = "agent"
+)
+
 // Device authorization request states.
 const (
 	DeviceStatusPending  = "pending"
@@ -25,17 +31,23 @@ const (
 
 // APIToken is a stored scoped bearer token. Only the SHA-256 of the secret is kept.
 type APIToken struct {
-	ID         ULID       `json:"id"`
-	OwnerID    ULID       `json:"ownerId"`
-	OwnerKind  string     `json:"ownerKind"`
-	Name       string     `json:"name"`
-	Abilities  []string   `json:"abilities"`
-	TokenHash  []byte     `json:"-"`
-	Hint       string     `json:"hint"`
-	CreatedAt  time.Time  `json:"createdAt"`
-	ExpiresAt  *time.Time `json:"expiresAt,omitempty"`
-	LastUsedAt *time.Time `json:"lastUsedAt,omitempty"`
-	RevokedAt  *time.Time `json:"revokedAt,omitempty"`
+	ID        ULID     `json:"id"`
+	OwnerID   ULID     `json:"ownerId"`
+	OwnerKind string   `json:"ownerKind"`
+	Name      string   `json:"name"`
+	Abilities []string `json:"abilities"`
+	TokenHash []byte   `json:"-"`
+	Hint      string   `json:"hint"`
+	// Kind is APITokenKindPersonal or APITokenKindAgent.
+	Kind string `json:"kind,omitempty"`
+	// AgentName names the agent or MCP client holding an agent token.
+	AgentName string `json:"agentName,omitempty"`
+	// DelegatedBy is the human whose abilities bound an agent token.
+	DelegatedBy *ULID      `json:"delegatedBy,omitempty"`
+	CreatedAt   time.Time  `json:"createdAt"`
+	ExpiresAt   *time.Time `json:"expiresAt,omitempty"`
+	LastUsedAt  *time.Time `json:"lastUsedAt,omitempty"`
+	RevokedAt   *time.Time `json:"revokedAt,omitempty"`
 }
 
 // Usable reports whether the token is neither revoked nor expired at now.

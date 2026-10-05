@@ -36,6 +36,11 @@ type APITokensConfig struct {
 	DefaultTTL time.Duration
 	// MaxTTL caps any token lifetime. Defaults to 365 days.
 	MaxTTL time.Duration
+	// AgentTTL applies when an agent token is minted with no lifetime.
+	// Defaults to one hour.
+	AgentTTL time.Duration
+	// AgentMaxTTL caps agent token lifetimes. Defaults to 24 hours.
+	AgentMaxTTL time.Duration
 	// UserAbilities returns the abilities a user currently holds. Default:
 	// [AbilityRoot] for an admin (see IsAdmin), nothing otherwise. Evaluated
 	// on every request, so a demotion takes effect immediately.
@@ -81,6 +86,12 @@ func newAPITokenService(a *TheAuth, cfg *APITokensConfig, raw any) (*apiTokenSer
 	}
 	if c.MaxTTL <= 0 {
 		c.MaxTTL = 365 * 24 * time.Hour
+	}
+	if c.AgentTTL <= 0 {
+		c.AgentTTL = time.Hour
+	}
+	if c.AgentMaxTTL <= 0 {
+		c.AgentMaxTTL = 24 * time.Hour
 	}
 	for _, name := range c.Abilities {
 		if name == AbilityRoot || !abilityNameRE.MatchString(name) {
@@ -223,6 +234,13 @@ type MintAPITokenInput struct {
 	Abilities []string
 	// TTL is the lifetime. Zero uses Config.APITokens.DefaultTTL.
 	TTL time.Duration
+	// Kind is APITokenKindPersonal (default) or APITokenKindAgent.
+	Kind string
+	// AgentName is required for agent tokens.
+	AgentName string
+	// DelegatedBy is the human an agent token acts for. It must equal
+	// OwnerID, which defaults it when nil.
+	DelegatedBy *ULID
 }
 
 func (s *apiTokenService) mint(ctx context.Context, in MintAPITokenInput) (string, APIToken, error) {
@@ -232,11 +250,40 @@ func (s *apiTokenService) mint(ctx context.Context, in MintAPITokenInput) (strin
 	if err := s.validateAbilities(in.Abilities, false); err != nil {
 		return "", APIToken{}, err
 	}
+	kind := in.Kind
+	if kind == "" {
+		kind = APITokenKindPersonal
+	}
+	maxTTL, defTTL := s.cfg.MaxTTL, s.cfg.DefaultTTL
+	var delegatedBy *ULID
+	agentName := ""
+	switch kind {
+	case APITokenKindPersonal:
+		if in.AgentName != "" || in.DelegatedBy != nil {
+			return "", APIToken{}, errors.New("theauth: agent_name and delegated_by apply only to agent tokens")
+		}
+	case APITokenKindAgent:
+		if in.OwnerKind != OwnerKindUser {
+			return "", APIToken{}, errors.New("theauth: agent tokens must be owned by a user")
+		}
+		agentName = strings.TrimSpace(in.AgentName)
+		if agentName == "" || len(agentName) > 120 {
+			return "", APIToken{}, errors.New("theauth: agent name must be 1 to 120 characters")
+		}
+		if in.DelegatedBy != nil && *in.DelegatedBy != in.OwnerID {
+			return "", APIToken{}, errors.New("theauth: agent token delegated_by must be its owner")
+		}
+		owner := in.OwnerID
+		delegatedBy = &owner
+		maxTTL, defTTL = s.cfg.AgentMaxTTL, s.cfg.AgentTTL
+	default:
+		return "", APIToken{}, fmt.Errorf("theauth: unknown token kind %q", kind)
+	}
 	ttl := in.TTL
 	if ttl == 0 {
-		ttl = s.cfg.DefaultTTL
+		ttl = defTTL
 	}
-	if ttl < 0 || ttl > s.cfg.MaxTTL {
+	if ttl < 0 || ttl > maxTTL {
 		return "", APIToken{}, ErrTokenTTLInvalid
 	}
 	name := strings.TrimSpace(in.Name)
@@ -255,6 +302,7 @@ func (s *apiTokenService) mint(ctx context.Context, in MintAPITokenInput) (strin
 		ID: ulid.New(), OwnerID: in.OwnerID, OwnerKind: in.OwnerKind, Name: name,
 		Abilities: slices.Clone(in.Abilities), TokenHash: hashToken(raw),
 		Hint: s.cfg.Prefix + "_..." + secret[len(secret)-4:], CreatedAt: now, ExpiresAt: &exp,
+		Kind: kind, AgentName: agentName, DelegatedBy: delegatedBy,
 	}
 	saved, err := s.store.InsertAPIToken(ctx, t)
 	if err != nil {
@@ -300,7 +348,10 @@ func (s *apiTokenService) authenticate(ctx context.Context, raw string) (*Princi
 		_ = s.store.TouchAPITokenLastUsed(ctx, tok.ID, now.UTC())
 	}
 	id := tok.ID
-	return &Principal{Kind: PrincipalToken, UserID: tok.OwnerID, OwnerKind: tok.OwnerKind, TokenID: &id, Abilities: abilities, user: user}, nil
+	return &Principal{
+		Kind: PrincipalToken, UserID: tok.OwnerID, OwnerKind: tok.OwnerKind, TokenID: &id, Abilities: abilities, user: user,
+		TokenKind: tok.Kind, AgentName: tok.AgentName, DelegatedBy: tok.DelegatedBy,
+	}, nil
 }
 
 func (a *TheAuth) apiSvc() (*apiTokenService, error) {
@@ -353,7 +404,15 @@ func (a *TheAuth) RevokeAPIToken(ctx context.Context, id ULID) error {
 	if err != nil {
 		return err
 	}
-	return s.store.RevokeAPIToken(ctx, id, s.now().UTC())
+	if err := s.store.RevokeAPIToken(ctx, id, s.now().UTC()); err != nil {
+		return err
+	}
+	ev := RevocationEvent{Kind: RevocationAPIToken, ID: id.String(), Reason: "revoked"}
+	if tok, err := s.store.APITokenByID(ctx, id); err == nil {
+		ev.UserID = tok.OwnerID.String()
+	}
+	a.publishRevocation(ctx, ev)
+	return nil
 }
 
 // RevokeOwnerAPITokens revokes every live token of an owner. Call it when a
@@ -363,5 +422,10 @@ func (a *TheAuth) RevokeOwnerAPITokens(ctx context.Context, ownerID ULID) (int, 
 	if err != nil {
 		return 0, err
 	}
-	return s.store.RevokeAPITokensByOwner(ctx, ownerID, s.now().UTC())
+	n, err := s.store.RevokeAPITokensByOwner(ctx, ownerID, s.now().UTC())
+	if err != nil {
+		return n, err
+	}
+	a.publishRevocation(ctx, RevocationEvent{Kind: RevocationAPIToken, UserID: ownerID.String(), Reason: "owner tokens revoked"})
+	return n, nil
 }

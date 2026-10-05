@@ -27,6 +27,8 @@ type tokenCreateBody struct {
 	Name           string   `json:"name"`
 	Abilities      []string `json:"abilities"`
 	ExpiresIn      int64    `json:"expires_in"`
+	Kind           string   `json:"kind"`
+	AgentName      string   `json:"agent_name"`
 	ServiceAccount bool     `json:"service_account"`
 	OwnerID        string   `json:"owner_id"`
 }
@@ -61,7 +63,7 @@ func (a *TheAuth) handleTokenCreate(w http.ResponseWriter, r *http.Request) {
 		a.tokenInternalError(w, "resolve grantor abilities", err)
 		return
 	}
-	in := MintAPITokenInput{OwnerID: user.ID, OwnerKind: OwnerKindUser, Name: body.Name, Abilities: body.Abilities, TTL: time.Duration(body.ExpiresIn) * time.Second}
+	in := MintAPITokenInput{OwnerID: user.ID, OwnerKind: OwnerKindUser, Name: body.Name, Abilities: body.Abilities, TTL: time.Duration(body.ExpiresIn) * time.Second, Kind: body.Kind, AgentName: body.AgentName}
 	if body.ServiceAccount {
 		admin, err := s.isAdmin(r.Context(), user)
 		if err != nil {
@@ -179,7 +181,7 @@ func (a *TheAuth) handleTokenRevoke(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	if err := s.store.RevokeAPIToken(r.Context(), id, s.now().UTC()); err != nil {
+	if err := a.RevokeAPIToken(r.Context(), id); err != nil {
 		a.tokenInternalError(w, "revoke token", err)
 		return
 	}

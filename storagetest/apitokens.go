@@ -37,6 +37,25 @@ func testAPITokens(t *testing.T, store theauth.APITokenStorage) {
 		}
 	}
 
+	t.Run("agent token fields round trip", func(t *testing.T) {
+		by := newID()
+		agent := newTestToken(by, theauth.OwnerKindUser, "agent-"+by.String(), now)
+		agent.Kind, agent.AgentName, agent.DelegatedBy = theauth.APITokenKindAgent, "mcp-client", &by
+		if _, err := store.InsertAPIToken(ctx, agent); err != nil {
+			t.Fatalf("InsertAPIToken: %v", err)
+		}
+		got, err := store.APITokenByHash(ctx, agent.TokenHash)
+		if err != nil {
+			t.Fatalf("APITokenByHash: %v", err)
+		}
+		if got.Kind != theauth.APITokenKindAgent || got.AgentName != "mcp-client" || got.DelegatedBy == nil || *got.DelegatedBy != by {
+			t.Fatalf("agent fields lost: %+v", got)
+		}
+		if err := store.RevokeAPIToken(ctx, agent.ID, now); err != nil {
+			t.Fatal(err)
+		}
+	})
+
 	t.Run("ByHash round trips", func(t *testing.T) {
 		got, err := store.APITokenByHash(ctx, newer.TokenHash)
 		if err != nil {
