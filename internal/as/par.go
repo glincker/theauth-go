@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/glincker/theauth-go/internal/models"
+	"github.com/glincker/theauth-go/v2/internal/models"
 )
 
 // par.go: RFC 9126 Pushed Authorization Requests (PAR).

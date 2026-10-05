@@ -28,7 +28,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/glincker/theauth-go/cmd/theauth-migrate/internal"
+	"github.com/glincker/theauth-go/v2/cmd/theauth-migrate/internal"
 )
 
 // Auth0User matches the shape of a user object from the Auth0 Management API

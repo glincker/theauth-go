@@ -38,9 +38,9 @@ import (
 	"net/http"
 	"os"
 
-	"github.com/glincker/theauth-go"
-	appleprov "github.com/glincker/theauth-go/provider/apple"
-	"github.com/glincker/theauth-go/storage/memory"
+	"github.com/glincker/theauth-go/v2"
+	appleprov "github.com/glincker/theauth-go/v2/provider/apple"
+	"github.com/glincker/theauth-go/v2/storage/memory"
 	"github.com/go-chi/chi/v5"
 )
 

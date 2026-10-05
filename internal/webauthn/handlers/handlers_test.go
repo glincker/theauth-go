@@ -29,12 +29,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/glincker/theauth-go/internal/audit"
-	"github.com/glincker/theauth-go/internal/models"
-	"github.com/glincker/theauth-go/internal/ulid"
-	"github.com/glincker/theauth-go/internal/wavt"
-	"github.com/glincker/theauth-go/internal/webauthn"
-	"github.com/glincker/theauth-go/internal/webauthn/handlers"
+	"github.com/glincker/theauth-go/v2/internal/audit"
+	"github.com/glincker/theauth-go/v2/internal/models"
+	"github.com/glincker/theauth-go/v2/internal/ulid"
+	"github.com/glincker/theauth-go/v2/internal/wavt"
+	"github.com/glincker/theauth-go/v2/internal/webauthn"
+	"github.com/glincker/theauth-go/v2/internal/webauthn/handlers"
 	"github.com/go-chi/chi/v5"
 )
 

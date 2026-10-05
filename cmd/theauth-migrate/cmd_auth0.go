@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"os"
 
-	auth0pkg "github.com/glincker/theauth-go/cmd/theauth-migrate/auth0"
-	"github.com/glincker/theauth-go/cmd/theauth-migrate/internal"
+	auth0pkg "github.com/glincker/theauth-go/v2/cmd/theauth-migrate/auth0"
+	"github.com/glincker/theauth-go/v2/cmd/theauth-migrate/internal"
 )
 
 func runAuth0(args []string) error {

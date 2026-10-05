@@ -10,10 +10,10 @@ import (
 	"sort"
 	"time"
 
-	"github.com/glincker/theauth-go/crypto"
-	"github.com/glincker/theauth-go/internal/password"
-	"github.com/glincker/theauth-go/internal/session"
-	"github.com/glincker/theauth-go/internal/ulid"
+	"github.com/glincker/theauth-go/v2/crypto"
+	"github.com/glincker/theauth-go/v2/internal/password"
+	"github.com/glincker/theauth-go/v2/internal/session"
+	"github.com/glincker/theauth-go/v2/internal/ulid"
 )
 
 // CredentialChecker reports whether the upstream credential a session is tied

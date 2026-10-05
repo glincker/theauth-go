@@ -13,10 +13,10 @@ import (
 	"context"
 	"time"
 
-	internalas "github.com/glincker/theauth-go/internal/as"
-	"github.com/glincker/theauth-go/internal/cimd"
-	"github.com/glincker/theauth-go/internal/models"
-	internaloauth "github.com/glincker/theauth-go/internal/oauth"
+	internalas "github.com/glincker/theauth-go/v2/internal/as"
+	"github.com/glincker/theauth-go/v2/internal/cimd"
+	"github.com/glincker/theauth-go/v2/internal/models"
+	internaloauth "github.com/glincker/theauth-go/v2/internal/oauth"
 )
 
 // ---------- Request context keys ----------

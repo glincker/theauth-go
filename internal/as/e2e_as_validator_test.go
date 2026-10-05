@@ -7,10 +7,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/glincker/theauth-go"
-	"github.com/glincker/theauth-go/crypto"
-	"github.com/glincker/theauth-go/internal/ulid"
 	"github.com/glincker/theauth-go/mcpresource"
+	"github.com/glincker/theauth-go/v2"
+	"github.com/glincker/theauth-go/v2/crypto"
+	"github.com/glincker/theauth-go/v2/internal/ulid"
 	"github.com/go-chi/chi/v5"
 )
 

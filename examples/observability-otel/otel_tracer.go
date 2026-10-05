@@ -3,7 +3,7 @@
 // Usage:
 //
 //	import (
-//	    "github.com/glincker/theauth-go"
+//	    "github.com/glincker/theauth-go/v2"
 //	    otelbridge "github.com/glincker/theauth-go/examples/observability-otel"
 //	    "go.opentelemetry.io/otel"
 //	)
@@ -23,7 +23,7 @@ package otelbridge
 import (
 	"context"
 
-	"github.com/glincker/theauth-go"
+	"github.com/glincker/theauth-go/v2"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"

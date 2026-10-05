@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	internaloauth "github.com/glincker/theauth-go/internal/oauth"
+	internaloauth "github.com/glincker/theauth-go/v2/internal/oauth"
 )
 
 // OAuthState is the per-flow record kept between /start and /callback.

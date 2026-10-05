@@ -4,8 +4,8 @@ import (
 	"context"
 	"errors"
 
-	"github.com/glincker/theauth-go/internal/models"
-	obs "github.com/glincker/theauth-go/internal/observability"
+	"github.com/glincker/theauth-go/v2/internal/models"
+	obs "github.com/glincker/theauth-go/v2/internal/observability"
 )
 
 // observability.go: per-service helpers that fold the standard

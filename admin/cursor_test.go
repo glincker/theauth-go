@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/glincker/theauth-go/admin"
+	"github.com/glincker/theauth-go/v2/admin"
 	"github.com/oklog/ulid/v2"
 )
 

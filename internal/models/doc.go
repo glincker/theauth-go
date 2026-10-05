@@ -4,7 +4,7 @@
 // adapters and service code share.
 //
 // This package is internal. The exported root package
-// (github.com/glincker/theauth-go) re-exports every symbol here via type
+// (github.com/glincker/theauth-go/v2) re-exports every symbol here via type
 // aliases (type X = models.X), const aliases (const X = models.X), and
 // var aliases (var X = models.X). Compile-time API stability is preserved:
 // the alias form keeps every type identity, method set, and exported name

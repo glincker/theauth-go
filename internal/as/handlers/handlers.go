@@ -30,8 +30,8 @@ import (
 	"strconv"
 	"strings"
 
-	internalas "github.com/glincker/theauth-go/internal/as"
-	"github.com/glincker/theauth-go/internal/models"
+	internalas "github.com/glincker/theauth-go/v2/internal/as"
+	"github.com/glincker/theauth-go/v2/internal/models"
 	"github.com/go-chi/chi/v5"
 )
 

@@ -16,8 +16,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/glincker/theauth-go"
-	appleprov "github.com/glincker/theauth-go/provider/apple"
+	"github.com/glincker/theauth-go/v2"
+	appleprov "github.com/glincker/theauth-go/v2/provider/apple"
 )
 
 // generateTestKey creates a P-256 ECDSA key suitable for tests.

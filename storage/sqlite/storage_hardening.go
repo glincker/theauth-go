@@ -3,7 +3,7 @@ package sqlite
 import (
 	"context"
 
-	"github.com/glincker/theauth-go"
+	"github.com/glincker/theauth-go/v2"
 )
 
 var (

@@ -28,7 +28,7 @@ import (
 	"net/http"
 	"time"
 
-	theauth "github.com/glincker/theauth-go"
+	theauth "github.com/glincker/theauth-go/v2"
 	collectorlogsv1 "go.opentelemetry.io/proto/otlp/collector/logs/v1"
 	commonv1 "go.opentelemetry.io/proto/otlp/common/v1"
 	logsv1 "go.opentelemetry.io/proto/otlp/logs/v1"

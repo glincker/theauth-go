@@ -7,8 +7,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/glincker/theauth-go"
-	"github.com/glincker/theauth-go/storage"
+	"github.com/glincker/theauth-go/v2"
+	"github.com/glincker/theauth-go/v2/storage"
 )
 
 // v2.0 (phase 1 + 2): in-memory OAuth 2.1 authorization server adapter.

@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	auth0pkg "github.com/glincker/theauth-go/cmd/theauth-migrate/auth0"
+	auth0pkg "github.com/glincker/theauth-go/v2/cmd/theauth-migrate/auth0"
 )
 
 // sampleAuth0JSON is a minimal Auth0 Management API export with three users:

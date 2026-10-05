@@ -3,7 +3,7 @@ module github.com/glincker/theauth-go/storage/sqlite
 go 1.26.0
 
 require (
-	github.com/glincker/theauth-go v0.0.0
+	github.com/glincker/theauth-go/v2 v2.0.0-00010101000000-000000000000
 	github.com/oklog/ulid/v2 v2.1.2
 )
 

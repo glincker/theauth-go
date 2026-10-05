@@ -11,8 +11,8 @@ import (
 	"net/http"
 	"strings"
 
-	internalas "github.com/glincker/theauth-go/internal/as"
-	"github.com/glincker/theauth-go/internal/models"
+	internalas "github.com/glincker/theauth-go/v2/internal/as"
+	"github.com/glincker/theauth-go/v2/internal/models"
 )
 
 // handleBCAuthorize implements POST /oauth/bc-authorize per RFC 9509 section 7.

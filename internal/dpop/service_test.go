@@ -16,7 +16,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/glincker/theauth-go/internal/dpop"
+	"github.com/glincker/theauth-go/v2/internal/dpop"
 )
 
 // service_test.go: every numbered check from RFC 9449 section 4.3 lands

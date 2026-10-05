@@ -4,7 +4,7 @@
 // Usage:
 //
 //	import (
-//	    "github.com/glincker/theauth-go"
+//	    "github.com/glincker/theauth-go/v2"
 //	    prombridge "github.com/glincker/theauth-go/examples/observability-prom"
 //	    "github.com/prometheus/client_golang/prometheus"
 //	)
@@ -29,7 +29,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/glincker/theauth-go"
+	"github.com/glincker/theauth-go/v2"
 	"github.com/prometheus/client_golang/prometheus"
 )
 

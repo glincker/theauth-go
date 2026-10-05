@@ -3,7 +3,7 @@ package bench
 import (
 	"testing"
 
-	"github.com/glincker/theauth-go"
+	"github.com/glincker/theauth-go/v2"
 )
 
 // BenchmarkAuditRedactor measures DefaultRedactor on a representative

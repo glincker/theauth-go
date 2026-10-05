@@ -20,10 +20,10 @@ import (
 	"log/slog"
 	"time"
 
-	internalas "github.com/glincker/theauth-go/internal/as"
-	"github.com/glincker/theauth-go/internal/audit"
-	"github.com/glincker/theauth-go/internal/password"
-	"github.com/glincker/theauth-go/internal/totp"
+	internalas "github.com/glincker/theauth-go/v2/internal/as"
+	"github.com/glincker/theauth-go/v2/internal/audit"
+	"github.com/glincker/theauth-go/v2/internal/password"
+	"github.com/glincker/theauth-go/v2/internal/totp"
 	"github.com/go-webauthn/webauthn/protocol"
 )
 

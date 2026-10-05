@@ -6,10 +6,10 @@ import (
 	"testing"
 	"time"
 
-	theauth "github.com/glincker/theauth-go"
-	"github.com/glincker/theauth-go/internal/theauthtest"
-	"github.com/glincker/theauth-go/internal/ulid"
-	"github.com/glincker/theauth-go/storage/memory"
+	theauth "github.com/glincker/theauth-go/v2"
+	"github.com/glincker/theauth-go/v2/internal/theauthtest"
+	"github.com/glincker/theauth-go/v2/internal/ulid"
+	"github.com/glincker/theauth-go/v2/storage/memory"
 )
 
 func newOrgTestAuth(t *testing.T) (*theauth.TheAuth, *memory.Store) {

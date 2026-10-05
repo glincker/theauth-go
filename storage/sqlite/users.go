@@ -5,7 +5,7 @@ import (
 	"database/sql"
 	"time"
 
-	"github.com/glincker/theauth-go"
+	"github.com/glincker/theauth-go/v2"
 )
 
 const userCols = `id, email, email_verified_at, name, avatar_url, created_at, updated_at,

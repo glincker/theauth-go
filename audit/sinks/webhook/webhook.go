@@ -25,7 +25,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/glincker/theauth-go/internal/models"
+	"github.com/glincker/theauth-go/v2/internal/models"
 )
 
 const defaultTimeout = 5 * time.Second

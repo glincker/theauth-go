@@ -6,9 +6,9 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/glincker/theauth-go"
-	"github.com/glincker/theauth-go/internal/ulid"
-	"github.com/glincker/theauth-go/storage/memory"
+	"github.com/glincker/theauth-go/v2"
+	"github.com/glincker/theauth-go/v2/internal/ulid"
+	"github.com/glincker/theauth-go/v2/storage/memory"
 )
 
 // newAgentASInstance wires the same AS harness as newASInstance plus the

@@ -7,10 +7,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/glincker/theauth-go/crypto"
-	"github.com/glincker/theauth-go/internal/delegation"
-	"github.com/glincker/theauth-go/internal/jwt"
-	"github.com/glincker/theauth-go/internal/models"
+	"github.com/glincker/theauth-go/v2/crypto"
+	"github.com/glincker/theauth-go/v2/internal/delegation"
+	"github.com/glincker/theauth-go/v2/internal/jwt"
+	"github.com/glincker/theauth-go/v2/internal/models"
 )
 
 // introspect.go: RFC 7662 token introspection.

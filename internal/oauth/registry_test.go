@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/glincker/theauth-go/internal/oauth"
+	"github.com/glincker/theauth-go/v2/internal/oauth"
 )
 
 type fakeProvider struct{ name, tag string }

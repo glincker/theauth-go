@@ -5,7 +5,7 @@ import (
 	"errors"
 	"strings"
 
-	"github.com/glincker/theauth-go/internal/models"
+	"github.com/glincker/theauth-go/v2/internal/models"
 	"github.com/oklog/ulid/v2"
 )
 

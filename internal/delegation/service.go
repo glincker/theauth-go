@@ -21,16 +21,16 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/glincker/theauth-go/internal/audit"
-	"github.com/glincker/theauth-go/internal/chain"
-	"github.com/glincker/theauth-go/internal/models"
-	obs "github.com/glincker/theauth-go/internal/observability"
-	"github.com/glincker/theauth-go/internal/ulid"
+	"github.com/glincker/theauth-go/v2/internal/audit"
+	"github.com/glincker/theauth-go/v2/internal/chain"
+	"github.com/glincker/theauth-go/v2/internal/models"
+	obs "github.com/glincker/theauth-go/v2/internal/observability"
+	"github.com/glincker/theauth-go/v2/internal/ulid"
 )
 
 // Storage is the minimal persistence subset this package needs. Declared
 // here (not imported from root) so internal/delegation does not import
-// github.com/glincker/theauth-go, which would form an import cycle with the
+// github.com/glincker/theauth-go/v2, which would form an import cycle with the
 // root constructor. Any type satisfying these methods (notably the root
 // theauth.Storage when it also implements OAuthServerStorage) is a valid
 // argument to New.

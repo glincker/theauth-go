@@ -3,7 +3,7 @@ package theauth
 // Type, constant, and function aliases that re-export the v0.x model layer
 // (User, Session, MagicLink, organization + SAML + SCIM + RBAC + audit
 // structs) from the canonical internal home at
-// github.com/glincker/theauth-go/internal/models.
+// github.com/glincker/theauth-go/v2/internal/models.
 //
 // The alias form (type X = models.X, const X = models.X, var X = models.X)
 // preserves COMPILE-TIME API stability: every exported symbol in this file
@@ -21,7 +21,7 @@ package theauth
 // the alias line itself instead of the underlying type body; this is
 // expected and is no longer a STABILITY check.
 
-import "github.com/glincker/theauth-go/internal/models"
+import "github.com/glincker/theauth-go/v2/internal/models"
 
 // ---------- v0.x core entity types ----------
 

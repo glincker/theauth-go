@@ -8,8 +8,8 @@ import (
 	"net/url"
 	"testing"
 
-	"github.com/glincker/theauth-go"
-	glprov "github.com/glincker/theauth-go/provider/gitlab"
+	"github.com/glincker/theauth-go/v2"
+	glprov "github.com/glincker/theauth-go/v2/provider/gitlab"
 )
 
 func TestNameIsGitLab(t *testing.T) {

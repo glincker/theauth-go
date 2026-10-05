@@ -8,9 +8,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/glincker/theauth-go"
-	discprov "github.com/glincker/theauth-go/provider/discord"
-	"github.com/glincker/theauth-go/provider/internal/oauthtest"
+	"github.com/glincker/theauth-go/v2"
+	discprov "github.com/glincker/theauth-go/v2/provider/discord"
+	"github.com/glincker/theauth-go/v2/provider/internal/oauthtest"
 )
 
 func TestNameIsDiscord(t *testing.T) {

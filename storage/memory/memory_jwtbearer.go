@@ -5,7 +5,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/glincker/theauth-go/storage"
+	"github.com/glincker/theauth-go/v2/storage"
 )
 
 // jtiState backs the in-process JTI replay cache. A single global sync.Map

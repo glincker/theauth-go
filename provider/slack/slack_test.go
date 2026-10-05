@@ -8,8 +8,8 @@ import (
 	"net/url"
 	"testing"
 
-	"github.com/glincker/theauth-go"
-	slackprov "github.com/glincker/theauth-go/provider/slack"
+	"github.com/glincker/theauth-go/v2"
+	slackprov "github.com/glincker/theauth-go/v2/provider/slack"
 )
 
 func TestNameIsSlack(t *testing.T) {

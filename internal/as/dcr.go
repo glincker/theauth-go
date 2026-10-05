@@ -9,10 +9,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/glincker/theauth-go/crypto"
-	"github.com/glincker/theauth-go/internal/models"
-	obs "github.com/glincker/theauth-go/internal/observability"
-	"github.com/glincker/theauth-go/internal/ulid"
+	"github.com/glincker/theauth-go/v2/crypto"
+	"github.com/glincker/theauth-go/v2/internal/models"
+	obs "github.com/glincker/theauth-go/v2/internal/observability"
+	"github.com/glincker/theauth-go/v2/internal/ulid"
 )
 
 // dcr.go: RFC 7591 dynamic client registration.

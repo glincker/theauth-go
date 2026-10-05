@@ -1,6 +1,6 @@
 package theauth
 
-import "github.com/glincker/theauth-go/internal/models"
+import "github.com/glincker/theauth-go/v2/internal/models"
 
 // Error codes added with the auth hardening work.
 const (

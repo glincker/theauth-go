@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/glincker/theauth-go"
+	"github.com/glincker/theauth-go/v2"
 )
 
 const webauthnCols = `id, user_id, credential_id, public_key, sign_count, transports, aaguid, name,

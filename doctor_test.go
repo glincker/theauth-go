@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/glincker/theauth-go"
+	"github.com/glincker/theauth-go/v2"
 )
 
 var updateGolden = flag.Bool("update-doctor-golden", false, "rewrite doctor golden files")

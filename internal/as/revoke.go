@@ -4,8 +4,8 @@ import (
 	"context"
 	"errors"
 
-	"github.com/glincker/theauth-go/crypto"
-	obs "github.com/glincker/theauth-go/internal/observability"
+	"github.com/glincker/theauth-go/v2/crypto"
+	obs "github.com/glincker/theauth-go/v2/internal/observability"
 )
 
 // revoke.go: RFC 7009 token revocation.

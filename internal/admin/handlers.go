@@ -19,10 +19,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/glincker/theauth-go/admin"
-	"github.com/glincker/theauth-go/internal/httpx"
-	"github.com/glincker/theauth-go/internal/models"
-	internalulid "github.com/glincker/theauth-go/internal/ulid"
+	"github.com/glincker/theauth-go/v2/admin"
+	"github.com/glincker/theauth-go/v2/internal/httpx"
+	"github.com/glincker/theauth-go/v2/internal/models"
+	internalulid "github.com/glincker/theauth-go/v2/internal/ulid"
 	"github.com/go-chi/chi/v5"
 	"github.com/oklog/ulid/v2"
 )

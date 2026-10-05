@@ -24,9 +24,9 @@ import (
 	"net/http"
 	"os"
 
-	"github.com/glincker/theauth-go"
-	xprov "github.com/glincker/theauth-go/provider/x"
-	"github.com/glincker/theauth-go/storage/memory"
+	"github.com/glincker/theauth-go/v2"
+	xprov "github.com/glincker/theauth-go/v2/provider/x"
+	"github.com/glincker/theauth-go/v2/storage/memory"
 	"github.com/go-chi/chi/v5"
 )
 

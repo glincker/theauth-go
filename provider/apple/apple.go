@@ -54,7 +54,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/glincker/theauth-go"
+	"github.com/glincker/theauth-go/v2"
 )
 
 // defaultScopes for Sign In with Apple.

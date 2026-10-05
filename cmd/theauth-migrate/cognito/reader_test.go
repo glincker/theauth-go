@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/glincker/theauth-go/cmd/theauth-migrate/cognito"
+	"github.com/glincker/theauth-go/v2/cmd/theauth-migrate/cognito"
 )
 
 // sampleCognitoCSV is a minimal Cognito user export CSV with two users.

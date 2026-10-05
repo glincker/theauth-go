@@ -6,7 +6,7 @@ import (
 )
 
 // Sentinel errors that the storage layer and service code share. These names
-// are re-exported from the root package (github.com/glincker/theauth-go)
+// are re-exported from the root package (github.com/glincker/theauth-go/v2)
 // via var aliases for backward compatibility with v0.1+ callers that
 // errors.Is-check against them.
 //

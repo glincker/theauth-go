@@ -8,8 +8,8 @@ import (
 	"net/url"
 	"testing"
 
-	"github.com/glincker/theauth-go"
-	bbprov "github.com/glincker/theauth-go/provider/bitbucket"
+	"github.com/glincker/theauth-go/v2"
+	bbprov "github.com/glincker/theauth-go/v2/provider/bitbucket"
 )
 
 func TestNameIsBitbucket(t *testing.T) {

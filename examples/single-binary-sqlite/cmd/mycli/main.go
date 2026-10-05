@@ -10,7 +10,7 @@ import (
 	"os"
 	"os/signal"
 
-	"github.com/glincker/theauth-go/clientauth"
+	"github.com/glincker/theauth-go/v2/clientauth"
 )
 
 const app = "mycli"

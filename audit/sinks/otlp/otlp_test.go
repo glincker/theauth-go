@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	theauth "github.com/glincker/theauth-go"
 	"github.com/glincker/theauth-go/audit/sinks/otlp"
+	theauth "github.com/glincker/theauth-go/v2"
 	collectorlogsv1 "go.opentelemetry.io/proto/otlp/collector/logs/v1"
 	"google.golang.org/protobuf/proto"
 )

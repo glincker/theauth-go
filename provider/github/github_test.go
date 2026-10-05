@@ -9,8 +9,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/glincker/theauth-go"
-	ghprov "github.com/glincker/theauth-go/provider/github"
+	"github.com/glincker/theauth-go/v2"
+	ghprov "github.com/glincker/theauth-go/v2/provider/github"
 )
 
 func TestNameIsGitHub(t *testing.T) {

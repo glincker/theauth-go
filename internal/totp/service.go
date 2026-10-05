@@ -25,11 +25,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/glincker/theauth-go/crypto"
-	"github.com/glincker/theauth-go/internal/audit"
-	"github.com/glincker/theauth-go/internal/models"
-	"github.com/glincker/theauth-go/internal/throttle"
-	"github.com/glincker/theauth-go/internal/ulid"
+	"github.com/glincker/theauth-go/v2/crypto"
+	"github.com/glincker/theauth-go/v2/internal/audit"
+	"github.com/glincker/theauth-go/v2/internal/models"
+	"github.com/glincker/theauth-go/v2/internal/throttle"
+	"github.com/glincker/theauth-go/v2/internal/ulid"
 	"github.com/pquerna/otp"
 	"github.com/pquerna/otp/totp"
 )

@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/glincker/theauth-go/internal/ulid"
+	"github.com/glincker/theauth-go/v2/internal/ulid"
 )
 
 // Errors returned by the API token service.

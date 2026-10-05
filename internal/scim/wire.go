@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/glincker/theauth-go/internal/models"
+	"github.com/glincker/theauth-go/v2/internal/models"
 )
 
 // SCIM 2.0 wire formats and resource mapping. RFC 7643 (Core Schema)

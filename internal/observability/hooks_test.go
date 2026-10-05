@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	obs "github.com/glincker/theauth-go/internal/observability"
+	obs "github.com/glincker/theauth-go/v2/internal/observability"
 )
 
 // TestNilHooksDoNothing locks the contract that every public Hooks method

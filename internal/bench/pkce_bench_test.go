@@ -3,7 +3,7 @@ package bench
 import (
 	"testing"
 
-	"github.com/glincker/theauth-go/crypto"
+	"github.com/glincker/theauth-go/v2/crypto"
 )
 
 // BenchmarkPKCEChallenge measures NewCodeVerifier + CodeChallenge as a

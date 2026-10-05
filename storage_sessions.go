@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/glincker/theauth-go/internal/models"
+	"github.com/glincker/theauth-go/v2/internal/models"
 )
 
 // SessionLink is a short-lived, single-use grant that exchanges for a session.

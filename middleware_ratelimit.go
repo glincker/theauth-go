@@ -14,7 +14,7 @@ import (
 
 	"golang.org/x/time/rate"
 
-	"github.com/glincker/theauth-go/internal/httpx"
+	"github.com/glincker/theauth-go/v2/internal/httpx"
 )
 
 // keyedLimiter is an in-memory per-key sliding-window limiter. Each unique

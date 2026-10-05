@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/glincker/theauth-go"
+	"github.com/glincker/theauth-go/v2"
 )
 
 // scim_patch_test.go closes the SCIM PATCH branch matrix called out in the

@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/glincker/theauth-go/internal/jwt"
+	"github.com/glincker/theauth-go/v2/internal/jwt"
 )
 
 // BenchmarkJWTSign measures a single Ed25519 JWT sign (header + payload

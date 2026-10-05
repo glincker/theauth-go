@@ -5,7 +5,7 @@ import (
 	"database/sql"
 	"time"
 
-	"github.com/glincker/theauth-go"
+	"github.com/glincker/theauth-go/v2"
 )
 
 // CreateMagicLink stores a single-use magic link.

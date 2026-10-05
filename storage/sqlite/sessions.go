@@ -5,7 +5,7 @@ import (
 	"database/sql"
 	"time"
 
-	"github.com/glincker/theauth-go"
+	"github.com/glincker/theauth-go/v2"
 )
 
 const sessionCols = `id, user_id, token_hash, user_agent, ip, created_at, expires_at, revoked_at, auth_level, last_seen_at, elevated_until, credential_id`

@@ -8,9 +8,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/glincker/theauth-go"
-	"github.com/glincker/theauth-go/provider/internal/oauthtest"
-	msprov "github.com/glincker/theauth-go/provider/microsoft"
+	"github.com/glincker/theauth-go/v2"
+	"github.com/glincker/theauth-go/v2/provider/internal/oauthtest"
+	msprov "github.com/glincker/theauth-go/v2/provider/microsoft"
 )
 
 func TestNameIsMicrosoft(t *testing.T) {

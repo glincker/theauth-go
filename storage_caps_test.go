@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/glincker/theauth-go"
-	"github.com/glincker/theauth-go/storage/memory"
+	"github.com/glincker/theauth-go/v2"
+	"github.com/glincker/theauth-go/v2/storage/memory"
 )
 
 // allCapabilities lists every capability interface; keep in sync with storage_caps.go.

@@ -7,8 +7,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/glincker/theauth-go/cmd/theauth-migrate/cognito"
-	"github.com/glincker/theauth-go/cmd/theauth-migrate/internal"
+	"github.com/glincker/theauth-go/v2/cmd/theauth-migrate/cognito"
+	"github.com/glincker/theauth-go/v2/cmd/theauth-migrate/internal"
 )
 
 func runCognito(args []string) error {

@@ -11,7 +11,7 @@ import (
 
 	"github.com/oklog/ulid/v2"
 
-	theauth "github.com/glincker/theauth-go"
+	theauth "github.com/glincker/theauth-go/v2"
 )
 
 const batchSize = 500

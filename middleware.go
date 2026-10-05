@@ -7,7 +7,7 @@ import (
 	"net/http"
 	"strings"
 
-	internalscim "github.com/glincker/theauth-go/internal/scim"
+	internalscim "github.com/glincker/theauth-go/v2/internal/scim"
 )
 
 // Authn looks for a session cookie, validates it, and adds the user + session

@@ -10,7 +10,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/glincker/theauth-go"
+	"github.com/glincker/theauth-go/v2"
 	"github.com/oklog/ulid/v2"
 )
 

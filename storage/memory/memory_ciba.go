@@ -5,8 +5,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/glincker/theauth-go"
-	"github.com/glincker/theauth-go/storage"
+	"github.com/glincker/theauth-go/v2"
+	"github.com/glincker/theauth-go/v2/storage"
 )
 
 // memory_ciba.go: in-memory CIBAStorage adapter for RFC 9509 backchannel

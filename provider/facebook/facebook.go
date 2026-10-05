@@ -17,7 +17,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/glincker/theauth-go"
+	"github.com/glincker/theauth-go/v2"
 )
 
 // defaultScopes are the minimum permissions needed to populate ProviderUser.

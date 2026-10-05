@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/glincker/theauth-go/internal/models"
+	"github.com/glincker/theauth-go/v2/internal/models"
 )
 
 // token_ciba.go: token minting for the CIBA grant. Splits from token.go

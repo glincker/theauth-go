@@ -22,7 +22,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/glincker/theauth-go/cmd/theauth-migrate/internal"
+	"github.com/glincker/theauth-go/v2/cmd/theauth-migrate/internal"
 )
 
 // ReadCSV reads a Cognito user export CSV from r and returns a Bundle.

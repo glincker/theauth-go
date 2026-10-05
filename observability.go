@@ -11,7 +11,7 @@ import (
 	"encoding/hex"
 	"strings"
 
-	"github.com/glincker/theauth-go/internal/observability"
+	"github.com/glincker/theauth-go/v2/internal/observability"
 )
 
 // Observability re-exports are the public surface for plugging tracing +

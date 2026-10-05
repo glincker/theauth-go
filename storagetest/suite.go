@@ -3,7 +3,7 @@ package storagetest
 import (
 	"testing"
 
-	"github.com/glincker/theauth-go"
+	"github.com/glincker/theauth-go/v2"
 )
 
 // SessionSuiteStorage is the storage RunCore's session tests need.

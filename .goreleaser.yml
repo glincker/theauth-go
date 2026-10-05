@@ -107,4 +107,4 @@ release:
       theauth-go-{{ .Tag }}.tar.gz.sbom.json
     ```
 
-    Use this library: `go get github.com/glincker/theauth-go@{{ .Tag }}`
+    Use this library: `go get github.com/glincker/theauth-go/v2@{{ .Tag }}`

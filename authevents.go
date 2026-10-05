@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/glincker/theauth-go/internal/audit"
+	"github.com/glincker/theauth-go/v2/internal/audit"
 )
 
 // AuthEventType names one security-relevant authentication event.
