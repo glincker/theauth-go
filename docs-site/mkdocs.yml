@@ -68,7 +68,6 @@ nav:
       - Storage Backends: getting-started/storage-backends.md
       - Example Apps: getting-started/example-apps.md
   - Concepts:
-      - Why MCP OAuth 2.1 matters: concepts/positioning.md
       - Capability Interfaces and Storage: concepts/capability-interfaces.md
       - OAuth 2.1 Primer: concepts/oauth21-primer.md
       - MCP Authorization: concepts/mcp-authorization.md
