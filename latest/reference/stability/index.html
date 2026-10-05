@@ -1,0 +1,2910 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Go auth library covering OAuth 2.1, MCP authorization, agent identities, WebAuthn, SAML, SCIM, and more.">
+      
+      
+      
+        <link rel="canonical" href="https://go.theauth.dev/latest/reference/stability/">
+      
+      
+        <link rel="prev" href="../configuration/">
+      
+      
+        <link rel="next" href="../storage/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>API Stability - theauth-go</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.ec1eaa64.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  
+<meta property="og:type" content="website" />
+<meta property="og:title" content="API Stability - theauth-go" />
+<meta property="og:description" content="Go auth library covering OAuth 2.1, MCP authorization, agent identities, WebAuthn, SAML, SCIM, and more." />
+<meta property="og:image" content="https://go.theauth.dev/latest/assets/images/social/reference/stability.png" />
+<meta property="og:image:type" content="image/png" />
+<meta property="og:image:width" content="1200" />
+<meta property="og:image:height" content="630" />
+<meta property="og:url" content="https://go.theauth.dev/latest/reference/stability/" />
+<meta property="twitter:card" content="summary_large_image" />
+<meta property="twitter:title" content="API Stability - theauth-go" />
+<meta property="twitter:description" content="Go auth library covering OAuth 2.1, MCP authorization, agent identities, WebAuthn, SAML, SCIM, and more." />
+<meta property="twitter:image" content="https://go.theauth.dev/latest/assets/images/social/reference/stability.png" />
+</head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#api-stability" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+      <div data-md-color-scheme="default" data-md-component="outdated" hidden>
+        
+      </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow md-header--lifted" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="theauth-go" class="md-header__button md-logo" aria-label="theauth-go" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            theauth-go
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              API Stability
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/glincker/theauth-go" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    glincker/theauth-go
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+    
+      
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../.." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../getting-started/overview/" class="md-tabs__link">
+          
+  
+  
+  Getting Started
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../concepts/capability-interfaces/" class="md-tabs__link">
+          
+  
+  
+  Concepts
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../guides/add-oauth-provider/" class="md-tabs__link">
+          
+  
+  
+  Guides
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+    
+  
+  
+    
+    
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="../configuration/" class="md-tabs__link">
+          
+  
+  
+  Reference
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../security/threat-model/" class="md-tabs__link">
+          
+  
+  
+  Security
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../migrations/migration-guide/" class="md-tabs__link">
+          
+  
+  
+  Migrations
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../changelog/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Changelog
+
+      </a>
+    </li>
+  
+
+      
+    </ul>
+  </div>
+</nav>
+    
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="theauth-go" class="md-nav__button md-logo" aria-label="theauth-go" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    theauth-go
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/glincker/theauth-go" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    glincker/theauth-go
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting Started
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Getting Started
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/overview/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/installation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Installation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/quick-start/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Quick Start
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/storage-backends/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Storage Backends
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/example-apps/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Example Apps
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Concepts
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Concepts
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../concepts/capability-interfaces/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Capability Interfaces and Storage
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../concepts/oauth21-primer/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    OAuth 2.1 Primer
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../concepts/mcp-authorization/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MCP Authorization
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../concepts/authorization-server/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Authorization Server
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../concepts/resource-server/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Resource Server (mcpresource)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../concepts/agent-identity/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Agent Identity and Revocation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../concepts/par-jar/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    PAR + JAR (FAPI 2.0)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../concepts/jwt-bearer/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    JWT-Bearer Client Auth
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../concepts/ciba/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CIBA Backchannel Auth
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Guides
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Guides
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guides/add-oauth-provider/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Add an OAuth Provider
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guides/webauthn-passkeys/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Enable WebAuthn Passkeys
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guides/api-tokens/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API Tokens and Device Login
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guides/cli-login/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CLI Login
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guides/path-prefix-and-dynamic-providers/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Path Prefix and Dynamic Providers
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guides/policy-engine/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Policy Engine
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guides/sessions/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Session Management
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guides/auth-hardening/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Auth Hardening
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guides/observability/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Observability
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guides/security-doctor/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Security Doctor
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guides/single-binary-go-app/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Auth for a Single-Binary Go App
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guides/migrate-from-hand-rolled-sessions/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Migrate from Hand-Rolled Sessions
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guides/oauth-hardening-and-auth-events/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    OAuth Hardening and Auth Events
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guides/opentelemetry-tracing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Wire OpenTelemetry Tracing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guides/audit-log-splunk/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Stream Audit Logs to Splunk
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guides/sqlite-storage/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Use the SQLite Backend
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guides/postgres-mysql-storage/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Use the Postgres or MySQL Backend
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guides/custom-storage-backend/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Write a Custom Storage Backend
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guides/migrate-from-cognito/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Migrate from Cognito
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guides/migrate-from-auth0/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Migrate from Auth0
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../configuration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API Stability
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../storage/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Storage Interface
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../errors/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Errors
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../metrics/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Metrics
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../spans/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Spans
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../audit-events/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Audit Events
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Security
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Security
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../security/threat-model/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Threat Model
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../security/http-security/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    HTTP Security
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../security/releases/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Releases and Verification
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../security/benchmarks/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Benchmarks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../security/compliance-soc2/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SOC 2 Mapping
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../security/compliance-gdpr/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    GDPR Reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Migrations
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Migrations
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../migrations/migration-guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Migration guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../migrations/to-v2-module-path/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Migrating to /v2
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../migrations/v2.3-to-v2.4/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v2.3 to v2.4
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../migrations/v2.0-to-v2.1/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v2.0 to v2.1
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../migrations/v1.0-to-v2.0/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v1.0 to v2.0
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../migrations/v0.7-to-v1.0/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v0.7 to v1.0
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../changelog/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Changelog
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+                
+
+
+
+  
+
+
+  <nav class="md-path" aria-label="Navigation" >
+    <ol class="md-path__list">
+      
+        
+  
+  
+    <li class="md-path__item">
+      <a href="../.." class="md-path__link">
+        
+  <span class="md-ellipsis">
+    Home
+  </span>
+
+      </a>
+    </li>
+  
+
+      
+      
+        
+  
+  
+    
+    
+      <li class="md-path__item">
+        <a href="../configuration/" class="md-path__link">
+          
+  <span class="md-ellipsis">
+    Reference
+  </span>
+
+        </a>
+      </li>
+    
+  
+
+      
+    </ol>
+  </nav>
+
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="api-stability">API stability<a class="headerlink" href="#api-stability" title="Permanent link">&para;</a></h1>
+<h1 id="theauth-go-api-stability">theauth-go API stability<a class="headerlink" href="#theauth-go-api-stability" title="Permanent link">&para;</a></h1>
+<p>This document captures what counts as the public API of theauth-go and what
+guarantees it carries. Starting with v1.0 the project follows
+<a href="https://semver.org/">Semantic Versioning</a> strictly: any change to a stable
+symbol's signature, name, or documented behavior contract requires a v2.0
+release. Adding new exported symbols, new optional <code>Config</code> fields, or new
+methods on <code>*TheAuth</code> is non-breaking. Deprecations are announced one minor
+version before removal with a <code>// Deprecated:</code> godoc line.</p>
+<h2 id="stable-packages-v10">Stable packages (v1.0)<a class="headerlink" href="#stable-packages-v10" title="Permanent link">&para;</a></h2>
+<ul>
+<li><code>github.com/glincker/theauth-go/v2</code></li>
+<li><code>github.com/glincker/theauth-go/v2/crypto</code></li>
+<li><code>github.com/glincker/theauth-go/v2/email</code></li>
+<li><code>github.com/glincker/theauth-go/v2/provider</code></li>
+<li><code>github.com/glincker/theauth-go/v2/provider/github</code></li>
+<li><code>github.com/glincker/theauth-go/v2/provider/google</code></li>
+<li><code>github.com/glincker/theauth-go/v2/provider/microsoft</code></li>
+<li><code>github.com/glincker/theauth-go/v2/provider/discord</code></li>
+<li><code>github.com/glincker/theauth-go/v2/storage</code></li>
+<li><code>github.com/glincker/theauth-go/v2/storage/memory</code></li>
+<li><code>github.com/glincker/theauth-go/v2/storage/postgres</code></li>
+<li><code>github.com/glincker/theauth-go/v2/admin</code></li>
+</ul>
+<h2 id="stable-packages-v20-additions">Stable packages (v2.0 additions)<a class="headerlink" href="#stable-packages-v20-additions" title="Permanent link">&para;</a></h2>
+<p>The v1.0 surface above is unchanged. v2.0 adds the following packages, each
+covered by the same SemVer guarantees from this point forward.</p>
+<ul>
+<li><code>github.com/glincker/theauth-go/mcpresource</code> (separately importable as a
+  zero-dependency Go module: a consumer pulling this package does NOT
+  transitively pull theauth core or the storage adapters).</li>
+</ul>
+<h2 id="experimental-packages">Experimental packages<a class="headerlink" href="#experimental-packages" title="Permanent link">&para;</a></h2>
+<ul>
+<li><code>github.com/glincker/theauth-go/storage/sqlite</code>: separate Go module backed
+  by <code>modernc.org/sqlite</code>. Core, OAuthAccount, WebAuthn, TOTP and Audit
+  capabilities only. Its migrations are append-only like the other adapters.
+  Promoted to stable once organizations and RBAC land.</li>
+</ul>
+<h2 id="stable-packages-v23-additions">Stable packages (v2.3 additions)<a class="headerlink" href="#stable-packages-v23-additions" title="Permanent link">&para;</a></h2>
+<p>The v2.0 surface above is unchanged. v2.3 adds the following packages for
+SIEM audit log streaming, covered by the same SemVer guarantees from this
+point forward.</p>
+<ul>
+<li><code>github.com/glincker/theauth-go/v2/audit/sinks/splunkhec</code>: Splunk HTTP Event
+  Collector sink. No new deps; importable as part of the root module.</li>
+<li><code>github.com/glincker/theauth-go/v2/audit/sinks/webhook</code>: generic CloudEvents
+  1.0 POST sink with HMAC-SHA256 signing. No new deps; importable as part of
+  the root module.</li>
+<li><code>github.com/glincker/theauth-go/audit/sinks/otlp</code>: OTLP/HTTP logs sink.
+  Separately importable as its own Go module; adds
+  <code>go.opentelemetry.io/proto/otlp</code> and <code>google.golang.org/protobuf</code> to that
+  sub-module only. The root <code>theauth-go</code> module gains zero new dependencies.</li>
+</ul>
+<h3 id="root-package-additions-v23-additive-only">Root package additions (v2.3, additive only)<a class="headerlink" href="#root-package-additions-v23-additive-only" title="Permanent link">&para;</a></h3>
+<ul>
+<li><code>AuditSink</code> interface: streaming contract for external SIEM destinations.
+  Implementations must be best-effort; a failing <code>Stream</code> call must never
+  block the canonical storage write.</li>
+<li><code>AuditConfig.Sinks []AuditSink</code>: optional list of sinks; fan-out happens
+  after each successful <code>InsertAuditEvents</code> call.</li>
+<li><code>Stats.AuditSinkFailed uint64</code>: monotonically non-decreasing counter
+  incremented once per failing sink per batch. Existing fields are unchanged.</li>
+</ul>
+<h2 id="additive-surface-auth-hardening">Additive surface (auth hardening)<a class="headerlink" href="#additive-surface-auth-hardening" title="Permanent link">&para;</a></h2>
+<p>New, non-breaking: <code>Config.OAuth</code>, <code>Config.AuthEventSink</code>, <code>OAuthConfig</code>,
+<code>OAuthStateStore</code>, <code>OAuthState</code>, <code>OAuthSignupPolicy</code>, <code>NonceProvider</code>,
+<code>AuthEvent</code>, <code>AuthEventType</code>, <code>AuthEventSink</code>, <code>AuthEventChannelSink</code>,
+<code>WebAuthnConfig.RequireUserVerification</code>, <code>WebAuthnConfig.CloneWarning</code>,
+<code>WebAuthnRenameStorage</code>, <code>RecoveryCodeStorage</code>,
+<code>(*TheAuth).RecordTokenMinted</code>, <code>RecordTokenRevoked</code>, <code>TOTPStatus</code>,
+<code>RegenerateRecoveryCodes</code>, <code>RenamePasskey</code>, and the package
+<code>github.com/glincker/theauth-go/v2/provider/oidc</code>.</p>
+<h2 id="stable-surface">Stable surface<a class="headerlink" href="#stable-surface" title="Permanent link">&para;</a></h2>
+<h3 id="root-package-githubcomglinckertheauth-gov2">Root package: <code>github.com/glincker/theauth-go/v2</code><a class="headerlink" href="#root-package-githubcomglinckertheauth-gov2" title="Permanent link">&para;</a></h3>
+<p><strong>Core types</strong>: <code>TheAuth</code>, <code>Config</code>, <code>Storage</code>, <code>Provider</code>, <code>ProviderToken</code>,
+<code>ProviderUser</code>, <code>User</code>, <code>Session</code>, <code>MagicLink</code>, <code>PasswordResetToken</code>,
+<code>OAuthAccount</code>, <code>WebAuthnCredential</code>, <code>TOTPSecret</code>, <code>RecoveryCode</code>,
+<code>SAMLConnection</code>, <code>SAMLIdentity</code>, <code>SAMLAttributeMap</code>, <code>SCIMToken</code>,
+<code>Organization</code>, <code>OrganizationMember</code>, <code>Group</code>, <code>SCIMUserFilter</code>,
+<code>SCIMGroupFilter</code>, <code>EnrollTOTPResult</code>, <code>SigninStep</code>, <code>TheAuthError</code>, <code>ULID</code>,
+<code>Role</code>, <code>Permission</code>, <code>UserRole</code>, <code>AuditEvent</code>, <code>TargetRef</code>, <code>AuditQuery</code>,
+<code>AuditMetadata</code>, <code>Stats</code>.</p>
+<p><strong>Config subtypes</strong>: <code>WebAuthnConfig</code>, <code>TOTPConfig</code>, <code>OrganizationsConfig</code>,
+<code>SAMLConfig</code>, <code>SCIMConfig</code>, <code>RBACConfig</code>, <code>RoleSeed</code>, <code>AuditConfig</code>,
+<code>AdminConfig</code>.</p>
+<p><strong>Constructors and lifecycle</strong>: <code>New</code>, <code>NewError</code>, <code>(*TheAuth).Start</code>,
+<code>(*TheAuth).Close</code>, <code>(*TheAuth).Mount</code>, <code>(*TheAuth).Stats</code>.</p>
+<p><strong>Auth flows</strong>: <code>(*TheAuth).SignUp</code> (via service entry points),
+<code>(*TheAuth).BeginPasskeyRegistration</code>, <code>FinishPasskeyRegistration</code>,
+<code>BeginPasskeyLogin</code>, <code>FinishPasskeyLogin</code>, <code>BeginTOTPEnrollment</code>,
+<code>FinishTOTPEnrollment</code>, <code>VerifyTOTP</code>, <code>ConsumeRecoveryCode</code>,
+<code>IssuePending2FA</code>. Service entry points reachable via the HTTP layer
+mounted by <code>Mount</code> are also stable; signatures of the unexported handlers
+themselves are not part of the public contract.</p>
+<p><strong>RBAC (v1.0)</strong>: <code>(*TheAuth).SeedPermissions</code>,
+<code>SeedOrganizationRoles</code>, <code>PermissionsForUser</code>, <code>HasPermission</code>, <code>GrantRole</code>,
+<code>RevokeRole</code>, <code>CreateRole</code>, <code>UpdateRole</code>, <code>DeleteRole</code>,
+<code>(*TheAuth).RequirePermission</code>. Plus the permission name constants
+(<code>PermissionBillingRead</code>, <code>PermissionBillingWrite</code>, <code>PermissionBillingAdmin</code>,
+<code>PermissionUsersRead</code>, <code>PermissionUsersInvite</code>, <code>PermissionUsersAdmin</code>,
+<code>PermissionRolesRead</code>, <code>PermissionRolesAdmin</code>, <code>PermissionAuditRead</code>,
+<code>PermissionSAMLAdmin</code>, <code>PermissionSCIMAdmin</code>, <code>PermissionSessionsRevoke</code>),
+the seed helpers <code>SeededPermissions</code> and <code>DefaultRoleSeeds</code>, and the
+constant <code>SystemRoleSuperAdmin</code>.</p>
+<p><strong>Audit (v1.0)</strong>: <code>(*TheAuth).EmitAudit</code>, <code>(*TheAuth).QueryAudit</code>,
+<code>DefaultRedactor</code>, <code>SeededSecretKeys</code>, <code>HashEmailForAudit</code>,
+<code>WithAuditMetadata</code>. Action strings for the canonical catalog are not
+exported as constants, but the spelling of every emitted action listed in
+docs/audit_catalog.md is part of the v1.0 stability commitment: existing
+actions will keep their name and target shape through every minor release.</p>
+<p><strong>Middleware</strong>: <code>(*TheAuth).Authn</code>, <code>(*TheAuth).RequireAuth</code>,
+<code>(*TheAuth).RequirePendingOrFull</code>, <code>(*TheAuth).RequirePermission</code>,
+<code>(*TheAuth).RateLimitByIP</code>, <code>(*TheAuth).RateLimitByEmail</code>.</p>
+<p><strong>Errors</strong>: <code>ErrInvalidToken</code>, <code>ErrSessionExpired</code>, <code>ErrUserNotFound</code>,
+<code>ErrMagicLinkExpired</code>, <code>ErrMagicLinkUsed</code>, <code>ErrEmailNotVerified</code>,
+<code>ErrStorageNotFound</code>, <code>ErrReplayDetected</code>, <code>ErrAlreadyEnrolled</code>,
+<code>ErrSCIMRequiresOrganizations</code>, <code>ErrSAMLRequiresOrganizations</code>,
+<code>ErrSAMLUnsignedAssertion</code>, <code>ErrSAMLMissingEmail</code>, <code>ErrSAMLInvalidAssertion</code>,
+<code>ErrLastOwner</code>, <code>ErrUnsupportedFilter</code>, <code>ErrSlugTaken</code>,
+<code>ErrAdminRequiresRBAC</code>, <code>ErrForbidden</code>, <code>ErrUnknownPermission</code>,
+<code>ErrRoleInUse</code>, <code>ErrNoActiveOrg</code>, <code>ErrOrgMismatch</code>, <code>ErrRBACDisabled</code>.</p>
+<p><strong>Error codes</strong>: <code>CodeWeakPassword</code>, <code>CodeEmailTaken</code>,
+<code>CodeInvalidCredentials</code>, <code>CodeRateLimited</code>, <code>CodePasswordResetExpired</code>,
+<code>CodePasswordResetInvalid</code>, <code>CodeTOTPRequired</code>, <code>CodeInvalidTOTP</code>,
+<code>CodeAlreadyEnrolled</code>, <code>CodeWebAuthn</code>.</p>
+<p><strong>Auth level constants</strong>: <code>AuthLevelFull</code>, <code>AuthLevelPending2FA</code>.</p>
+<p><strong>Signin step constants</strong>: <code>SigninStepFull</code>, <code>SigninStepTOTPRequired</code>.</p>
+<p><strong>Tunables</strong>: <code>MinPasswordLength</code>, <code>PasswordResetTTL</code>.</p>
+<p><strong>Helpers</strong>: <code>UserFromContext</code>, <code>SessionFromContext</code>,
+<code>DefaultSAMLAttributeMap</code>.</p>
+<h3 id="subpackage-crypto">Subpackage: <code>crypto</code><a class="headerlink" href="#subpackage-crypto" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Constants: <code>AESKeyLen</code>.</li>
+<li>Functions: <code>Encrypt</code>, <code>Decrypt</code>, <code>NewToken</code>, <code>HashToken</code>, <code>HashPassword</code>,
+  <code>VerifyPassword</code>, <code>NewCodeVerifier</code>, <code>CodeChallenge</code>,
+  <code>GenerateRecoveryCode</code>, <code>HashRecoveryCode</code>, <code>VerifyRecoveryCode</code>.</li>
+<li>Errors: <code>ErrInvalidKeyLength</code>, <code>ErrCiphertextTooShort</code>,
+  <code>ErrInvalidPasswordHash</code>.</li>
+</ul>
+<h3 id="subpackage-email">Subpackage: <code>email</code><a class="headerlink" href="#subpackage-email" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Interface: <code>Sender</code>.</li>
+<li>Type: <code>Noop</code>.</li>
+</ul>
+<h3 id="subpackage-storage">Subpackage: <code>storage</code><a class="headerlink" href="#subpackage-storage" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Re-export of root <code>Storage</code> interface plus <code>ErrNotFound</code> sentinel.</li>
+</ul>
+<h3 id="subpackages-storagememory-storagepostgres">Subpackages: <code>storage/memory</code>, <code>storage/postgres</code><a class="headerlink" href="#subpackages-storagememory-storagepostgres" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Constructor <code>New</code> and the returned <code>*Store</code> value satisfy
+  <code>theauth.Storage</code>.</li>
+</ul>
+<h3 id="subpackage-admin">Subpackage: <code>admin</code><a class="headerlink" href="#subpackage-admin" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Helper functions: <code>Write</code>, <code>EncodeCursor</code>, <code>DecodeCursor</code>.</li>
+<li>Type: <code>Problem</code>.</li>
+<li>Constants: <code>ProblemTypeBase</code>, plus the <code>Code*</code> problem code constants
+  (<code>CodeForbidden</code>, <code>CodeOrgMismatch</code>, <code>CodeNoActiveOrg</code>, <code>CodeRoleInUse</code>,
+  <code>CodeUnknownPermission</code>, <code>CodeBadCursor</code>, <code>CodeUserNotInOrg</code>,
+  <code>CodeValidationInvalid</code>, <code>CodeNotFound</code>, <code>CodeInternal</code>,
+  <code>CodeUnauthorized</code>, <code>CodeUnsupportedAction</code>).</li>
+</ul>
+<h3 id="subpackages-providergithub-providergoogle-providermicrosoft-providerdiscord">Subpackages: <code>provider/github</code>, <code>provider/google</code>, <code>provider/microsoft</code>, <code>provider/discord</code><a class="headerlink" href="#subpackages-providergithub-providergoogle-providermicrosoft-providerdiscord" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Each exposes a <code>Config</code> struct and a <code>New(Config) theauth.Provider</code>
+  constructor.</li>
+</ul>
+<h3 id="subpackages-added-in-v22-providerfacebook-providerslack-providergitlab-providerbitbucket-providertwitch-providerlinkedin-providerx-providerapple">Subpackages added in v2.2: <code>provider/facebook</code>, <code>provider/slack</code>, <code>provider/gitlab</code>, <code>provider/bitbucket</code>, <code>provider/twitch</code>, <code>provider/linkedin</code>, <code>provider/x</code>, <code>provider/apple</code><a class="headerlink" href="#subpackages-added-in-v22-providerfacebook-providerslack-providergitlab-providerbitbucket-providertwitch-providerlinkedin-providerx-providerapple" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Each exposes a <code>Config</code> struct and a <code>New(Config) theauth.Provider</code>
+  constructor, following the same contract as the v1.0 provider subpackages.</li>
+<li><code>provider/gitlab</code> additionally accepts a <code>BaseURL</code> field for self-hosted
+  GitLab instances; defaults to https://gitlab.com.</li>
+<li><code>provider/apple</code> accepts <code>TeamID</code>, <code>KeyID</code>, <code>PrivateKey</code>, and <code>BundleID</code>
+  fields. The <code>PrivateKey</code> field is the ECDSA P-256 key from an Apple .p8 file.
+  <code>ExchangeCode</code> mints a short-lived ES256 JWT client secret on each call.</li>
+<li><code>provider/x</code> requires PKCE (code_challenge_method=S256) for all flows, per
+  the X OAuth 2.0 vendor requirement. <code>ExchangeCode</code> returns an error if
+  <code>codeVerifier</code> is empty.</li>
+<li>All eight new providers default to PKCE enabled.</li>
+</ul>
+<h3 id="what-is-not-public">What is NOT public<a class="headerlink" href="#what-is-not-public" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Anything under <code>internal/</code>. The Go toolchain enforces this; listed here
+  for completeness.</li>
+<li>Anything under <code>examples/</code>. Examples may be rewritten or removed at any
+  time.</li>
+<li>Test helpers in <code>*_test.go</code> files and <code>internal/testhooks</code>. Those exist for
+  our own tests and are not importable outside the module.</li>
+<li>The audit writer internals (channel sizing strategy, goroutine
+  scheduling, batch SQL shape). Only the contract described under
+  <code>Stats</code> and <code>EmitAudit</code> semantics is stable.</li>
+</ul>
+<h2 id="special-rule-the-storage-interface">Special rule: the <code>Storage</code> interface<a class="headerlink" href="#special-rule-the-storage-interface" title="Permanent link">&para;</a></h2>
+<p>Adding a method to <code>Storage</code> is a breaking change for everyone who
+implements the interface. The v1.0 release closes the door on that
+particular kind of breakage: new persistence operations land behind a
+separate optional interface (for example <code>StorageWithSessionList</code>) and the
+library uses a type assertion to detect support at runtime. The base
+<code>Storage</code> interface only grows in a v2.0 release.</p>
+<p><code>Storage</code> is the embedding of the capability interfaces declared in
+<code>storage.go</code>. Its method set is frozen by a test; a new method goes
+into the capability it belongs to only in a major release, otherwise behind
+a new optional interface.</p>
+<p>Session management follows this rule: <code>SessionManagementStorage</code> and
+<code>SessionLinkStorage</code> (storage.go) are optional capabilities outside
+<code>Storage</code>; see <code>docs/SESSIONS.md</code>. The new <code>Session</code> fields <code>LastSeenAt</code>,
+<code>ElevatedUntil</code> and <code>CredentialID</code> are additive.</p>
+<p>The Postgres and MySQL adapters implement <code>APITokenStorage</code>,
+<code>DeviceCodeStorage</code>, <code>SessionManagementStorage</code>, <code>SessionLinkStorage</code>,
+<code>TOTPReplayStorage</code>, <code>UserCountStorage</code>, <code>WebAuthnRenameStorage</code>,
+<code>RecoveryCodeStorage</code> and an optional <code>LoginThrottleCASStore</code> through
+<code>Store.ThrottleStore</code>, added by migration 0018 in each adapter.</p>
+<h2 id="special-rule-database-migrations">Special rule: database migrations<a class="headerlink" href="#special-rule-database-migrations" title="Permanent link">&para;</a></h2>
+<p>Postgres and MySQL migrations under <code>storage/postgres/migrations/</code> and
+<code>storage/mysql/migrations/</code> are append-only.
+A renamed column ships as a new migration that adds the new column and (in
+a later release) removes the old one. This protects deployments that run
+migrations on rolling restarts.</p>
+<h2 id="special-rule-audit-table-append-only">Special rule: audit table append-only<a class="headerlink" href="#special-rule-audit-table-append-only" title="Permanent link">&para;</a></h2>
+<p>The <code>audit_events</code> table is append-only by contract. Storage adapters MUST
+NOT expose UPDATE or DELETE methods for audit rows; the <code>Storage</code>
+interface deliberately offers only <code>InsertAuditEvents</code> and
+<code>QueryAuditEvents</code>. Operators wanting tamper-evidence should layer Merkle
+signing on top; native signing is on the v1.x roadmap.</p>
+<h2 id="special-rule-stats-counters">Special rule: <code>Stats</code> counters<a class="headerlink" href="#special-rule-stats-counters" title="Permanent link">&para;</a></h2>
+<p>The four counters declared in v1.0 (<code>AuditEmitted</code>, <code>AuditWritten</code>,
+<code>AuditDropped</code>, <code>AuditFailed</code>) are stable in name and meaning. Adding new
+fields to <code>Stats</code> is allowed and non-breaking; renaming or changing the
+semantics of an existing field is a v2.0 break.</p>
+<h2 id="deprecations-carried-into-v10">Deprecations carried into v1.0<a class="headerlink" href="#deprecations-carried-into-v10" title="Permanent link">&para;</a></h2>
+<p>None. The v0.7 audit and the v1.0 review both found no symbols warranting
+a <code>// Deprecated:</code> marker before the v1.0 cut.</p>
+<h2 id="v20-surface-added">v2.0 surface added<a class="headerlink" href="#v20-surface-added" title="Permanent link">&para;</a></h2>
+<p>Every entry below is a stability commitment at v2.0. The entries are
+additive: they do not rename, remove, or change the semantics of any v1.0
+symbol. Consumers who do not configure <code>AuthorizationServer</code>, <code>AgentIdentity</code>,
+or <code>AccountUX</code> continue to see the v1.0 surface unchanged.</p>
+<h3 id="root-package-v20-additions">Root package (v2.0 additions)<a class="headerlink" href="#root-package-v20-additions" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Types: <code>AuthorizationServerConfig</code>, <code>AgentConfig</code>, <code>ProtectedResource</code>,
+  <code>ProtectedResourceMetadata</code>, <code>ASMetadata</code>, <code>ClientOwner</code>, <code>OAuthClient</code>,
+  <code>AuthorizationCode</code>, <code>RefreshToken</code>, <code>JWKSKey</code>, <code>Agent</code>, <code>AgentOwner</code>,
+  <code>AgentCredential</code>, <code>AgentSecret</code>, <code>CreateAgentInput</code>, <code>DelegationGrant</code>,
+  <code>GrantDelegationInput</code>, <code>ActorClaim</code>, <code>IntrospectionResponse</code>,
+  <code>TokenRequest</code>, <code>TokenResponse</code>, <code>TokenExchangeRequest</code>,
+  <code>AuthorizeRequest</code>, <code>ClientRegistrationRequest</code>.</li>
+</ul>
+<h4 id="security-audit-additions-2026-06-20-additive-only">Security audit additions (2026-06-20, additive only)<a class="headerlink" href="#security-audit-additions-2026-06-20-additive-only" title="Permanent link">&para;</a></h4>
+<ul>
+<li><code>Config.TrustedProxies []netip.Prefix</code>: allowlist of reverse-proxy
+  prefixes whose <code>X-Forwarded-For</code> header is trusted by the rate
+  limiter. Default empty slice (no XFF trust). Existing deployments
+  that depend on XFF must opt in explicitly.</li>
+<li><code>AuthorizationServerConfig.RegistrationTokens []string</code>: initial
+  access tokens accepted by POST <code>/oauth/register</code> when DCR is bearer
+  gated. Hashed at <code>New</code> time; constant-time compare on the wire.
+  Default empty slice, which combined with the default
+  <code>AllowAnonymousRegistration: false</code> denies all registration.</li>
+<li><code>AuthorizationServerConfig.RegistrationRateLimitPerMinute int</code>:
+  per-IP per-minute cap on POST <code>/oauth/register</code>. Defaults to 1 when
+  <code>AllowAnonymousRegistration</code> is true and 5 otherwise. Set to a
+  negative value to disable the cap.</li>
+<li>Constructors and lifecycle: existing <code>New</code> accepts new optional
+  <code>Config.AuthorizationServer</code>, <code>Config.AgentIdentity</code>, <code>Config.AccountUX</code>
+  fields; existing <code>Mount</code> automatically mounts the v2.0 routes when those
+  fields are set.</li>
+<li>New methods on <code>*TheAuth</code>: <code>CreateAgent</code>, <code>MintAgentCredential</code>,
+  <code>RotateAgentSecret</code>, <code>ListAgentsByOwner</code>, <code>GetAgent</code>, <code>SuspendAgent</code>,
+  <code>ResumeAgent</code>, <code>RevokeAgent</code>, <code>GrantDelegation</code>,
+  <code>ListDelegationsForUser</code>, <code>ListDelegationsForAgent</code>, <code>RevokeDelegation</code>,
+  <code>StartAuthorize</code>, <code>ExchangeAuthorizationCode</code>, <code>RefreshAccessToken</code>,
+  <code>ClientCredentialsToken</code>, <code>ExchangeToken</code>, <code>RevokeToken</code>,
+  <code>IntrospectToken</code>, <code>RegisterClient</code>, <code>RotateSigningKey</code>,
+  <code>ASMetadataDoc</code>, <code>ProtectedResourceMetadataDoc</code>.</li>
+<li>Storage extension: <code>OAuthServerStorage</code> interface (root <code>Storage</code>
+  remains unchanged; AS-enabled deployments require an adapter that
+  satisfies both).</li>
+<li>New permission names: <code>agents:admin</code>, <code>delegations:admin</code>. Owner and
+  admin default org roles include both.</li>
+<li>New error sentinels (additive): <code>ErrASIssuerRequired</code>,
+  <code>ErrASRequiresEncryptionKey</code>, <code>ErrASUnsupportedAlg</code>,
+  <code>ErrOAuthInvalidRequest</code>, <code>ErrOAuthInvalidClient</code>, <code>ErrOAuthInvalidGrant</code>,
+  <code>ErrOAuthInvalidScope</code>, <code>ErrOAuthUnsupportedGrantType</code>,
+  <code>ErrOAuthUnsupportedResponseType</code>, <code>ErrOAuthInvalidResource</code>,
+  <code>ErrOAuthRegistrationDenied</code>, <code>ErrOAuthRedirectURIMismatch</code>,
+  <code>ErrOAuthPKCEMismatch</code>, <code>ErrOAuthAudienceMismatch</code>, <code>ErrNotImplemented</code>,
+  <code>ErrAgentNotFound</code>, <code>ErrAgentInactive</code>, <code>ErrDelegationNotFound</code>,
+  <code>ErrDelegationRevoked</code>, <code>ErrChainDepthExceeded</code>, <code>ErrSubjectTokenInvalid</code>,
+  <code>ErrActorTokenInvalid</code>, <code>ErrAgentRequiresAS</code>, <code>ErrAgentChainDepthTooHigh</code>,
+  <code>ErrAccountUXRequiresAgents</code>, <code>ErrStorageMissingOAuthMethods</code>.</li>
+</ul>
+<h3 id="subpackage-mcpresource-new-in-v20">Subpackage <code>mcpresource</code> (new in v2.0)<a class="headerlink" href="#subpackage-mcpresource-new-in-v20" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Types: <code>Validator</code>, <code>Principal</code>, <code>Option</code>.</li>
+<li>Functions: <code>New</code>, <code>PrincipalFromContext</code>.</li>
+<li>Options: <code>WithJWKS</code>, <code>WithIntrospection</code>, <code>WithCacheTTL</code>,
+  <code>WithHTTPClient</code>, <code>WithClockSkew</code>.</li>
+<li>Methods: <code>(*Validator).Middleware</code>, <code>(*Validator).Principal</code>,
+  <code>(*Validator).ResourceURI</code>, <code>(*Validator).CacheTTL</code>.</li>
+</ul>
+<h3 id="http-surface-mounted-by-mount-when-configured">HTTP surface (mounted by <code>Mount</code> when configured)<a class="headerlink" href="#http-surface-mounted-by-mount-when-configured" title="Permanent link">&para;</a></h3>
+<ul>
+<li><code>GET /.well-known/oauth-authorization-server</code> (RFC 8414).</li>
+<li><code>GET /.well-known/oauth-protected-resource</code> (RFC 9728, default resource).</li>
+<li><code>GET /.well-known/oauth-protected-resource/{path}</code> (RFC 9728, per-resource).</li>
+<li><code>GET /oauth/jwks</code> (RFC 7517).</li>
+<li><code>GET /oauth/authorize</code>, <code>POST /oauth/token</code>, <code>POST /oauth/revoke</code>,
+  <code>POST /oauth/introspect</code>, <code>POST /oauth/register</code>.</li>
+<li><code>/admin/v1/organizations/{orgID}/agents</code> and
+  <code>/admin/v1/organizations/{orgID}/delegations</code> (RBAC-gated).</li>
+<li><code>/account/agents</code> and <code>/account/delegations</code> (session-gated, when
+  <code>Config.AccountUX</code> is true).</li>
+</ul>
+<h3 id="what-is-not-public-in-v20">What is NOT public in v2.0<a class="headerlink" href="#what-is-not-public-in-v20" title="Permanent link">&para;</a></h3>
+<ul>
+<li><code>internal/jwt</code>, <code>internal/chain</code>, <code>internal/ulid</code> remain internal.</li>
+<li>The HTTP error body wire shape for <code>application/problem+json</code> follows
+  RFC 7807; the <code>code</code> extension namespace is reserved by this library and
+  may grow with new codes in additive minor releases.</li>
+</ul>
+<h2 id="auth-hardening-additions-additive">Auth hardening additions (additive)<a class="headerlink" href="#auth-hardening-additions-additive" title="Permanent link">&para;</a></h2>
+<p>New exported symbols, none changing existing signatures: <code>LoginThrottleConfig</code>,
+<code>LoginThrottleStore</code>, <code>LoginThrottleEntry</code>, <code>NewMemoryLoginThrottleStore</code>,
+<code>BootstrapConfig</code>, <code>BreachChecker</code>, <code>HIBPBreachChecker</code>, <code>TOTPReplayStorage</code>,
+<code>UserCountStorage</code> (optional capabilities, not part of <code>Storage</code>),
+<code>Config.LoginThrottle</code>, <code>Config.Bootstrap</code>, <code>Config.EmailNFKC</code>,
+<code>PasswordPolicyConfig.MinLength/MaxBytes/BreachChecker</code>, <code>TheAuth.UserCount</code>,
+<code>SetupToken</code>, <code>NormalizeEmail</code>, <code>ResetPasswordAdmin</code>, <code>UnlockUser</code>,
+<code>TheAuthError.RetryAfter</code>, and error codes <code>CodeAccountLocked</code>,
+<code>CodeSignupClosed</code>, <code>CodeSetupTokenInvalid</code>, <code>CodeBadRequest</code>,
+<code>CodeUnauthorized</code>, <code>CodeForbidden</code>, <code>CodeNotFound</code>, <code>CodeConflict</code>,
+<code>CodeInternal</code>. See <code>docs/AUTH-HARDENING.md</code>.</p>
+<h2 id="what-changes-without-a-major-bump">What changes without a major bump<a class="headerlink" href="#what-changes-without-a-major-bump" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Bug fixes that preserve documented behavior.</li>
+<li>Performance improvements that preserve observable outputs.</li>
+<li>New optional <code>Config</code> fields with backward-compatible zero values.</li>
+<li>New methods on <code>*TheAuth</code> that do not conflict with existing ones.</li>
+<li>New error sentinels and codes (callers must not switch exhaustively).</li>
+<li>New migrations that add tables or columns without renaming or removing
+  existing ones.</li>
+<li>New audit event actions (existing ones keep their name and target shape).</li>
+<li>New <code>Stats</code> fields (existing ones keep their name and meaning).</li>
+</ul>
+<h2 id="what-requires-a-major-bump">What requires a major bump<a class="headerlink" href="#what-requires-a-major-bump" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Removing or renaming any stable symbol.</li>
+<li>Changing the signature of any exported function or method.</li>
+<li>Adding a required method to <code>Storage</code> (see the special rule).</li>
+<li>Removing a column or renaming it destructively (migrations stay
+  append-only).</li>
+<li>Changing the semantics of an existing <code>Stats</code> field.</li>
+<li>Adding UPDATE or DELETE to the audit interface.</li>
+</ul>
+<h2 id="api-tokens-and-device-grant-additive">API tokens and device grant (additive)<a class="headerlink" href="#api-tokens-and-device-grant-additive" title="Permanent link">&para;</a></h2>
+<p><code>Config.APITokens</code>, <code>APITokensConfig</code>, <code>DeviceConfig</code>, <code>APIToken</code>, <code>DeviceCode</code>,
+<code>Principal</code>, the <code>APITokenStorage</code> and <code>DeviceCodeStorage</code> capability
+interfaces, <code>RequireAbility</code>, and the <code>/auth/tokens</code> (including the
+bearer-only <code>GET</code> and <code>DELETE /auth/tokens/current</code>) and <code>/auth/device/*</code>
+routes are additive and covered by the same SemVer guarantees. The <code>Storage</code>
+method set is unchanged.</p>
+<h2 id="v26-additions">v2.6 additions<a class="headerlink" href="#v26-additions" title="Permanent link">&para;</a></h2>
+<p>All additive; the <code>Storage</code> method set is unchanged. New surface starts
+Experimental unless it is a small, low-risk contract already proven in use.</p>
+<p>Stable (same SemVer guarantees as the root package):</p>
+<ul>
+<li>The storage capability interfaces that <code>Storage</code> is composed of
+  (<code>UserStorage</code>, <code>SessionStorage</code>, <code>MagicLinkStorage</code>, <code>PasswordStorage</code>,
+  <code>OAuthAccountStorage</code>, <code>WebAuthnStorage</code>, <code>TOTPStorage</code>,
+  <code>OrganizationStorage</code>, <code>SAMLStorage</code>, <code>SCIMStorage</code>, <code>RBACStorage</code>,
+  <code>AuditStorage</code>), <code>Config.CoreStorage</code> and <code>ErrStorageMissingCapability</code>.</li>
+<li><code>(*TheAuth).Handler</code> and <code>Config.PathPrefix</code>.</li>
+</ul>
+<p>Experimental (may change in a minor release; revisit after one release cycle
+of feedback):</p>
+<ul>
+<li>Optional storage capabilities added in v2.6: <code>SessionManagementStorage</code>,
+  <code>SessionLinkStorage</code>, <code>DeviceCodeLister</code>, <code>LoginThrottleCASStore</code>,
+  <code>APITokenStorage</code>, <code>DeviceCodeStorage</code>, <code>TOTPReplayStorage</code>,
+  <code>UserCountStorage</code>.</li>
+<li><code>Config.ProviderResolver</code> with <code>InvalidateProvider</code> and <code>ListProviders</code>.</li>
+<li><code>(*TheAuth).Doctor</code>, <code>cmd/theauth-doctor</code> and the
+  <code>GET /auth/admin/doctor</code> finding IDs.</li>
+<li>Agent identity and revocation: <code>MintAgentToken</code>, <code>RegisterAgent</code>,
+  <code>APIToken.Kind</code>, <code>AgentName</code>, <code>DelegatedBy</code>, <code>Principal.ActorChain</code>,
+  <code>RevocationBus</code> and the revocation watcher helpers (<code>docs/AGENT-IDENTITY.md</code>).</li>
+<li><code>ImportAPIToken</code> and the legacy token and bcrypt options.</li>
+<li><code>sqlite.NewTx</code> and the <code>Import*To</code> helpers (<code>ImportUserTo</code>, <code>ImportAPITokenTo</code>,
+  <code>ImportTOTPSecretTo</code>, <code>ImportWebAuthnCredentialTo</code>) and their <code>TheAuth</code> forms.</li>
+<li><code>CIMDConfig.AllowPrivateNetworks</code>, <code>CIMDConfig.DenyHost</code> and
+  <code>SAMLConfig.AllowedRelayStates</code>.</li>
+<li><code>github.com/glincker/theauth-go/storage/sqlite</code> (now with capability parity;
+  still no organizations, SAML, SCIM or RBAC).</li>
+<li><code>github.com/glincker/theauth-go/v2/clientauth</code></li>
+<li><code>github.com/glincker/theauth-go/v2/policy</code> and <code>policy.Storage</code></li>
+</ul>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.tabs", "navigation.tabs.sticky", "navigation.sections", "navigation.expand", "navigation.path", "navigation.top", "search.highlight", "search.suggest", "content.code.copy", "content.code.annotate"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"default": "latest", "provider": "mike"}}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+    
+  </body>
+</html>
