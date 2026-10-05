@@ -884,8 +884,8 @@ func (a *TheAuth) RevokeAgent(ctx context.Context, agentID ULID, reason string) 
 
 // startOAuth delegates the /auth/providers/{name}/start flow to
 // the extracted internal/oauth.Service.
-func (a *TheAuth) startOAuth(ctx context.Context, providerName, returnTo string) (internaloauth.StartResult, error) {
-	return a.oauthSvc.Start(ctx, providerName, returnTo)
+func (a *TheAuth) startOAuth(ctx context.Context, r *http.Request, providerName, returnTo string) (internaloauth.StartResult, error) {
+	return a.oauthSvc.Start(ctx, r, providerName, returnTo)
 }
 
 // callbackOAuth delegates the /auth/providers/{name}/callback flow to
@@ -1034,4 +1034,27 @@ func (a *TheAuth) ListProviders(ctx context.Context) ([]Provider, error) {
 		return nil, nil
 	}
 	return a.providerReg.List(ctx)
+}
+
+// OAuthStartResult is what OAuthStart returns: the provider authorization
+// URL to redirect the browser to and the Binding secret to set as an
+// HttpOnly cookie (presented again to OAuthCallback).
+type OAuthStartResult = internaloauth.StartResult
+
+// OAuthCallbackResult is what OAuthCallback returns on success.
+type OAuthCallbackResult = internaloauth.CallbackResult
+
+// OAuthStart begins the login flow for the named provider and returns the
+// authorization URL. It lets an app host its own start route; r feeds
+// OAuthConfig.RedirectURI. The caller must store Binding in a cookie.
+func (a *TheAuth) OAuthStart(r *http.Request, provider, returnTo string) (OAuthStartResult, error) {
+	return a.startOAuth(r.Context(), r, provider, returnTo)
+}
+
+// OAuthCallback completes the login flow for an app that hosts its own
+// callback route, using the user agent and client IP of r. It fires the same
+// hooks as the built-in callback; the caller sets the session cookie from
+// the returned SessionToken and clears the binding cookie.
+func (a *TheAuth) OAuthCallback(r *http.Request, provider, code, state, binding string) (OAuthCallbackResult, *User, error) {
+	return a.callbackOAuth(r.Context(), provider, code, state, binding, r.UserAgent(), httpx.ClientIP(r))
 }

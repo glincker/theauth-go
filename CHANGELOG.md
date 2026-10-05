@@ -9,6 +9,9 @@ adheres to [Semantic Versioning](https://semver.org/) from v1.0 forward.
 ### Fixed
 
 - `PasswordPolicy.OnLegacyHashAccepted` is now invoked (in a goroutine, after the new Argon2id hash is persisted) on signin and step-up; it was declared but never called.
+### Added
+
+- `OAuthConfig.RedirectURI`, `RedirectURIAllowedHosts` and `AllowInsecureRedirectURI` to override and validate the OAuth redirect URI, plus `(*TheAuth).OAuthStart` and `OAuthCallback` for apps hosting their own routes.
 
 ## [2.6.0] - 2026-10-05
 

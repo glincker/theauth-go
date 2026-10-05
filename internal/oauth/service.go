@@ -15,6 +15,9 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net"
+	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -164,6 +167,14 @@ type Config struct {
 	InviteCheck         func(ctx context.Context, email string) (bool, error)
 	// PathPrefix is the route prefix of the callback URI. Empty means "/auth".
 	PathPrefix string
+	// RedirectURI overrides the redirect URI built at Start. r is the
+	// request that began the flow.
+	RedirectURI func(r *http.Request, provider string) (string, error)
+	// RedirectURIAllowedHosts restricts the host (or host:port) a RedirectURI
+	// result may use. Empty means no host restriction.
+	RedirectURIAllowedHosts []string
+	// AllowInsecureRedirectURI permits an http:// redirect URI to a non-loopback host.
+	AllowInsecureRedirectURI bool
 }
 
 // StartResult is what Start hands the HTTP layer.
@@ -273,8 +284,12 @@ func (s *Service) provider(ctx context.Context, name string) (Provider, error) {
 // OIDC providers) a nonce, records them, and returns the provider's
 // authorization URL. returnTo is honored only when it matches the
 // configured allow-list.
-func (s *Service) Start(ctx context.Context, providerName, returnTo string) (StartResult, error) {
+func (s *Service) Start(ctx context.Context, r *http.Request, providerName, returnTo string) (StartResult, error) {
 	p, err := s.provider(ctx, providerName)
+	if err != nil {
+		return StartResult{}, err
+	}
+	redirectURI, err := s.redirectURIFor(r, providerName)
 	if err != nil {
 		return StartResult{}, err
 	}
@@ -291,7 +306,6 @@ func (s *Service) Start(ctx context.Context, providerName, returnTo string) (Sta
 		return StartResult{}, err
 	}
 	challenge := crypto.CodeChallenge(verifier)
-	redirectURI := s.baseURL + pathprefix.Normalize(s.cfg.PathPrefix) + "/providers/" + providerName + "/callback"
 	st := State{
 		Provider:     providerName,
 		CodeVerifier: verifier,
@@ -313,6 +327,72 @@ func (s *Service) Start(ctx context.Context, providerName, returnTo string) (Sta
 		return StartResult{}, fmt.Errorf("theauth: store oauth state: %w", err)
 	}
 	return StartResult{AuthURL: authURL, State: state, Binding: binding}, nil
+}
+
+func (s *Service) redirectURIFor(r *http.Request, providerName string) (string, error) {
+	if s.cfg.RedirectURI == nil {
+		return s.baseURL + pathprefix.Normalize(s.cfg.PathPrefix) + "/providers/" + providerName + "/callback", nil
+	}
+	if r == nil {
+		return "", errors.New("theauth: oauth redirect uri hook requires a request")
+	}
+	raw, err := s.cfg.RedirectURI(r, providerName)
+	if err != nil {
+		return "", fmt.Errorf("theauth: oauth redirect uri hook: %w", err)
+	}
+	if err := validateRedirectURI(raw, s.cfg.RedirectURIAllowedHosts, s.cfg.AllowInsecureRedirectURI); err != nil {
+		return "", fmt.Errorf("theauth: oauth redirect uri %q rejected: %w", raw, err)
+	}
+	return raw, nil
+}
+
+func validateRedirectURI(raw string, allowedHosts []string, allowInsecure bool) error {
+	if HasUnsafeRedirectChars(raw) {
+		return errors.New("contains control or backslash characters")
+	}
+	u, err := url.Parse(raw)
+	if err != nil {
+		return fmt.Errorf("parse: %w", err)
+	}
+	if u.Scheme != "http" && u.Scheme != "https" {
+		return errors.New("scheme must be http or https")
+	}
+	if u.Hostname() == "" || u.Opaque != "" {
+		return errors.New("must be an absolute url with a host")
+	}
+	if u.User != nil {
+		return errors.New("must not contain userinfo")
+	}
+	if u.Fragment != "" || strings.Contains(raw, "#") {
+		return errors.New("must not contain a fragment")
+	}
+	if u.Scheme == "http" && !allowInsecure && !isLoopbackHost(u.Hostname()) {
+		return errors.New("http requires a loopback host or AllowInsecureRedirectURI")
+	}
+	if len(allowedHosts) > 0 && !hostAllowed(u, allowedHosts) {
+		return errors.New("host is not in RedirectURIAllowedHosts")
+	}
+	return nil
+}
+
+func isLoopbackHost(h string) bool {
+	if strings.EqualFold(h, "localhost") {
+		return true
+	}
+	ip := net.ParseIP(h)
+	return ip != nil && ip.IsLoopback()
+}
+
+func hostAllowed(u *url.URL, allowed []string) bool {
+	for _, a := range allowed {
+		if strings.EqualFold(a, u.Host) {
+			return true
+		}
+		if _, _, err := net.SplitHostPort(a); err != nil && strings.EqualFold(a, u.Hostname()) {
+			return true
+		}
+	}
+	return false
 }
 
 func bindingHash(binding string) []byte {
