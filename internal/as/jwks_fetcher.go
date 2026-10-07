@@ -99,7 +99,7 @@ func (f *jwksFetcher) Fetch(ctx context.Context, jwksURL string) ([]jwksEntry, e
 	if err != nil || u.Host == "" {
 		return nil, fmt.Errorf("fetch jwks %q: invalid url", jwksURL)
 	}
-	if u.Scheme != "https" && !(f.allowPrivate && u.Scheme == "http") {
+	if u.Scheme != "https" && (!f.allowPrivate || u.Scheme != "http") {
 		return nil, fmt.Errorf("fetch jwks %q: %w", jwksURL, ErrJWKSInsecureURL)
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, jwksURL, nil)

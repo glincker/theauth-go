@@ -29,8 +29,8 @@ func testJWKSDocument(t *testing.T, kid string) []byte {
 	}
 	doc, err := json.Marshal(map[string]any{"keys": []any{map[string]any{
 		"kty": "EC", "crv": "P-256", "alg": "ES256", "use": "sig", "kid": kid,
-		"x": base64.RawURLEncoding.EncodeToString(priv.PublicKey.X.FillBytes(make([]byte, 32))),
-		"y": base64.RawURLEncoding.EncodeToString(priv.PublicKey.Y.FillBytes(make([]byte, 32))),
+		"x": base64.RawURLEncoding.EncodeToString(priv.X.FillBytes(make([]byte, 32))),
+		"y": base64.RawURLEncoding.EncodeToString(priv.Y.FillBytes(make([]byte, 32))),
 	}}})
 	if err != nil {
 		t.Fatal(err)
