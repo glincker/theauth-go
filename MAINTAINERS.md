@@ -46,8 +46,8 @@ When the `release` workflow succeeds, the `release-discussion` workflow adds the
 release to the shared monthly `Releases YYYY-MM` thread in
 `glincker/theauth` Discussions (Announcements) and links the thread from the
 GitHub release notes. `theauth` (the TypeScript SDK) writes to the same thread,
-each repo owning its own section. It needs the `DISCUSSIONS_TOKEN` secret
-(Discussions write on `glincker/theauth`, GitHub App or fine-grained PAT). To
+each repo owning its own section. It needs the org secret `GLINR_BOT_TOKEN`
+(Discussions write on `glincker/theauth`, fine-grained PAT or GitHub App). To
 backfill or retry, run the workflow from the Actions tab with the tag.
 
 ## Incidents
