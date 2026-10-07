@@ -1,10 +1,10 @@
 # theauth-go v2.6.0
 
-Docs: https://go.theauth.dev/ . Full list: [CHANGELOG.md](../CHANGELOG.md).
+Docs: https://docs.theauth.dev/go . Full list: [CHANGELOG.md](../CHANGELOG.md).
 
 ## Upgrade notes
 
-- **Module path is now `github.com/glincker/theauth-go/v2`.** Update imports; the old path stays at v1.0.0. This is the first resolvable v2 tag. See the migration guide: https://go.theauth.dev/migrations/to-v2-module-path/
+- **Module path is now `github.com/glincker/theauth-go/v2`.** Update imports; the old path stays at v1.0.0. This is the first resolvable v2 tag. See the migration guide: https://docs.theauth.dev/go/migrations/to-v2-module-path
 - **Login throttle is on by default.** 429 with `Retry-After`, codes `rate_limited` or `account_locked`. Tune with `Config.LoginThrottle`.
 - **Errors are JSON** `{"code","message"}` instead of plain text. Status codes are unchanged.
 - **TOTP verify and recovery routes rotate the session cookie.**

@@ -61,7 +61,7 @@ go get github.com/glincker/theauth-go/mcpresource      # optional
 
 Warning: anyone on the old path (including pseudo-versions of
 `github.com/glincker/theauth-go`) must change their imports to the `/v2` path.
-The old path stays frozen at v1.0.0. See `docs-site/docs/migrations/to-v2-module-path.md`.
+The old path stays frozen at v1.0.0. See https://docs.theauth.dev/go/migrations/to-v2-module-path.
 
 ## Release checklist
 
