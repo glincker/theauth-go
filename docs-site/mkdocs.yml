@@ -55,6 +55,10 @@ markdown_extensions:
       permalink: true
 
 extra:
+  social:
+    - icon: fontawesome/solid/globe
+      link: https://theauth.dev
+      name: theauth.dev
   version:
     provider: mike
     default: latest

@@ -9,6 +9,9 @@ contact_links:
   - name: 💬 Ask a question on Discord
     url: https://discord.gg/Ar5pcaZB99
     about: Questions and help from the community in the #theauth forum.
+  - name: Website
+    url: https://theauth.dev
+    about: theAuth product website, pricing and the TypeScript SDK.
   - name: Documentation
     url: https://theauth.dev
     about: Getting started, concepts, guides, configuration, error catalog.
