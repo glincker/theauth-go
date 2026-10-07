@@ -1,8 +1,15 @@
 # theauth-go Benchmark Gate
 
-Every pull request runs a curated benchmark suite via the `bench` GitHub
-Actions workflow and fails if any benchmark regresses more than the
-configured threshold (default 25%).
+A curated benchmark suite and a regression gate (default threshold 25%) live
+in `scripts/bench-gate.sh` and `benchgate/curated.txt`. The `bench` GitHub
+Actions workflow runs the suite on manual dispatch and on a weekly schedule,
+not on every pull request. The normal `ci` workflow does run the
+`internal/bench` benchmarks on pull requests with `-benchtime=1x`, which only
+checks that they still execute; it does not compare timings. See
+[CI workflow](#ci-workflow) for the current limits.
+
+This page lists no ns/op figures. Run the suite on your own hardware if you
+need numbers.
 
 ## Curated benchmark list
 
@@ -94,21 +101,35 @@ why and when it will be un-skipped.
 
 ## CI workflow
 
-The `bench` workflow (`.github/workflows/bench.yml`) runs on every pull
-request and on pushes to `main`.
+The `bench` workflow (`.github/workflows/bench.yml`) triggers on
+`workflow_dispatch` and on a cron schedule of Mondays at 06:00 UTC. It does not
+trigger on pull requests or pushes. Per-PR runs were dropped because of the CI
+time they cost; run it by hand before a release if you want a check.
 
-Key design decisions:
+Read from the workflow file as of 2026-10-06:
+
+- The base commit is taken from `github.event.pull_request.base.sha` or
+  `github.event.before`. Both are empty for dispatch and schedule runs, so the
+  workflow sets `SKIP_DIFF` and skips the benchstat comparison and the
+  threshold check. In those runs it only benchmarks the checked-out commit and
+  uploads `pr-bench.txt`. The `base_sha` dispatch input is declared but no step
+  reads it.
+- The scheduled runs on 2026-09-21, 2026-09-28 and 2026-10-05 failed at the
+  `Install benchstat` step, before any benchmark ran.
+- The PR-comment step is conditioned on `pull_request` events, so it never runs
+  under the current triggers.
+
+What the workflow is built to do when it has a base commit:
 
 - **Base caching**: the base-branch benchmark output is cached by commit SHA
-  (`bench-baseline-<sha>`) so re-runs of the same PR do not re-benchmark
-  the base.
-- **Cold-base fallback**: when no cache exists the workflow checks out the
-  base commit, runs the benchmarks, saves the cache, then returns to the PR
-  SHA before the diff step.
-- **PR comment**: on pull requests the diff is posted (or updated) as a PR
-  comment by `github-actions[bot]` so reviewers see the delta without
-  downloading artifacts.
-- **Artifacts**: `pr-bench.txt`, `base-bench.txt`, and `diff.txt` are
-  uploaded as workflow artifacts (retained 90 days) for post-hoc analysis.
+  (`bench-baseline-<sha>`) so a repeat run does not re-benchmark the base.
+- **Cold-base fallback**: when no cache exists the workflow checks out the base
+  commit, runs the benchmarks, saves the cache, then returns to the tested SHA
+  before the diff step.
+- **Artifacts**: `pr-bench.txt`, `base-bench.txt`, and `diff.txt` are uploaded
+  as workflow artifacts (retained 90 days).
 - **benchstat**: installed via `go install golang.org/x/perf/cmd/benchstat@latest`
   in the workflow; not added to `go.mod` to avoid bloating the module graph.
+
+To compare two commits today, use the local procedure in
+[Running locally](#running-locally).

@@ -6,6 +6,12 @@ adheres to [Semantic Versioning](https://semver.org/) from v1.0 forward.
 
 ## [Unreleased]
 
+### Security
+
+- JWKS fetching for `private_key_jwt` client `jwks_uri` and `TrustedJWTIssuer.JWKSURL` is now SSRF-guarded. The fetch refuses loopback, private, link-local, cloud metadata and other non-public addresses at dial time (rebinding-safe), does not follow redirects, uses no proxy, times out (default 5s), requires a 200 status and caps the body at 512 KiB. Behavior change: JWKS URLs must be `https`, and a JWKS host that resolves to a non-public address is now refused. For local development only, set `JWTBearerConfig.AllowPrivateJWKSNetworks` to permit both `http` and private addresses.
+- The in-process JWKS cache now expires entries (`JWTBearerConfig.JWKSCacheTTL`, default 5 minutes) so rotated keys are picked up, is bounded (`JWKSCacheMaxEntries`, default 256) and never caches failed fetches. New optional `JWKSFetchTimeout` and `JWKSHTTPClient` (test injection) options.
+- The address guard now lives in a shared `internal/safehttp` package used by both CIMD and JWKS fetching.
+
 ## [2.7.0] - 2026-10-05
 
 ### Added

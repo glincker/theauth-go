@@ -31,11 +31,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"math/big"
-	"net/http"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/glincker/theauth-go/v2/internal/jwt"
@@ -348,11 +345,6 @@ type jwksEntry struct {
 	Key crypto.PublicKey
 }
 
-// jwksURLCache memoizes parsed JWKS documents keyed by URL. In-process only;
-// the production path should wire a proper HTTP client with ETags. Good enough
-// for the initial implementation.
-var jwksURLCache sync.Map // map[string][]jwksEntry
-
 // clientJWKS returns the parsed public keys for a client that uses
 // private_key_jwt authentication, from either inline jwks or jwks_uri.
 func (s *Service) clientJWKS(client *models.OAuthClient) ([]jwksEntry, error) {
@@ -360,36 +352,14 @@ func (s *Service) clientJWKS(client *models.OAuthClient) ([]jwksEntry, error) {
 		return parseJWKSBytes(client.Jwks)
 	}
 	if client.JwksURI != "" {
-		return fetchAndCacheJWKS(client.JwksURI)
+		return s.jwks.Fetch(context.Background(), client.JwksURI)
 	}
 	return nil, errors.New("client has no jwks_uri or inline jwks")
 }
 
 // trustedIssuerJWKS fetches (and caches) the JWKS for a TrustedJWTIssuer.
 func (s *Service) trustedIssuerJWKS(issuer TrustedJWTIssuer) ([]jwksEntry, error) {
-	return fetchAndCacheJWKS(issuer.JWKSURL)
-}
-
-// fetchAndCacheJWKS fetches from the URL and caches the result.
-func fetchAndCacheJWKS(jwksURL string) ([]jwksEntry, error) {
-	if v, ok := jwksURLCache.Load(jwksURL); ok {
-		return v.([]jwksEntry), nil
-	}
-	resp, err := http.Get(jwksURL) //nolint:noctx
-	if err != nil {
-		return nil, fmt.Errorf("fetch jwks %q: %w", jwksURL, err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-	raw, err := io.ReadAll(io.LimitReader(resp.Body, 512*1024))
-	if err != nil {
-		return nil, fmt.Errorf("read jwks %q: %w", jwksURL, err)
-	}
-	keys, err := parseJWKSBytes(raw)
-	if err != nil {
-		return nil, err
-	}
-	jwksURLCache.Store(jwksURL, keys)
-	return keys, nil
+	return s.jwks.Fetch(context.Background(), issuer.JWKSURL)
 }
 
 // parseJWKSBytes parses a JWKS JSON document into a slice of jwksEntry.
