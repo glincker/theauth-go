@@ -1,1 +1,0 @@
---8<-- "docs/MIGRATING-FROM-AUTH0.md"

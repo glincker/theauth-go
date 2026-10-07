@@ -19,7 +19,7 @@ type Metrics interface {
 	// Counter returns a monotonic counter. labels enumerates the LABEL
 	// VALUES (not names) for the instance; the names are part of the
 	// metric definition and are documented in the matrix in
-	// docs/OBSERVABILITY.md. Adapters that need label names register
+	// https://docs.theauth.dev/go/guides/observability. Adapters that need label names register
 	// them on first Counter call.
 	Counter(name string, labels Labels) Counter
 
@@ -63,7 +63,7 @@ type Gauge interface {
 // Cardinality discipline: callers MUST NOT put high-cardinality identifiers
 // (client_id, user_id, session_id, IP) into Labels. Those go on spans as
 // attributes. The label set for each library-emitted metric is documented
-// in docs/OBSERVABILITY.md and enforced by review.
+// in https://docs.theauth.dev/go/guides/observability and enforced by review.
 type Labels map[string]string
 
 // NoopMetrics is the default Metrics used when Hooks.Metrics is nil. Every

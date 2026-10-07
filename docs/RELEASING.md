@@ -61,7 +61,7 @@ go get github.com/glincker/theauth-go/mcpresource      # optional
 
 Warning: anyone on the old path (including pseudo-versions of
 `github.com/glincker/theauth-go`) must change their imports to the `/v2` path.
-The old path stays frozen at v1.0.0. See `docs-site/docs/migrations/to-v2-module-path.md`.
+The old path stays frozen at v1.0.0. See https://docs.theauth.dev/go/migrations/to-v2-module-path.
 
 ## Release checklist
 
@@ -179,7 +179,7 @@ gh attestation verify /tmp/release-check/theauth-go-vX.Y.Z.tar.gz \
 ### 7. Post-release
 
 - Announce in GitHub Discussions if the release has significant changes.
-- Update MIGRATION.md if there are any breaking changes.
+- Update https://docs.theauth.dev/go/migrations/migration-guide if there are any breaking changes.
 - If a Slack webhook is configured (`SLACK_WEBHOOK_URL` repository secret),
   the workflow posts a notification automatically.
 

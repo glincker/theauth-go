@@ -110,8 +110,8 @@ EXAMPLES
 
 SEE ALSO
 
-  docs/MIGRATING-FROM-COGNITO.md
-  docs/MIGRATING-FROM-AUTH0.md
+  https://docs.theauth.dev/go/guides/migrate-from-cognito
+  https://docs.theauth.dev/go/guides/migrate-from-auth0
 `)
 }
 

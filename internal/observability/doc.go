@@ -18,7 +18,7 @@
 //   - Cardinality discipline lives at the call site: client_id, user_id,
 //     and other high-cardinality identifiers go on spans (as attributes),
 //     never on metric labels. The exposed metric label sets are bounded
-//     and documented in the package matrix in docs/OBSERVABILITY.md.
+//     and documented in the package matrix in https://docs.theauth.dev/go/guides/observability.
 //
 //   - Reference adapters live under examples/observability-otel and
 //     examples/observability-prom. Each is a separate Go module with its

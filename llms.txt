@@ -20,15 +20,15 @@ theauth-go is not a SaaS or hosted IdP. It is a Go library you mount into your o
 
 - [Website](https://theauth.dev): theAuth, open-source auth for AI agents and humans.
 - [README](https://github.com/glincker/theauth-go/blob/main/README.md): quick start, feature comparison table, examples index.
-- [Full documentation](https://go.theauth.dev/): getting started, concepts, guides, API reference.
+- [Full documentation](https://docs.theauth.dev/go): getting started, concepts, guides, API reference.
 - [AGENTS.md](https://github.com/glincker/theauth-go/blob/main/docs/AGENTS.md): version-by-version shipped feature history, written for AI coding assistants.
-- [STABILITY.md](https://github.com/glincker/theauth-go/blob/main/docs/STABILITY.md): SemVer contract and API surface guarantees.
+- [STABILITY.md](https://docs.theauth.dev/go/reference/stability): SemVer contract and API surface guarantees.
 - [CHANGELOG](https://github.com/glincker/theauth-go/blob/main/CHANGELOG.md): release notes.
-- [Auth for a single-binary Go app](https://go.theauth.dev/guides/single-binary-go-app/): SQLite, setup token, tokens, device-login CLI.
-- [Capability interfaces and choosing a storage backend](https://go.theauth.dev/concepts/capability-interfaces/): feature matrix per backend.
-- [Migrating from hand-rolled sessions](https://go.theauth.dev/guides/migrate-from-hand-rolled-sessions/).
+- [Auth for a single-binary Go app](https://docs.theauth.dev/go/guides/single-binary-go-app): SQLite, setup token, tokens, device-login CLI.
+- [Capability interfaces and choosing a storage backend](https://docs.theauth.dev/go/concepts/capability-interfaces): feature matrix per backend.
+- [Migrating from hand-rolled sessions](https://docs.theauth.dev/go/guides/migrate-from-hand-rolled-sessions).
 - [examples/single-binary-sqlite](https://github.com/glincker/theauth-go/tree/main/examples/single-binary-sqlite): runnable app, `cmd/mycli`, smoke test.
-- [Migrating from Auth0](https://github.com/glincker/theauth-go/blob/main/docs/MIGRATING-FROM-AUTH0.md) / [Migrating from Cognito](https://github.com/glincker/theauth-go/blob/main/docs/MIGRATING-FROM-COGNITO.md).
+- [Migrating from Auth0](https://docs.theauth.dev/go/guides/migrate-from-auth0) / [Migrating from Cognito](https://docs.theauth.dev/go/guides/migrate-from-cognito).
 
 ## Quick start
 

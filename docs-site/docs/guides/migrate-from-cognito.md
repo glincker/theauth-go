@@ -1,1 +1,0 @@
---8<-- "docs/MIGRATING-FROM-COGNITO.md"
