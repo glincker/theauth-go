@@ -11,7 +11,9 @@
 [![SLSA 3](https://slsa.dev/images/gh-badge-level3.svg)](https://github.com/glincker/theauth-go/releases)
 [![Discord](https://img.shields.io/discord/829168897080557579?style=flat-square&logo=discord&logoColor=white&label=discord&color=5865F2)](https://discord.gg/Ar5pcaZB99)
 
-Documentation: **[go.theauth.dev](https://go.theauth.dev/)**
+Website: **[theauth.dev](https://theauth.dev)** | Documentation: **[go.theauth.dev](https://go.theauth.dev/)**
+
+Part of [theAuth](https://theauth.dev), open-source auth for AI agents and humans. Docs: [docs.theauth.dev](https://docs.theauth.dev).
 
 ## Install
 
