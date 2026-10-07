@@ -18,7 +18,6 @@ import (
 
 	"github.com/glincker/theauth-go/v2"
 	gocrypto "github.com/glincker/theauth-go/v2/crypto"
-	internalas "github.com/glincker/theauth-go/v2/internal/as"
 	"github.com/glincker/theauth-go/v2/internal/models"
 	"github.com/glincker/theauth-go/v2/internal/ulid"
 	"github.com/glincker/theauth-go/v2/storage/memory"
@@ -47,6 +46,8 @@ func newJWTBearerASInstance(t *testing.T, issuers []theauth.TrustedJWTIssuer) (*
 				ClientAssertionMaxAge: 60 * time.Second,
 				AssertionMaxAge:       300 * time.Second,
 				ReplayCacheTTL:        600 * time.Second,
+				// Test JWKS servers are plain-http loopback httptest servers.
+				AllowPrivateJWKSNetworks: true,
 			},
 		},
 	})
@@ -107,8 +108,6 @@ func jwksServerForECKey(t *testing.T, pub *ecdsa.PublicKey) string {
 		_, _ = w.Write(docBytes)
 	}))
 	t.Cleanup(srv.Close)
-	// Clear in-process JWKS cache so each test fetches fresh.
-	internalas.ResetJWKSCache()
 	return srv.URL + "/jwks"
 }
 

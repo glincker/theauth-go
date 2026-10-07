@@ -500,6 +500,32 @@ type JWTBearerConfig struct {
 	// recommended: each additional link adds a storage round-trip at
 	// token-exchange time.
 	MaxActorChainDepth int
+
+	// JWKSCacheTTL is how long a JWKS fetched from a client jwks_uri or a
+	// TrustedJWTIssuer.JWKSURL is reused before being fetched again, so key
+	// rotation is picked up. Failed fetches are never cached. Defaults to
+	// 5 minutes.
+	JWKSCacheTTL time.Duration
+
+	// JWKSCacheMaxEntries bounds how many distinct JWKS URLs are cached.
+	// Defaults to 256.
+	JWKSCacheMaxEntries int
+
+	// JWKSFetchTimeout is the total time allowed for one JWKS fetch.
+	// Defaults to 5 seconds.
+	JWKSFetchTimeout time.Duration
+
+	// AllowPrivateJWKSNetworks disables the dial-time block on loopback,
+	// private, link-local and cloud metadata addresses when fetching JWKS
+	// documents, and also permits plain http JWKS URLs. Development only:
+	// it re-opens SSRF to internal hosts. Default false.
+	AllowPrivateJWKSNetworks bool
+
+	// JWKSHTTPClient, when non-nil, replaces the default SSRF-guarded
+	// client used for JWKS fetches. It is used as-is, so it must provide
+	// equivalent protection (no redirects, address guard). Intended for
+	// tests that inject an httptest server.
+	JWKSHTTPClient *http.Client
 }
 
 // TrustedJWTIssuer is one entry in JWTBearerConfig.TrustedJWTIssuers.
@@ -683,6 +709,12 @@ func jwtBearerConfigFromRoot(c *JWTBearerConfig) *internalas.JWTBearerConfig {
 		AssertionMaxAge:       c.AssertionMaxAge,
 		ReplayCacheTTL:        c.ReplayCacheTTL,
 		MaxActorChainDepth:    c.MaxActorChainDepth,
+
+		JWKSCacheTTL:             c.JWKSCacheTTL,
+		JWKSCacheMaxEntries:      c.JWKSCacheMaxEntries,
+		JWKSFetchTimeout:         c.JWKSFetchTimeout,
+		AllowPrivateJWKSNetworks: c.AllowPrivateJWKSNetworks,
+		JWKSHTTPClient:           c.JWKSHTTPClient,
 	}
 }
 
