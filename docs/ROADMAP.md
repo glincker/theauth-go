@@ -1,17 +1,36 @@
 # Roadmap
 
 This is the living, human-readable version of what's in flight. The
-authoritative record of what's shipped is [CHANGELOG.md](CHANGELOG.md);
+authoritative record of what's shipped is [CHANGELOG.md](../CHANGELOG.md);
 this file is forward-looking and gets pruned as items land.
 
-## Now (v2.6.x)
+## Shipped
 
-v2.5.0 shipped earlier and v2.6.0 is the next release (see [CHANGELOG.md](CHANGELOG.md)): the full
-`Config.LifecycleHooks` surface, the `Mount()` hook-bypass fix, and a batch
-of storage-layer correctness fixes across Postgres and MySQL.
+The latest release is v2.7.0 (2026-10-05). [CHANGELOG.md](../CHANGELOG.md) is the
+record of what shipped; its v2.7.0 entries still sit under `[Unreleased]` and
+have not been moved into a dated section yet.
 
-- [ ] Selective package re-exports (#79) so consumers can import fewer
-      symbols from the root package
+- **v2.7.0**: `OAuthConfig.RedirectURI` and related validation with the
+  `OAuthStart` and `OAuthCallback` entry points, default logs without email
+  addresses, `ResetPasswordAdmin` clearing login backoff entries,
+  `WebAuthnConfig.UserHandleResolver`, and `PasswordPolicy.OnLegacyHashAccepted`
+  now being invoked.
+- **v2.6.0**: module path `github.com/glincker/theauth-go/v2` (the earlier v2.x
+  tags never resolved through the Go toolchain), login throttle on by default,
+  JSON error bodies, `Config.PathPrefix`, `Handler()`, storage capability
+  interfaces with `Config.CoreStorage`, the `storage/sqlite` adapter, and the
+  repository layout split into `internal/` packages. Read its upgrade notes
+  before moving from v2.5.x.
+- **v2.5.0**: the full `Config.LifecycleHooks` surface, the `Mount()`
+  hook-bypass fix, and a batch of storage-layer correctness fixes across
+  Postgres and MySQL.
+
+## In flight
+
+- [ ] Selective package re-exports (#79, still open) so consumers can import
+      fewer symbols from the root package. The v2.6.0 aliases keep existing
+      root names working but are not the selective re-exports that issue asks
+      for.
 
 ## Stability hardening (in progress)
 
