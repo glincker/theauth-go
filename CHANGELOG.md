@@ -6,18 +6,21 @@ adheres to [Semantic Versioning](https://semver.org/) from v1.0 forward.
 
 ## [Unreleased]
 
-### Fixed
+## [2.7.0] - 2026-10-05
 
-- `PasswordPolicy.OnLegacyHashAccepted` is now invoked (in a goroutine, after the new Argon2id hash is persisted) on signin and step-up; it was declared but never called.
 ### Added
 
 - `OAuthConfig.RedirectURI`, `RedirectURIAllowedHosts` and `AllowInsecureRedirectURI` to override and validate the OAuth redirect URI, plus `(*TheAuth).OAuthStart` and `OAuthCallback` for apps hosting their own routes.
-- Default logs no longer contain email addresses (password signin/signup/reset, magic link, `email.Noop`); lines carry `user_id` or a 12-hex `email_ref` hash instead.
-- `ResetPasswordAdmin` now also clears the email's per-IP login backoff entries (new optional `LoginThrottleEntryDeleter` store capability; implemented by the memory, sqlite, postgres and mysql stores).
-
-### Added
-
 - `WebAuthnConfig.UserHandleResolver`: lets imported passkeys whose authenticator holds a foreign user handle sign in; the credential's stored owner stays authoritative and the resolver must agree with it.
+
+### Changed
+
+- Default logs no longer contain email addresses (password signin/signup/reset, magic link, `email.Noop`); lines carry `user_id` or a 12-hex `email_ref` hash instead.
+
+### Fixed
+
+- `PasswordPolicy.OnLegacyHashAccepted` is now invoked (in a goroutine, after the new Argon2id hash is persisted) on signin and step-up; it was declared but never called.
+- `ResetPasswordAdmin` now also clears the email's per-IP login backoff entries (new optional `LoginThrottleEntryDeleter` store capability; implemented by the memory, sqlite, postgres and mysql stores).
 
 ## [2.6.0] - 2026-10-05
 
@@ -1408,6 +1411,7 @@ revocation, chi-friendly middleware, in-memory and Postgres storage
 adapters.
 
 
-[Unreleased]: https://github.com/glincker/theauth-go/compare/v2.6.0...HEAD
+[Unreleased]: https://github.com/glincker/theauth-go/compare/v2.7.0...HEAD
+[2.7.0]: https://github.com/glincker/theauth-go/compare/v2.6.0...v2.7.0
 [2.6.0]: https://github.com/glincker/theauth-go/compare/v2.5.0...v2.6.0
 [2.5.0]: https://github.com/glincker/theauth-go/compare/v2.5.0-rc.1...v2.5.0
