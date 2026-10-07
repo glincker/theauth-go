@@ -3,6 +3,7 @@ package as
 import (
 	"context"
 	"errors"
+	"net/http"
 	"strings"
 	"time"
 
@@ -158,6 +159,13 @@ type JWTBearerConfig struct {
 	AssertionMaxAge       time.Duration
 	ReplayCacheTTL        time.Duration
 	MaxActorChainDepth    int
+
+	// JWKS fetching; see the root JWTBearerConfig for semantics.
+	JWKSCacheTTL             time.Duration
+	JWKSCacheMaxEntries      int
+	JWKSFetchTimeout         time.Duration
+	AllowPrivateJWKSNetworks bool
+	JWKSHTTPClient           *http.Client
 }
 
 // TrustedJWTIssuer is the internal mirror of the root TrustedJWTIssuer.
@@ -245,6 +253,15 @@ func Validate(cfg *Config, encryptionKey []byte) error {
 		}
 		if cfg.JWTBearer.ReplayCacheTTL <= 0 {
 			cfg.JWTBearer.ReplayCacheTTL = 600 * time.Second
+		}
+		if cfg.JWTBearer.JWKSCacheTTL <= 0 {
+			cfg.JWTBearer.JWKSCacheTTL = DefaultJWKSCacheTTL
+		}
+		if cfg.JWTBearer.JWKSCacheMaxEntries <= 0 {
+			cfg.JWTBearer.JWKSCacheMaxEntries = DefaultJWKSCacheMaxEntries
+		}
+		if cfg.JWTBearer.JWKSFetchTimeout <= 0 {
+			cfg.JWTBearer.JWKSFetchTimeout = DefaultJWKSFetchTimeout
 		}
 		if cfg.JWTBearer.MaxActorChainDepth <= 0 {
 			cfg.JWTBearer.MaxActorChainDepth = 5

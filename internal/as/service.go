@@ -114,6 +114,10 @@ type Service struct {
 	// the in-process jtiCache sync.Map is used (not durable across restarts).
 	jwtBearerStorage JWTBearerStorageAdapter
 
+	// jwks fetches and caches remote JWKS documents (client jwks_uri and
+	// trusted issuer JWKSURL) behind an SSRF guard.
+	jwks *jwksFetcher
+
 	// jtiCache is the in-process fallback JTI replay cache used when
 	// jwtBearerStorage is nil. Keyed by "client:<jti>" or "grant:<jti>".
 	jtiCache sync.Map // map[string]time.Time
@@ -232,6 +236,7 @@ func New(d Deps) *Service {
 		clientAuthCache:  clientauthcache.New[*models.OAuthClient](clientauthcache.DefaultMaxEntries, clientauthcache.DefaultTTL),
 		dpopSvc:          dpopSvc,
 		jwtBearerStorage: d.JWTBearerStorage,
+		jwks:             newJWKSFetcher(d.Cfg.JWTBearer),
 		Hooks:            hooks,
 	}
 	if s.Cfg.Clock == nil {
