@@ -66,7 +66,7 @@ go test -fuzz FuzzAESGCMRoundTrip -fuzztime=10s ./crypto/...
 go test -bench=. -benchmem ./internal/bench/...
 ```
 
-The CI workflow runs `go test -race ./...` and a per-target fuzz job (`-fuzztime=10s`) on every PR.
+The CI workflow runs `go test -race ./...` on every PR. The per-target fuzz job (`-fuzztime=10s`) runs only on the Monday schedule and on manual dispatch, so run the fuzz targets for any code you touch locally.
 
 ---
 
