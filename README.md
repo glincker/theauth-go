@@ -11,9 +11,9 @@
 [![SLSA 3](https://slsa.dev/images/gh-badge-level3.svg)](https://github.com/glincker/theauth-go/releases)
 [![Discord](https://img.shields.io/discord/829168897080557579?style=flat-square&logo=discord&logoColor=white&label=discord&color=5865F2)](https://discord.gg/Ar5pcaZB99)
 
-Website: **[theauth.dev](https://theauth.dev)** | Documentation: **[docs.theauth.dev/go](https://docs.theauth.dev/go)**
+**[Website](https://theauth.dev)** &middot; **[Docs](https://docs.theauth.dev/go)** &middot; **[pkg.go.dev](https://pkg.go.dev/github.com/glincker/theauth-go)** &middot; **[theAuth for TypeScript](https://github.com/glincker/theauth)**
 
-Part of [theAuth](https://theauth.dev), open-source auth for AI agents and humans. Docs: [docs.theauth.dev](https://docs.theauth.dev).
+This is the Go SDK for [theAuth](https://theauth.dev), open-source auth for AI agents and humans. The TypeScript library lives in [glincker/theauth](https://github.com/glincker/theauth) and this repo is the Go counterpart. Both share one model: agents as identities, scoped permissions, delegation chains and an audit trail.
 
 ## Install
 
