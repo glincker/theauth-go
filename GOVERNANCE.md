@@ -41,7 +41,7 @@ Larger changes need more up front:
    [GitHub Discussion](https://github.com/glincker/theauth-go/discussions)
    describing the change before writing code.
 2. State the compatibility impact. What counts as a breaking change, and how
-   deprecations work, is in [docs/STABILITY.md](docs/STABILITY.md).
+   deprecations work, is in [the stability policy](https://docs.theauth.dev/go/reference/stability).
 3. A maintainer agrees to the direction, then the pull request is reviewed like
    any other. New behavior needs tests.
 

@@ -32,7 +32,7 @@ Governance and decision rules are in [GOVERNANCE.md](GOVERNANCE.md).
 - Behavior changes need tests.
 - Commit messages use `<type>: <description>`, as described in
   [.github/CONTRIBUTING.md](.github/CONTRIBUTING.md).
-- Breaking changes are handled under [docs/STABILITY.md](docs/STABILITY.md).
+- Breaking changes are handled under [the stability policy](https://docs.theauth.dev/go/reference/stability).
 
 ## Releases
 
