@@ -226,7 +226,7 @@ func TestObservabilityNilTracerNoPanic(t *testing.T) {
 // names exposed at the public surface. Dashboards key off these strings;
 // a rename is a breaking change and MUST update consumers explicitly. If
 // this test fails, intentional renames need to be reflected in the
-// expected list AND in docs/OBSERVABILITY.md.
+// expected list AND in https://docs.theauth.dev/go/guides/observability.
 func TestCanonicalNamesExported(t *testing.T) {
 	t.Parallel()
 	if theauth.SpanOAuthToken != "theauth.oauth.token" {

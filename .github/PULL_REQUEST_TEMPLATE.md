@@ -31,7 +31,7 @@ go vet ./...
 - [ ] No public API change
 - [ ] Yes -- describe what changed:
 
-(If yes, confirm [STABILITY.md](STABILITY.md) is updated and `CHANGELOG.md` has an entry under `[Unreleased]`.)
+(If yes, confirm [STABILITY](https://docs.theauth.dev/go/reference/stability) is updated and `CHANGELOG.md` has an entry under `[Unreleased]`.)
 
 ## Storage migration
 

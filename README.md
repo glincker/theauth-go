@@ -107,7 +107,7 @@ Postgres and MySQL implement the newer token, device, session and throttle capab
 
 ## Stability
 
-Packages and APIs that were Stable before v2.6 keep their SemVer guarantees. Among the additions in v2.6, only the storage capability split, `Handler()` and `Config.PathPrefix` are Stable. Experimental: `storage/sqlite`, `clientauth`, `policy`, the agent identity and revocation APIs, `Doctor`, `Config.ProviderResolver` and the new optional storage capabilities. Experimental APIs may change in a minor release. The SemVer rules and the list of stable packages are in [STABILITY.md](docs/STABILITY.md).
+Packages and APIs that were Stable before v2.6 keep their SemVer guarantees. Among the additions in v2.6, only the storage capability split, `Handler()` and `Config.PathPrefix` are Stable. Experimental: `storage/sqlite`, `clientauth`, `policy`, the agent identity and revocation APIs, `Doctor`, `Config.ProviderResolver` and the new optional storage capabilities. Experimental APIs may change in a minor release. The SemVer rules and the list of stable packages are in [STABILITY.md](https://docs.theauth.dev/go/reference/stability).
 
 ## FAQ
 
@@ -136,7 +136,7 @@ Runnable apps live in [`examples/`](./examples): [`single-binary-sqlite`](./exam
 ## Links
 
 - [Documentation](https://docs.theauth.dev/go) and [API reference on pkg.go.dev](https://pkg.go.dev/github.com/glincker/theauth-go/v2)
-- [CHANGELOG](CHANGELOG.md), [STABILITY](docs/STABILITY.md), [ROADMAP](docs/ROADMAP.md)
+- [CHANGELOG](CHANGELOG.md), [STABILITY](https://docs.theauth.dev/go/reference/stability), [ROADMAP](docs/ROADMAP.md)
 - [Security policy](.github/SECURITY.md): report vulnerabilities privately, not in public issues
 - [Contributing](.github/CONTRIBUTING.md), [Discussions](https://github.com/glincker/theauth-go/discussions), [Discord](https://discord.gg/Ar5pcaZB99)
 - [AGENTS.md](docs/AGENTS.md) and [llms.txt](llms.txt) for AI coding assistants

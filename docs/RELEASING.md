@@ -179,7 +179,7 @@ gh attestation verify /tmp/release-check/theauth-go-vX.Y.Z.tar.gz \
 ### 7. Post-release
 
 - Announce in GitHub Discussions if the release has significant changes.
-- Update MIGRATION.md if there are any breaking changes.
+- Update https://docs.theauth.dev/go/migrations/migration-guide if there are any breaking changes.
 - If a Slack webhook is configured (`SLACK_WEBHOOK_URL` repository secret),
   the workflow posts a notification automatically.
 

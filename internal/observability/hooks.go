@@ -59,7 +59,7 @@ func (h *Hooks) Gauge(name string, labels Labels) Gauge {
 
 // LatencyBuckets is the shared histogram bucket layout used by every
 // _latency_seconds metric the library emits. Documented in
-// docs/OBSERVABILITY.md so consumers can pre-register matching Prometheus
+// https://docs.theauth.dev/go/guides/observability so consumers can pre-register matching Prometheus
 // histograms (the bucket layout must match between the library call site
 // and the Prometheus registration for the bucket boundaries to align).
 //

@@ -10,7 +10,7 @@
 //     JSON responses that each contain a UserAttributes slice.
 //
 // Cognito does NOT export password hashes; all migrated users will have
-// RequiresPasswordReset=true. See docs/MIGRATING-FROM-COGNITO.md for the
+// RequiresPasswordReset=true. See https://docs.theauth.dev/go/guides/migrate-from-cognito for the
 // recommended operator workflow.
 package cognito
 

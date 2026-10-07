@@ -136,7 +136,7 @@ Examples: `feat/dpop-binding`, `fix/refresh-replay`, `docs/readme-overhaul`
 - No `fmt.Println` or `log.Println` in production code paths.
 - Max approximately 500 lines per file. Split into focused service files if a file grows beyond that.
 - All new HTTP endpoints require auth middleware. No unauthenticated routes except health checks and well-known discovery endpoints.
-- New storage operations go behind an optional interface (type-asserted at runtime) to avoid breaking the base `Storage` interface. See [STABILITY.md](STABILITY.md).
+- New storage operations go behind an optional interface (type-asserted at runtime) to avoid breaking the base `Storage` interface. See [STABILITY](https://docs.theauth.dev/go/reference/stability).
 - New entities need a corresponding test backed by the in-memory adapter so the suite runs without Postgres.
 
 ---
@@ -152,3 +152,7 @@ CI checks for em dashes and en dashes in all markdown files before merge.
 ## Code of conduct
 
 This project follows the [Contributor Covenant v2.1](CODE_OF_CONDUCT.md). By participating you agree to uphold it. Report unacceptable behavior to **security@glincker.com**.
+
+## Editing the docs
+
+The Go library docs live at <https://docs.theauth.dev/go>. Their source is in the [glincker/theauth](https://github.com/glincker/theauth) repository under `docs/go/`, so docs changes go there as a pull request. This repository keeps only repo-level files (README, CHANGELOG, SECURITY, CONTRIBUTING) and a few internal references under `docs/`.

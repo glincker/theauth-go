@@ -10,7 +10,7 @@ Thanks for using **theauth-go**. Pick the channel that matches what you need.
 | Request a feature | [Open an issue](https://github.com/glincker/theauth-go/issues/new?template=feature_request.yml) |
 | Report a **security vulnerability** (do NOT open a public issue) | [Security advisories](https://github.com/glincker/theauth-go/security/advisories/new) and `SECURITY.md` |
 | See what shipped per release | `CHANGELOG.md` |
-| Upgrade between minor or major versions | `docs/MIGRATION.md` |
+| Upgrade between minor or major versions | [Migration guide](https://docs.theauth.dev/go/migrations/migration-guide) |
 
 ## Before opening an issue
 

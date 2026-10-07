@@ -41,4 +41,4 @@ Docs: https://docs.theauth.dev/go . Full list: [CHANGELOG.md](../CHANGELOG.md).
 
 ## Stability
 
-New and Experimental in this release: `storage/sqlite`, `clientauth`, `policy`, the agent identity and revocation APIs, `Doctor`, `Config.ProviderResolver`, and the new optional storage capabilities (sessions, API tokens, device codes). Only the storage capability split, `Handler()` and `Config.PathPrefix` are Stable. See [STABILITY.md](STABILITY.md).
+New and Experimental in this release: `storage/sqlite`, `clientauth`, `policy`, the agent identity and revocation APIs, `Doctor`, `Config.ProviderResolver`, and the new optional storage capabilities (sessions, API tokens, device codes). Only the storage capability split, `Handler()` and `Config.PathPrefix` are Stable. See [https://docs.theauth.dev/go/reference/stability](https://docs.theauth.dev/go/reference/stability).
