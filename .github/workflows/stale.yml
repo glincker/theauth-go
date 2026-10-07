@@ -1,0 +1,37 @@
+name: stale
+
+on:
+  schedule:
+    - cron: "0 16 * * *"
+  workflow_dispatch:
+
+permissions:
+  issues: write
+  pull-requests: write
+
+jobs:
+  stale:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/stale@4391f3da665fdf50b6810c1a66712fb9ba21aa93 # v11.0.0
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          days-before-issue-stale: 45
+          days-before-issue-close: 14
+          days-before-pr-stale: 60
+          days-before-pr-close: 14
+          stale-issue-label: stale
+          stale-pr-label: stale
+          exempt-issue-labels: "security,blocked,good first issue,help wanted,pinned"
+          exempt-pr-labels: "security,blocked,pinned"
+          stale-issue-message: >
+            This issue has been quiet for 45 days and will close in 14 days
+            unless there is new activity. Comment if it is still relevant.
+          close-issue-message: >
+            Closing for inactivity. Reopen any time with more context.
+          stale-pr-message: >
+            This PR has been quiet for 60 days and will close in 14 days
+            unless there is new activity.
+          close-pr-message: >
+            Closing for inactivity. Reopen or push an update to continue.
