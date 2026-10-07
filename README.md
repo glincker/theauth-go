@@ -188,4 +188,12 @@ Runnable apps live in [`examples/`](./examples): [`single-binary-sqlite`](./exam
 - [AGENTS.md](docs/AGENTS.md) and [llms.txt](llms.txt) for AI coding assistants
 - [License: MIT](LICENSE)
 
-Built by the founder of [theSVG.org](https://thesvg.org). A product of GLINR STUDIOS.
+## Made by GLINR STUDIOS
+
+theAuth is built and maintained in the open by [GLINR STUDIOS](https://glinr.com). Founder: [thegdsks.com](https://thegdsks.com). The TypeScript library is [glincker/theauth](https://github.com/glincker/theauth).
+
+| Partner project | What it is | Site | Source |
+|---|---|---|---|
+| **LevelRail** | Self-hosted deployment platform: push to git, get a running app. | [levelrail.com](https://levelrail.com) | [glincker/levelrail](https://github.com/glincker/levelrail) |
+| **theSVG** | Open-source brand SVG icons. | [thesvg.org](https://thesvg.org) | [glincker/thesvg](https://github.com/glincker/thesvg) |
+| **GLINUI** | Open-source liquid glass UI components for React. theauth.dev is designed with it. | [glinui.com](https://glinui.com) | [glincker/glinui](https://github.com/glincker/glinui) |
