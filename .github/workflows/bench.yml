@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       base_sha:
-        description: "Base SHA to diff against (defaults to previous commit on main)"
+        description: "Base ref or SHA to diff against (defaults to the previous commit)"
         required: false
         type: string
   schedule:
@@ -56,19 +56,72 @@ jobs:
           go-version: "1.25"
           cache: true
 
+      # Pinned: benchstat at @latest requires Go 1.26 as of 2026-08-19 (x/perf
+      # bumped its go directive), which breaks this job on Go 1.25. This is
+      # the last x/perf commit whose go.mod still says go 1.25.0. Bump this
+      # together with the go-version above.
       - name: Install benchstat
-        run: go install golang.org/x/perf/cmd/benchstat@latest
+        run: go install golang.org/x/perf/cmd/benchstat@fd4a688df89207abdabe0a0cf5b2cd9ccfd376d2
 
-      # Try to restore a cached baseline for the base commit. On a PR the base
-      # commit is github.event.pull_request.base.sha; on a push to main it is
-      # the commit before the push (github.event.before). Both are pinned so
-      # the cache is stable across PR re-runs.
+      # Work out which commit to compare against, once, so the cache key and
+      # the base checkout agree.
+      #   pull_request: the PR base SHA.
+      #   push:         the commit before the push.
+      #   dispatch:     the base_sha input, else the previous commit.
+      #   schedule:     the newest commit at least 7 days old (weekly drift
+      #                 check), else the previous commit.
+      # Anything else that resolves to nothing fails the job instead of
+      # silently skipping the comparison. The only legitimate skip is the
+      # first push of a new branch (all-zero "before" SHA).
+      - name: Resolve base commit
+        id: base
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          PUSH_BEFORE: ${{ github.event.before }}
+          INPUT_BASE: ${{ inputs.base_sha }}
+        run: |
+          set -euo pipefail
+          base=""
+          case "${EVENT_NAME}" in
+            pull_request) base="${PR_BASE}" ;;
+            push) base="${PUSH_BEFORE}" ;;
+            workflow_dispatch)
+              if [ -n "${INPUT_BASE}" ]; then
+                base="$(git rev-parse --verify "${INPUT_BASE}^{commit}")"
+              else
+                base="$(git rev-parse --verify HEAD~1)"
+              fi
+              ;;
+            schedule)
+              base="$(git rev-list -n 1 --before='7 days ago' HEAD)"
+              if [ -z "${base}" ]; then
+                base="$(git rev-parse --verify HEAD~1)"
+              fi
+              ;;
+          esac
+          if [ "${EVENT_NAME}" = "push" ] && { [ -z "${base}" ] || [ "${base}" = "0000000000000000000000000000000000000000" ]; }; then
+            echo "No base SHA available (first push to branch); skipping base run."
+            echo "SKIP_DIFF=true" >> "$GITHUB_ENV"
+            base="none"
+          elif [ -z "${base}" ]; then
+            echo "::error::Could not resolve a base commit for ${EVENT_NAME}; refusing to skip the regression check."
+            exit 1
+          elif [ "${base}" = "${GITHUB_SHA}" ]; then
+            echo "::error::Base commit equals HEAD (${base}); nothing to compare. Pass base_sha to pick another commit."
+            exit 1
+          fi
+          echo "Comparing ${GITHUB_SHA} against ${base}"
+          echo "sha=${base}" >> "$GITHUB_OUTPUT"
+
+      # Try to restore a cached baseline for the base commit resolved above.
+      # It is a fixed SHA, so the cache is stable across re-runs.
       - name: Restore base benchmark cache
         id: cache-base
         uses: actions/cache@v6
         with:
           path: base-bench.txt
-          key: bench-baseline-${{ github.event.pull_request.base.sha || github.event.before }}
+          key: bench-baseline-${{ steps.base.outputs.sha }}
 
       # Save a copy of the gate script and curated list to /tmp before any
       # git checkout so we can run them on the base commit (which does not
@@ -91,15 +144,8 @@ jobs:
 
       # Run benchmarks on the base branch only when the cache was not hit.
       - name: Checkout base branch
-        if: steps.cache-base.outputs.cache-hit != 'true'
-        run: |
-          BASE_SHA="${{ github.event.pull_request.base.sha || github.event.before }}"
-          if [ -z "${BASE_SHA}" ] || [ "${BASE_SHA}" = "0000000000000000000000000000000000000000" ]; then
-            echo "No base SHA available (first push to branch); skipping base run."
-            echo "SKIP_DIFF=true" >> "$GITHUB_ENV"
-          else
-            git checkout "${BASE_SHA}"
-          fi
+        if: steps.cache-base.outputs.cache-hit != 'true' && env.SKIP_DIFF != 'true'
+        run: git checkout "${{ steps.base.outputs.sha }}"
 
       - name: Run benchmarks on base commit
         if: steps.cache-base.outputs.cache-hit != 'true' && env.SKIP_DIFF != 'true'
@@ -119,7 +165,7 @@ jobs:
         uses: actions/cache/save@v6
         with:
           path: base-bench.txt
-          key: bench-baseline-${{ github.event.pull_request.base.sha || github.event.before }}
+          key: bench-baseline-${{ steps.base.outputs.sha }}
 
       # Return to the PR branch before running the diff step (git checkout
       # above moves HEAD).
@@ -132,9 +178,11 @@ jobs:
         id: benchstat
         run: |
           benchstat base-bench.txt pr-bench.txt | tee diff.txt
-          echo "diff_output<<BENCHEOF" >> "$GITHUB_OUTPUT"
-          cat diff.txt >> "$GITHUB_OUTPUT"
-          echo "BENCHEOF" >> "$GITHUB_OUTPUT"
+          {
+            echo "diff_output<<BENCHEOF"
+            cat diff.txt
+            echo "BENCHEOF"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Comment benchstat diff on PR
         if: github.event_name == 'pull_request' && env.SKIP_DIFF != 'true'
