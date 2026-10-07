@@ -189,9 +189,9 @@ Runnable apps live in [`examples/`](./examples): [`single-binary-sqlite`](./exam
 - [AGENTS.md](docs/AGENTS.md) and [llms.txt](llms.txt) for AI coding assistants
 - [License: MIT](LICENSE)
 
-## Made by GLINR STUDIOS
+## Made by GLINCKER, a GLINR STUDIOS company
 
-theAuth is built and maintained in the open by [GLINR STUDIOS](https://glinr.com). Founder: [thegdsks.com](https://thegdsks.com). The TypeScript library is [glincker/theauth](https://github.com/glincker/theauth).
+theAuth is built and maintained in the open by [GLINCKER](https://glincker.com), the open-source division of [GLINR STUDIOS](https://glinr.com). Founder: [thegdsks.com](https://thegdsks.com). The TypeScript library is [glincker/theauth](https://github.com/glincker/theauth).
 
 | Partner project | What it is | Site | Source |
 |---|---|---|---|
