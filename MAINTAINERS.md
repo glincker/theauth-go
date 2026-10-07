@@ -7,7 +7,7 @@ Governance and decision rules are in [GOVERNANCE.md](GOVERNANCE.md).
 
 ## Contact
 
-- Security, conduct and general inquiries: support@glincker.com
+- Security, conduct and general inquiries: support@glinr.com
 - Vulnerability reports: GitHub private vulnerability reporting, as described
   in [.github/SECURITY.md](.github/SECURITY.md)
 - Questions and ideas:
