@@ -63,13 +63,13 @@ Behavior changes and upgrade notes are in [CHANGELOG.md](CHANGELOG.md).
   them.
 - Community behavior follows
   [.github/CODE_OF_CONDUCT.md](.github/CODE_OF_CONDUCT.md).
-- Anything that does not fit a public channel: support@glincker.com.
+- Anything that does not fit a public channel: support@glinr.com.
 
 ## Becoming a maintainer
 
 No formal process is defined yet. If you have contributed steadily and want to
 help maintain the project, say so in a discussion or write to
-support@glincker.com.
+support@glinr.com.
 
 ## Changing this document
 

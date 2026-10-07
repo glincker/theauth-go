@@ -23,4 +23,4 @@ Thanks for using **theauth-go**. Pick the channel that matches what you need.
 ## Commercial support
 
 For SLAs, audit assistance, custom storage backends, or migration help,
-contact **support@glincker.com**.
+contact **support@glinr.com**.

@@ -151,7 +151,7 @@ CI checks for em dashes and en dashes in all markdown files before merge.
 
 ## Code of conduct
 
-This project follows the [Contributor Covenant v2.1](CODE_OF_CONDUCT.md). By participating you agree to uphold it. Report unacceptable behavior to **security@glincker.com**.
+This project follows the [Contributor Covenant v2.1](CODE_OF_CONDUCT.md). By participating you agree to uphold it. Report unacceptable behavior to **support@glinr.com**.
 
 ## Editing the docs
 

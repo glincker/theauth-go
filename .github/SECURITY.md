@@ -21,7 +21,7 @@ Use [GitHub's private vulnerability reporting](https://github.com/glincker/theau
 
 **Option 2: Email**
 
-Send a report to **security@glincker.com**. Include:
+Send a report to **support@glinr.com**. Include:
 
 - A description of the issue and potential impact
 - Steps to reproduce or a proof-of-concept
