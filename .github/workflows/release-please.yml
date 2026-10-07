@@ -14,8 +14,8 @@ jobs:
     steps:
       # A bot token (GitHub App or fine-grained PAT) is required. Tags pushed
       # with the default GITHUB_TOKEN do not trigger release.yml (goreleaser).
-      - uses: googleapis/release-please-action@v4
+      - uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
         with:
-          token: ${{ secrets.RELEASE_PLEASE_TOKEN }}
+          token: ${{ secrets.RELEASE_PLEASE_TOKEN || github.token }}
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
