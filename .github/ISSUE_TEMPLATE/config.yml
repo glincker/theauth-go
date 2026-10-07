@@ -12,6 +12,9 @@ contact_links:
   - name: Website
     url: https://theauth.dev
     about: theAuth product website, pricing and the TypeScript SDK.
+  - name: Ask on Discord
+    url: https://discord.gg/Ar5pcaZB99
+    about: Quick questions and community help in the GLINR Discord.
   - name: Documentation
     url: https://theauth.dev
     about: Getting started, concepts, guides, configuration, error catalog.
