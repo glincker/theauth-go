@@ -6,6 +6,18 @@ adheres to [Semantic Versioning](https://semver.org/) from v1.0 forward.
 
 ## [Unreleased]
 
+## [2.7.1] - 2026-10-07
+
+### Upgrade notes
+
+Read these before upgrading from v2.7.0. They only affect JWKS fetching for `private_key_jwt` client authentication and trusted JWT issuers.
+
+- **JWKS URLs must use `https`.** Plain `http` is refused unless `JWTBearerConfig.AllowPrivateJWKSNetworks` is set.
+- **JWKS hosts that resolve to loopback, private, link-local, CGNAT or cloud metadata addresses are refused.** Local development and tests that serve a JWKS from `localhost` need `AllowPrivateJWKSNetworks: true`, or an injected `JWKSHTTPClient`.
+- **Redirects are not followed.** A JWKS URL must serve the document directly.
+- **Rotated keys are picked up after the cache TTL** (`JWKSCacheTTL`, default 5 minutes) instead of never.
+- **CIMD fetch errors now start with `safehttp:` instead of `cimd:`.** The error value is unchanged, so `errors.Is` still works.
+
 ### Security
 
 - JWKS fetching for `private_key_jwt` client `jwks_uri` and `TrustedJWTIssuer.JWKSURL` is now SSRF-guarded. The fetch refuses loopback, private, link-local, cloud metadata and other non-public addresses at dial time (rebinding-safe), does not follow redirects, uses no proxy, times out (default 5s), requires a 200 status and caps the body at 512 KiB. Behavior change: JWKS URLs must be `https`, and a JWKS host that resolves to a non-public address is now refused. For local development only, set `JWTBearerConfig.AllowPrivateJWKSNetworks` to permit both `http` and private addresses.
@@ -1417,7 +1429,8 @@ revocation, chi-friendly middleware, in-memory and Postgres storage
 adapters.
 
 
-[Unreleased]: https://github.com/glincker/theauth-go/compare/v2.7.0...HEAD
+[Unreleased]: https://github.com/glincker/theauth-go/compare/v2.7.1...HEAD
+[2.7.1]: https://github.com/glincker/theauth-go/compare/v2.7.0...v2.7.1
 [2.7.0]: https://github.com/glincker/theauth-go/compare/v2.6.0...v2.7.0
 [2.6.0]: https://github.com/glincker/theauth-go/compare/v2.5.0...v2.6.0
 [2.5.0]: https://github.com/glincker/theauth-go/compare/v2.5.0-rc.1...v2.5.0
