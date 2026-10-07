@@ -48,6 +48,11 @@ signs:
   - cmd: cosign
     artifacts: all
     output: true
+    # Without these two names goreleaser expands ${signature} and ${certificate}
+    # to nothing and uploads no .cert, so the verify steps in the release notes
+    # cannot work. Names match the commands in release.header below.
+    signature: "${artifact}.sig"
+    certificate: "${artifact}.cert"
     args:
       - sign-blob
       - "--output-signature=${signature}"
