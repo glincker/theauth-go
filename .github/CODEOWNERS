@@ -1,0 +1,4 @@
+# Default reviewers. Add people to the glinr-owners team to share review load.
+*                       @glincker/glinr-owners
+/.github/               @glincker/glinr-owners
+/.goreleaser.yml        @glincker/glinr-owners
