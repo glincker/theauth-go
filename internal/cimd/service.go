@@ -357,7 +357,7 @@ func (s *Service) Resolve(ctx context.Context, rawURL string) (*models.OAuthClie
 		}
 	}
 	if doc, ok := s.sharedLoad(ctx, key, rawURL); ok {
-		s.cache.Store(key, &cacheEntry{doc: doc, fetchedAt: now})
+		s.cache.Store(key, &cacheEntry{doc: doc, fetchedAt: time.Now()})
 		return synthesizeClient(doc), nil
 	}
 	doc, err := s.fetchOnce(ctx, key, rawURL)
