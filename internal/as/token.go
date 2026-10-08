@@ -343,7 +343,10 @@ func (s *Service) AuthenticateClient(ctx context.Context, clientID, clientSecret
 		if clientSecret == "" || len(client.ClientSecretHash) == 0 {
 			return nil, models.ErrOAuthInvalidClient
 		}
-		ok, err := crypto.VerifyPassword(clientSecret, string(client.ClientSecretHash))
+		ok, err := s.verifyClientSecret(ctx, clientSecret, string(client.ClientSecretHash))
+		if errors.Is(err, models.ErrOAuthServerBusy) {
+			return nil, err
+		}
 		if err != nil || !ok {
 			// Failures are never cached: an attacker presenting a wrong
 			// secret must keep paying Argon2id on every attempt so the

@@ -15,6 +15,7 @@ import (
 	"github.com/glincker/theauth-go/v2/internal/dpop"
 	"github.com/glincker/theauth-go/v2/internal/models"
 	obs "github.com/glincker/theauth-go/v2/internal/observability"
+	"github.com/glincker/theauth-go/v2/kv"
 )
 
 // Service bundles the OAuth 2.1 authorization server runtime: JWKS state +
@@ -122,6 +123,14 @@ type Service struct {
 	// jwtBearerStorage is nil. Keyed by "client:<jti>" or "grant:<jti>".
 	jtiCache sync.Map // map[string]time.Time
 
+	// Limiter backs the per-IP and per-client request limits on the AS
+	// endpoints. Never nil after New (defaults to in-process memory).
+	Limiter kv.RateLimiter
+
+	// verifySem caps concurrent Argon2id client-secret verifications. Nil
+	// when the cap is disabled.
+	verifySem chan struct{}
+
 	// Hooks is the consumer-supplied observability bundle. Never nil:
 	// New substitutes the no-op bundle when Deps.Hooks is nil. Every
 	// instrumented path uses Hooks.StartSpan / Hooks.Counter directly so
@@ -215,7 +224,11 @@ func New(d Deps) *Service {
 		// Validate already ran in Validate(); if New is called directly
 		// the dpop.New constructor will reapply defaults so we never
 		// land on a zero-valued config.
-		ds, err := dpop.New(*d.Cfg.DPoP)
+		dc := *d.Cfg.DPoP
+		if dc.ReplayCache == nil {
+			dc.ReplayCache = d.Cfg.Stores.ReplayCache
+		}
+		ds, err := dpop.New(dc)
 		if err == nil {
 			dpopSvc = ds
 		}
@@ -242,8 +255,20 @@ func New(d Deps) *Service {
 	if s.Cfg.Clock == nil {
 		s.Cfg.Clock = realClock{}
 	}
+	applyRateLimitDefaults(&s.Cfg)
+	if n := s.Cfg.RateLimits.MaxConcurrentSecretVerifications; n > 0 {
+		s.verifySem = make(chan struct{}, n)
+	}
+	s.Limiter = d.Cfg.Stores.RateLimiter
+	if s.Limiter == nil {
+		s.Limiter = kv.NewMemory()
+	}
 	if d.Cfg.CIMD != nil {
-		s.cimdSvc = cimd.NewService(*d.Cfg.CIMD, emitter)
+		cc := *d.Cfg.CIMD
+		if cc.Cache == nil {
+			cc.Cache = d.Cfg.Stores.Cache
+		}
+		s.cimdSvc = cimd.NewService(cc, emitter)
 	}
 	// Pre-allocate the instruments with stable label sets so the hot
 	// path (introspect, clientauthcache size gauge) does not allocate

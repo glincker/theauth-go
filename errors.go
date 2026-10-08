@@ -320,6 +320,27 @@ var (
 	// DenyBackchannelAuth when the supplied userID does not match the
 	// resolved subject on the pending request.
 	ErrCIBAUserMismatch = models.ErrCIBAUserMismatch
+
+	// ErrDeviceAuthUserCodeTaken is returned by
+	// DeviceAuthorizationStorage.InsertDeviceAuthorization on a user code hash
+	// collision with a live record.
+	ErrDeviceAuthUserCodeTaken = models.ErrDeviceAuthUserCodeTaken
+
+	// ErrDeviceUserCodeInvalid is returned by ApproveDeviceUserCode when the
+	// code is unknown, expired or already decided.
+	ErrDeviceUserCodeInvalid = models.ErrDeviceUserCodeInvalid
+
+	// ErrDeviceTooManyAttempts is returned when a subject exhausted its
+	// user-code attempt budget.
+	ErrDeviceTooManyAttempts = models.ErrDeviceTooManyAttempts
+
+	// ErrRegistrationTokenInvalid covers unknown, expired, revoked and
+	// exhausted registration tokens.
+	ErrRegistrationTokenInvalid = models.ErrRegistrationTokenInvalid
+
+	// ErrRegistrationTokensDisabled is returned when the storage cannot hold
+	// registration tokens.
+	ErrRegistrationTokensDisabled = models.ErrRegistrationTokensDisabled
 )
 
 // OAuth 2.1 standard error codes returned in JSON error bodies.
