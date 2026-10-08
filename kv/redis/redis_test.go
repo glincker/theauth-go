@@ -6,12 +6,16 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/glincker/theauth-go/v2/kv"
+	"github.com/glincker/theauth-go/v2/kv/kvtest"
 )
 
 // fake interprets the adapter's scripts against a map, honoring PX expiry with
 // an injected clock. It stands in for a real Redis.
 type fake struct {
 	mu   sync.Mutex
+	clk  func() time.Time
 	now  time.Time
 	data map[string]string
 	exp  map[string]time.Time
@@ -22,6 +26,9 @@ func newFake() *fake {
 }
 
 func (f *fake) alive(k string) bool {
+	if f.clk != nil {
+		f.now = f.clk()
+	}
 	if e, ok := f.exp[k]; ok && !f.now.Before(e) {
 		delete(f.data, k)
 		delete(f.exp, k)
@@ -31,6 +38,9 @@ func (f *fake) alive(k string) bool {
 }
 
 func (f *fake) setTTL(k, ms string) {
+	if f.clk != nil {
+		f.now = f.clk()
+	}
 	delete(f.exp, k)
 	if n, _ := strconv.Atoi(ms); n > 0 {
 		f.exp[k] = f.now.Add(time.Duration(n) * time.Millisecond)
@@ -123,4 +133,12 @@ func TestStore(t *testing.T) {
 	if _, ok, _ := s.Get(ctx, "c"); ok {
 		t.Fatal("delete failed")
 	}
+}
+
+func TestContract(t *testing.T) {
+	kvtest.Run(t, func(_ *testing.T, clk *kvtest.Clock) kv.Cache {
+		f := newFake()
+		f.clk = clk.Now
+		return New(f, "t:")
+	})
 }
