@@ -60,6 +60,12 @@ func New(svc *internalas.Service, userFromCtx func(r *http.Request) (*models.Use
 // when the operator opted out of the cap.
 func (h *Handler) Mount(r chi.Router, authn func(http.Handler) http.Handler, registerLimit func(http.Handler) http.Handler) {
 	r.Get("/.well-known/oauth-authorization-server", h.handleASMetadata)
+	// RFC 8414 section 3.1: when the issuer has a path component the
+	// well-known segment is inserted between host and path. The OIDC
+	// discovery name is served too, since MCP clients probe both.
+	r.Get("/.well-known/oauth-authorization-server/*", h.handleASMetadataPath)
+	r.Get("/.well-known/openid-configuration", h.handleASMetadata)
+	r.Get("/.well-known/openid-configuration/*", h.handleASMetadataPath)
 	r.Get("/.well-known/oauth-protected-resource", h.handleProtectedResourceMetadata)
 	r.Get("/.well-known/oauth-protected-resource/*", h.handleProtectedResourceMetadata)
 	r.Get("/oauth/jwks", h.handleJWKS)
@@ -102,6 +108,22 @@ func (h *Handler) handleASMetadata(w http.ResponseWriter, _ *http.Request) {
 	_ = json.NewEncoder(w).Encode(doc)
 }
 
+// handleASMetadataPath serves the RFC 8414 path-inserted form. The path
+// after the well-known segment must equal the issuer path, otherwise the
+// request is for a different issuer and gets a 404.
+func (h *Handler) handleASMetadataPath(w http.ResponseWriter, r *http.Request) {
+	want := "/" + strings.Trim(chi.URLParam(r, "*"), "/")
+	got := ""
+	if u, err := url.Parse(h.svc.Cfg.Issuer); err == nil {
+		got = "/" + strings.Trim(u.Path, "/")
+	}
+	if want != got {
+		http.NotFound(w, r)
+		return
+	}
+	h.handleASMetadata(w, r)
+}
+
 func (h *Handler) handleProtectedResourceMetadata(w http.ResponseWriter, r *http.Request) {
 	resourceID := chi.URLParam(r, "*")
 	var ident string
@@ -111,6 +133,11 @@ func (h *Handler) handleProtectedResourceMetadata(w http.ResponseWriter, r *http
 		if _, ok := h.svc.ResourceByIdentifier(ident); !ok {
 			if _, ok := h.svc.ResourceByIdentifier(strings.TrimPrefix(resourceID, "/")); ok {
 				ident = strings.TrimPrefix(resourceID, "/")
+			} else if id, ok := h.resourceByPath(resourceID); ok {
+				// RFC 9728 section 3.1: the suffix is the resource path,
+				// and the resource may live on a different origin than
+				// the issuer.
+				ident = id
 			}
 		}
 	default:
@@ -128,6 +155,22 @@ func (h *Handler) handleProtectedResourceMetadata(w http.ResponseWriter, r *http
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "public, max-age=300")
 	_ = json.NewEncoder(w).Encode(doc)
+}
+
+// resourceByPath finds a configured resource whose identifier path equals
+// the well-known suffix (trailing slash ignored).
+func (h *Handler) resourceByPath(suffix string) (string, bool) {
+	want := "/" + strings.Trim(suffix, "/")
+	for _, res := range h.svc.Cfg.Resources {
+		u, err := url.Parse(res.Identifier)
+		if err != nil {
+			continue
+		}
+		if "/"+strings.Trim(u.Path, "/") == want {
+			return res.Identifier, true
+		}
+	}
+	return "", false
 }
 
 func (h *Handler) handleJWKS(w http.ResponseWriter, _ *http.Request) {

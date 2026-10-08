@@ -525,6 +525,13 @@ func webauthnConfigFromRoot(c *WebAuthnConfig) *internalwebauthn.Config {
 		RequireUserVerification: c.RequireUserVerification,
 		CloneWarning:            string(c.CloneWarning),
 		UserHandleResolver:      c.UserHandleResolver,
+
+		AttestationPreference:       c.AttestationPreference,
+		RequireAttestationStatement: c.RequireAttestationStatement,
+		AAGUIDAllowlist:             append([]string(nil), c.AAGUIDAllowlist...),
+		AAGUIDDenylist:              append([]string(nil), c.AAGUIDDenylist...),
+		AuthenticatorNames:          c.AuthenticatorNames,
+		AuthenticatorName:           c.AuthenticatorName,
 	}
 }
 

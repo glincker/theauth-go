@@ -141,11 +141,11 @@ func (s *Service) AuthenticateClientJWT(ctx context.Context, clientID, assertion
 	if subtle.ConstantTimeCompare([]byte(claims.Aud), []byte(tokenEndpointURL)) != 1 {
 		return nil, models.ErrOAuthInvalidClient
 	}
-	if claims.Exp == 0 || time.Unix(claims.Exp, 0).Before(now) {
+	if claims.Exp == 0 || time.Unix(claims.Exp, 0).Add(s.Cfg.ClockSkew).Before(now) {
 		return nil, models.ErrOAuthInvalidClient
 	}
 	maxAge := s.Cfg.JWTBearer.ClientAssertionMaxAge
-	if claims.Iat == 0 || now.Sub(time.Unix(claims.Iat, 0)) > maxAge {
+	if claims.Iat == 0 || now.Sub(time.Unix(claims.Iat, 0)) > maxAge+s.Cfg.ClockSkew {
 		return nil, models.ErrOAuthInvalidClient
 	}
 	if claims.Jti == "" {
@@ -217,14 +217,14 @@ func (s *Service) JWTBearerGrant(ctx context.Context, req TokenRequest, assertio
 	if subtle.ConstantTimeCompare([]byte(claims.Aud), []byte(s.Cfg.Issuer)) != 1 {
 		return TokenResponse{}, models.ErrOAuthInvalidGrant
 	}
-	if claims.Exp == 0 || time.Unix(claims.Exp, 0).Before(now) {
+	if claims.Exp == 0 || time.Unix(claims.Exp, 0).Add(s.Cfg.ClockSkew).Before(now) {
 		return TokenResponse{}, models.ErrOAuthInvalidGrant
 	}
 	maxAge := s.Cfg.JWTBearer.AssertionMaxAge
-	if claims.Iat == 0 || now.Sub(time.Unix(claims.Iat, 0)) > maxAge {
+	if claims.Iat == 0 || now.Sub(time.Unix(claims.Iat, 0)) > maxAge+s.Cfg.ClockSkew {
 		return TokenResponse{}, models.ErrOAuthInvalidGrant
 	}
-	if claims.Nbf != 0 && time.Unix(claims.Nbf, 0).After(now) {
+	if claims.Nbf != 0 && time.Unix(claims.Nbf, 0).Add(-s.Cfg.ClockSkew).After(now) {
 		return TokenResponse{}, models.ErrOAuthInvalidGrant
 	}
 	// jti replay prevention.
@@ -468,6 +468,12 @@ func parseJWKSBytes(data []byte) ([]jwksEntry, error) {
 			continue
 		}
 		out = append(out, jwksEntry{Kid: base.Kid, Alg: alg, Key: pub})
+	}
+	// Individual unusable keys are skipped, but a document that held keys
+	// and yielded none is a parse failure, not an empty key set. Returning
+	// it as an error keeps it out of the cache and visible to the operator.
+	if len(out) == 0 && len(doc.Keys) > 0 {
+		return nil, fmt.Errorf("parse jwks: none of %d keys could be parsed", len(doc.Keys))
 	}
 	return out, nil
 }

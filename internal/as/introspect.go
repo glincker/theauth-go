@@ -9,7 +9,6 @@ import (
 
 	"github.com/glincker/theauth-go/v2/crypto"
 	"github.com/glincker/theauth-go/v2/internal/delegation"
-	"github.com/glincker/theauth-go/v2/internal/jwt"
 	"github.com/glincker/theauth-go/v2/internal/models"
 )
 
@@ -122,7 +121,7 @@ func (s *Service) IntrospectToken(ctx context.Context, token, clientID, clientSe
 }
 
 func (s *Service) introspectJWT(ctx context.Context, token, expectedAud string) IntrospectionResponse {
-	claims, err := jwt.Verify(token, s.PublicKeyByKID, expectedAud, time.Now())
+	claims, err := s.verifyAccessJWT(token, expectedAud, time.Now())
 	if err != nil {
 		return IntrospectionResponse{Active: false}
 	}

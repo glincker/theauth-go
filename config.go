@@ -184,6 +184,31 @@ type WebAuthnConfig struct {
 	// authoritative: login is refused unless the resolver returns that same
 	// user. Nil (the default) accepts only theauth user handles.
 	UserHandleResolver func(ctx context.Context, credentialID, userHandle []byte) (ULID, error)
+
+	// AttestationPreference is the attestation conveyance requested from
+	// authenticators: "none" (default), "indirect", "direct" or
+	// "enterprise". The upstream library verifies the statement formats it
+	// supports; trust anchors (FIDO MDS) are not configured here.
+	AttestationPreference string
+
+	// RequireAttestationStatement rejects registrations whose attestation
+	// format is "none". Pair with AttestationPreference "direct".
+	RequireAttestationStatement bool
+
+	// AAGUIDAllowlist, when non-empty, accepts only these authenticator
+	// models (UUID strings). Registration of anything else fails.
+	AAGUIDAllowlist []string
+
+	// AAGUIDDenylist rejects these authenticator models. It wins over the
+	// allowlist.
+	AAGUIDDenylist []string
+
+	// AuthenticatorNames maps an AAGUID to a display name for UIs.
+	AuthenticatorNames map[string]string
+
+	// AuthenticatorName is an optional lookup consulted before
+	// AuthenticatorNames, receiving a lowercase hyphenated AAGUID.
+	AuthenticatorName func(aaguid string) string
 }
 
 // CloneWarningPolicy selects the response to a sign count regression.

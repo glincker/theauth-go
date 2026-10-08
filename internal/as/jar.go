@@ -180,13 +180,14 @@ func (s *Service) ParseRequestObject(ctx interface{ Done() <-chan struct{} }, ra
 
 	// Validate registered claims.
 	now := time.Now()
-	if claims.Exp == 0 || time.Unix(claims.Exp, 0).Before(now) {
+	skew := s.Cfg.ClockSkew
+	if claims.Exp == 0 || time.Unix(claims.Exp, 0).Add(skew).Before(now) {
 		return AuthorizeRequest{}, fmt.Errorf("%w: request object expired", models.ErrOAuthInvalidRequest)
 	}
-	if claims.Iat != 0 && time.Unix(claims.Iat, 0).After(now.Add(5*time.Minute)) {
+	if claims.Iat != 0 && time.Unix(claims.Iat, 0).After(now.Add(5*time.Minute+skew)) {
 		return AuthorizeRequest{}, fmt.Errorf("%w: request object iat is in the future", models.ErrOAuthInvalidRequest)
 	}
-	if claims.Nbf != 0 && time.Unix(claims.Nbf, 0).After(now) {
+	if claims.Nbf != 0 && time.Unix(claims.Nbf, 0).Add(-skew).After(now) {
 		return AuthorizeRequest{}, fmt.Errorf("%w: request object not yet valid", models.ErrOAuthInvalidRequest)
 	}
 

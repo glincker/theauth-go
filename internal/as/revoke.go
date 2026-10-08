@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/glincker/theauth-go/v2/crypto"
-	"github.com/glincker/theauth-go/v2/internal/jwt"
 	obs "github.com/glincker/theauth-go/v2/internal/observability"
 )
 
@@ -88,7 +87,7 @@ func (s *Service) revokeAccessToken(ctx context.Context, token, clientID string)
 	if s.denylist() == nil {
 		return
 	}
-	claims, verr := jwt.Verify(token, s.PublicKeyByKID, "", time.Now())
+	claims, verr := s.verifyAccessJWT(token, "", time.Now())
 	if verr != nil || claims.Iss != s.Cfg.Issuer || claims.ClientID != clientID || claims.Jti == "" {
 		return
 	}

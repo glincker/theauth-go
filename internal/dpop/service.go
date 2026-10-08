@@ -31,6 +31,7 @@ import (
 type Service struct {
 	allowedAlgs           map[string]struct{}
 	proofMaxAge           time.Duration
+	clockSkew             time.Duration
 	nonceTTL              time.Duration
 	requireNonceForTokens bool
 	requireForClients     map[string]struct{}
@@ -59,6 +60,11 @@ type Config struct {
 	// ProofMaxAge bounds how far in the past or future the proof's iat
 	// claim may be. Defaults to 60 seconds.
 	ProofMaxAge time.Duration
+
+	// ClockSkew widens the acceptance window for the proof iat claim on
+	// top of ProofMaxAge, absorbing clock drift between the client and
+	// this server. Defaults to zero.
+	ClockSkew time.Duration
 
 	// NonceTTL bounds how long an issued DPoP-Nonce remains acceptable.
 	// Defaults to 10 minutes.
@@ -132,6 +138,7 @@ func New(cfg Config) (*Service, error) {
 	return &Service{
 		allowedAlgs:           algSet,
 		proofMaxAge:           cfg.ProofMaxAge,
+		clockSkew:             cfg.ClockSkew,
 		nonceTTL:              cfg.NonceTTL,
 		requireNonceForTokens: cfg.RequireNonceForTokens,
 		requireForClients:     requireSet,
@@ -227,7 +234,7 @@ func (s *Service) Verify(proofJWT string, params VerifyParams) (*Proof, error) {
 		return nil, joinErr(ErrProofExpired, "iat", "missing")
 	}
 	iat := time.Unix(claims.IAT, 0)
-	if abs(now.Sub(iat)) > s.proofMaxAge {
+	if abs(now.Sub(iat)) > s.proofMaxAge+s.clockSkew {
 		return nil, joinErr(ErrProofExpired, "age", now.Sub(iat).String(), "max", s.proofMaxAge.String())
 	}
 	// Check 7: nonce. RequireNonce ALWAYS forces a nonce. When the
