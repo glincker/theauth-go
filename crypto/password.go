@@ -84,3 +84,20 @@ func VerifyPassword(plain, phc string) (bool, error) {
 	got := argon2.IDKey([]byte(plain), salt, time, memory, threads, uint32(len(want)))
 	return subtle.ConstantTimeCompare(got, want) == 1, nil
 }
+
+// NeedsRehash reports whether phc is a well-formed argon2id hash whose
+// memory, time or thread cost is below the current defaults, so callers can
+// transparently upgrade it after a successful login. Malformed hashes and
+// hashes at or above the current cost report false.
+func NeedsRehash(phc string) bool {
+	parts := strings.Split(phc, "$")
+	if len(parts) != 6 || parts[0] != "" || parts[1] != "argon2id" {
+		return false
+	}
+	var memory, t uint32
+	var threads uint8
+	if _, err := fmt.Sscanf(parts[3], "m=%d,t=%d,p=%d", &memory, &t, &threads); err != nil {
+		return false
+	}
+	return memory < argonMemoryKiB || t < argonTime || threads < argonThreads
+}

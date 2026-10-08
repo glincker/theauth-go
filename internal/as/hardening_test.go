@@ -7,6 +7,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -333,5 +334,49 @@ func TestRevokeOwnershipAndAccessTokens(t *testing.T) {
 				t.Fatalf("active=%v want %v", active, tc.wantActive)
 			}
 		})
+	}
+}
+
+func TestMetadataAdvertisesIssAndLegacyDCR(t *testing.T) {
+	tests := []struct {
+		name         string
+		mut          func(*theauth.AuthorizationServerConfig)
+		wantRegistry bool
+	}{
+		{"dcr hidden by default", func(*theauth.AuthorizationServerConfig) {}, false},
+		{"dcr advertised with registration token", func(c *theauth.AuthorizationServerConfig) { c.RegistrationTokens = []string{"t"} }, true},
+		{"dcr advertised when anonymous allowed", func(c *theauth.AuthorizationServerConfig) { c.AllowAnonymousRegistration = true }, true},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			a, _ := newASInstance(t, tc.mut)
+			md, err := a.ASMetadataDoc()
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !md.AuthorizationResponseIssParameterSupported {
+				t.Fatal("iss parameter support not advertised")
+			}
+			if (md.RegistrationEndpoint != "") != tc.wantRegistry {
+				t.Fatalf("registration_endpoint=%q wantRegistry=%v", md.RegistrationEndpoint, tc.wantRegistry)
+			}
+		})
+	}
+}
+
+func TestAuthorizeResponseCarriesIssuer(t *testing.T) {
+	a, user := hardeningInstance(t, false, false)
+	client := confidentialClient(t, a)
+	verifier, _ := crypto.NewCodeVerifier()
+	res, err := a.StartAuthorize(context.Background(), theauth.AuthorizeRequest{
+		ClientID: client.ClientID, RedirectURI: "https://app.example.com/cb", ResponseType: "code",
+		Scope: []string{"files.read"}, CodeChallenge: crypto.CodeChallenge(verifier),
+		CodeChallengeMethod: "S256", Resource: hardeningResource,
+	}, &user)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(res.RedirectURL, "iss=https%3A%2F%2Fauth.example.com") {
+		t.Fatalf("redirect lacks iss: %s", res.RedirectURL)
 	}
 }

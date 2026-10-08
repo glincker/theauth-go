@@ -42,7 +42,8 @@ func VerifyLegacyBcrypt(plain, hash string) (bool, error) {
 // so the user-facing latency stays unchanged.
 //
 // Returns (matched bool, newHash string, err error). newHash is non-empty
-// only when a bcrypt hash was accepted and re-hashed successfully.
+// only when a bcrypt hash was accepted, or an Argon2id hash with parameters
+// below the current baseline matched, and was re-hashed successfully.
 func VerifyPasswordWithLegacyFallback(plain, storedHash string, allowLegacy bool) (matched bool, newArgon2Hash string, err error) {
 	if IsBcryptHash(storedHash) {
 		if !allowLegacy {
@@ -68,5 +69,13 @@ func VerifyPasswordWithLegacyFallback(plain, storedHash string, allowLegacy bool
 
 	// Standard Argon2id path.
 	ok, verifyErr := VerifyPassword(plain, storedHash)
+	if ok && verifyErr == nil && NeedsRehash(storedHash) {
+		// Parameters are below the current baseline: hand back a fresh hash
+		// so the caller persists the upgrade. A rehash failure keeps the
+		// login successful; the upgrade is retried next time.
+		if newHash, hashErr := HashPassword(plain); hashErr == nil {
+			return true, newHash, nil
+		}
+	}
 	return ok, "", verifyErr
 }

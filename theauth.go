@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/ed25519"
 	"net/netip"
+	"strings"
 	"time"
 
 	"github.com/glincker/theauth-go/v2/email"
@@ -70,8 +71,9 @@ type Config struct {
 	SessionLinks *SessionLinksConfig
 	MagicLinkTTL time.Duration
 	CookieName   string
-	// SecureCookie forces the Secure attribute on every session cookie.
-	// When false, Secure is still set per request if BaseURL is https, the
+	// SecureCookie forces the Secure attribute on every session cookie. It
+	// defaults to true when BaseURL is https. When false, Secure is still
+	// set per request if BaseURL is https, the
 	// connection is TLS, or a TrustedProxies peer sent X-Forwarded-Proto: https.
 	SecureCookie bool
 	// SuppressSecureCookieWarning silences the v2.2 deprecation WARN logged
@@ -482,19 +484,20 @@ func New(cfg Config) (*TheAuth, error) {
 	}
 
 	a := &TheAuth{
-		storage:                    cfg.Storage,
-		emailSender:                cfg.EmailSender,
-		baseURL:                    cfg.BaseURL,
-		allowLegacyBcrypt:          cfg.PasswordPolicy.AllowLegacyBcrypt,
-		onLegacyHash:               cfg.PasswordPolicy.OnLegacyHashAccepted,
-		pathPrefix:                 pathprefix.Normalize(cfg.PathPrefix),
-		signingKey:                 cfg.SigningKey,
-		sessionTTL:                 cfg.SessionTTL,
-		sx:                         sx,
-		magicLinkTTL:               cfg.MagicLinkTTL,
-		cookieName:                 cfg.CookieName,
-		revocations:                cfg.RevocationBus,
-		secureCookie:               cfg.SecureCookie,
+		storage:           cfg.Storage,
+		emailSender:       cfg.EmailSender,
+		baseURL:           cfg.BaseURL,
+		allowLegacyBcrypt: cfg.PasswordPolicy.AllowLegacyBcrypt,
+		onLegacyHash:      cfg.PasswordPolicy.OnLegacyHashAccepted,
+		pathPrefix:        pathprefix.Normalize(cfg.PathPrefix),
+		signingKey:        cfg.SigningKey,
+		sessionTTL:        cfg.SessionTTL,
+		sx:                sx,
+		magicLinkTTL:      cfg.MagicLinkTTL,
+		cookieName:        cfg.CookieName,
+		revocations:       cfg.RevocationBus,
+		// Secure defaults to on whenever BaseURL is https.
+		secureCookie:               cfg.SecureCookie || strings.HasPrefix(strings.ToLower(cfg.BaseURL), "https://"),
 		rateLimitPerIP:             cfg.RateLimitPerIP,
 		rateLimitPerEmail:          cfg.RateLimitPerEmail,
 		trustedProxies:             append([]netip.Prefix(nil), cfg.TrustedProxies...),

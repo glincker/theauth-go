@@ -4,6 +4,7 @@ import (
 	"crypto/ed25519"
 	"crypto/rand"
 	"encoding/base64"
+	"encoding/json"
 	"strings"
 	"testing"
 	"time"
@@ -95,5 +96,39 @@ func TestVerifyRejectsAudMismatch(t *testing.T) {
 	}, "kid-1", priv)
 	if _, err := jwt.Verify(tok, func(string) (ed25519.PublicKey, bool) { return pub, true }, "other", time.Now()); err == nil {
 		t.Fatal("expected aud mismatch rejection")
+	}
+}
+
+func TestVerifyTypRequirement(t *testing.T) {
+	pub, priv, _ := ed25519.GenerateKey(rand.Reader)
+	resolve := func(string) (ed25519.PublicKey, bool) { return pub, true }
+	mk := func(typ string) string {
+		h := map[string]string{"alg": "EdDSA", "kid": "k"}
+		if typ != "" {
+			h["typ"] = typ
+		}
+		hb, _ := json.Marshal(h)
+		cb, _ := json.Marshal(map[string]any{"iss": "i", "exp": time.Now().Add(time.Hour).Unix()})
+		in := base64.RawURLEncoding.EncodeToString(hb) + "." + base64.RawURLEncoding.EncodeToString(cb)
+		return in + "." + base64.RawURLEncoding.EncodeToString(ed25519.Sign(priv, []byte(in)))
+	}
+	tests := []struct {
+		name    string
+		typ     string
+		opts    jwt.VerifyOptions
+		wantErr bool
+	}{
+		{"at+jwt ok", "at+jwt", jwt.VerifyOptions{}, false},
+		{"missing rejected", "", jwt.VerifyOptions{}, true},
+		{"missing tolerated", "", jwt.VerifyOptions{AllowMissingTyp: true}, false},
+		{"wrong typ rejected even tolerant", "JWT", jwt.VerifyOptions{AllowMissingTyp: true}, true},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := jwt.VerifyOpts(mk(tc.typ), resolve, "", time.Now(), tc.opts)
+			if (err != nil) != tc.wantErr {
+				t.Fatalf("err=%v wantErr=%v", err, tc.wantErr)
+			}
+		})
 	}
 }

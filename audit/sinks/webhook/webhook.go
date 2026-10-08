@@ -1,8 +1,11 @@
 // Package webhook provides an AuditSink that POSTs audit events as
 // CloudEvents 1.0 envelopes to a configurable HTTP endpoint. Each batch
 // event is sent as a separate CloudEvents HTTP request. The full request
-// body is HMAC-SHA256 signed and the signature is attached in the
-// X-CloudEvents-Signature header so recipients can verify authenticity.
+// body is HMAC-SHA256 signed together with a send timestamp: the MAC input
+// is "<unix-seconds>." followed by the body. The signature goes in
+// X-CloudEvents-Signature and the timestamp in X-CloudEvents-Timestamp, so
+// recipients can verify authenticity and reject replays older than a window
+// (see Verify).
 //
 // Usage:
 //
@@ -21,8 +24,11 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/glincker/theauth-go/v2/internal/models"
@@ -47,6 +53,65 @@ type Sink struct {
 	hmacSecret []byte
 	client     *http.Client
 	redactor   func(models.AuditEvent) models.AuditEvent
+	now        func() time.Time
+}
+
+// SignatureHeader and TimestampHeader name the request headers that carry
+// the MAC and the signed send time.
+const (
+	SignatureHeader = "X-CloudEvents-Signature"
+	TimestampHeader = "X-CloudEvents-Timestamp"
+	// DefaultReplayWindow is the tolerance Verify callers should start with.
+	DefaultReplayWindow = 5 * time.Minute
+)
+
+// Verification errors returned by Verify.
+var (
+	ErrSignatureMissing  = errors.New("webhook: signature or timestamp header missing")
+	ErrSignatureMismatch = errors.New("webhook: signature mismatch")
+	ErrTimestampStale    = errors.New("webhook: timestamp outside replay window")
+)
+
+// Verify checks a received webhook. It recomputes HMAC-SHA256 over
+// "<timestamp>." + body, compares in constant time, and rejects the request
+// when the timestamp is more than window away from now (either direction),
+// which bounds how long a captured request can be replayed. A window <= 0
+// uses DefaultReplayWindow.
+func Verify(secret, body []byte, signature, timestamp string, window time.Duration, now time.Time) error {
+	if signature == "" || timestamp == "" {
+		return ErrSignatureMissing
+	}
+	if window <= 0 {
+		window = DefaultReplayWindow
+	}
+	secs, err := strconv.ParseInt(timestamp, 10, 64)
+	if err != nil {
+		return ErrSignatureMissing
+	}
+	got, err := hex.DecodeString(strings.TrimPrefix(signature, "sha256="))
+	if err != nil {
+		return ErrSignatureMismatch
+	}
+	if !hmac.Equal(got, sign(secret, timestamp, body)) {
+		return ErrSignatureMismatch
+	}
+	if d := now.Sub(time.Unix(secs, 0)); d > window || d < -window {
+		return ErrTimestampStale
+	}
+	return nil
+}
+
+func sign(secret []byte, timestamp string, body []byte) []byte {
+	mac := hmac.New(sha256.New, secret)
+	mac.Write([]byte(timestamp))
+	mac.Write([]byte("."))
+	mac.Write(body)
+	return mac.Sum(nil)
+}
+
+// WithClock overrides the time source used to stamp requests (tests).
+func WithClock(now func() time.Time) Option {
+	return func(s *Sink) { s.now = now }
 }
 
 // Option configures a Sink.
@@ -80,6 +145,7 @@ func New(endpoint string, hmacSecret []byte, opts ...Option) (*Sink, error) {
 		endpoint:   endpoint,
 		hmacSecret: hmacSecret,
 		client:     &http.Client{Timeout: defaultTimeout},
+		now:        time.Now,
 	}
 	for _, o := range opts {
 		o(s)
@@ -128,9 +194,9 @@ func (s *Sink) send(ctx context.Context, evt models.AuditEvent) error {
 	}
 	req.Header.Set("Content-Type", "application/cloudevents+json")
 	if len(s.hmacSecret) > 0 {
-		mac := hmac.New(sha256.New, s.hmacSecret)
-		mac.Write(body)
-		req.Header.Set("X-CloudEvents-Signature", "sha256="+hex.EncodeToString(mac.Sum(nil)))
+		ts := strconv.FormatInt(s.now().Unix(), 10)
+		req.Header.Set(TimestampHeader, ts)
+		req.Header.Set(SignatureHeader, "sha256="+hex.EncodeToString(sign(s.hmacSecret, ts, body)))
 	}
 
 	resp, err := s.client.Do(req)

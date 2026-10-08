@@ -1,9 +1,13 @@
 package crypto
 
 import (
+	"encoding/base64"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
+
+	"golang.org/x/crypto/argon2"
 )
 
 func TestHashPasswordRoundTrip(t *testing.T) {
@@ -83,5 +87,53 @@ func TestHashPasswordUsesFreshSalt(t *testing.T) {
 		if !ok {
 			t.Fatalf("verify failed for %s", phc)
 		}
+	}
+}
+
+func TestRehashOnLoginForWeakArgon2Params(t *testing.T) {
+	weak := func(plain string, mem, iters uint32, threads uint8) string {
+		salt := []byte("0123456789abcdef")
+		key := argon2.IDKey([]byte(plain), salt, iters, mem, threads, 32)
+		enc := base64.RawStdEncoding.EncodeToString
+		return fmt.Sprintf("$argon2id$v=%d$m=%d,t=%d,p=%d$%s$%s", argon2.Version, mem, iters, threads, enc(salt), enc(key))
+	}
+	current, err := HashPassword("pw")
+	if err != nil {
+		t.Fatal(err)
+	}
+	tests := []struct {
+		name       string
+		hash       string
+		pw         string
+		wantMatch  bool
+		wantRehash bool
+		wantNeeds  bool
+	}{
+		{"current params untouched", current, "pw", true, false, false},
+		{"low memory upgraded", weak("pw", 8*1024, 3, 4), "pw", true, true, true},
+		{"low time upgraded", weak("pw", 64*1024, 1, 4), "pw", true, true, true},
+		{"wrong password never rehashes", weak("pw", 8*1024, 3, 4), "nope", false, false, true},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := NeedsRehash(tc.hash); got != tc.wantNeeds {
+				t.Fatalf("NeedsRehash=%v want %v", got, tc.wantNeeds)
+			}
+			ok, newHash, err := VerifyPasswordWithLegacyFallback(tc.pw, tc.hash, false)
+			if err != nil || ok != tc.wantMatch {
+				t.Fatalf("ok=%v err=%v want %v", ok, err, tc.wantMatch)
+			}
+			if (newHash != "") != tc.wantRehash {
+				t.Fatalf("newHash=%q wantRehash=%v", newHash, tc.wantRehash)
+			}
+			if newHash != "" {
+				if NeedsRehash(newHash) {
+					t.Fatal("rehashed value still below baseline")
+				}
+				if ok, _ := VerifyPassword("pw", newHash); !ok {
+					t.Fatal("rehashed value does not verify")
+				}
+			}
+		})
 	}
 }
