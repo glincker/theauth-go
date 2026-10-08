@@ -43,6 +43,8 @@ func testPool(t *testing.T) *pgxpool.Pool {
 	// (v0.5 + v0.7 reference users; v0.7 SAML/SCIM reference organizations).
 	_, _ = pool.Exec(context.Background(), `
 		DROP TABLE IF EXISTS theauth_schema_migrations CASCADE;
+		DROP TABLE IF EXISTS registration_tokens CASCADE;
+		DROP TABLE IF EXISTS device_authorizations CASCADE;
 		DROP TABLE IF EXISTS throttle_entries CASCADE;
 		DROP TABLE IF EXISTS totp_last_steps CASCADE;
 		DROP TABLE IF EXISTS device_codes CASCADE;

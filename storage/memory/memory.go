@@ -42,6 +42,8 @@ type Store struct {
 	ciba *cibaState
 	// scoped API tokens + device codes. See memory_apitokens.go.
 	tokens tokenState
+	// OAuth device authorizations + registration tokens. See memory_device.go.
+	devauth devAuthState
 }
 
 func New() *Store {

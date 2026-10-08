@@ -12,6 +12,7 @@ import (
 	"github.com/glincker/theauth-go/v2/internal/dpop"
 	"github.com/glincker/theauth-go/v2/internal/models"
 	"github.com/glincker/theauth-go/v2/internal/pathprefix"
+	"github.com/glincker/theauth-go/v2/kv"
 )
 
 // Config wires the OAuth 2.1 + MCP authorization server runtime. Mirror of
@@ -159,6 +160,24 @@ type Config struct {
 	// Requires the Storage to also implement CIBAStorage; otherwise CIBA
 	// is silently disabled even if this field is non-nil.
 	CIBA *CIBAConfig
+
+	// RateLimits tunes per-IP and per-client request limits on the AS
+	// endpoints and the cap on concurrent client-secret verifications.
+	// Nil applies the defaults; see RateLimits.
+	RateLimits *RateLimits
+
+	// Stores supplies the shared state backends (rate limiter, replay cache,
+	// cache). Nil fields fall back to one in-process kv.Memory.
+	Stores kv.Stores
+
+	// DeviceAuthorization (RFC 8628) enables POST /oauth/device_authorization
+	// and the device_code grant when non-nil. Requires the Storage to also
+	// implement DeviceAuthorizationStorage.
+	DeviceAuthorization *DeviceConfig
+
+	// RegistrationTokenTTL is the default lifetime of an initial access
+	// token created through the admin API. Default 24h.
+	RegistrationTokenTTL time.Duration
 }
 
 // JWTBearerConfig is the internal mirror of the root JWTBearerConfig.
@@ -281,6 +300,13 @@ func Validate(cfg *Config, encryptionKey []byte) error {
 				cfg.JWTBearer.TrustedJWTIssuers[i].AllowedAlgorithms = []string{"ES256", "RS256", "EdDSA"}
 			}
 		}
+	}
+	applyRateLimitDefaults(cfg)
+	if cfg.RegistrationTokenTTL <= 0 {
+		cfg.RegistrationTokenTTL = 24 * time.Hour
+	}
+	if cfg.DeviceAuthorization != nil {
+		applyDeviceDefaults(cfg.DeviceAuthorization)
 	}
 	// CIBA defaults.
 	if cfg.CIBA != nil {

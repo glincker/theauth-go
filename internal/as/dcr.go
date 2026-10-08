@@ -182,7 +182,7 @@ func validateRegistrationRequest(req *ClientRegistrationRequest, anonymous bool)
 		switch gt {
 		case models.GrantTypeAuthorizationCode, models.GrantTypeRefreshToken,
 			models.GrantTypeClientCredentials, models.GrantTypeTokenExchange,
-			models.GrantTypeCIBA:
+			models.GrantTypeCIBA, models.GrantTypeDeviceCode:
 			// supported
 		default:
 			return wrapInvalidReg("unsupported grant_type: " + gt)

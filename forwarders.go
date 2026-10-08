@@ -1058,3 +1058,35 @@ func (a *TheAuth) OAuthStart(r *http.Request, provider, returnTo string) (OAuthS
 func (a *TheAuth) OAuthCallback(r *http.Request, provider, code, state, binding string) (OAuthCallbackResult, *User, error) {
 	return a.callbackOAuth(r.Context(), provider, code, state, binding, r.UserAgent(), httpx.ClientIP(r))
 }
+
+// ---------- initial access (registration) tokens ----------
+
+// CreateRegistrationToken mints a one-time (or limited-use), scoped, expiring
+// initial access token for POST /oauth/register and returns the stored record
+// plus the plaintext token. The plaintext is shown once and never stored; the
+// record keeps only a SHA-256 digest. Requires Config.AuthorizationServer and
+// a storage that implements RegistrationTokenStorage.
+func (a *TheAuth) CreateRegistrationToken(ctx context.Context, in CreateRegistrationTokenInput) (RegistrationToken, string, error) {
+	if a.as == nil {
+		return RegistrationToken{}, "", ErrRegistrationTokensDisabled
+	}
+	return a.as.CreateRegistrationToken(ctx, in)
+}
+
+// ListRegistrationTokens lists registration tokens, newest first. A nil orgID
+// lists every token. Hashes are included on the model; do not expose them.
+func (a *TheAuth) ListRegistrationTokens(ctx context.Context, orgID *ULID) ([]RegistrationToken, error) {
+	if a.as == nil {
+		return nil, ErrRegistrationTokensDisabled
+	}
+	return a.as.ListRegistrationTokens(ctx, orgID)
+}
+
+// RevokeRegistrationToken revokes a registration token. Revoking an already
+// revoked token succeeds.
+func (a *TheAuth) RevokeRegistrationToken(ctx context.Context, id ULID) error {
+	if a.as == nil {
+		return ErrRegistrationTokensDisabled
+	}
+	return a.as.RevokeRegistrationToken(ctx, id, nil, nil)
+}

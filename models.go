@@ -226,6 +226,27 @@ const (
 // GrantTypeCIBA is the CIBA grant type URN per RFC 9509.
 const GrantTypeCIBA = models.GrantTypeCIBA
 
+// ---------- RFC 8628 device authorization grant (AS) ----------
+
+// DeviceAuthorization is the persistent record of one OAuth device flow served
+// at /oauth/device_authorization. It is unrelated to DeviceCode, which belongs
+// to the API-token device flow.
+type DeviceAuthorization = models.DeviceAuthorization
+
+// DeviceAuthorization status values.
+const (
+	DeviceAuthPending  = models.DeviceAuthPending
+	DeviceAuthApproved = models.DeviceAuthApproved
+	DeviceAuthDenied   = models.DeviceAuthDenied
+	DeviceAuthConsumed = models.DeviceAuthConsumed
+)
+
+// GrantTypeDeviceCode is the RFC 8628 grant type URN.
+const GrantTypeDeviceCode = models.GrantTypeDeviceCode
+
+// RegistrationToken is an initial access token for POST /oauth/register.
+type RegistrationToken = models.RegistrationToken
+
 // ---------- Lifecycle hook enums (v2.5) ----------
 
 // SignupMethod identifies which credential path created a user. Passed to

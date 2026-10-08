@@ -54,6 +54,8 @@ func TestMySQLCapabilityContracts(t *testing.T) {
 	}{
 		{"APITokens", func(t *testing.T, s *mysql.Store) { storagetest.RunAPITokens(t, s) }},
 		{"DeviceCodes", func(t *testing.T, s *mysql.Store) { storagetest.RunDeviceCodes(t, s) }},
+		{"DeviceAuthorizations", func(t *testing.T, s *mysql.Store) { storagetest.RunDeviceAuthorizations(t, s) }},
+		{"RegistrationTokens", func(t *testing.T, s *mysql.Store) { storagetest.RunRegistrationTokens(t, s) }},
 		{"SessionManagement", func(t *testing.T, s *mysql.Store) { storagetest.RunSessionManagement(t, s) }},
 	}
 	for _, tc := range suites {

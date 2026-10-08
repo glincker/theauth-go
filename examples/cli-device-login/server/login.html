@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Demo sign in</title></head>
+<body style="font:16px system-ui;max-width:24rem;margin:10vh auto;padding:0 1rem">
+<h1>Demo sign in</h1>
+<p>Any email and password works: the account is created on first use.</p>
+<form id="f">
+<p><input id="email" type="email" placeholder="you@example.com" required style="width:100%"></p>
+<p><input id="password" type="password" placeholder="Password (12+ characters)" required minlength="12" style="width:100%"></p>
+<p><button type="submit">Sign in</button> <span id="msg"></span></p>
+</form>
+<script>
+const post = (path, body) => fetch(path, {method: "POST", headers: {"Content-Type": "application/json"}, credentials: "same-origin", body: JSON.stringify(body)});
+document.getElementById("f").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const body = {email: email.value, password: password.value};
+  await post("/auth/email-password/signup", body);
+  const r = await post("/auth/email-password/signin", body);
+  if (!r.ok) { msg.textContent = "Sign in failed"; return; }
+  const next = new URLSearchParams(location.search).get("next") || "/";
+  location.href = next.startsWith("/") && !next.startsWith("//") ? next : "/";
+});
+</script>
+</body></html>

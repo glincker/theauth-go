@@ -59,6 +59,10 @@ type ASMetadata struct {
 	BackchannelAuthenticationEndpoint      string   `json:"backchannel_authentication_endpoint,omitempty"`
 	BackchannelTokenDeliveryModesSupported []string `json:"backchannel_token_delivery_modes_supported,omitempty"`
 	BackchannelUserCodeParameterSupported  bool     `json:"backchannel_user_code_parameter_supported,omitempty"`
+
+	// DeviceAuthorizationEndpoint (RFC 8628 section 4). Omitted when the
+	// device grant is disabled.
+	DeviceAuthorizationEndpoint string `json:"device_authorization_endpoint,omitempty"`
 }
 
 // ASMetadataDoc builds the metadata document. The result is
@@ -154,6 +158,11 @@ func (s *Service) ASMetadataDoc() (ASMetadata, error) {
 		}
 	}
 
+	// Advertise the RFC 8628 device grant when enabled.
+	if s.IsDeviceEnabled() {
+		meta.DeviceAuthorizationEndpoint = s.Cfg.Issuer + "/oauth/device_authorization"
+	}
+
 	return meta, nil
 }
 
@@ -180,6 +189,9 @@ func (s *Service) grantTypesAdvertised() []string {
 		if _, ok := s.Storage.(CIBAStorage); ok {
 			out = append(out, models.GrantTypeCIBA)
 		}
+	}
+	if s.IsDeviceEnabled() {
+		out = append(out, models.GrantTypeDeviceCode)
 	}
 	return out
 }

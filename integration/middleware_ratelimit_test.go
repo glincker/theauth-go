@@ -2,6 +2,7 @@ package integration
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -15,6 +16,7 @@ import (
 
 	"github.com/glincker/theauth-go/v2"
 	"github.com/glincker/theauth-go/v2/integration/internal/testutil"
+	"github.com/glincker/theauth-go/v2/kv"
 	"github.com/glincker/theauth-go/v2/storage/memory"
 )
 
@@ -415,4 +417,70 @@ func TestRateLimitConcurrentReaders(t *testing.T) {
 		}(i)
 	}
 	wg.Wait()
+}
+
+// TestRateLimitWithSharedStore covers Config.Stores.RateLimiter: two instances
+// (replicas) sharing one limiter share one per-IP budget, separate middleware
+// instances keep separate budgets, and a failing backend fails open.
+func TestRateLimitWithSharedStore(t *testing.T) {
+	newAuth := func(t *testing.T, stores kv.Stores) *theauth.TheAuth {
+		t.Helper()
+		a, err := theauth.New(theauth.Config{Storage: memory.New(), BaseURL: "http://localhost", Stores: stores, SuppressTrustedProxiesWarning: true})
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(a.Close)
+		return a
+	}
+	ok := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK) })
+	hit := func(h http.Handler, remote string) int {
+		req := httptest.NewRequest("POST", "/", nil)
+		req.RemoteAddr = remote
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, req)
+		return w.Code
+	}
+
+	t.Run("replicas share the budget", func(t *testing.T) {
+		shared := kv.NewMemory().Stores()
+		a, b := newAuth(t, shared), newAuth(t, shared)
+		ha, hb := a.RateLimitByIP(2)(ok), b.RateLimitByIP(2)(ok)
+		got := []int{hit(ha, "203.0.113.5:1"), hit(hb, "203.0.113.5:2"), hit(ha, "203.0.113.5:3"), hit(hb, "203.0.113.5:4")}
+		want := []int{200, 200, 429, 429}
+		for i := range want {
+			if got[i] != want[i] {
+				t.Fatalf("sequence %v, want %v", got, want)
+			}
+		}
+		if hit(ha, "203.0.113.6:1") != 200 {
+			t.Fatal("another IP has its own budget")
+		}
+	})
+
+	t.Run("separate middleware instances do not share a bucket", func(t *testing.T) {
+		a := newAuth(t, kv.NewMemory().Stores())
+		signin, signup := a.RateLimitByIP(1)(ok), a.RateLimitByIP(1)(ok)
+		if hit(signin, "203.0.113.5:1") != 200 || hit(signup, "203.0.113.5:1") != 200 {
+			t.Fatal("each route group should have its own budget")
+		}
+		if hit(signin, "203.0.113.5:1") != 429 {
+			t.Fatal("second hit on the same route group should be limited")
+		}
+	})
+
+	t.Run("a failing backend fails open", func(t *testing.T) {
+		a := newAuth(t, kv.Stores{RateLimiter: brokenLimiter{}})
+		h := a.RateLimitByIP(1)(ok)
+		for i := 0; i < 3; i++ {
+			if hit(h, "203.0.113.5:1") != 200 {
+				t.Fatal("limiter outage must not block sign-in")
+			}
+		}
+	})
+}
+
+type brokenLimiter struct{}
+
+func (brokenLimiter) Allow(context.Context, string, int, time.Duration) (kv.Decision, error) {
+	return kv.Decision{}, fmt.Errorf("backend down")
 }

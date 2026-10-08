@@ -169,6 +169,36 @@ type CIBAStorage interface {
 	TouchBackchannelPoll(ctx context.Context, authReqID string, now time.Time, newInterval int) (BackchannelRequest, error)
 }
 
+// ---------- RFC 8628 device grant and registration tokens ----------
+
+// DeviceAuthorizationStorage is the optional persistence extension for the
+// OAuth device grant (Config.AuthorizationServer.DeviceAuthorization). Lookups
+// return ErrStorageNotFound on a miss. Decide and Consume are conditional
+// updates that report whether they applied. Memory, Postgres and MySQL
+// implement it; run storagetest.RunDeviceAuthorizations against a custom one.
+type DeviceAuthorizationStorage interface {
+	InsertDeviceAuthorization(ctx context.Context, d DeviceAuthorization) error
+	DeviceAuthorizationByDeviceCodeHash(ctx context.Context, hash []byte) (*DeviceAuthorization, error)
+	DeviceAuthorizationByUserCodeHash(ctx context.Context, hash []byte) (*DeviceAuthorization, error)
+	DecideDeviceAuthorization(ctx context.Context, id ULID, status string, userID ULID, now time.Time) (bool, error)
+	RecordDeviceAuthorizationPoll(ctx context.Context, id ULID, polledAt time.Time, intervalSeconds int) error
+	ConsumeDeviceAuthorization(ctx context.Context, id ULID, now time.Time) (bool, error)
+	DeleteExpiredDeviceAuthorizations(ctx context.Context, before time.Time) (int64, error)
+}
+
+// RegistrationTokenStorage is the optional persistence extension for initial
+// access tokens (admin API plus POST /oauth/register). Run
+// storagetest.RunRegistrationTokens against a custom implementation.
+type RegistrationTokenStorage interface {
+	InsertRegistrationToken(ctx context.Context, t RegistrationToken) error
+	RegistrationTokenByHash(ctx context.Context, hash []byte) (*RegistrationToken, error)
+	RegistrationTokenByID(ctx context.Context, id ULID) (*RegistrationToken, error)
+	ListRegistrationTokens(ctx context.Context, orgID *ULID) ([]RegistrationToken, error)
+	RevokeRegistrationToken(ctx context.Context, id ULID, at time.Time) (bool, error)
+	RedeemRegistrationToken(ctx context.Context, id ULID, now time.Time) (bool, error)
+	RefundRegistrationToken(ctx context.Context, id ULID) error
+}
+
 // UserStorage covers user records and email verification.
 type UserStorage interface {
 	CreateUser(ctx context.Context, u User) (User, error)

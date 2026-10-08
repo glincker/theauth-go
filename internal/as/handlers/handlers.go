@@ -41,6 +41,7 @@ type Handler struct {
 	svc          *internalas.Service
 	userFromCtx  func(r *http.Request) (*models.User, bool)
 	bearerHashes [][32]byte
+	clientIP     func(r *http.Request) string
 }
 
 // New constructs a Handler. The userFromCtx shim pulls the
@@ -63,9 +64,9 @@ func (h *Handler) Mount(r chi.Router, authn func(http.Handler) http.Handler, reg
 	r.Get("/.well-known/oauth-protected-resource/*", h.handleProtectedResourceMetadata)
 	r.Get("/oauth/jwks", h.handleJWKS)
 	r.With(authn).Get("/oauth/authorize", h.handleAuthorize)
-	r.Post("/oauth/token", h.handleToken)
-	r.Post("/oauth/revoke", h.handleRevoke)
-	r.Post("/oauth/introspect", h.handleIntrospect)
+	r.With(h.limited).Post("/oauth/token", h.handleToken)
+	r.With(h.limited).Post("/oauth/revoke", h.handleRevoke)
+	r.With(h.limited).Post("/oauth/introspect", h.handleIntrospect)
 	if registerLimit != nil {
 		r.With(registerLimit).Post("/oauth/register", h.handleRegister)
 	} else {
@@ -76,11 +77,15 @@ func (h *Handler) Mount(r chi.Router, authn func(http.Handler) http.Handler, reg
 	// handler keeps the router clean: unknown routes get a 405 rather than a
 	// runtime error body.
 	if h.svc.IsPAREnabled() {
-		r.Post("/oauth/par", h.handlePAR)
+		r.With(h.limited).Post("/oauth/par", h.handlePAR)
 	}
 	// CIBA: only mount when CIBA is configured and storage supports it.
 	if h.svc.IsCIBAEnabled() {
-		r.Post("/oauth/bc-authorize", h.handleBCAuthorize)
+		r.With(h.limited).Post("/oauth/bc-authorize", h.handleBCAuthorize)
+	}
+	// RFC 8628 device grant: start endpoint plus the user-code page.
+	if h.svc.IsDeviceEnabled() {
+		h.mountDevice(r, authn)
 	}
 }
 
@@ -292,6 +297,10 @@ func (h *Handler) handlePAR(w http.ResponseWriter, r *http.Request) {
 
 	resp, err := h.svc.PushAuthorize(r.Context(), req)
 	if err != nil {
+		if isBusy(err) {
+			writeBusy(w)
+			return
+		}
 		code := mapOAuthErrorCode(err)
 		status := http.StatusBadRequest
 		if code == oauthErrInvalidClient {
@@ -462,6 +471,26 @@ func (h *Handler) handleToken(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		writeTokenJSON(w, resp)
+	case models.GrantTypeDeviceCode:
+		req := internalas.DeviceTokenRequest{
+			TokenRequest: internalas.TokenRequest{
+				GrantType:           grantType,
+				ClientID:            clientID,
+				ClientSecret:        clientSecret,
+				DPoPProof:           dpopHeader,
+				HTTPMethod:          r.Method,
+				HTTPURL:             httpURL,
+				ClientAssertionType: clientAssertionType,
+				ClientAssertion:     clientAssertion,
+			},
+			DeviceCode: r.PostFormValue("device_code"),
+		}
+		resp, err := h.svc.PollDeviceToken(r.Context(), req)
+		if err != nil {
+			h.writeDeviceTokenError(w, err)
+			return
+		}
+		writeTokenJSON(w, resp)
 	default:
 		writeOAuthError(w, http.StatusBadRequest, oauthErrUnsupportedGrantType, "grant_type not supported")
 	}
@@ -497,6 +526,10 @@ func writeTokenJSON(w http.ResponseWriter, resp internalas.TokenResponse) {
 }
 
 func writeTokenError(w http.ResponseWriter, err error) {
+	if isBusy(err) {
+		writeBusy(w)
+		return
+	}
 	code := mapOAuthErrorCode(err)
 	status := http.StatusBadRequest
 	if code == oauthErrInvalidClient {
@@ -516,6 +549,10 @@ func (h *Handler) handleRevoke(w http.ResponseWriter, r *http.Request) {
 	token := r.PostFormValue("token")
 	hint := r.PostFormValue("token_type_hint")
 	if err := h.svc.RevokeToken(r.Context(), token, hint, clientID, clientSecret); err != nil {
+		if isBusy(err) {
+			writeBusy(w)
+			return
+		}
 		if errors.Is(err, models.ErrOAuthInvalidClient) {
 			writeOAuthError(w, http.StatusUnauthorized, oauthErrInvalidClient, "client authentication failed")
 			return
@@ -538,6 +575,10 @@ func (h *Handler) handleIntrospect(w http.ResponseWriter, r *http.Request) {
 	aud := r.PostFormValue("resource")
 	_, body, err := h.svc.IntrospectToken(r.Context(), token, clientID, clientSecret, aud)
 	if err != nil {
+		if isBusy(err) {
+			writeBusy(w)
+			return
+		}
 		if errors.Is(err, models.ErrOAuthInvalidClient) {
 			writeOAuthError(w, http.StatusUnauthorized, oauthErrInvalidClient, "client authentication failed")
 			return
@@ -561,6 +602,7 @@ func (h *Handler) handleRegister(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	anonymous := true
+	var spent *models.RegistrationToken
 	authz := strings.TrimSpace(r.Header.Get("Authorization"))
 	if authz != "" {
 		if !strings.HasPrefix(strings.ToLower(authz), "bearer ") {
@@ -569,12 +611,32 @@ func (h *Handler) handleRegister(w http.ResponseWriter, r *http.Request) {
 		}
 		rawToken := strings.TrimSpace(authz[len("bearer "):])
 		if !h.dcrBearerValid(rawToken) {
-			writeOAuthError(w, http.StatusUnauthorized, "access_denied", "invalid initial access token")
-			return
+			// Not one of the static operator tokens: try stored, scoped,
+			// single-use registration tokens.
+			t, terr := h.svc.RedeemRegistrationToken(r.Context(), rawToken, req)
+			switch {
+			case terr == nil:
+				spent = t
+			case errors.Is(terr, models.ErrRegistrationTokenScope):
+				writeOAuthError(w, http.StatusBadRequest, "invalid_client_metadata", "registration request exceeds the scope of the initial access token")
+				return
+			case errors.Is(terr, models.ErrRegistrationTokenInvalid):
+				writeOAuthError(w, http.StatusUnauthorized, "access_denied", "invalid initial access token")
+				return
+			default:
+				writeOAuthError(w, http.StatusInternalServerError, oauthErrServerError, "registration token check failed")
+				return
+			}
 		}
 		anonymous = false
 	}
 	resp, err := h.svc.RegisterClient(r.Context(), req, anonymous)
+	if err != nil && spent != nil {
+		h.svc.RefundRegistrationToken(r.Context(), spent.ID)
+	}
+	if err == nil && spent != nil {
+		h.svc.RegistrationSucceeded(r.Context(), spent, resp.ClientID)
+	}
 	if err != nil {
 		if errors.Is(err, models.ErrOAuthRegistrationDenied) {
 			writeOAuthError(w, http.StatusUnauthorized, "access_denied", "anonymous registration not permitted")
