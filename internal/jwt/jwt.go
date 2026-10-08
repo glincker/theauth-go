@@ -150,7 +150,24 @@ type ResolveKey func(kid string) (ed25519.PublicKey, bool)
 //
 // The expectedAud parameter is optional: when non-empty, a mismatch returns
 // an error. Resource servers should always pass their configured identifier.
+//
+// The JOSE header typ MUST be "at+jwt" (RFC 9068); a missing typ is rejected
+// so other JWTs signed with the same key cannot be passed off as access
+// tokens. Use VerifyOpts with AllowMissingTyp for the tolerant mode.
 func Verify(token string, resolve ResolveKey, expectedAud string, now time.Time) (Claims, error) {
+	return VerifyOpts(token, resolve, expectedAud, now, VerifyOptions{})
+}
+
+// VerifyOptions tunes VerifyOpts.
+type VerifyOptions struct {
+	// AllowMissingTyp accepts tokens whose header has no typ (tolerant
+	// mode for tokens minted before typ was always set). A present but
+	// different typ is still rejected.
+	AllowMissingTyp bool
+}
+
+// VerifyOpts is Verify with explicit options.
+func VerifyOpts(token string, resolve ResolveKey, expectedAud string, now time.Time, opts VerifyOptions) (Claims, error) {
 	parts := strings.Split(token, ".")
 	if len(parts) != 3 {
 		return Claims{}, errors.New("jwt: token must have three segments")
@@ -165,6 +182,9 @@ func Verify(token string, resolve ResolveKey, expectedAud string, now time.Time)
 	}
 	if h.Alg != AlgEdDSA {
 		return Claims{}, fmt.Errorf("jwt: unsupported alg %q", h.Alg)
+	}
+	if h.Typ == "" && !opts.AllowMissingTyp {
+		return Claims{}, errors.New("jwt: header missing typ")
 	}
 	if h.Typ != "" && h.Typ != TypeAccessToken {
 		return Claims{}, fmt.Errorf("jwt: unsupported typ %q", h.Typ)

@@ -85,3 +85,20 @@ type Storage interface {
 type JWKSAtomicRotator interface {
 	AtomicRotateJWKS(ctx context.Context, retireKIDs []string, demoteKID, promoteKID string, freshKey models.JWKSKey, now time.Time) error
 }
+
+// AuthCodeReplayStorage is an optional capability. When the backend
+// implements it, replaying an already-redeemed authorization code revokes
+// every token family first issued from that code (RFC 6749 section 4.1.2).
+// codeHash is the value from codeStorageKey. The returned slice holds the
+// access-token jtis of the refresh tokens that were revoked.
+type AuthCodeReplayStorage interface {
+	RevokeRefreshTokensByAuthCode(ctx context.Context, codeHash, reason string) ([]string, error)
+}
+
+// AccessTokenDenylistStorage is an optional capability backing opt-in
+// access-token revocation (Config.AccessTokenRevocation). Entries expire
+// at the token's own exp, so the store only holds live revocations.
+type AccessTokenDenylistStorage interface {
+	DenyAccessToken(ctx context.Context, jti string, expiresAt time.Time) error
+	IsAccessTokenDenied(ctx context.Context, jti string) (bool, error)
+}

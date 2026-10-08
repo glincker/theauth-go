@@ -6,9 +6,11 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -36,6 +38,7 @@ func TestWebhookSinkHMAC(t *testing.T) {
 
 	type capturedReq struct {
 		sigHeader string
+		tsHeader  string
 		body      []byte
 	}
 	var captured []capturedReq
@@ -44,6 +47,7 @@ func TestWebhookSinkHMAC(t *testing.T) {
 		body, _ := io.ReadAll(r.Body)
 		captured = append(captured, capturedReq{
 			sigHeader: r.Header.Get("X-CloudEvents-Signature"),
+			tsHeader:  r.Header.Get("X-CloudEvents-Timestamp"),
 			body:      body,
 		})
 		w.WriteHeader(http.StatusOK)
@@ -65,23 +69,56 @@ func TestWebhookSinkHMAC(t *testing.T) {
 	}
 
 	for i, req := range captured {
-		sig := req.sigHeader
-		if !strings.HasPrefix(sig, "sha256=") {
-			t.Errorf("req %d: signature header = %q, want prefix sha256=", i, sig)
+		if !strings.HasPrefix(req.sigHeader, "sha256=") {
+			t.Errorf("req %d: signature header = %q, want prefix sha256=", i, req.sigHeader)
 			continue
 		}
-		gotHex := strings.TrimPrefix(sig, "sha256=")
-		gotBytes, err := hex.DecodeString(gotHex)
-		if err != nil {
-			t.Errorf("req %d: bad hex in signature: %v", i, err)
-			continue
+		if err := webhook.Verify(secret, req.body, req.sigHeader, req.tsHeader, 0, time.Now()); err != nil {
+			t.Errorf("req %d: Verify: %v", i, err)
 		}
-		mac := hmac.New(sha256.New, secret)
-		mac.Write(req.body)
-		wantBytes := mac.Sum(nil)
-		if !hmac.Equal(gotBytes, wantBytes) {
-			t.Errorf("req %d: HMAC mismatch: got %x, want %x", i, gotBytes, wantBytes)
-		}
+	}
+}
+
+func TestVerify(t *testing.T) {
+	t.Parallel()
+	secret := []byte("k")
+	body := []byte(`{"a":1}`)
+	now := time.Unix(1_800_000_000, 0)
+	signAt := func(ts int64, sec, b []byte) (string, string) {
+		tss := strconv.FormatInt(ts, 10)
+		mac := hmac.New(sha256.New, sec)
+		mac.Write([]byte(tss + "."))
+		mac.Write(b)
+		return "sha256=" + hex.EncodeToString(mac.Sum(nil)), tss
+	}
+	fresh, freshTS := signAt(now.Unix(), secret, body)
+	old, oldTS := signAt(now.Add(-10*time.Minute).Unix(), secret, body)
+	future, futureTS := signAt(now.Add(10*time.Minute).Unix(), secret, body)
+	other, otherTS := signAt(now.Unix(), []byte("x"), body)
+	bodyOnly := hmac.New(sha256.New, secret)
+	bodyOnly.Write(body)
+	tests := []struct {
+		name      string
+		body      []byte
+		sig, ts   string
+		wantErrIs error
+	}{
+		{"fresh ok", body, fresh, freshTS, nil},
+		{"stale rejected", body, old, oldTS, webhook.ErrTimestampStale},
+		{"future rejected", body, future, futureTS, webhook.ErrTimestampStale},
+		{"wrong secret", body, other, otherTS, webhook.ErrSignatureMismatch},
+		{"tampered body", []byte(`{"a":2}`), fresh, freshTS, webhook.ErrSignatureMismatch},
+		{"timestamp swapped", body, fresh, oldTS, webhook.ErrSignatureMismatch},
+		{"legacy body-only mac", body, "sha256=" + hex.EncodeToString(bodyOnly.Sum(nil)), freshTS, webhook.ErrSignatureMismatch},
+		{"missing headers", body, "", "", webhook.ErrSignatureMissing},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			err := webhook.Verify(secret, tc.body, tc.sig, tc.ts, 0, now)
+			if !errors.Is(err, tc.wantErrIs) {
+				t.Fatalf("got %v want %v", err, tc.wantErrIs)
+			}
+		})
 	}
 }
 

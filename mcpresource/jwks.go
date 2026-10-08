@@ -27,6 +27,12 @@ type jwksCache struct {
 
 	minRefreshInterval time.Duration
 
+	// maxStale caps how long cached keys are served after a failed refresh.
+	// Zero means 1 hour.
+	maxStale time.Duration
+	// now is the clock; nil means time.Now.
+	now func() time.Time
+
 	mu          sync.RWMutex
 	keys        map[string]ed25519.PublicKey
 	lastFetched time.Time
@@ -54,7 +60,7 @@ func (c *jwksCache) PublicKey(kid string) (ed25519.PublicKey, error) {
 	}
 	c.mu.RLock()
 	pub, ok := c.keys[kid]
-	stale := time.Since(c.lastFetched) > c.ttl
+	stale := c.clock().Sub(c.lastFetched) > c.ttl
 	c.mu.RUnlock()
 	if ok && !stale {
 		return pub, nil
@@ -65,8 +71,9 @@ func (c *jwksCache) PublicKey(kid string) (ed25519.PublicKey, error) {
 		// fetch error so the middleware returns 401.
 		c.mu.RLock()
 		pub, ok := c.keys[kid]
+		age := c.clock().Sub(c.lastFetched)
 		c.mu.RUnlock()
-		if ok {
+		if ok && age <= c.staleLimit() {
 			return pub, nil
 		}
 		return nil, err
@@ -80,11 +87,25 @@ func (c *jwksCache) PublicKey(kid string) (ed25519.PublicKey, error) {
 	return pub, nil
 }
 
+func (c *jwksCache) clock() time.Time {
+	if c.now != nil {
+		return c.now()
+	}
+	return time.Now()
+}
+
+func (c *jwksCache) staleLimit() time.Duration {
+	if c.maxStale > 0 {
+		return c.maxStale
+	}
+	return time.Hour
+}
+
 // refresh pulls the JWKS document and rebuilds the cache. Throttled by
 // minRefreshInterval so a flood of unknown-kid tokens cannot DoS the AS.
 func (c *jwksCache) refresh() error {
 	c.mu.Lock()
-	if time.Since(c.lastFetched) < c.minRefreshInterval && len(c.keys) > 0 {
+	if c.clock().Sub(c.lastFetched) < c.minRefreshInterval && len(c.keys) > 0 {
 		c.mu.Unlock()
 		return nil
 	}
@@ -132,7 +153,7 @@ func (c *jwksCache) refresh() error {
 	}
 	c.mu.Lock()
 	c.keys = fresh
-	c.lastFetched = time.Now()
+	c.lastFetched = c.clock()
 	c.mu.Unlock()
 	return nil
 }

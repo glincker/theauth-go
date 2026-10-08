@@ -63,7 +63,7 @@ func (v *Validator) Middleware(next http.Handler) http.Handler {
 //  5. Build the Principal and return.
 func (v *Validator) authenticate(r *http.Request, token, scheme string) (*Principal, error) {
 	now := time.Now()
-	claims, err := verifyJWT(token, v.resourceURI, v.jwks.PublicKey, now, v.clockSkew)
+	claims, err := verifyJWT(token, v.resourceURI, v.jwks.PublicKey, now, v.clockSkew, v.allowMissingTyp)
 	if err != nil {
 		return nil, err
 	}

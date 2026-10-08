@@ -157,16 +157,17 @@ func canonicalURL(raw string) string {
 	return u.String()
 }
 
-// validateRedirectURI enforces the same OAuth 2.1 redirect URI rules the
-// DCR path applies. Kept local to avoid a cross-package dependency on
-// internal/as.
-func validateRedirectURI(raw string) error {
+// ValidateRedirectURI applies the redirect URI allowlist shared with the
+// DCR path: https, loopback http (any port, RFC 8252 section 7.3), or a
+// reverse-DNS private-use scheme (RFC 8252 section 7.1). javascript:, data:,
+// file: and dotless custom schemes are refused. No fragment, no userinfo.
+func ValidateRedirectURI(raw string) error {
 	if raw == "" {
 		return errors.New("empty redirect_uri")
 	}
 	u, err := url.Parse(raw)
 	if err != nil {
-		return fmt.Errorf("redirect_uri parse failed: %v", err)
+		return errors.New("redirect_uri is not a valid URI")
 	}
 	if u.Scheme == "" {
 		return errors.New("redirect_uri must be absolute")
@@ -174,11 +175,40 @@ func validateRedirectURI(raw string) error {
 	if u.Fragment != "" {
 		return errors.New("redirect_uri must not contain a fragment")
 	}
-	if u.Scheme == "http" {
-		host := strings.ToLower(u.Hostname())
-		if host != "localhost" && host != "127.0.0.1" && host != "::1" {
-			return errors.New("http redirect_uri is only allowed for localhost")
+	if u.User != nil {
+		return errors.New("redirect_uri must not contain userinfo")
+	}
+	scheme := strings.ToLower(u.Scheme)
+	switch scheme {
+	case "https":
+		if u.Hostname() == "" {
+			return errors.New("https redirect_uri requires a host")
+		}
+		return nil
+	case "http":
+		switch strings.ToLower(u.Hostname()) {
+		case "localhost", "127.0.0.1", "::1":
+			return nil
+		}
+		return errors.New("http redirect_uri is only allowed for loopback hosts")
+	case "javascript", "data", "file", "vbscript", "blob", "about", "ftp":
+		return errors.New("redirect_uri scheme is not allowed")
+	}
+	labels := strings.Split(scheme, ".")
+	if len(labels) < 2 {
+		return errors.New("native redirect_uri scheme must be reverse-DNS")
+	}
+	for _, l := range labels {
+		if l == "" {
+			return errors.New("native redirect_uri scheme must be reverse-DNS")
+		}
+		for _, r := range l {
+			if !(r >= 'a' && r <= 'z' || r >= '0' && r <= '9' || r == '-') {
+				return errors.New("native redirect_uri scheme must be reverse-DNS")
+			}
 		}
 	}
 	return nil
 }
+
+func validateRedirectURI(raw string) error { return ValidateRedirectURI(raw) }

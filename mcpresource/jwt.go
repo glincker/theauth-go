@@ -50,7 +50,7 @@ type jwtHeader struct {
 // verifyJWT performs the EdDSA signature check plus structural validation:
 // segment count, alg, kid, expiry, nbf, iat, audience. Returns the parsed
 // claims on success.
-func verifyJWT(token, expectedAud string, resolve func(kid string) (ed25519.PublicKey, error), now time.Time, skew time.Duration) (*claims, error) {
+func verifyJWT(token, expectedAud string, resolve func(kid string) (ed25519.PublicKey, error), now time.Time, skew time.Duration, allowMissingTyp bool) (*claims, error) {
 	parts := strings.Split(token, ".")
 	if len(parts) != 3 {
 		return nil, errors.New("mcpresource: token must have three segments")
@@ -65,6 +65,13 @@ func verifyJWT(token, expectedAud string, resolve func(kid string) (ed25519.Publ
 	}
 	if h.Alg != "EdDSA" {
 		return nil, fmt.Errorf("mcpresource: unsupported alg %q", h.Alg)
+	}
+	// RFC 9068 section 4: access token JWTs carry typ "at+jwt". Requiring it
+	// stops other JWTs signed by the same keys (ID tokens, assertions) from
+	// being replayed as access tokens. WithAllowMissingTyp relaxes only the
+	// absent case for authorization servers that do not set typ.
+	if h.Typ == "" && !allowMissingTyp {
+		return nil, errors.New("mcpresource: token header missing typ at+jwt")
 	}
 	if h.Typ != "" && h.Typ != "at+jwt" {
 		return nil, fmt.Errorf("mcpresource: unsupported typ %q", h.Typ)

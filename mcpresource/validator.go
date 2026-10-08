@@ -26,6 +26,12 @@ type Validator struct {
 
 	clockSkew time.Duration
 
+	// allowMissingTyp tolerates access tokens whose JOSE header has no typ.
+	allowMissingTyp bool
+	// jwksMaxStale bounds how long cached keys may be served after refresh
+	// failures.
+	jwksMaxStale time.Duration
+
 	jwks       *jwksCache
 	introspect *introspectCache
 
@@ -87,6 +93,26 @@ func WithHTTPClient(c *http.Client) Option {
 	}
 }
 
+// WithAllowMissingTyp accepts access tokens whose header omits typ. By
+// default the validator requires typ "at+jwt" (RFC 9068). Enable this only
+// for an authorization server that cannot set it; a wrong typ is rejected
+// either way.
+func WithAllowMissingTyp() Option {
+	return func(v *Validator) { v.allowMissingTyp = true }
+}
+
+// WithJWKSMaxStale bounds how long previously fetched signing keys keep
+// being served when the JWKS endpoint is unreachable. Past the bound,
+// validation fails closed instead of trusting keys the AS may have
+// rotated out. Default 1 hour.
+func WithJWKSMaxStale(d time.Duration) Option {
+	return func(v *Validator) {
+		if d > 0 {
+			v.jwksMaxStale = d
+		}
+	}
+}
+
 // WithClockSkew overrides the default 60 second skew tolerance applied to
 // exp, nbf, and iat checks.
 func WithClockSkew(d time.Duration) Option {
@@ -122,9 +148,10 @@ func WithDPoPVerification(allowedSignAlgs []string, proofMaxAge time.Duration, j
 // validated lazily: a missing JWKS URL surfaces only on the first request.
 func New(resourceURI string, opts ...Option) *Validator {
 	v := &Validator{
-		resourceURI: resourceURI,
-		cacheTTL:    60 * time.Second,
-		clockSkew:   60 * time.Second,
+		resourceURI:  resourceURI,
+		cacheTTL:     60 * time.Second,
+		clockSkew:    60 * time.Second,
+		jwksMaxStale: time.Hour,
 		httpClient: &http.Client{
 			Timeout: 10 * time.Second,
 		},
@@ -133,6 +160,7 @@ func New(resourceURI string, opts ...Option) *Validator {
 		opt(v)
 	}
 	v.jwks = newJWKSCache(v.jwksURI, v.httpClient, v.cacheTTL)
+	v.jwks.maxStale = v.jwksMaxStale
 	v.introspect = newIntrospectCache(v.introspectURI, v.introspectClient, v.introspectSecret, v.httpClient, v.cacheTTL)
 	if v.dpopEnabled {
 		v.dpop = newDPoPVerifier(v.dpopAllowAlgs, v.dpopMaxAge, v.clockSkew, v.dpopJTIWindow)

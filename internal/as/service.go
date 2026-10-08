@@ -292,6 +292,11 @@ func (s *Service) DPoP() *dpop.Service {
 // tokenEndpointURL returns the canonical token endpoint URL derived from
 // the configured issuer. Used as the expected aud value in client assertions
 // per RFC 7523 section 3.
+// TokenEndpointURL is the canonical absolute URL of the token endpoint,
+// derived from the configured issuer. It is the expected DPoP htu and the
+// client-assertion audience.
+func (s *Service) TokenEndpointURL() string { return s.tokenEndpointURL() }
+
 func (s *Service) tokenEndpointURL() string {
 	if s == nil {
 		return ""

@@ -13,16 +13,27 @@ import (
 // RFC 8414 section 2. Optional fields are omitted when empty so consumers
 // parsing the document with a strict library stay happy.
 type ASMetadata struct {
-	Issuer                            string   `json:"issuer"`
-	AuthorizationEndpoint             string   `json:"authorization_endpoint"`
-	TokenEndpoint                     string   `json:"token_endpoint"`
-	RegistrationEndpoint              string   `json:"registration_endpoint"`
-	IntrospectionEndpoint             string   `json:"introspection_endpoint"`
-	RevocationEndpoint                string   `json:"revocation_endpoint"`
-	JwksURI                           string   `json:"jwks_uri"`
-	ResponseTypesSupported            []string `json:"response_types_supported"`
-	GrantTypesSupported               []string `json:"grant_types_supported"`
-	TokenEndpointAuthMethodsSupported []string `json:"token_endpoint_auth_methods_supported"`
+	Issuer                string `json:"issuer"`
+	AuthorizationEndpoint string `json:"authorization_endpoint"`
+	TokenEndpoint         string `json:"token_endpoint"`
+	// RegistrationEndpoint (RFC 7591 Dynamic Client Registration) is
+	// legacy per MCP spec 2026-07-28 and is only advertised when the
+	// operator opted in via RegistrationTokens or AllowAnonymousRegistration.
+	RegistrationEndpoint string `json:"registration_endpoint,omitempty"`
+
+	// ClientIDMetadataDocumentSupported advertises CIMD support (MCP
+	// authorization spec, client registration).
+	ClientIDMetadataDocumentSupported bool `json:"client_id_metadata_document_supported,omitempty"`
+
+	// AuthorizationResponseIssParameterSupported advertises that
+	// authorization responses carry the RFC 9207 iss parameter.
+	AuthorizationResponseIssParameterSupported bool     `json:"authorization_response_iss_parameter_supported,omitempty"`
+	IntrospectionEndpoint                      string   `json:"introspection_endpoint"`
+	RevocationEndpoint                         string   `json:"revocation_endpoint"`
+	JwksURI                                    string   `json:"jwks_uri"`
+	ResponseTypesSupported                     []string `json:"response_types_supported"`
+	GrantTypesSupported                        []string `json:"grant_types_supported"`
+	TokenEndpointAuthMethodsSupported          []string `json:"token_endpoint_auth_methods_supported"`
 	// TokenEndpointAuthSigningAlgValuesSupported lists the JWS signing
 	// algorithms supported for private_key_jwt and client_secret_jwt
 	// client authentication. Omitted when JWT client auth is disabled.
@@ -110,7 +121,6 @@ func (s *Service) ASMetadataDoc() (ASMetadata, error) {
 		Issuer:                s.Cfg.Issuer,
 		AuthorizationEndpoint: s.Cfg.Issuer + "/oauth/authorize",
 		TokenEndpoint:         s.Cfg.Issuer + "/oauth/token",
-		RegistrationEndpoint:  s.Cfg.Issuer + "/oauth/register",
 		IntrospectionEndpoint: s.Cfg.Issuer + "/oauth/introspect",
 		RevocationEndpoint:    s.Cfg.Issuer + "/oauth/revoke",
 		JwksURI:               s.Cfg.Issuer + "/oauth/jwks",
@@ -127,6 +137,12 @@ func (s *Service) ASMetadataDoc() (ASMetadata, error) {
 		RequirePushedAuthorizationRequests:         requirePAR,
 		RequestParameterSupported:                  requestParamSupported,
 		RequestObjectSigningAlgValuesSupported:     jarAlgs,
+	}
+
+	meta.AuthorizationResponseIssParameterSupported = true
+	meta.ClientIDMetadataDocumentSupported = s.Cfg.CIMD != nil
+	if len(s.Cfg.RegistrationTokens) > 0 || s.Cfg.AllowAnonymousRegistration {
+		meta.RegistrationEndpoint = s.Cfg.Issuer + "/oauth/register"
 	}
 
 	// Advertise CIBA when enabled and the storage supports it.

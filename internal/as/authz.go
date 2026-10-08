@@ -116,7 +116,7 @@ func (s *Service) StartAuthorize(ctx context.Context, req AuthorizeRequest, user
 	}
 	now := time.Now()
 	if err := s.Storage.InsertAuthorizationCode(ctx, models.AuthorizationCode{
-		Code:                codeStr,
+		Code:                codeStorageKey(codeStr),
 		ClientID:            client.ClientID,
 		UserID:              user.ID,
 		RedirectURI:         req.RedirectURI,
@@ -130,7 +130,7 @@ func (s *Service) StartAuthorize(ctx context.Context, req AuthorizeRequest, user
 	}); err != nil {
 		return AuthorizeResult{}, err
 	}
-	redirectURL := buildAuthzRedirect(req.RedirectURI, codeStr, req.State)
+	redirectURL := buildAuthzRedirect(req.RedirectURI, codeStr, req.State, s.Cfg.Issuer)
 	return AuthorizeResult{RedirectURL: redirectURL}, nil
 }
 
@@ -161,7 +161,7 @@ func redirectURIRegistered(registered []string, uri string) bool {
 
 // buildAuthzRedirect appends ?code=...&state=... to the supplied redirect
 // URI, preserving any pre-existing query parameters.
-func buildAuthzRedirect(redirectURI, code, state string) string {
+func buildAuthzRedirect(redirectURI, code, state, issuer string) string {
 	u, err := url.Parse(redirectURI)
 	if err != nil {
 		// fallback: plain concat (the registered URI was already
@@ -172,6 +172,10 @@ func buildAuthzRedirect(redirectURI, code, state string) string {
 	q.Set("code", code)
 	if state != "" {
 		q.Set("state", state)
+	}
+	if issuer != "" {
+		// RFC 9207 mix-up defence; advertised in AS metadata.
+		q.Set("iss", issuer)
 	}
 	u.RawQuery = q.Encode()
 	return u.String()

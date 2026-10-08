@@ -238,8 +238,8 @@ func (s *Store) InsertRefreshToken(ctx context.Context, t theauth.RefreshToken) 
 	const q = `
 INSERT INTO oauth_refresh_tokens (
   id, hash, family_id, client_id, user_id, agent_id, scope, resource,
-  parent_jti, issued_at, expires_at
-) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`
+  parent_jti, issued_at, expires_at, dpop_jkt, auth_code_hash
+) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`
 	_, err := s.pool.Exec(ctx, q,
 		ulidToPgUUID(t.ID),
 		t.Hash,
@@ -252,6 +252,8 @@ INSERT INTO oauth_refresh_tokens (
 		t.ParentJTI,
 		timeToTs(t.IssuedAt),
 		timeToTs(t.ExpiresAt),
+		t.DPoPJKT,
+		t.AuthCodeHash,
 	)
 	return err
 }
@@ -259,7 +261,8 @@ INSERT INTO oauth_refresh_tokens (
 func (s *Store) RefreshTokenByHash(ctx context.Context, hash []byte) (*theauth.RefreshToken, error) {
 	const q = `
 SELECT id, hash, family_id, client_id, user_id, agent_id, scope, resource,
-       parent_jti, issued_at, expires_at, revoked_at, revocation_note
+       parent_jti, issued_at, expires_at, revoked_at, revocation_note,
+       dpop_jkt, auth_code_hash
 FROM oauth_refresh_tokens WHERE hash = $1`
 	row := s.pool.QueryRow(ctx, q, hash)
 	var (
@@ -268,12 +271,14 @@ FROM oauth_refresh_tokens WHERE hash = $1`
 		issued, expires           pgtype.Timestamptz
 		revoked                   pgtype.Timestamptz
 		parentJTI, resource, note string
+		dpopJKT, authCodeHash     string
 		hashOut                   []byte
 		scope                     []string
 		clientID                  string
 	)
 	err := row.Scan(&id, &hashOut, &familyID, &clientID, &userID, &agentID,
-		&scope, &resource, &parentJTI, &issued, &expires, &revoked, &note)
+		&scope, &resource, &parentJTI, &issued, &expires, &revoked, &note,
+		&dpopJKT, &authCodeHash)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, storage.ErrNotFound
@@ -294,6 +299,8 @@ FROM oauth_refresh_tokens WHERE hash = $1`
 		ExpiresAt:      tsToTime(expires),
 		RevokedAt:      tsToTimePtr(revoked),
 		RevocationNote: note,
+		DPoPJKT:        dpopJKT,
+		AuthCodeHash:   authCodeHash,
 	}
 	return &out, nil
 }
@@ -308,6 +315,56 @@ func (s *Store) RevokeRefreshToken(ctx context.Context, hash []byte, reason stri
 		return storage.ErrNotFound
 	}
 	return nil
+}
+
+// RevokeRefreshTokensByAuthCode revokes every live token in the rotation
+// families first issued from the code stored under codeHash and returns the
+// access-token jtis of the tokens it revoked.
+func (s *Store) RevokeRefreshTokensByAuthCode(ctx context.Context, codeHash, reason string) ([]string, error) {
+	if codeHash == "" {
+		return nil, nil
+	}
+	const q = `
+UPDATE oauth_refresh_tokens SET revoked_at = now(), revocation_note = $2
+WHERE revoked_at IS NULL AND family_id IN (
+    SELECT family_id FROM oauth_refresh_tokens WHERE auth_code_hash = $1
+)
+RETURNING parent_jti`
+	rows, err := s.pool.Query(ctx, q, codeHash, reason)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var jtis []string
+	for rows.Next() {
+		var j string
+		if err := rows.Scan(&j); err != nil {
+			return nil, err
+		}
+		jtis = append(jtis, j)
+	}
+	return jtis, rows.Err()
+}
+
+// DenyAccessToken records jti as revoked until expiresAt (opt-in access
+// token revocation).
+func (s *Store) DenyAccessToken(ctx context.Context, jti string, expiresAt time.Time) error {
+	if _, err := s.pool.Exec(ctx, `
+INSERT INTO oauth_revoked_jtis (jti, expires_at) VALUES ($1, $2)
+ON CONFLICT (jti) DO UPDATE SET expires_at = EXCLUDED.expires_at`, jti, timeToTs(expiresAt)); err != nil {
+		return err
+	}
+	// Opportunistic purge keeps the table bounded by live revocations.
+	_, _ = s.pool.Exec(ctx, `DELETE FROM oauth_revoked_jtis WHERE expires_at < now()`)
+	return nil
+}
+
+// IsAccessTokenDenied reports whether jti is on the unexpired denylist.
+func (s *Store) IsAccessTokenDenied(ctx context.Context, jti string) (bool, error) {
+	var denied bool
+	err := s.pool.QueryRow(ctx,
+		`SELECT EXISTS (SELECT 1 FROM oauth_revoked_jtis WHERE jti = $1 AND expires_at > now())`, jti).Scan(&denied)
+	return denied, err
 }
 
 func (s *Store) RevokeRefreshTokenFamily(ctx context.Context, familyID theauth.ULID, reason string) error {

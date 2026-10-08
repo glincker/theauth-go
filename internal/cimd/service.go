@@ -28,10 +28,14 @@ const (
 	// before the next request triggers a re-fetch.
 	DefaultCacheTTL = 5 * time.Minute
 	// DefaultMaxDocumentBytes caps the size of a CIMD document body.
-	// 64 KiB is more than enough for every RFC 7591 metadata document
-	// observed in the wild and blocks resource exhaustion via giant
-	// responses.
-	DefaultMaxDocumentBytes int64 = 64 * 1024
+	// 5 KiB follows the draft-ietf-oauth-client-id-metadata-document
+	// recommendation; real documents are far smaller. Raise
+	// Config.MaxDocumentBytes if a legitimate client needs more.
+	DefaultMaxDocumentBytes int64 = 5 * 1024
+	// DefaultNegativeCacheTTL is how long a failed fetch is remembered so a
+	// hostile or broken client_id cannot make the AS refetch on every
+	// request.
+	DefaultNegativeCacheTTL = 30 * time.Second
 	// gcEvery is how often the cache GC sweep runs. 60s mirrors other
 	// in-tree GC loops (webauthn challenges, oauth state).
 	gcEvery = time.Minute
@@ -59,6 +63,11 @@ type Config struct {
 	// applies DefaultMaxDocumentBytes; negative disables the cap (not
 	// recommended on a public-internet bind).
 	MaxDocumentBytes int64
+
+	// NegativeCacheTTL is how long a failed fetch (transport error, bad
+	// status, oversize or invalid document) is cached. Zero applies
+	// DefaultNegativeCacheTTL; negative disables the negative cache.
+	NegativeCacheTTL time.Duration
 
 	// HTTPClient is the http.Client used for outbound fetches. Nil
 	// constructs a default SSRF-guarded client (no redirects, no proxy,
@@ -106,6 +115,11 @@ type Service struct {
 
 	cache sync.Map // map[string]*cacheEntry, keyed by canonical URL
 
+	// inflight collapses concurrent fetches of the same URL into one
+	// outbound request (single-flight).
+	inflightMu sync.Mutex
+	inflight   map[string]*flight
+
 	mu      sync.Mutex
 	started bool
 	stopped bool
@@ -118,6 +132,16 @@ type Service struct {
 type cacheEntry struct {
 	doc       Document
 	fetchedAt time.Time
+	// err, when non-nil, marks a negative entry: the fetch failed and the
+	// same error is replayed until NegativeCacheTTL elapses.
+	err error
+}
+
+// flight is one in-progress fetch shared by every concurrent caller.
+type flight struct {
+	done chan struct{}
+	doc  Document
+	err  error
 }
 
 // NewService constructs an inert Service. The Service is safe to call
@@ -137,6 +161,9 @@ func NewService(cfg Config, emitter audit.Emitter) *Service {
 	if cfg.CacheTTL <= 0 {
 		cfg.CacheTTL = DefaultCacheTTL
 	}
+	if cfg.NegativeCacheTTL == 0 {
+		cfg.NegativeCacheTTL = DefaultNegativeCacheTTL
+	}
 	if cfg.MaxDocumentBytes == 0 {
 		cfg.MaxDocumentBytes = DefaultMaxDocumentBytes
 	}
@@ -148,9 +175,10 @@ func NewService(cfg Config, emitter audit.Emitter) *Service {
 		emitter = audit.NoopEmitter{}
 	}
 	return &Service{
-		cfg:     cfg,
-		client:  client,
-		emitter: emitter,
+		cfg:      cfg,
+		client:   client,
+		emitter:  emitter,
+		inflight: map[string]*flight{},
 	}
 }
 
@@ -214,7 +242,7 @@ func (s *Service) gcLoop(stop chan struct{}, done chan struct{}) {
 		case now := <-t.C:
 			s.cache.Range(func(k, v any) bool {
 				if entry, ok := v.(*cacheEntry); ok {
-					if now.Sub(entry.fetchedAt) >= s.cfg.CacheTTL {
+					if now.Sub(entry.fetchedAt) >= s.entryTTL(entry) {
 						s.cache.Delete(k)
 					}
 				}
@@ -256,8 +284,18 @@ func LooksLikeCIMD(clientID string) bool {
 	if u.Scheme != "https" {
 		return false
 	}
-	if u.Host == "" {
+	if u.Host == "" || u.User != nil || u.Fragment != "" {
 		return false
+	}
+	// MCP spec: the client_id URL MUST contain a path component, and the
+	// draft forbids dot segments.
+	if u.Path == "" || u.Path == "/" {
+		return false
+	}
+	for _, seg := range strings.Split(u.Path, "/") {
+		if seg == "." || seg == ".." {
+			return false
+		}
 	}
 	return true
 }
@@ -308,10 +346,12 @@ func (s *Service) Resolve(ctx context.Context, rawURL string) (*models.OAuthClie
 		}
 	}
 	key := cacheKey(rawURL)
-	now := time.Now()
 	if cached, ok := s.cache.Load(key); ok {
 		if entry, ok := cached.(*cacheEntry); ok {
-			if now.Sub(entry.fetchedAt) < s.cfg.CacheTTL {
+			if time.Since(entry.fetchedAt) < s.entryTTL(entry) {
+				if entry.err != nil {
+					return nil, entry.err
+				}
 				return synthesizeClient(entry.doc), nil
 			}
 		}
@@ -320,12 +360,11 @@ func (s *Service) Resolve(ctx context.Context, rawURL string) (*models.OAuthClie
 		s.cache.Store(key, &cacheEntry{doc: doc, fetchedAt: now})
 		return synthesizeClient(doc), nil
 	}
-	doc, err := s.fetch(ctx, rawURL)
+	doc, err := s.fetchOnce(ctx, key, rawURL)
 	if err != nil {
 		// Already audited inside fetch; no double-emit here.
 		return nil, err
 	}
-	s.cache.Store(key, &cacheEntry{doc: doc, fetchedAt: now})
 	s.sharedStore(ctx, key, doc)
 	s.emitter.EmitAudit(ctx, AuditFetched,
 		models.TargetRef{Type: "cimd", ID: rawURL},
@@ -336,6 +375,47 @@ func (s *Service) Resolve(ctx context.Context, rawURL string) (*models.OAuthClie
 			"grant_types":   doc.GrantTypes,
 		})
 	return synthesizeClient(doc), nil
+}
+
+// entryTTL returns the freshness window for a cache entry.
+func (s *Service) entryTTL(e *cacheEntry) time.Duration {
+	if e.err != nil {
+		return s.cfg.NegativeCacheTTL
+	}
+	return s.cfg.CacheTTL
+}
+
+// fetchOnce runs fetch at most once per URL at a time. Followers wait for
+// the leader and share its result. The leader fetches with a context that
+// is detached from any single caller's cancellation (but keeps the fetch
+// timeout via the client) so one impatient caller cannot fail the rest.
+// Successes land in the positive cache; fetch failures in the negative one.
+func (s *Service) fetchOnce(ctx context.Context, key, rawURL string) (Document, error) {
+	s.inflightMu.Lock()
+	if f, ok := s.inflight[key]; ok {
+		s.inflightMu.Unlock()
+		select {
+		case <-f.done:
+			return f.doc, f.err
+		case <-ctx.Done():
+			return Document{}, fmt.Errorf("%w: %v", ErrFetchFailed, ctx.Err())
+		}
+	}
+	f := &flight{done: make(chan struct{})}
+	s.inflight[key] = f
+	s.inflightMu.Unlock()
+
+	f.doc, f.err = s.fetch(context.WithoutCancel(ctx), rawURL)
+	if f.err == nil {
+		s.cache.Store(key, &cacheEntry{doc: f.doc, fetchedAt: time.Now()})
+	} else if s.cfg.NegativeCacheTTL > 0 {
+		s.cache.Store(key, &cacheEntry{fetchedAt: time.Now(), err: f.err})
+	}
+	s.inflightMu.Lock()
+	delete(s.inflight, key)
+	s.inflightMu.Unlock()
+	close(f.done)
+	return f.doc, f.err
 }
 
 // fetch issues the HTTP request, enforces the body cap and content-type
