@@ -158,6 +158,7 @@ func dropTables(t *testing.T, ctx context.Context, db *sql.DB) {
 
 	tables := []string{
 		"theauth_schema_migrations",
+		"oauth_revoked_jtis",
 		"registration_tokens",
 		"device_authorizations",
 		"throttle_entries",

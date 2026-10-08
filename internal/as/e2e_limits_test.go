@@ -119,8 +119,10 @@ func TestASRateLimitHonorsTrustedProxiesFromTheRight(t *testing.T) {
 	}
 	// Two real clients behind the proxy get separate budgets.
 	for _, ip := range []string{"198.51.100.1", "198.51.100.2"} {
-		if send(ip) == 429 || send(ip) == 429 {
-			t.Fatalf("%s should have its own budget", ip)
+		for i := 0; i < 2; i++ {
+			if send(ip) == 429 {
+				t.Fatalf("%s should have its own budget", ip)
+			}
 		}
 	}
 	// A client rotating a forged leftmost entry stays in one bucket, because
