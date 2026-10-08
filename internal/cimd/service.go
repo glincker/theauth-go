@@ -13,6 +13,7 @@ import (
 
 	"github.com/glincker/theauth-go/v2/internal/audit"
 	"github.com/glincker/theauth-go/v2/internal/models"
+	"github.com/glincker/theauth-go/v2/kv"
 )
 
 // Default knobs applied when Config zero-values are passed in. The
@@ -70,6 +71,11 @@ type Config struct {
 	// private, link-local and other non-public addresses in the default
 	// client. Development only: it re-opens SSRF to internal hosts.
 	AllowPrivateNetworks bool
+
+	// Cache, when set, is a second cache tier shared by every replica (see
+	// the kv package). Documents read from it are re-validated. Nil keeps
+	// the cache per process.
+	Cache kv.Cache
 
 	// DenyHost, when set, is consulted before any network IO; returning
 	// true rejects the URL's hostname. It runs in addition to TrustPolicy.
@@ -225,6 +231,7 @@ func (s *Service) Invalidate(rawURL string) {
 		return
 	}
 	s.cache.Delete(cacheKey(rawURL))
+	s.sharedDelete(cacheKey(rawURL))
 }
 
 // LooksLikeCIMD reports whether a client_id string is shaped like a
@@ -309,12 +316,17 @@ func (s *Service) Resolve(ctx context.Context, rawURL string) (*models.OAuthClie
 			}
 		}
 	}
+	if doc, ok := s.sharedLoad(ctx, key, rawURL); ok {
+		s.cache.Store(key, &cacheEntry{doc: doc, fetchedAt: now})
+		return synthesizeClient(doc), nil
+	}
 	doc, err := s.fetch(ctx, rawURL)
 	if err != nil {
 		// Already audited inside fetch; no double-emit here.
 		return nil, err
 	}
 	s.cache.Store(key, &cacheEntry{doc: doc, fetchedAt: now})
+	s.sharedStore(ctx, key, doc)
 	s.emitter.EmitAudit(ctx, AuditFetched,
 		models.TargetRef{Type: "cimd", ID: rawURL},
 		map[string]any{
