@@ -35,6 +35,27 @@ type Config struct {
 	// AllowInsecureHTTP permits http:// issuers; for tests and local IdPs only.
 	AllowInsecureHTTP bool
 	HTTPClient        *http.Client
+
+	// DiscoveryURL overrides the discovery document location, for IdPs that
+	// publish it somewhere other than Issuer + "/.well-known/openid-configuration"
+	// (for example a tenant-scoped path). The issuer inside the document must
+	// still equal Issuer.
+	DiscoveryURL string
+	// Endpoints overrides individual endpoints after discovery. Set
+	// AuthorizationEndpoint, TokenEndpoint and JWKSURI together with
+	// DisableDiscovery to run against an IdP that serves no discovery document.
+	Endpoints Endpoints
+	// DisableDiscovery skips the discovery request. Requires Endpoints.
+	DisableDiscovery bool
+}
+
+// Endpoints are manual overrides for discovered OIDC endpoints. Empty
+// fields keep the discovered value.
+type Endpoints struct {
+	AuthorizationEndpoint string
+	TokenEndpoint         string
+	UserinfoEndpoint      string
+	JWKSURI               string
 }
 
 type metadata struct {
@@ -79,7 +100,16 @@ func New(ctx context.Context, cfg Config) (theauth.Provider, error) {
 		client = &http.Client{Timeout: httpTimeout}
 	}
 	p := &provider{cfg: cfg, client: client}
-	if err := p.discover(ctx); err != nil {
+	if cfg.DisableDiscovery {
+		e := cfg.Endpoints
+		if e.AuthorizationEndpoint == "" || e.TokenEndpoint == "" || e.JWKSURI == "" {
+			return nil, errors.New("oidc: DisableDiscovery needs Endpoints.AuthorizationEndpoint, TokenEndpoint and JWKSURI")
+		}
+		p.meta = metadata{Issuer: cfg.Issuer}
+	} else if err := p.discover(ctx); err != nil {
+		return nil, err
+	}
+	if err := p.applyOverrides(); err != nil {
 		return nil, err
 	}
 	p.keys = &keySet{uri: p.meta.JWKSURI, client: client}
@@ -88,6 +118,9 @@ func New(ctx context.Context, cfg Config) (theauth.Provider, error) {
 
 func (p *provider) discover(ctx context.Context) error {
 	u := strings.TrimSuffix(p.cfg.Issuer, "/") + "/.well-known/openid-configuration"
+	if p.cfg.DiscoveryURL != "" {
+		u = p.cfg.DiscoveryURL
+	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
 	if err != nil {
 		return err
@@ -117,6 +150,30 @@ func (p *provider) discover(ctx context.Context) error {
 		return errors.New("oidc: issuer does not support PKCE S256")
 	}
 	p.basic = len(p.meta.AuthMethods) > 0 && !contains(p.meta.AuthMethods, "client_secret_post") && contains(p.meta.AuthMethods, "client_secret_basic")
+	return nil
+}
+
+// applyOverrides lays manual endpoints over the discovered metadata. Every
+// override must be https unless AllowInsecureHTTP is set.
+func (p *provider) applyOverrides() error {
+	e := p.cfg.Endpoints
+	for name, pair := range map[string]struct {
+		dst *string
+		v   string
+	}{
+		"AuthorizationEndpoint": {&p.meta.AuthorizationEndpoint, e.AuthorizationEndpoint},
+		"TokenEndpoint":         {&p.meta.TokenEndpoint, e.TokenEndpoint},
+		"UserinfoEndpoint":      {&p.meta.UserinfoEndpoint, e.UserinfoEndpoint},
+		"JWKSURI":               {&p.meta.JWKSURI, e.JWKSURI},
+	} {
+		if pair.v == "" {
+			continue
+		}
+		if !strings.HasPrefix(pair.v, "https://") && !(p.cfg.AllowInsecureHTTP && strings.HasPrefix(pair.v, "http://")) {
+			return fmt.Errorf("oidc: Endpoints.%s must be https", name)
+		}
+		*pair.dst = pair.v
+	}
 	return nil
 }
 
