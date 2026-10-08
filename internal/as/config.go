@@ -83,6 +83,14 @@ type Config struct {
 	// deterministically instead of sleeping past IntrospectionCacheTTL.
 	Clock Clock
 
+	// ClockSkew is the tolerance applied when validating time claims
+	// (exp, nbf, iat) on every JWT this AS verifies: access tokens in
+	// introspection, revocation and token exchange, JAR request objects,
+	// client assertions and jwt-bearer assertions. It also widens the
+	// DPoP proof iat window. Zero (the default) means no tolerance, which
+	// is the pre-existing behavior. Negative values are treated as zero.
+	ClockSkew time.Duration
+
 	// OnTokenIssued mirrors root LifecycleHooks.OnTokenIssued. Nil is a
 	// no-op. When set, it runs immediately before every access token JWT
 	// is signed (authorization_code, refresh_token, client_credentials,
@@ -251,6 +259,9 @@ func Validate(cfg *Config, encryptionKey []byte) error {
 	}
 	if cfg.Clock == nil {
 		cfg.Clock = realClock{}
+	}
+	if cfg.ClockSkew < 0 {
+		cfg.ClockSkew = 0
 	}
 	if cfg.LoginURL == "" {
 		cfg.LoginURL = pathprefix.Default + "/login"

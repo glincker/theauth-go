@@ -293,6 +293,11 @@ func protectedResourceMetadataURL(r *http.Request, resourceURI string) string {
 	if parsed.Path != "" && parsed.Path != "/" {
 		out += parsed.Path
 	}
+	// RFC 9728 section 3.1: a query component stays after the inserted
+	// well-known path.
+	if parsed.RawQuery != "" {
+		out += "?" + parsed.RawQuery
+	}
 	return out
 }
 

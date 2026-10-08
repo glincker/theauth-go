@@ -141,15 +141,25 @@ func (c *jwksCache) refresh() error {
 		return fmt.Errorf("mcpresource: jwks parse: %w", err)
 	}
 	fresh := map[string]ed25519.PublicKey{}
+	malformed := 0
 	for _, k := range doc.Keys {
-		if k.Kty != "OKP" || k.Crv != "Ed25519" || k.Kid == "" {
+		// Keys of another type are legitimately ignored (the AS may publish
+		// more than Ed25519), but an Ed25519 entry that cannot be parsed is
+		// counted and reported.
+		if k.Kty != "OKP" || k.Crv != "Ed25519" {
 			continue
 		}
 		raw, err := base64.RawURLEncoding.DecodeString(k.X)
-		if err != nil || len(raw) != ed25519.PublicKeySize {
+		if k.Kid == "" || err != nil || len(raw) != ed25519.PublicKeySize {
+			malformed++
 			continue
 		}
 		fresh[k.Kid] = ed25519.PublicKey(raw)
+	}
+	// Never replace a working key set with an empty one: that would turn a
+	// malformed or truncated document into an outage with no explanation.
+	if len(fresh) == 0 {
+		return fmt.Errorf("mcpresource: jwks has no usable Ed25519 keys (%d of %d entries malformed)", malformed, len(doc.Keys))
 	}
 	c.mu.Lock()
 	c.keys = fresh

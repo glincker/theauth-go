@@ -352,8 +352,29 @@ func (s *Service) Signin(ctx context.Context, emailAddr, password, userAgent, ip
 // email enumeration. When the user does exist, mints a single-use token
 // and emails the reset link.
 func (s *Service) RequestReset(ctx context.Context, emailAddr string) error {
-	_, err := s.RequestResetForTest(ctx, emailAddr)
-	return err
+	emailAddr = s.normalizeEmail(emailAddr)
+	user, err := s.storage.UserByEmail(ctx, emailAddr)
+	if errors.Is(err, models.ErrStorageNotFound) {
+		// Silent success; do not disclose whether the email is registered.
+		slog.Info("theauth: password reset requested for unknown email", "email_ref", emailnorm.LogRef(emailAddr))
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	// Token minting and the email send are the slow part of the known
+	// branch. Run them off the request path so the response time is the
+	// same one lookup for known and unknown addresses (enumeration safety).
+	// A detached context keeps the send alive after the response is written.
+	bg := context.WithoutCancel(ctx)
+	go func() {
+		bg, cancel := context.WithTimeout(bg, 30*time.Second)
+		defer cancel()
+		if _, err := s.mintAndSendReset(bg, user, emailAddr); err != nil {
+			slog.Warn("theauth: password reset delivery failed", "email_ref", emailnorm.LogRef(emailAddr), "err", err.Error())
+		}
+	}()
+	return nil
 }
 
 // RequestResetForTest is the testable variant: returns the raw token when
@@ -371,6 +392,11 @@ func (s *Service) RequestResetForTest(ctx context.Context, emailAddr string) (st
 		return "", err
 	}
 
+	return s.mintAndSendReset(ctx, user, emailAddr)
+}
+
+// mintAndSendReset persists a reset token for user and emails the link.
+func (s *Service) mintAndSendReset(ctx context.Context, user *models.User, emailAddr string) (string, error) {
 	token, err := crypto.NewToken()
 	if err != nil {
 		return "", err

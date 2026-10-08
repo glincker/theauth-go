@@ -187,7 +187,7 @@ func (s *Service) ExchangeToken(ctx context.Context, req TokenExchangeRequest) (
 		return TokenResponse{}, models.ErrOAuthInvalidRequest
 	}
 	now := time.Now().UTC()
-	subjectClaims, err := jwt.Verify(req.SubjectToken, s.PublicKeyByKID, "", now)
+	subjectClaims, err := s.verifyAccessJWT(req.SubjectToken, "", now)
 	if err != nil {
 		return TokenResponse{}, models.ErrSubjectTokenInvalid
 	}
@@ -222,7 +222,7 @@ func (s *Service) ExchangeToken(ctx context.Context, req TokenExchangeRequest) (
 		if req.ActorTokenType != "" && req.ActorTokenType != models.TokenTypeAccessToken {
 			return TokenResponse{}, models.ErrOAuthInvalidRequest
 		}
-		actClaims, err := jwt.Verify(req.ActorToken, s.PublicKeyByKID, "", now)
+		actClaims, err := s.verifyAccessJWT(req.ActorToken, "", now)
 		if err != nil {
 			return TokenResponse{}, models.ErrActorTokenInvalid
 		}

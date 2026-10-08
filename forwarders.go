@@ -1090,3 +1090,13 @@ func (a *TheAuth) RevokeRegistrationToken(ctx context.Context, id ULID) error {
 	}
 	return a.as.RevokeRegistrationToken(ctx, id, nil, nil)
 }
+
+// PasskeyAuthenticatorName returns the display name configured through
+// WebAuthnConfig.AuthenticatorName or AuthenticatorNames for a credential's
+// AAGUID, or "" when none is known or WebAuthn is not configured.
+func (a *TheAuth) PasskeyAuthenticatorName(aaguid []byte) string {
+	if a.webauthnSvc == nil {
+		return ""
+	}
+	return a.webauthnSvc.AuthenticatorName(aaguid)
+}

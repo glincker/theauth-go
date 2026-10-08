@@ -334,3 +334,30 @@ func TestJWKSFetcherDefaults(t *testing.T) {
 		t.Fatalf("unexpected defaults: ttl=%v max=%d allowPrivate=%v", f.ttl, f.maxEntries, f.allowPrivate)
 	}
 }
+
+// Regression for zitadel/oidc#541 and kratos#4572: a JWKS whose keys all fail
+// to parse must be an error, not a silently cached empty key set.
+func TestJWKSFetcherAllKeysMalformedIsError(t *testing.T) {
+	tests := []struct {
+		name    string
+		body    string
+		wantErr bool
+		want    int
+	}{
+		{"all malformed", `{"keys":[{"kty":"RSA","n":"!!","e":"AQAB","kid":"a"},{"kty":"EC","crv":"P-256","x":"!","y":"!","kid":"b"}]}`, true, 0},
+		{"one good one bad", string(testJWKSDocument(t, "good")), false, 1},
+		{"empty keys array", `{"keys":[]}`, false, 0},
+		{"not json", `<html>`, true, 0},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			keys, err := parseJWKSBytes([]byte(tc.body))
+			if (err != nil) != tc.wantErr {
+				t.Fatalf("err = %v, wantErr %v", err, tc.wantErr)
+			}
+			if len(keys) != tc.want {
+				t.Fatalf("got %d keys, want %d", len(keys), tc.want)
+			}
+		})
+	}
+}
