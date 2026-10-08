@@ -108,4 +108,90 @@ func testRefreshTokens(t *testing.T, store theauth.OAuthServerStorage) {
 			t.Fatalf("want ErrNotFound, got %v", err)
 		}
 	})
+
+	t.Run("RevokeTwiceIsConditional", func(t *testing.T) {
+		hash := sha256Hash([]byte("rt-revoke-twice"))
+		if err := store.InsertRefreshToken(ctx, makeToken(hash, newID())); err != nil {
+			t.Fatal(err)
+		}
+		if err := store.RevokeRefreshToken(ctx, hash, "first"); err != nil {
+			t.Fatalf("first revoke: %v", err)
+		}
+		if err := store.RevokeRefreshToken(ctx, hash, "second"); !errors.Is(err, storage.ErrNotFound) {
+			t.Fatalf("second revoke must be ErrNotFound, got %v", err)
+		}
+	})
+
+	t.Run("BindingFieldsRoundTrip", func(t *testing.T) {
+		hash := sha256Hash([]byte("rt-binding"))
+		tok := makeToken(hash, newID())
+		tok.DPoPJKT = "jkt-thumbprint"
+		tok.AuthCodeHash = "codehash-roundtrip"
+		if err := store.InsertRefreshToken(ctx, tok); err != nil {
+			t.Fatal(err)
+		}
+		got, err := store.RefreshTokenByHash(ctx, hash)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got.DPoPJKT != tok.DPoPJKT || got.AuthCodeHash != tok.AuthCodeHash {
+			t.Fatalf("binding fields lost: %+v", got)
+		}
+	})
+
+	t.Run("RevokeByAuthCode", func(t *testing.T) {
+		rs, ok := store.(interface {
+			RevokeRefreshTokensByAuthCode(ctx context.Context, codeHash, reason string) ([]string, error)
+		})
+		if !ok {
+			t.Skip("storage does not implement RevokeRefreshTokensByAuthCode")
+		}
+		fam := newID()
+		hash := sha256Hash([]byte("rt-by-code"))
+		tok := makeToken(hash, fam)
+		tok.AuthCodeHash = "codehash-revoke"
+		tok.ParentJTI = "jti-from-code"
+		if err := store.InsertRefreshToken(ctx, tok); err != nil {
+			t.Fatal(err)
+		}
+		jtis, err := rs.RevokeRefreshTokensByAuthCode(ctx, "codehash-revoke", "replay")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(jtis) != 1 || jtis[0] != "jti-from-code" {
+			t.Fatalf("jtis=%v", jtis)
+		}
+		got, _ := store.RefreshTokenByHash(ctx, hash)
+		if got == nil || got.RevokedAt == nil {
+			t.Fatal("token should be revoked")
+		}
+		if again, _ := rs.RevokeRefreshTokensByAuthCode(ctx, "codehash-revoke", "replay"); len(again) != 0 {
+			t.Fatalf("second call must be a no-op, got %v", again)
+		}
+		if none, err := rs.RevokeRefreshTokensByAuthCode(ctx, "never-issued", "replay"); err != nil || len(none) != 0 {
+			t.Fatalf("unknown code: %v %v", none, err)
+		}
+	})
+
+	t.Run("AccessTokenDenylist", func(t *testing.T) {
+		d, ok := store.(interface {
+			DenyAccessToken(ctx context.Context, jti string, expiresAt time.Time) error
+			IsAccessTokenDenied(ctx context.Context, jti string) (bool, error)
+		})
+		if !ok {
+			t.Skip("storage does not implement the access-token denylist")
+		}
+		if err := d.DenyAccessToken(ctx, "jti-live", time.Now().Add(time.Hour)); err != nil {
+			t.Fatal(err)
+		}
+		if err := d.DenyAccessToken(ctx, "jti-expired", time.Now().Add(-time.Hour)); err != nil {
+			t.Fatal(err)
+		}
+		for jti, want := range map[string]bool{"jti-live": true, "jti-expired": false, "jti-unknown": false} {
+			got, err := d.IsAccessTokenDenied(ctx, jti)
+			if err != nil || got != want {
+				t.Fatalf("IsAccessTokenDenied(%s)=%v,%v want %v", jti, got, err, want)
+			}
+		}
+	})
 }

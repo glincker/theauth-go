@@ -344,7 +344,11 @@ func TestLooksLikeCIMD(t *testing.T) {
 		want bool
 	}{
 		{"https://example.org/c", true},
-		{"https://example.org", true},
+		{"https://example.org", false},
+		{"https://example.org/", false},
+		{"https://example.org/a/../c", false},
+		{"https://u:p@example.org/c", false},
+		{"https://example.org/c#f", false},
 		{"http://example.org/c", false},
 		{"client-abc123", false},
 		{"", false},

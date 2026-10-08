@@ -25,6 +25,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -313,6 +314,7 @@ func (h *Handler) writeAuthorizeError(w http.ResponseWriter, r *http.Request, re
 		if perr == nil {
 			qq := u.Query()
 			qq.Set("error", code)
+			qq.Set("iss", h.svc.Cfg.Issuer)
 			if req.State != "" {
 				qq.Set("state", req.State)
 			}
@@ -346,7 +348,11 @@ func (h *Handler) handleToken(w http.ResponseWriter, r *http.Request) {
 	// match against the htm / htu claims; the verifier strips fragment +
 	// query string from htu so it is fine to pass the full URL here.
 	dpopHeader := r.Header.Get("DPoP")
-	httpURL := tokenEndpointURL(r)
+	// The DPoP htu comes from the configured issuer, never from request
+	// headers: X-Forwarded-Proto/Host are client-controlled unless a proxy
+	// scrubs them, and trusting them lets a proof minted for another origin
+	// pass the htu check.
+	httpURL := h.svc.TokenEndpointURL()
 	switch grantType {
 	case models.GrantTypeAuthorizationCode:
 		req := internalas.TokenRequest{
@@ -416,10 +422,13 @@ func (h *Handler) handleToken(w http.ResponseWriter, r *http.Request) {
 			Resource:           r.PostFormValue("resource"),
 			Audience:           r.PostFormValue("audience"),
 			Scope:              scopeSplit(r.PostFormValue("scope")),
+			DPoPProof:          dpopHeader,
+			HTTPMethod:         r.Method,
+			HTTPURL:            httpURL,
 		}
 		resp, err := h.svc.ExchangeToken(r.Context(), req)
 		if err != nil {
-			writeTokenError(w, err)
+			h.writeTokenErrorDPoP(w, err)
 			return
 		}
 		writeTokenJSON(w, resp)
@@ -607,6 +616,12 @@ func parseClientCredentials(r *http.Request) (string, string) {
 
 // writeOAuthError emits the standard OAuth error JSON body shape.
 func writeOAuthError(w http.ResponseWriter, status int, code, description string) {
+	// Never echo internal error text (storage errors, driver messages) to
+	// the client on a server fault. The detail goes to the log only.
+	if status >= http.StatusInternalServerError || code == oauthErrServerError {
+		slog.Error("oauth endpoint server error", "code", code, "detail", description)
+		description = "internal server error"
+	}
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "no-store")
 	w.WriteHeader(status)
@@ -686,26 +701,6 @@ const (
 	oauthErrInvalidDPoPProof = "invalid_dpop_proof"
 	oauthErrUseDPoPNonce     = "use_dpop_nonce"
 )
-
-// tokenEndpointURL returns the canonical https://host/oauth/token URL
-// the DPoP verifier expects. We rebuild it from the request rather than
-// trusting r.URL because chi normalizes paths but does not populate
-// scheme/host. When the deployment uses a reverse proxy that terminates
-// TLS the X-Forwarded-Proto + Host headers are honored.
-func tokenEndpointURL(r *http.Request) string {
-	scheme := "http"
-	if r.TLS != nil {
-		scheme = "https"
-	}
-	if xfp := r.Header.Get("X-Forwarded-Proto"); xfp != "" {
-		scheme = xfp
-	}
-	host := r.Host
-	if xfh := r.Header.Get("X-Forwarded-Host"); xfh != "" {
-		host = xfh
-	}
-	return scheme + "://" + host + r.URL.Path
-}
 
 // writeTokenErrorDPoP extends writeTokenError with the RFC 9449
 // invalid_dpop_proof / use_dpop_nonce wire mapping. When the AS demands

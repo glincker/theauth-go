@@ -82,6 +82,16 @@ type RefreshToken struct {
 	ExpiresAt      time.Time
 	RevokedAt      *time.Time
 	RevocationNote string
+
+	// DPoPJKT is the RFC 7638 thumbprint of the DPoP key the grant was
+	// bound to at issuance. When non-empty, every refresh must present a
+	// DPoP proof signed by the same key (RFC 9449 section 8).
+	DPoPJKT string
+	// AuthCodeHash is the storage key (hex SHA-256) of the authorization
+	// code this token family was first issued from. Empty for grants not
+	// minted from a code. Used to revoke the family when the code is
+	// replayed (RFC 6749 section 4.1.2).
+	AuthCodeHash string
 }
 
 // JWKSKey is one signing key in the AS's JWKS state machine. State transitions:

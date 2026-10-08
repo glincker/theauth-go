@@ -31,6 +31,13 @@ type TokenExchangeRequest struct {
 	Resource           string
 	Audience           string
 	Scope              []string
+
+	// DPoPProof, HTTPMethod and HTTPURL carry the request's DPoP header and
+	// the method/URL it must be bound to. Required when the subject token is
+	// DPoP-bound (cnf.jkt), and used to bind the new token otherwise.
+	DPoPProof  string
+	HTTPMethod string
+	HTTPURL    string
 }
 
 // ClientCredentialsToken mints a self-token for the authenticated agent
@@ -187,6 +194,27 @@ func (s *Service) ExchangeToken(ctx context.Context, req TokenExchangeRequest) (
 	if subjectClaims.Iss != s.Cfg.Issuer {
 		return TokenResponse{}, models.ErrSubjectTokenInvalid
 	}
+	// A subject token revoked via /oauth/revoke (opt-in denylist) cannot be
+	// exchanged for a fresh one.
+	if s.accessJTIRevoked(ctx, subjectClaims.Jti) {
+		return TokenResponse{}, models.ErrSubjectTokenInvalid
+	}
+	// RFC 9449: a DPoP-bound subject token may only be exchanged by the
+	// holder of the bound key. The new token inherits the binding, so the
+	// exchange can never launder a sender-constrained token into a bearer.
+	subjectJKT := cnfJKT(subjectClaims.Extra)
+	proofJKT, perr := s.dpopThumbprintForRequest(TokenRequest{
+		ClientID:   client.ClientID,
+		DPoPProof:  req.DPoPProof,
+		HTTPMethod: req.HTTPMethod,
+		HTTPURL:    req.HTTPURL,
+	})
+	if perr != nil {
+		return TokenResponse{}, perr
+	}
+	if subjectJKT != "" && (proofJKT == "" || !jktEqual(proofJKT, subjectJKT)) {
+		return TokenResponse{}, fmt.Errorf("%w: subject token is DPoP-bound, matching proof required", ErrDPoPInvalid)
+	}
 	// Step 4: validate optional actor_token; when supplied, must name
 	// this agent (defence-in-depth against a stolen client credential
 	// being used in a different agent context).
@@ -295,6 +323,11 @@ func (s *Service) ExchangeToken(ctx context.Context, req TokenExchangeRequest) (
 			"delegation_grant_id": grant.ID.String(),
 		},
 	}
+	exchangedType := "Bearer"
+	if proofJKT != "" {
+		claims.Extra["cnf"] = map[string]string{"jkt": proofJKT}
+		exchangedType = "DPoP"
+	}
 	if err := s.applyOnTokenIssued(ctx, &claims); err != nil {
 		return TokenResponse{}, err
 	}
@@ -314,7 +347,7 @@ func (s *Service) ExchangeToken(ctx context.Context, req TokenExchangeRequest) (
 	})
 	return TokenResponse{
 		AccessToken:     access,
-		TokenType:       "Bearer",
+		TokenType:       exchangedType,
 		ExpiresIn:       int(time.Until(policyExp).Seconds()),
 		Scope:           scopeJoin(finalScope),
 		IssuedTokenType: models.TokenTypeAccessToken,

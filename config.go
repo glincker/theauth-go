@@ -434,6 +434,16 @@ type AuthorizationServerConfig struct {
 	// authorization request (security re-audit L5, 2026-06-22).
 	RequireState bool
 
+	// AccessTokenRevocation enables the store-backed access-token jti
+	// denylist (opt-in). When true and the Storage implements the denylist
+	// capability (memory, postgres and mysql do), revoking an access token
+	// at /oauth/revoke, replaying an authorization code, and token
+	// exchange all honor it, and /oauth/introspect reports revoked tokens
+	// inactive. Resource servers that verify JWTs locally never consult
+	// the denylist; they must introspect. Default false keeps access
+	// tokens stateless.
+	AccessTokenRevocation bool
+
 	// PAR wires RFC 9126 Pushed Authorization Requests. When non-nil and
 	// the Storage backend implements PARStorage, POST /oauth/par is
 	// registered and GET /oauth/authorize accepts request_uri. Nil (the
@@ -750,6 +760,7 @@ func validateASConfig(cfg *AuthorizationServerConfig, encryptionKey []byte) erro
 		DisableRotation:                cfg.DisableRotation,
 		DPoP:                           dpopConfigFromRoot(cfg.DPoP),
 		RequireState:                   cfg.RequireState,
+		AccessTokenRevocation:          cfg.AccessTokenRevocation,
 		PAR:                            cfg.PAR,
 		JAR:                            cfg.JAR,
 		JWTBearer:                      jwtBearerConfigFromRoot(cfg.JWTBearer),

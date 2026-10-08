@@ -6,6 +6,33 @@ adheres to [Semantic Versioning](https://semver.org/) from v1.0 forward.
 
 ## [Unreleased]
 
+### Upgrade notes
+
+- **Authorization codes are hashed at rest.** Migration `0019_as_security_hardening` deletes any plaintext code still stored (codes live 60 seconds, so in-flight authorizations must be restarted). Custom storage adapters are unaffected: the service hashes before calling storage.
+- **Run the new migration.** `0019` adds `dpop_jkt` and `auth_code_hash` to `oauth_refresh_tokens` and creates `oauth_revoked_jtis` (postgres and mysql). Custom adapters should persist `RefreshToken.DPoPJKT` and `RefreshToken.AuthCodeHash`, and may implement `RevokeRefreshTokensByAuthCode`, `DenyAccessToken` and `IsAccessTokenDenied`.
+- **DPoP `htu` comes from the issuer.** The token endpoint no longer reads `X-Forwarded-Proto` or `X-Forwarded-Host`; clients must sign proofs for `<issuer>/oauth/token`.
+- **Refresh tokens issued with a DPoP proof now require a matching proof on refresh.**
+- **`mcpresource` and `internal/jwt` require `typ: at+jwt`.** Use `mcpresource.WithAllowMissingTyp()` for an authorization server that omits it.
+- **Webhook audit signatures changed.** The MAC now covers `"<timestamp>." + body` and a new `X-CloudEvents-Timestamp` header is sent. Receivers should call `webhook.Verify`.
+- **`registration_endpoint` is advertised only when DCR is enabled** (`RegistrationTokens` or `AllowAnonymousRegistration`).
+- **CIMD default body cap is 5 KiB** (was 64 KiB) and `client_id` URLs must have a path.
+- **`SecureCookie` defaults to true when `BaseURL` is https.**
+- `PasswordPolicy.OnLegacyHashAccepted` also fires when an Argon2id hash with weaker parameters is upgraded on login.
+
+### Security
+
+- Refresh tokens are sender-constrained for DPoP-bound grants (RFC 9449 section 8); no downgrade to Bearer, and a failed proof does not consume the token.
+- Token exchange propagates `cnf` and requires a matching proof for DPoP-bound subject tokens, and rejects revoked subject tokens when the denylist is on.
+- `/oauth/revoke` enforces client ownership (RFC 7009). New opt-in `AccessTokenRevocation` adds a store-backed `jti` denylist for access tokens.
+- Replaying an authorization code revokes the tokens already issued from it (RFC 6749 section 4.1.2).
+- Redirect URI allowlist (https, loopback http, reverse-DNS native schemes) for DCR and CIMD; `javascript:` and `data:` are refused. Server faults on OAuth endpoints no longer echo internal error text.
+- CIMD: 5 KiB default cap, single-flight fetches, negative cache (`NegativeCacheTTL`). Metadata advertises `client_id_metadata_document_supported`; authorization responses carry `iss` (RFC 9207). DCR is documented as legacy.
+- In-memory `RevokeRefreshToken` is conditional like the SQL backends; concurrent rotation of one token is treated as reuse.
+- Webhook audit sink: timestamped signature plus `webhook.Verify` with a replay window.
+- `mcpresource`: JWKS max-stale bound (`WithJWKSMaxStale`, default 1 hour).
+- Argon2id hashes below the current cost are rehashed on login.
+- `docs/THREAT-MODEL.md` restored for the authorization server and corrected: codes were not hashed before this release.
+
 ## [2.7.1] - 2026-10-07
 
 ### Upgrade notes

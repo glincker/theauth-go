@@ -128,6 +128,16 @@ type Config struct {
 	// this to enforce CSRF protection (security re-audit L5, 2026-06-22).
 	RequireState bool
 
+	// AccessTokenRevocation turns on the store-backed access-token jti
+	// denylist. When true (and the Storage implements
+	// AccessTokenDenylistStorage), RFC 7009 revocation of an access token,
+	// authorization-code replay, and token-exchange subject checks all
+	// consult it, and introspection reports revoked tokens inactive.
+	// Off by default: access tokens stay stateless JWTs. Resource servers
+	// that verify JWTs locally do not see the denylist; they must
+	// introspect to benefit from it.
+	AccessTokenRevocation bool
+
 	// PAR wires RFC 9126 Pushed Authorization Requests. When non-nil and
 	// the Storage backend implements PARStorage, POST /oauth/par is
 	// enabled and GET /oauth/authorize accepts request_uri. Nil (default)

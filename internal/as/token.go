@@ -90,8 +90,12 @@ func (s *Service) ExchangeAuthorizationCode(ctx context.Context, req TokenReques
 	if req.CodeVerifier == "" {
 		return TokenResponse{}, models.ErrOAuthInvalidRequest
 	}
-	codeRow, err := s.Storage.ConsumeAuthorizationCode(ctx, req.Code)
+	codeKey := codeStorageKey(req.Code)
+	codeRow, err := s.Storage.ConsumeAuthorizationCode(ctx, codeKey)
 	if err != nil {
+		// A code that cannot be consumed may be a replay: revoke whatever
+		// was already issued from it (RFC 6749 section 4.1.2).
+		s.handleCodeReplay(ctx, codeKey)
 		return TokenResponse{}, models.ErrOAuthInvalidGrant
 	}
 	if codeRow.ClientID != client.ClientID {
@@ -127,6 +131,8 @@ func (s *Service) ExchangeAuthorizationCode(ctx context.Context, req TokenReques
 		Scope:    scope,
 		Resource: codeRow.Resource,
 		DPoPJKT:  jkt,
+		// AuthCodeHash lets a later replay of this code revoke the family.
+		AuthCodeHash: codeKey,
 	})
 }
 
@@ -181,15 +187,31 @@ func (s *Service) RefreshAccessToken(ctx context.Context, req TokenRequest) (res
 		}
 		scope = req.Scope
 	}
-	// Revoke the old refresh token before issuing the new pair, so a
-	// crash mid-mint cannot leave both alive (the new mint is idempotent
-	// on its fresh family ID).
-	if err := s.Storage.RevokeRefreshToken(ctx, hash, "rotated"); err != nil {
-		return TokenResponse{}, fmt.Errorf("revoke prior refresh: %w", err)
-	}
+	// RFC 9449 section 8: a refresh token issued to a DPoP-bound grant is
+	// bound to the same key. Verify the proof before burning the token so
+	// a failed proof does not consume it, and never downgrade to Bearer.
 	jkt, err := s.dpopThumbprintForRequest(req)
 	if err != nil {
 		return TokenResponse{}, err
+	}
+	if rt.DPoPJKT != "" {
+		if jkt == "" || !jktEqual(jkt, rt.DPoPJKT) {
+			if jkt == "" {
+				return TokenResponse{}, fmt.Errorf("%w: refresh token is DPoP-bound, proof required", ErrDPoPInvalid)
+			}
+			return TokenResponse{}, fmt.Errorf("%w: proof key does not match the bound key", ErrDPoPInvalid)
+		}
+	}
+	// Revoke the old refresh token before issuing the new pair, so a
+	// crash mid-mint cannot leave both alive (the new mint is idempotent
+	// on its fresh family ID). The revoke is conditional: if a concurrent
+	// request already rotated this token we treat it as reuse.
+	if err := s.Storage.RevokeRefreshToken(ctx, hash, "rotated"); err != nil {
+		if errors.Is(err, models.ErrStorageNotFound) {
+			_ = s.Storage.RevokeRefreshTokenFamily(ctx, rt.FamilyID, "reuse detected")
+			return TokenResponse{}, models.ErrOAuthInvalidGrant
+		}
+		return TokenResponse{}, fmt.Errorf("revoke prior refresh: %w", err)
 	}
 	return s.mintAccessAndRefresh(ctx, mintInput{
 		ClientID: client.ClientID,
@@ -214,6 +236,9 @@ type mintInput struct {
 	// key. Resource servers MUST then require an inbound DPoP proof
 	// signed by the matching key on every protected call.
 	DPoPJKT string
+	// AuthCodeHash is the storage key of the authorization code the
+	// family was issued from; empty on refresh and other grants.
+	AuthCodeHash string
 }
 
 // mintAccessAndRefresh signs a fresh access token JWT and stores a fresh
@@ -272,16 +297,18 @@ func (s *Service) mintAccessAndRefresh(ctx context.Context, in mintInput) (Token
 		familyID = *in.FamilyID
 	}
 	rt := models.RefreshToken{
-		ID:        ulid.New(),
-		Hash:      refreshHash,
-		FamilyID:  familyID,
-		ClientID:  in.ClientID,
-		UserID:    in.UserID,
-		Scope:     in.Scope,
-		Resource:  in.Resource,
-		ParentJTI: jti,
-		IssuedAt:  now,
-		ExpiresAt: now.Add(s.Cfg.RefreshTokenTTL),
+		ID:           ulid.New(),
+		Hash:         refreshHash,
+		FamilyID:     familyID,
+		ClientID:     in.ClientID,
+		UserID:       in.UserID,
+		Scope:        in.Scope,
+		Resource:     in.Resource,
+		ParentJTI:    jti,
+		DPoPJKT:      in.DPoPJKT,
+		AuthCodeHash: in.AuthCodeHash,
+		IssuedAt:     now,
+		ExpiresAt:    now.Add(s.Cfg.RefreshTokenTTL),
 	}
 	if err := s.Storage.InsertRefreshToken(ctx, rt); err != nil {
 		return TokenResponse{}, fmt.Errorf("insert refresh token: %w", err)
