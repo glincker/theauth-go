@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/base64"
+	"encoding/hex"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -141,7 +142,7 @@ func insertAuthCode(tb testing.TB, store *memory.Store, clientID string, userID 
 	code := base64.RawURLEncoding.EncodeToString(rawCode)
 	now := time.Now().UTC()
 	if err := store.InsertAuthorizationCode(context.Background(), theauth.AuthorizationCode{
-		Code:                code,
+		Code:                hex.EncodeToString(crypto.HashToken(code)),
 		ClientID:            clientID,
 		UserID:              userID,
 		RedirectURI:         codeFlowRedirect,
