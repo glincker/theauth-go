@@ -44,7 +44,7 @@ import (
 //
 // Default rate limits: 5/min per source IP on every credential endpoint, plus
 // 3/min per email on signin + forgot (most attack-surface). All limits are
-// in-memory + per-process; replace at the LB layer for multi-instance deploys.
+// in-memory + per-process unless Config.Stores.RateLimiter supplies a shared one.
 func (a *TheAuth) Mount(r chi.Router) {
 	r.Group(func(r chi.Router) {
 		r.Use(a.securityMiddleware, a.auditContextMiddleware)

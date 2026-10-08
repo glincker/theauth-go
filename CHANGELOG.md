@@ -6,6 +6,24 @@ adheres to [Semantic Versioning](https://semver.org/) from v1.0 forward.
 
 ## [Unreleased]
 
+### Upgrade notes
+
+- **`X-Forwarded-For` is now read from the right.** For a request from a `TrustedProxies` peer, the client address is the first entry, walking right to left, that is not itself a trusted proxy. Before, the leftmost entry was used, which a client could forge. If your chain has more than one proxy hop, list every hop in `TrustedProxies`.
+- **OAuth endpoints are rate limited by default** when `AuthorizationServer` is set: 120 requests per IP per minute across `/oauth/token`, `/oauth/revoke`, `/oauth/introspect`, `/oauth/par`, `/oauth/bc-authorize` and `/oauth/device_authorization`, 300 secret-bearing requests per client per minute, and at most 8 concurrent Argon2id client-secret verifications (over the cap: `503 temporarily_unavailable`). Tune or disable with `AuthorizationServerConfig.RateLimits`.
+- Postgres and MySQL gain migration `0019` (device authorizations, registration tokens). `Migrate` applies it.
+
+### Added
+
+- `Config.Stores` and the `kv` package: `RateLimiter`, `ReplayCache` and `Cache` interfaces with memory (default), SQL (`kv/sqlkv`, Postgres, MySQL, SQLite) and Redis (`kv/redis`, driver-free) adapters, and the `kv/kvtest` contract suite. Wired into `RateLimitByIP`, `RateLimitByEmail`, the OAuth endpoint limits, DPoP `jti` replay and the CIMD cache.
+- RFC 8628 device authorization grant on the authorization server: `POST /oauth/device_authorization`, the `device_code` grant, a themable user-code page with a JSON API at `/oauth/device`, `slow_down`, expiry, attempt limits, HMAC-hashed codes at rest, metadata advertisement. `AuthorizationServerConfig.DeviceAuthorization`, `DeviceAuthorizationStorage`, `storagetest.RunDeviceAuthorizations`. Memory, Postgres and MySQL.
+- Registration tokens (initial access tokens) for `POST /oauth/register`: one-time or limited use, scoped, expiring, hashed at rest, `CreateRegistrationToken`/`ListRegistrationTokens`/`RevokeRegistrationToken`, an org-scoped admin API, audit events. `RegistrationTokenStorage`, `storagetest.RunRegistrationTokens`.
+- `AuthorizationServerConfig.RateLimits` (`ASRateLimits`).
+- `examples/cli-device-login`: a stdlib-only CLI and a demo server.
+
+### Fixed
+
+- A malformed form body on the rate-limited OAuth endpoints still returns `invalid_request`.
+
 ## [2.7.1] - 2026-10-07
 
 ### Upgrade notes

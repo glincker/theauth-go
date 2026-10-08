@@ -130,11 +130,30 @@ For Postgres, chi or a runnable CLI with API tokens and device login, see [`exam
 | Sessions | Opaque server-side sessions, session list and revoke, idle timeout | [Configuration](https://docs.theauth.dev/go/reference/configuration) |
 | API tokens and CLIs | Scoped tokens with `RequireAbility`, RFC 8628 device login via the `clientauth` package | [API tokens](https://docs.theauth.dev/go/guides/api-tokens), [CLI login](https://docs.theauth.dev/go/guides/cli-login) |
 | OAuth 2.1 server | Authorization code with PKCE, refresh rotation, `client_credentials`, token exchange, CIBA, PAR, JAR, DPoP | [OAuth 2.1 primer](https://docs.theauth.dev/go/concepts/oauth21-primer), [Authorization server](https://docs.theauth.dev/go/concepts/authorization-server) |
+| Multi-replica and abuse controls | Pluggable rate limiter, DPoP replay cache and CIMD cache (memory, SQL, Redis or your own), per-IP and per-client limits and an Argon2id concurrency cap on the OAuth endpoints | [Pluggable stores](./docs/pluggable-stores.md), [Endpoint limits](./docs/oauth-endpoint-limits.md) |
+| Browserless OAuth | RFC 8628 device authorization grant on the authorization server with a themable verification page, plus scoped one-time registration tokens for agents | [Device grant](./docs/device-authorization.md), [Registration tokens](./docs/registration-tokens.md) |
 | MCP and agents | MCP authorization (protected resource metadata, CIMD), agent identities with delegation, `mcpresource` SDK module | [MCP authorization](https://docs.theauth.dev/go/concepts/mcp-authorization), [Resource server](https://docs.theauth.dev/go/concepts/resource-server) |
 | Enterprise | SAML 2.0 SSO, SCIM 2.0, organizations, RBAC, append-only audit log with SIEM sinks | [Splunk audit streaming](https://docs.theauth.dev/go/guides/audit-log-splunk), [Threat model](https://docs.theauth.dev/go/security/threat-model) |
 | Policy | Authorization policy engine | [Policy engine](https://docs.theauth.dev/go/guides/policy-engine) |
 | Observability | OpenTelemetry spans, Prometheus metrics | [OpenTelemetry tracing](https://docs.theauth.dev/go/guides/opentelemetry-tracing), [Metrics](https://docs.theauth.dev/go/reference/metrics) |
 | Supply chain | SBOM and Sigstore signed release artifacts, SLSA 3 provenance | [Releases and verification](https://docs.theauth.dev/go/security/releases) |
+
+## Running more than one replica
+
+Rate limits, DPoP replay records and the CIMD cache are per process by default. Share them through the database you already have:
+
+```go
+db := stdlib.OpenDBFromPool(pool) // pgx stdlib
+kvStore, _ := sqlkv.New(db, sqlkv.Postgres)
+_ = kvStore.EnsureSchema(ctx)
+
+auth, _ := theauth.New(theauth.Config{
+    // ...
+    Stores: kv.FromCache(kvStore), // or kv/redis, or your own kv.RateLimiter / kv.ReplayCache / kv.Cache
+})
+```
+
+Details and the Redis adapter are in [docs/pluggable-stores.md](./docs/pluggable-stores.md).
 
 ## Storage backends
 
@@ -148,6 +167,7 @@ Persistence is split into small capability interfaces, and `New` fails at startu
 | Organizations, SAML, SCIM, RBAC | Yes | No | Yes | Yes |
 | OAuth 2.1 authorization server, agent identity | Yes | No | Yes | Yes |
 | CIBA backchannel auth | Yes | No | Yes | No |
+| OAuth device grant (RFC 8628) and registration tokens | Yes | No | Yes | Yes |
 | Durable JWT-bearer `jti` replay, policy engine storage | Yes | No | No | No |
 
 Postgres and MySQL implement the newer token, device, session and throttle capabilities and pass the new `storagetest` suites against live PostgreSQL 16 and MySQL 8. The older shared contract gate for those two adapters is still off in CI because some older subtests fail, so treat their support for the newer features as newly added. You can write your own backend and verify it with the public [`storagetest`](./storagetest) suite.
