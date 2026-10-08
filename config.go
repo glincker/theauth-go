@@ -467,7 +467,40 @@ type AuthorizationServerConfig struct {
 	// if it does not, CIBA endpoints are not mounted regardless of this
 	// setting. Default nil disables CIBA.
 	CIBA *CIBAConfig
+
+	// DeviceAuthorization enables the RFC 8628 device grant when non-nil:
+	// POST /oauth/device_authorization, the device_code grant at
+	// /oauth/token, and a user-code page at /oauth/device. The storage must
+	// also implement DeviceAuthorizationStorage (memory, Postgres and MySQL
+	// do). Clients opt in by registering the
+	// urn:ietf:params:oauth:grant-type:device_code grant type. Default nil
+	// disables it.
+	DeviceAuthorization *DeviceAuthorizationConfig
+
+	// RateLimits tunes the per-IP and per-client limits on /oauth/token,
+	// /oauth/revoke, /oauth/introspect, /oauth/par, /oauth/bc-authorize and
+	// /oauth/device_authorization, and the cap on concurrent Argon2id
+	// client-secret verifications. Nil applies the defaults (120 requests per
+	// IP per minute, 300 secret-bearing requests per client per minute, up to
+	// 8 concurrent verifications). Set a field negative to turn it off.
+	RateLimits *ASRateLimits
+
+	// RegistrationTokenTTL is the default lifetime of an initial access token
+	// created through CreateRegistrationToken or the admin API. Default 24h.
+	RegistrationTokenTTL time.Duration
 }
+
+// DeviceAuthorizationConfig is the root alias for the RFC 8628 settings.
+type DeviceAuthorizationConfig = internalas.DeviceConfig
+
+// DevicePage is the view model handed to DeviceAuthorizationConfig.Page.
+type DevicePage = internalas.DevicePage
+
+// ASRateLimits is the root alias for the AS endpoint limits.
+type ASRateLimits = internalas.RateLimits
+
+// CreateRegistrationTokenInput describes an initial access token to mint.
+type CreateRegistrationTokenInput = internalas.CreateRegistrationTokenInput
 
 // JWTBearerConfig controls RFC 7523 JWT client authentication and the
 // JWT Bearer grant type. All fields have safe defaults.
@@ -754,6 +787,9 @@ func validateASConfig(cfg *AuthorizationServerConfig, encryptionKey []byte) erro
 		JAR:                            cfg.JAR,
 		JWTBearer:                      jwtBearerConfigFromRoot(cfg.JWTBearer),
 		CIBA:                           cibaConfigToInternal(cfg.CIBA),
+		DeviceAuthorization:            cfg.DeviceAuthorization,
+		RateLimits:                     cfg.RateLimits,
+		RegistrationTokenTTL:           cfg.RegistrationTokenTTL,
 	}
 	if err := internalas.Validate(&internal, encryptionKey); err != nil {
 		return err
@@ -774,6 +810,8 @@ func validateASConfig(cfg *AuthorizationServerConfig, encryptionKey []byte) erro
 	cfg.IntrospectionCacheTTL = internal.IntrospectionCacheTTL
 	cfg.Clock = internal.Clock
 	cfg.LoginURL = internal.LoginURL
+	cfg.RateLimits = internal.RateLimits
+	cfg.RegistrationTokenTTL = internal.RegistrationTokenTTL
 	// Mirror CIBA defaults back.
 	if cfg.CIBA != nil && internal.CIBA != nil {
 		cfg.CIBA.DefaultExpiry = internal.CIBA.DefaultExpiry

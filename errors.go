@@ -326,7 +326,7 @@ var (
 	// collision with a live record.
 	ErrDeviceAuthUserCodeTaken = models.ErrDeviceAuthUserCodeTaken
 
-	// ErrDeviceUserCodeInvalid is returned by ApproveDeviceUserCode when the
+	// ErrDeviceUserCodeInvalid is returned by the device verification page when the
 	// code is unknown, expired or already decided.
 	ErrDeviceUserCodeInvalid = models.ErrDeviceUserCodeInvalid
 

@@ -305,6 +305,7 @@ func wireServices(a *TheAuth, cfg Config, providers map[string]Provider, sp saml
 			jwtBearerStore = jwtBearerStorageAdapter{jbs}
 		}
 		asCfg := asConfigFromRoot(cfg.AuthorizationServer)
+		asCfg.Stores = cfg.Stores
 		if asCfg.LoginURL == "" {
 			asCfg.LoginURL = a.pathPrefix + "/login"
 		}
@@ -596,6 +597,9 @@ func asConfigFromRoot(c *AuthorizationServerConfig) internalas.Config {
 		JAR:                            c.JAR,
 		JWTBearer:                      jwtBearerConfigFromRoot(c.JWTBearer),
 		CIBA:                           cibaConfigToInternal(c.CIBA),
+		DeviceAuthorization:            c.DeviceAuthorization,
+		RateLimits:                     c.RateLimits,
+		RegistrationTokenTTL:           c.RegistrationTokenTTL,
 	}
 }
 

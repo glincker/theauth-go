@@ -497,6 +497,7 @@ func (a *TheAuth) mountAS(r chi.Router) {
 		return
 	}
 	h := ashandlers.New(a.as, userFromRequest, a.dcrRegistrationTokenHashes)
+	h.SetClientIP(func(r *http.Request) string { return extractClientIPTrusting(r, a.trustedProxies) })
 	var registerLimit func(http.Handler) http.Handler
 	if cap := a.as.Cfg.RegistrationRateLimitPerMinute; cap > 0 {
 		registerLimit = a.RateLimitByIP(cap)

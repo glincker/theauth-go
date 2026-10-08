@@ -63,7 +63,12 @@ func (h *Handler) limited(next http.Handler) http.Handler {
 		}
 		if cfg.PerClientPerMinute > 0 {
 			r.Body = http.MaxBytesReader(w, r.Body, maxLimitedBody)
-			_ = r.ParseForm()
+			// ParseForm caches its result, so a parse error must be answered
+			// here: the handler's own ParseForm would see an empty form.
+			if err := r.ParseForm(); err != nil {
+				writeOAuthError(w, http.StatusBadRequest, oauthErrInvalidRequest, "malformed form")
+				return
+			}
 			id, secret := parseClientCredentials(r)
 			if id == "" {
 				id = jwtPeekIss(r.PostFormValue("client_assertion"))
