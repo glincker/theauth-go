@@ -169,7 +169,7 @@ func (p *provider) applyOverrides() error {
 		if pair.v == "" {
 			continue
 		}
-		if !strings.HasPrefix(pair.v, "https://") && !(p.cfg.AllowInsecureHTTP && strings.HasPrefix(pair.v, "http://")) {
+		if !strings.HasPrefix(pair.v, "https://") && (!p.cfg.AllowInsecureHTTP || !strings.HasPrefix(pair.v, "http://")) {
 			return fmt.Errorf("oidc: Endpoints.%s must be https", name)
 		}
 		*pair.dst = pair.v
