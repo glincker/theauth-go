@@ -230,7 +230,7 @@ func (s *Store) ListRegistrationTokens(ctx context.Context, orgID *theauth.ULID)
 	if err != nil {
 		return nil, fmt.Errorf("mysql: list registration tokens: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	var out []theauth.RegistrationToken
 	for rows.Next() {
 		t, err := scanRegToken(rows)

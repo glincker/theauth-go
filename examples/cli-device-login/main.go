@@ -131,13 +131,13 @@ func (f *flow) Login(ctx context.Context, cfg config) (Tokens, error) {
 		return Tokens{}, fmt.Errorf("device authorization: %w", err)
 	}
 
-	fmt.Fprintf(f.Out, "\nTo sign in, open %s\nand enter the code: %s\n\n", auth.VerificationURI, auth.UserCode)
+	_, _ = fmt.Fprintf(f.Out, "\nTo sign in, open %s\nand enter the code: %s\n\n", auth.VerificationURI, auth.UserCode)
 	if auth.VerificationURIComplete != "" && f.Open != nil {
 		if err := f.Open(auth.VerificationURIComplete); err != nil {
-			fmt.Fprintln(f.Out, "(could not open a browser:", err.Error()+")")
+			_, _ = fmt.Fprintln(f.Out, "(could not open a browser:", err.Error()+")")
 		}
 	}
-	fmt.Fprintf(f.Out, "Waiting for approval (the code expires in %d minutes)...\n", (auth.ExpiresIn+59)/60)
+	_, _ = fmt.Fprintf(f.Out, "Waiting for approval (the code expires in %d minutes)...\n", (auth.ExpiresIn+59)/60)
 
 	interval := defaultInterval
 	if auth.Interval > 0 {
