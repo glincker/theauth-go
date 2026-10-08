@@ -58,7 +58,7 @@ func TestDPoPEndToEnd(t *testing.T) {
 
 	// POST /oauth/token with a DPoP header.
 	tokenURL := srv.URL + "/oauth/token"
-	proofTokenEndpoint := makeDPoPProof(t, clientPriv, "POST", tokenURL, "", time.Now())
+	proofTokenEndpoint := makeDPoPProof(t, clientPriv, "POST", "https://auth.example.com/oauth/token", "", time.Now())
 	form := url.Values{}
 	form.Set("grant_type", theauth.GrantTypeAuthorizationCode)
 	form.Set("client_id", client.ClientID)

@@ -28,6 +28,9 @@ type v20State struct {
 
 	jwksKeys map[string]theauth.JWKSKey
 
+	// deniedJTIs is the opt-in access-token denylist: jti -> token exp.
+	deniedJTIs map[string]time.Time
+
 	// v2.0 phase 3 + 4 state. Each map is guarded by the shared mu lock so
 	// admin / token / introspect paths see a consistent snapshot.
 	agents           map[theauth.ULID]theauth.Agent
@@ -49,6 +52,7 @@ func (s *Store) ensureV20() *v20State {
 			refreshTokens:    map[string]theauth.RefreshToken{},
 			refreshTokensByF: map[theauth.ULID][]string{},
 			jwksKeys:         map[string]theauth.JWKSKey{},
+			deniedJTIs:       map[string]time.Time{},
 			agents:           map[theauth.ULID]theauth.Agent{},
 			agentsByClientID: map[string]theauth.ULID{},
 			agentCredentials: map[theauth.ULID]theauth.AgentCredential{},
@@ -190,7 +194,10 @@ func (s *Store) RevokeRefreshToken(_ context.Context, hash []byte, reason string
 	defer v.mu.Unlock()
 	key := bytesHexKey(hash)
 	t, ok := v.refreshTokens[key]
-	if !ok {
+	// Conditional like the SQL backends (WHERE revoked_at IS NULL): an
+	// already-revoked token reports ErrNotFound so exactly one of two
+	// concurrent rotations wins.
+	if !ok || t.RevokedAt != nil {
 		return storage.ErrNotFound
 	}
 	now := time.Now()
@@ -198,6 +205,38 @@ func (s *Store) RevokeRefreshToken(_ context.Context, hash []byte, reason string
 	t.RevocationNote = reason
 	v.refreshTokens[key] = t
 	return nil
+}
+
+// RevokeRefreshTokensByAuthCode revokes every live token in the rotation
+// families first issued from the authorization code stored under codeHash
+// and returns the access-token jtis (ParentJTI) of the tokens it revoked.
+func (s *Store) RevokeRefreshTokensByAuthCode(_ context.Context, codeHash, reason string) ([]string, error) {
+	v := s.ensureV20()
+	v.mu.Lock()
+	defer v.mu.Unlock()
+	if codeHash == "" {
+		return nil, nil
+	}
+	families := map[theauth.ULID]struct{}{}
+	for _, t := range v.refreshTokens {
+		if t.AuthCodeHash == codeHash {
+			families[t.FamilyID] = struct{}{}
+		}
+	}
+	var jtis []string
+	now := time.Now()
+	for fam := range families {
+		for _, k := range v.refreshTokensByF[fam] {
+			t := v.refreshTokens[k]
+			if t.RevokedAt == nil {
+				t.RevokedAt = &now
+				t.RevocationNote = reason
+				v.refreshTokens[k] = t
+				jtis = append(jtis, t.ParentJTI)
+			}
+		}
+	}
+	return jtis, nil
 }
 
 func (s *Store) RevokeRefreshTokenFamily(_ context.Context, familyID theauth.ULID, reason string) error {
@@ -538,4 +577,32 @@ func bytesHexKey(b []byte) string {
 
 func delegationTupleKey(userID, agentID theauth.ULID, resource string) string {
 	return userID.String() + "|" + agentID.String() + "|" + resource
+}
+
+// ---------- access-token denylist ----------
+
+// DenyAccessToken records jti as revoked until expiresAt. Expired entries
+// are purged opportunistically on each call so the map stays bounded by the
+// number of live revoked tokens.
+func (s *Store) DenyAccessToken(_ context.Context, jti string, expiresAt time.Time) error {
+	v := s.ensureV20()
+	v.mu.Lock()
+	defer v.mu.Unlock()
+	now := time.Now()
+	for k, exp := range v.deniedJTIs {
+		if !exp.After(now) {
+			delete(v.deniedJTIs, k)
+		}
+	}
+	v.deniedJTIs[jti] = expiresAt
+	return nil
+}
+
+// IsAccessTokenDenied reports whether jti is on the denylist and unexpired.
+func (s *Store) IsAccessTokenDenied(_ context.Context, jti string) (bool, error) {
+	v := s.ensureV20()
+	v.mu.RLock()
+	defer v.mu.RUnlock()
+	exp, ok := v.deniedJTIs[jti]
+	return ok && exp.After(time.Now()), nil
 }

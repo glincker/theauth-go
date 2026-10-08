@@ -298,8 +298,8 @@ func (s *Store) InsertRefreshToken(ctx context.Context, t theauth.RefreshToken) 
 	_, err := s.db.ExecContext(ctx, `
 INSERT INTO oauth_refresh_tokens
     (id, hash, family_id, client_id, user_id, agent_id, scope, resource,
-     parent_jti, issued_at, expires_at)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+     parent_jti, issued_at, expires_at, dpop_jkt, auth_code_hash)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		ulidToBytes(t.ID),
 		t.Hash,
 		ulidToBytes(t.FamilyID),
@@ -311,6 +311,8 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		t.ParentJTI,
 		timeUTC(t.IssuedAt),
 		timeUTC(t.ExpiresAt),
+		t.DPoPJKT,
+		t.AuthCodeHash,
 	)
 	return err
 }
@@ -319,17 +321,19 @@ func (s *Store) RefreshTokenByHash(ctx context.Context, hash []byte) (*theauth.R
 	var (
 		idB, familyIDB, userIDB, agentIDB []byte
 		clientID, resource, parentJTI     string
-		revNote                           string
+		revNote, dpopJKT, authCodeHash    string
 		scopeJSON                         []byte
 		issued, expires, revoked          sql.NullTime
 	)
 	err := s.db.QueryRowContext(ctx, `
 SELECT id, hash, family_id, client_id, user_id, agent_id, scope, resource,
-       parent_jti, issued_at, expires_at, revoked_at, revocation_note
+       parent_jti, issued_at, expires_at, revoked_at, revocation_note,
+       dpop_jkt, auth_code_hash
 FROM oauth_refresh_tokens WHERE hash = ?`, hash,
 	).Scan(
 		&idB, &hash, &familyIDB, &clientID, &userIDB, &agentIDB, &scopeJSON, &resource,
 		&parentJTI, &issued, &expires, &revoked, &revNote,
+		&dpopJKT, &authCodeHash,
 	)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, storage.ErrNotFound
@@ -354,6 +358,8 @@ FROM oauth_refresh_tokens WHERE hash = ?`, hash,
 		ExpiresAt:      expires.Time.UTC(),
 		RevokedAt:      nullTimeToPtr(revoked),
 		RevocationNote: revNote,
+		DPoPJKT:        dpopJKT,
+		AuthCodeHash:   authCodeHash,
 	}
 	return out, nil
 }
@@ -372,6 +378,77 @@ func (s *Store) RevokeRefreshToken(ctx context.Context, hash []byte, reason stri
 		return storage.ErrNotFound
 	}
 	return nil
+}
+
+// RevokeRefreshTokensByAuthCode revokes every live token in the rotation
+// families first issued from the code stored under codeHash and returns the
+// access-token jtis of the tokens it revoked.
+func (s *Store) RevokeRefreshTokensByAuthCode(ctx context.Context, codeHash, reason string) ([]string, error) {
+	if codeHash == "" {
+		return nil, nil
+	}
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = tx.Rollback() }()
+	rows, err := tx.QueryContext(ctx, `
+SELECT parent_jti FROM oauth_refresh_tokens
+WHERE revoked_at IS NULL AND family_id IN (
+    SELECT family_id FROM (SELECT family_id FROM oauth_refresh_tokens WHERE auth_code_hash = ?) f
+) FOR UPDATE`, codeHash)
+	if err != nil {
+		return nil, err
+	}
+	var jtis []string
+	for rows.Next() {
+		var j string
+		if err := rows.Scan(&j); err != nil {
+			_ = rows.Close()
+			return nil, err
+		}
+		jtis = append(jtis, j)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if _, err := tx.ExecContext(ctx, `
+UPDATE oauth_refresh_tokens SET revoked_at = ?, revocation_note = ?
+WHERE revoked_at IS NULL AND family_id IN (
+    SELECT family_id FROM (SELECT family_id FROM oauth_refresh_tokens WHERE auth_code_hash = ?) f
+)`, timeUTC(time.Now()), reason, codeHash); err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+	return jtis, nil
+}
+
+// DenyAccessToken records jti as revoked until expiresAt (opt-in access
+// token revocation).
+func (s *Store) DenyAccessToken(ctx context.Context, jti string, expiresAt time.Time) error {
+	_, err := s.db.ExecContext(ctx, `
+INSERT INTO oauth_revoked_jtis (jti, expires_at) VALUES (?, ?)
+ON DUPLICATE KEY UPDATE expires_at = VALUES(expires_at)`, jti, timeUTC(expiresAt))
+	if err != nil {
+		return err
+	}
+	// Opportunistic purge keeps the table bounded by live revocations.
+	_, _ = s.db.ExecContext(ctx, `DELETE FROM oauth_revoked_jtis WHERE expires_at < ?`, timeUTC(time.Now()))
+	return nil
+}
+
+// IsAccessTokenDenied reports whether jti is on the unexpired denylist.
+func (s *Store) IsAccessTokenDenied(ctx context.Context, jti string) (bool, error) {
+	var one int
+	err := s.db.QueryRowContext(ctx,
+		`SELECT 1 FROM oauth_revoked_jtis WHERE jti = ? AND expires_at > ?`,
+		jti, timeUTC(time.Now())).Scan(&one)
+	if errors.Is(err, sql.ErrNoRows) {
+		return false, nil
+	}
+	return err == nil, err
 }
 
 func (s *Store) RevokeRefreshTokenFamily(ctx context.Context, familyID theauth.ULID, reason string) error {

@@ -93,6 +93,11 @@ func (s *Service) IntrospectToken(ctx context.Context, token, clientID, clientSe
 		// resume / revoke decision the operator made AFTER the cache
 		// was populated. Inactive chain entries flip active=false and
 		// bypass the cache body entirely.
+		if resp.Active && resp.Jti != "" && s.accessJTIRevoked(ctx, resp.Jti) {
+			resp = IntrospectionResponse{Active: false}
+			body, _ := json.Marshal(resp)
+			return resp, body, nil
+		}
 		if resp.Active && (resp.Act != nil || resp.DelegationGrantID != "") {
 			if !s.chainStillActive(ctx, &resp) {
 				resp = IntrospectionResponse{Active: false}
@@ -126,6 +131,9 @@ func (s *Service) introspectJWT(ctx context.Context, token, expectedAud string) 
 	if claims.Aud == "" {
 		return IntrospectionResponse{Active: false}
 	}
+	if s.accessJTIRevoked(ctx, claims.Jti) {
+		return IntrospectionResponse{Active: false}
+	}
 	resp := IntrospectionResponse{
 		Active:    true,
 		Scope:     claims.Scope,
@@ -154,6 +162,7 @@ func (s *Service) introspectJWT(ctx context.Context, token, expectedAud string) 
 		if m, ok := v.(map[string]any); ok {
 			if jkt, ok := m["jkt"].(string); ok && jkt != "" {
 				resp.Cnf = &ConfirmationClaim{JKT: jkt}
+				resp.TokenType = "DPoP"
 			}
 		}
 	}
@@ -370,3 +379,15 @@ func introspectCacheKey(token, aud string) string {
 // 2026-06 architecture reorg consolidated both into
 // internal/delegation; this file now imports delegation.Active and
 // delegation.NarrowScope so the helpers exist in exactly one place.
+
+// purgeIntrospectCache drops every cached introspection body so a fresh
+// revocation is visible immediately on this instance.
+func (s *Service) purgeIntrospectCache() {
+	if s == nil {
+		return
+	}
+	s.introspectCache.Range(func(k, _ any) bool {
+		s.introspectCache.Delete(k)
+		return true
+	})
+}

@@ -3,8 +3,11 @@ package as
 import (
 	"context"
 	"errors"
+	"strings"
+	"time"
 
 	"github.com/glincker/theauth-go/v2/crypto"
+	"github.com/glincker/theauth-go/v2/internal/jwt"
 	obs "github.com/glincker/theauth-go/v2/internal/observability"
 )
 
@@ -17,10 +20,10 @@ import (
 // authentication; the handler maps that to 401 invalid_client per RFC
 // 6749.
 
-// RevokeToken invalidates a refresh token. Authorization codes and
-// access tokens are out of scope for this entry: codes are single-use
-// anyway, and access tokens are stateless JWTs whose lifetime is bounded
-// by exp.
+// RevokeToken invalidates a refresh token (whole rotation family) or, when
+// Config.AccessTokenRevocation is on, an access token via the jti
+// denylist. Only the client the token was issued to may revoke it.
+// Authorization codes are single-use anyway.
 func (s *Service) RevokeToken(ctx context.Context, token, tokenTypeHint, clientID, clientSecret string) (err error) {
 	if s == nil {
 		return errors.New("theauth: authorization server not configured")
@@ -36,7 +39,8 @@ func (s *Service) RevokeToken(ctx context.Context, token, tokenTypeHint, clientI
 		span.SetAttributes(obs.StringAttr(obs.AttrStatus, string(status)))
 		span.End()
 	}()
-	if _, aerr := s.AuthenticateClient(ctx, clientID, clientSecret); aerr != nil {
+	client, aerr := s.AuthenticateClient(ctx, clientID, clientSecret)
+	if aerr != nil {
 		err = aerr
 		return err
 	}
@@ -46,12 +50,13 @@ func (s *Service) RevokeToken(ctx context.Context, token, tokenTypeHint, clientI
 		// calling here.
 		return nil
 	}
-	hint := tokenTypeHint
-	// Phase 1 + 2 only stores refresh tokens. Access tokens are stateless
-	// JWTs whose lifetime is bounded by exp, so revocation has no
-	// server-side effect; we still accept the request and return success
-	// to honor the RFC.
-	if hint != "" && hint != "refresh_token" {
+	// Access tokens are JWTs (three segments); refresh tokens are opaque.
+	// The hint is advisory (RFC 7009 section 2.1), so the shape decides.
+	if strings.Count(token, ".") == 2 {
+		s.revokeAccessToken(ctx, token, client.ClientID)
+		return nil
+	}
+	if tokenTypeHint == "access_token" {
 		return nil
 	}
 	hash := crypto.HashToken(token)
@@ -61,12 +66,31 @@ func (s *Service) RevokeToken(ctx context.Context, token, tokenTypeHint, clientI
 	// child alive. Mirror the reuse-detection family walk in
 	// RefreshAccessToken.
 	rt, err := s.Storage.RefreshTokenByHash(ctx, hash)
-	if err == nil {
-		// Token found: revoke the whole family then the token itself.
-		_ = s.Storage.RevokeRefreshTokenFamily(ctx, rt.FamilyID, "explicit revoke")
+	if err != nil {
+		// Unknown, expired or never issued: RFC 7009 still answers 200.
+		err = nil
 		return nil
 	}
-	// Token not found (already expired, already revoked, or never issued).
-	// Per RFC 7009 the AS MUST respond with 200 on unknown tokens.
+	// RFC 7009 section 2.1: the AS validates that the token was issued to
+	// the authenticated client. A mismatch is answered 200 without effect
+	// so a client cannot probe or kill another client's tokens.
+	if rt.ClientID != client.ClientID {
+		return nil
+	}
+	_ = s.Storage.RevokeRefreshTokenFamily(ctx, rt.FamilyID, "explicit revoke")
 	return nil
+}
+
+// revokeAccessToken adds the token's jti to the denylist when the feature
+// is enabled. Without it, access tokens stay stateless and the call is a
+// no-op, as before. Only the issuing client may revoke.
+func (s *Service) revokeAccessToken(ctx context.Context, token, clientID string) {
+	if s.denylist() == nil {
+		return
+	}
+	claims, verr := jwt.Verify(token, s.PublicKeyByKID, "", time.Now())
+	if verr != nil || claims.Iss != s.Cfg.Issuer || claims.ClientID != clientID || claims.Jti == "" {
+		return
+	}
+	_ = s.denyAccessJTI(ctx, claims.Jti, time.Unix(claims.Exp, 0))
 }

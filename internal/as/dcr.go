@@ -5,11 +5,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"net/url"
-	"strings"
 	"time"
 
 	"github.com/glincker/theauth-go/v2/crypto"
+	"github.com/glincker/theauth-go/v2/internal/cimd"
 	"github.com/glincker/theauth-go/v2/internal/models"
 	obs "github.com/glincker/theauth-go/v2/internal/observability"
 	"github.com/glincker/theauth-go/v2/internal/ulid"
@@ -220,30 +219,22 @@ func validateRegistrationRequest(req *ClientRegistrationRequest, anonymous bool)
 	return nil
 }
 
-// validateRedirectURI enforces RFC 7591 + OAuth 2.1: URI MUST parse,
-// MUST have an absolute scheme, MUST NOT contain a fragment. Web app
-// schemes are limited to https and localhost http for development;
-// native app schemes (custom or loopback) are permitted but not
-// exhaustively whitelisted.
+// validateRedirectURI enforces RFC 7591, RFC 8252 and OAuth 2.1 on a
+// registered redirect URI. It must parse, be absolute, carry no fragment
+// and no userinfo, and use one of:
+//
+//   - https (any host);
+//   - http on a loopback host (localhost, 127.0.0.1, ::1) with any port
+//     (RFC 8252 section 7.3);
+//   - a private-use scheme in reverse-DNS form (RFC 8252 section 7.1),
+//     i.e. the scheme contains a dot, such as com.example.app.
+//
+// Everything else, notably javascript:, data:, file:, vbscript: and
+// dotless custom schemes, is refused so a registered URI can never turn
+// the authorization redirect into script execution or local file access.
 func validateRedirectURI(raw string) error {
-	if raw == "" {
-		return wrapInvalidReg("empty redirect_uri")
-	}
-	u, err := url.Parse(raw)
-	if err != nil {
-		return wrapInvalidReg("redirect_uri parse failed: " + err.Error())
-	}
-	if u.Scheme == "" {
-		return wrapInvalidReg("redirect_uri must be absolute")
-	}
-	if u.Fragment != "" {
-		return wrapInvalidReg("redirect_uri must not contain a fragment")
-	}
-	if u.Scheme == "http" {
-		host := strings.ToLower(u.Hostname())
-		if host != "localhost" && host != "127.0.0.1" && host != "::1" {
-			return wrapInvalidReg("http redirect_uri is only allowed for localhost")
-		}
+	if err := cimd.ValidateRedirectURI(raw); err != nil {
+		return wrapInvalidReg(err.Error())
 	}
 	return nil
 }
