@@ -44,6 +44,10 @@ adheres to [Semantic Versioning](https://semver.org/) from v1.0 forward.
 - Registration tokens (initial access tokens) for `POST /oauth/register`: one-time or limited use, scoped, expiring, hashed at rest, `CreateRegistrationToken`/`ListRegistrationTokens`/`RevokeRegistrationToken`, an org-scoped admin API, audit events. `RegistrationTokenStorage`, `storagetest.RunRegistrationTokens`.
 - `AuthorizationServerConfig.RateLimits` (`ASRateLimits`).
 - `examples/cli-device-login`: a stdlib-only CLI and a demo server.
+- `otp` package: email and SMS one-time codes with a pluggable `Sender` (`EmailSender`, `TwilioSender`, `SenderFunc`), resend cooldown, attempt limit, lockout, HMAC-at-rest codes and constant-time comparison. State lives in a `kv.Cache`.
+- `provider/generic`: table-driven OAuth provider factory with 10 built-in providers (Spotify, Dropbox, Zoom, Kakao, Naver, Patreon, Box, Salesforce, Figma, Codeberg) and custom `Spec` support.
+- `provider/oidc`: `Config.DiscoveryURL`, `Config.Endpoints` and `Config.DisableDiscovery` for IdPs with non-standard discovery.
+- `openapi` package (`openapi.Generate`) and the `cmd/theauth-go` CLI with `secret` and `openapi` commands.
 
 ### Fixed
 
