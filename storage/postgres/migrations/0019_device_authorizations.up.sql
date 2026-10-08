@@ -26,7 +26,7 @@ CREATE INDEX idx_device_authorizations_expires_at ON device_authorizations (expi
 CREATE TABLE registration_tokens (
     id              uuid PRIMARY KEY,
     token_hash      bytea NOT NULL,
-    prefix          text NOT NULL DEFAULT '',
+    token_prefix    text NOT NULL DEFAULT '',
     label           text NOT NULL DEFAULT '',
     organization_id uuid,
     scopes          text NOT NULL DEFAULT '[]',

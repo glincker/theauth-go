@@ -23,7 +23,7 @@ var (
 const devAuthCols = `id, device_code_hash, user_code_hash, client_id, scope, resource, status, user_id,
 interval_seconds, last_poll_at, created_at, expires_at, decided_at`
 
-const regTokenCols = `id, token_hash, prefix, label, organization_id, scopes, grant_types, max_uses, uses,
+const regTokenCols = `id, token_hash, token_prefix, label, organization_id, scopes, grant_types, max_uses, uses,
 created_by, created_at, expires_at, last_used_at, revoked_at`
 
 // InsertDeviceAuthorization satisfies DeviceAuthorizationStorage.
