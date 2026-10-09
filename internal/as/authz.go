@@ -35,6 +35,10 @@ type AuthorizeRequest struct {
 	Resource            string
 	Nonce               string
 
+	// AuthorizationDetails is the raw RFC 9396 authorization_details JSON
+	// array, empty when the request carries none.
+	AuthorizationDetails string
+
 	// RequestURI, when non-empty, identifies a pushed authorization
 	// request (RFC 9126). The handler resolves it before calling
 	// StartAuthorize; this field is informational at service level.
@@ -103,6 +107,10 @@ func (s *Service) StartAuthorize(ctx context.Context, req AuthorizeRequest, user
 	if err != nil {
 		return AuthorizeResult{}, err
 	}
+	_, details, err := s.parseAuthorizationDetails(client, req.AuthorizationDetails)
+	if err != nil {
+		return AuthorizeResult{}, err
+	}
 	if user == nil {
 		// Unauthenticated; let the caller redirect to LoginURL with a
 		// `next` query so the user returns here after sign in. This
@@ -116,17 +124,18 @@ func (s *Service) StartAuthorize(ctx context.Context, req AuthorizeRequest, user
 	}
 	now := time.Now()
 	if err := s.Storage.InsertAuthorizationCode(ctx, models.AuthorizationCode{
-		Code:                codeStorageKey(codeStr),
-		ClientID:            client.ClientID,
-		UserID:              user.ID,
-		RedirectURI:         req.RedirectURI,
-		Scope:               scope,
-		Resource:            req.Resource,
-		CodeChallenge:       req.CodeChallenge,
-		CodeChallengeMethod: req.CodeChallengeMethod,
-		Nonce:               req.Nonce,
-		ExpiresAt:           now.Add(s.Cfg.AuthorizationCodeTTL),
-		CreatedAt:           now,
+		Code:                 codeStorageKey(codeStr),
+		ClientID:             client.ClientID,
+		UserID:               user.ID,
+		RedirectURI:          req.RedirectURI,
+		Scope:                scope,
+		Resource:             req.Resource,
+		CodeChallenge:        req.CodeChallenge,
+		CodeChallengeMethod:  req.CodeChallengeMethod,
+		Nonce:                req.Nonce,
+		AuthorizationDetails: details,
+		ExpiresAt:            now.Add(s.Cfg.AuthorizationCodeTTL),
+		CreatedAt:            now,
 	}); err != nil {
 		return AuthorizeResult{}, err
 	}

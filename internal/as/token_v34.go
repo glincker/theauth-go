@@ -95,10 +95,6 @@ func (s *Service) ClientCredentialsToken(ctx context.Context, req TokenRequest) 
 	}
 	now := time.Now().UTC()
 	jti := ulid.New().String()
-	signingKey, priv, err := s.CurrentSigningKey()
-	if err != nil {
-		return TokenResponse{}, err
-	}
 	claims := jwt.Claims{
 		Iss:      s.Cfg.Issuer,
 		Sub:      models.AgentSubjectPrefix + agent.ID.String(),
@@ -120,7 +116,7 @@ func (s *Service) ClientCredentialsToken(ctx context.Context, req TokenRequest) 
 	if err := s.applyOnTokenIssued(ctx, &claims); err != nil {
 		return TokenResponse{}, err
 	}
-	access, err := jwt.Sign(claims, signingKey.KID, priv)
+	access, err := s.issueAccessToken(ctx, client.ClientID, claims)
 	if err != nil {
 		return TokenResponse{}, fmt.Errorf("sign agent token: %w", err)
 	}
@@ -158,6 +154,9 @@ func (s *Service) ClientCredentialsToken(ctx context.Context, req TokenRequest) 
 func (s *Service) ExchangeToken(ctx context.Context, req TokenExchangeRequest) (resp TokenResponse, err error) {
 	if s == nil {
 		return TokenResponse{}, errors.New("theauth: authorization server not configured")
+	}
+	if req.RequestedTokenType == models.TokenTypeIDJAG {
+		return s.exchangeForIDJAG(ctx, req)
 	}
 	if s.AgentPolicy == nil {
 		return TokenResponse{}, models.ErrOAuthUnsupportedGrantType
@@ -303,10 +302,6 @@ func (s *Service) ExchangeToken(ctx context.Context, req TokenExchangeRequest) (
 	// Step 11: build the new actor claim and mint.
 	existingActor := actorFromClaims(subjectClaims)
 	newActor := chain.Prepend(models.AgentSubjectPrefix+requestingAgent.ID.String(), existingActor)
-	signingKey, priv, err := s.CurrentSigningKey()
-	if err != nil {
-		return TokenResponse{}, err
-	}
 	jti := ulid.New().String()
 	claims := jwt.Claims{
 		Iss:      s.Cfg.Issuer,
@@ -331,7 +326,7 @@ func (s *Service) ExchangeToken(ctx context.Context, req TokenExchangeRequest) (
 	if err := s.applyOnTokenIssued(ctx, &claims); err != nil {
 		return TokenResponse{}, err
 	}
-	access, err := jwt.Sign(claims, signingKey.KID, priv)
+	access, err := s.issueAccessToken(ctx, client.ClientID, claims)
 	if err != nil {
 		return TokenResponse{}, fmt.Errorf("sign exchanged token: %w", err)
 	}

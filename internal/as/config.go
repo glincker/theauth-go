@@ -10,6 +10,7 @@ import (
 	"github.com/glincker/theauth-go/v2/crypto"
 	"github.com/glincker/theauth-go/v2/internal/cimd"
 	"github.com/glincker/theauth-go/v2/internal/dpop"
+	"github.com/glincker/theauth-go/v2/internal/jwt"
 	"github.com/glincker/theauth-go/v2/internal/models"
 	"github.com/glincker/theauth-go/v2/internal/pathprefix"
 	"github.com/glincker/theauth-go/v2/kv"
@@ -30,9 +31,24 @@ type Config struct {
 	// set from the resource (RFC 8707 + RFC 9068).
 	Resources []models.ProtectedResource
 
-	// SigningAlg defaults to EdDSA (Ed25519). Phase 1 + 2 ships Ed25519
-	// only.
+	// SigningAlg is the default JWS algorithm for access tokens: EdDSA
+	// (Ed25519, the default), ES256 or RS256. Individual clients may select
+	// another alg listed in TokenPolicy.SigningAlgs.
 	SigningAlg string
+
+	// TokenPolicy enables per-client access token policy: extra signing
+	// algorithms and opaque (reference) access tokens. Nil keeps every
+	// client on the default JWT/EdDSA behaviour.
+	TokenPolicy *TokenPolicyConfig
+
+	// RAR enables OAuth 2.0 Rich Authorization Requests (RFC 9396) when
+	// non-nil. Nil rejects any authorization_details parameter.
+	RAR *RARConfig
+
+	// IDJAG enables issuing Identity Assertion JWT Authorization Grants via
+	// token exchange and redeeming them at the jwt-bearer grant. Nil
+	// disables both.
+	IDJAG *IDJAGConfig
 
 	// KeyRotationPeriod defaults to 30 days. The rotation goroutine
 	// promotes next -> current -> previous and generates a fresh next at
@@ -233,8 +249,17 @@ func Validate(cfg *Config, encryptionKey []byte) error {
 	if cfg.SigningAlg == "" {
 		cfg.SigningAlg = "EdDSA"
 	}
-	if cfg.SigningAlg != "EdDSA" {
+	if !jwt.SupportedAlg(cfg.SigningAlg) {
 		return models.ErrASUnsupportedAlg
+	}
+	if err := validateTokenPolicy(cfg); err != nil {
+		return err
+	}
+	if err := validateRAR(cfg.RAR); err != nil {
+		return err
+	}
+	if err := validateIDJAG(cfg); err != nil {
+		return err
 	}
 	if cfg.KeyRotationPeriod <= 0 {
 		cfg.KeyRotationPeriod = 30 * 24 * time.Hour

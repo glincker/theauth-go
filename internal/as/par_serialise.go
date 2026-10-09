@@ -18,6 +18,8 @@ type serializedAuthorizeRequest struct {
 	CodeChallengeMethod string   `json:"code_challenge_method"`
 	Resource            string   `json:"resource"`
 	Nonce               string   `json:"nonce,omitempty"`
+
+	AuthorizationDetails string `json:"authorization_details,omitempty"`
 }
 
 func serializeAuthorizeRequest(req AuthorizeRequest) ([]byte, error) {
@@ -31,6 +33,8 @@ func serializeAuthorizeRequest(req AuthorizeRequest) ([]byte, error) {
 		CodeChallengeMethod: req.CodeChallengeMethod,
 		Resource:            req.Resource,
 		Nonce:               req.Nonce,
+
+		AuthorizationDetails: req.AuthorizationDetails,
 	})
 }
 
@@ -49,5 +53,7 @@ func deserializeAuthorizeRequest(payload []byte) (AuthorizeRequest, error) {
 		CodeChallengeMethod: s.CodeChallengeMethod,
 		Resource:            s.Resource,
 		Nonce:               s.Nonce,
+
+		AuthorizationDetails: s.AuthorizationDetails,
 	}, nil
 }

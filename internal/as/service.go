@@ -2,7 +2,7 @@ package as
 
 import (
 	"context"
-	"crypto/ed25519"
+	"crypto"
 	"errors"
 	"log/slog"
 	"strings"
@@ -72,7 +72,8 @@ type Service struct {
 	mu           sync.RWMutex
 	keys         []models.JWKSKey
 	keyMap       map[string]models.JWKSKey
-	privKeyByKID map[string]ed25519.PrivateKey
+	privKeyByKID map[string]crypto.Signer
+	pubByKID     map[string]verifyKey
 
 	// rotationMu serialises RotateSigningKey calls so that concurrent
 	// operators cannot observe a split-brain state where two storage rows
@@ -245,7 +246,8 @@ func New(d Deps) *Service {
 		Audit:            emitter,
 		AgentLookup:      d.AgentLookup,
 		keyMap:           map[string]models.JWKSKey{},
-		privKeyByKID:     map[string]ed25519.PrivateKey{},
+		privKeyByKID:     map[string]crypto.Signer{},
+		pubByKID:         map[string]verifyKey{},
 		clientAuthCache:  clientauthcache.New[*models.OAuthClient](clientauthcache.DefaultMaxEntries, clientauthcache.DefaultTTL),
 		dpopSvc:          dpopSvc,
 		jwtBearerStorage: d.JWTBearerStorage,

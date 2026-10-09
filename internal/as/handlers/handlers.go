@@ -264,6 +264,8 @@ func (h *Handler) handleAuthorize(w http.ResponseWriter, r *http.Request) {
 			CodeChallengeMethod: q.Get("code_challenge_method"),
 			Resource:            q.Get("resource"),
 			Nonce:               q.Get("nonce"),
+
+			AuthorizationDetails: q.Get("authorization_details"),
 		}
 	}
 
@@ -289,6 +291,7 @@ func hasInlineAuthorizeParams(q url.Values, clientID string) bool {
 	check := []string{
 		"response_type", "redirect_uri", "scope", "state",
 		"code_challenge", "code_challenge_method", "resource", "nonce",
+		"authorization_details",
 	}
 	for _, k := range check {
 		if q.Get(k) != "" {
@@ -335,6 +338,8 @@ func (h *Handler) handlePAR(w http.ResponseWriter, r *http.Request) {
 			CodeChallengeMethod: r.PostFormValue("code_challenge_method"),
 			Resource:            r.PostFormValue("resource"),
 			Nonce:               r.PostFormValue("nonce"),
+
+			AuthorizationDetails: r.PostFormValue("authorization_details"),
 		}
 	}
 
@@ -405,20 +410,30 @@ func (h *Handler) handleToken(w http.ResponseWriter, r *http.Request) {
 	// scrubs them, and trusting them lets a proof minted for another origin
 	// pass the htu check.
 	httpURL := h.svc.TokenEndpointURL()
+	// authorization_details is honoured on the code and refresh grants only.
+	// Ignoring it elsewhere would hand out a token narrower or wider than
+	// the caller believes, so refuse it.
+	if r.PostFormValue("authorization_details") != "" &&
+		grantType != models.GrantTypeAuthorizationCode && grantType != models.GrantTypeRefreshToken {
+		writeOAuthError(w, http.StatusBadRequest, oauthErrInvalidAuthorizationDetails, "authorization_details is not supported for this grant")
+		return
+	}
 	switch grantType {
 	case models.GrantTypeAuthorizationCode:
 		req := internalas.TokenRequest{
-			GrantType:           grantType,
-			ClientID:            clientID,
-			ClientSecret:        clientSecret,
-			Code:                r.PostFormValue("code"),
-			CodeVerifier:        r.PostFormValue("code_verifier"),
-			RedirectURI:         r.PostFormValue("redirect_uri"),
-			DPoPProof:           dpopHeader,
-			HTTPMethod:          r.Method,
-			HTTPURL:             httpURL,
-			ClientAssertionType: clientAssertionType,
-			ClientAssertion:     clientAssertion,
+			GrantType:    grantType,
+			ClientID:     clientID,
+			ClientSecret: clientSecret,
+			Code:         r.PostFormValue("code"),
+			CodeVerifier: r.PostFormValue("code_verifier"),
+			RedirectURI:  r.PostFormValue("redirect_uri"),
+
+			AuthorizationDetails: r.PostFormValue("authorization_details"),
+			DPoPProof:            dpopHeader,
+			HTTPMethod:           r.Method,
+			HTTPURL:              httpURL,
+			ClientAssertionType:  clientAssertionType,
+			ClientAssertion:      clientAssertion,
 		}
 		resp, err := h.svc.ExchangeAuthorizationCode(r.Context(), req)
 		if err != nil {
@@ -428,17 +443,19 @@ func (h *Handler) handleToken(w http.ResponseWriter, r *http.Request) {
 		writeTokenJSON(w, resp)
 	case models.GrantTypeRefreshToken:
 		req := internalas.TokenRequest{
-			GrantType:           grantType,
-			ClientID:            clientID,
-			ClientSecret:        clientSecret,
-			RefreshToken:        r.PostFormValue("refresh_token"),
-			Resource:            r.PostFormValue("resource"),
-			Scope:               scopeSplit(r.PostFormValue("scope")),
-			DPoPProof:           dpopHeader,
-			HTTPMethod:          r.Method,
-			HTTPURL:             httpURL,
-			ClientAssertionType: clientAssertionType,
-			ClientAssertion:     clientAssertion,
+			GrantType:    grantType,
+			ClientID:     clientID,
+			ClientSecret: clientSecret,
+			RefreshToken: r.PostFormValue("refresh_token"),
+			Resource:     r.PostFormValue("resource"),
+
+			AuthorizationDetails: r.PostFormValue("authorization_details"),
+			Scope:                scopeSplit(r.PostFormValue("scope")),
+			DPoPProof:            dpopHeader,
+			HTTPMethod:           r.Method,
+			HTTPURL:              httpURL,
+			ClientAssertionType:  clientAssertionType,
+			ClientAssertion:      clientAssertion,
 		}
 		resp, err := h.svc.RefreshAccessToken(r.Context(), req)
 		if err != nil {
@@ -773,6 +790,8 @@ func mapOAuthErrorCode(err error) string {
 		return oauthErrInvalidGrant
 	case errors.Is(err, models.ErrOAuthInvalidScope):
 		return oauthErrInvalidScope
+	case errors.Is(err, models.ErrOAuthInvalidAuthorizationDetails):
+		return oauthErrInvalidAuthorizationDetails
 	case errors.Is(err, models.ErrOAuthUnsupportedGrantType):
 		return oauthErrUnsupportedGrantType
 	case errors.Is(err, models.ErrOAuthUnsupportedResponseType):
@@ -801,6 +820,8 @@ const (
 	oauthErrAccessDenied            = "access_denied"
 	oauthErrServerError             = "server_error"
 	oauthErrInvalidTarget           = "invalid_target"
+	// RFC 9396 section 5.
+	oauthErrInvalidAuthorizationDetails = "invalid_authorization_details"
 	// RFC 9449 wire codes returned from the token endpoint when a DPoP
 	// proof is missing, malformed, or rejected.
 	oauthErrInvalidDPoPProof = "invalid_dpop_proof"

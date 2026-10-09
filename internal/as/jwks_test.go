@@ -140,7 +140,7 @@ func TestNewRejectsASMissingIssuer(t *testing.T) {
 	}
 }
 
-func TestNewRejectsRS256(t *testing.T) {
+func TestNewRejectsUnsupportedSigningAlg(t *testing.T) {
 	store := memory.New()
 	key := make([]byte, 32)
 	_, err := theauth.New(theauth.Config{
@@ -149,7 +149,7 @@ func TestNewRejectsRS256(t *testing.T) {
 		EncryptionKey: key,
 		AuthorizationServer: &theauth.AuthorizationServerConfig{
 			Issuer:     "https://auth.example.com",
-			SigningAlg: "RS256",
+			SigningAlg: "HS256",
 		},
 	})
 	if err != theauth.ErrASUnsupportedAlg {

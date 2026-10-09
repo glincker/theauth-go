@@ -23,5 +23,5 @@ func (realClock) Now() time.Time { return time.Now() }
 // verifyAccessJWT verifies an access token JWT issued by this AS, applying
 // the configured clock-skew tolerance to exp and nbf.
 func (s *Service) verifyAccessJWT(token, expectedAud string, now time.Time) (jwt.Claims, error) {
-	return jwt.VerifyOpts(token, s.PublicKeyByKID, expectedAud, now, jwt.VerifyOptions{Skew: s.Cfg.ClockSkew})
+	return jwt.VerifyWith(token, s.VerificationKey, jwt.TypeAccessToken, expectedAud, now, jwt.VerifyOptions{Skew: s.Cfg.ClockSkew})
 }

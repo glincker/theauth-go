@@ -512,6 +512,24 @@ type AuthorizationServerConfig struct {
 	// disables it.
 	DeviceAuthorization *DeviceAuthorizationConfig
 
+	// TokenPolicy enables per-client access token policy: extra signing
+	// algorithms (ES256, RS256) and opaque reference tokens. Nil keeps every
+	// client on EdDSA JWTs. Opaque tokens need a storage that implements
+	// OpaqueTokenStorage (memory, Postgres and MySQL do).
+	TokenPolicy *TokenPolicyConfig
+
+	// RAR enables RFC 9396 Rich Authorization Requests: the
+	// authorization_details parameter on /oauth/authorize, PAR, JAR and the
+	// token endpoint, and the claim in access tokens and introspection. Nil
+	// rejects the parameter.
+	RAR *RARConfig
+
+	// IDJAG enables issuing Identity Assertion JWT Authorization Grants
+	// through token exchange, and redeeming them at the jwt-bearer grant
+	// (which also needs JWTBearer with the issuing server as a trusted
+	// issuer). Nil disables both.
+	IDJAG *IDJAGConfig
+
 	// RateLimits tunes the per-IP and per-client limits on /oauth/token,
 	// /oauth/revoke, /oauth/introspect, /oauth/par, /oauth/bc-authorize and
 	// /oauth/device_authorization, and the cap on concurrent Argon2id
@@ -524,6 +542,15 @@ type AuthorizationServerConfig struct {
 	// created through CreateRegistrationToken or the admin API. Default 24h.
 	RegistrationTokenTTL time.Duration
 }
+
+// TokenPolicyConfig is the root alias for the per-client token policy.
+type TokenPolicyConfig = internalas.TokenPolicyConfig
+
+// RARConfig is the root alias for the RFC 9396 settings.
+type RARConfig = internalas.RARConfig
+
+// IDJAGConfig is the root alias for the ID-JAG settings.
+type IDJAGConfig = internalas.IDJAGConfig
 
 // DeviceAuthorizationConfig is the root alias for the RFC 8628 settings.
 type DeviceAuthorizationConfig = internalas.DeviceConfig
@@ -824,6 +851,9 @@ func validateASConfig(cfg *AuthorizationServerConfig, encryptionKey []byte) erro
 		JWTBearer:                      jwtBearerConfigFromRoot(cfg.JWTBearer),
 		CIBA:                           cibaConfigToInternal(cfg.CIBA),
 		DeviceAuthorization:            cfg.DeviceAuthorization,
+		TokenPolicy:                    cfg.TokenPolicy,
+		RAR:                            cfg.RAR,
+		IDJAG:                          cfg.IDJAG,
 		RateLimits:                     cfg.RateLimits,
 		RegistrationTokenTTL:           cfg.RegistrationTokenTTL,
 	}
