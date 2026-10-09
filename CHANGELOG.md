@@ -6,6 +6,19 @@ adheres to [Semantic Versioning](https://semver.org/) from v1.0 forward.
 
 ## [Unreleased]
 
+### Added
+
+- `LifecycleHooks.OnHookError(ctx, hook, err)`: called when an observe-only hook returns an error or panics, in addition to the existing slog line, so hosts can alert instead of only logging. Nil keeps today's behavior.
+- `examples/hooks` and `docs/hooks.md`: a runnable demo and a reference for every lifecycle hook, including the observe-only contract.
+
+### Fixed
+
+- `OnSignin` now fires for passkey login, SAML login, and the TOTP or recovery-code step that completes a password sign-in held at pending_2fa. Previously it fired only for password, magic link and OAuth callback, and its documentation claimed the TOTP step already fired it.
+
+### Changed
+
+- Documentation: `OnSignup`, `OnSignin`, `OnPasswordChange`, `OnMFAEnabled` and `OnOrgSwitch` are documented as observe-only. They run after the action committed, so they cannot veto it.
+
 ## [2.8.0] - 2026-10-09
 
 ### Added
