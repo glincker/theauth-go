@@ -186,6 +186,11 @@ func validateConfig(cfg *Config) (providers map[string]Provider, sp samlParsed, 
 		if _, ok := cfg.storageRaw.(OAuthServerStorage); !ok {
 			return nil, samlParsed{}, nil, ErrStorageMissingOAuthMethods
 		}
+		if tp := cfg.AuthorizationServer.TokenPolicy; tp != nil && tp.DefaultAccessTokenFormat == AccessTokenFormatOpaque {
+			if _, ok := cfg.storageRaw.(OpaqueTokenStorage); !ok {
+				return nil, samlParsed{}, nil, errors.New("theauth: TokenPolicy.DefaultAccessTokenFormat opaque needs a storage that implements OpaqueTokenStorage")
+			}
+		}
 	}
 
 	// v2.0 agent identity + delegation.
@@ -305,6 +310,7 @@ func wireServices(a *TheAuth, cfg Config, providers map[string]Provider, sp saml
 			jwtBearerStore = jwtBearerStorageAdapter{jbs}
 		}
 		asCfg := asConfigFromRoot(cfg.AuthorizationServer)
+		asCfg.Stores = cfg.Stores
 		if asCfg.LoginURL == "" {
 			asCfg.LoginURL = a.pathPrefix + "/login"
 		}
@@ -524,6 +530,13 @@ func webauthnConfigFromRoot(c *WebAuthnConfig) *internalwebauthn.Config {
 		RequireUserVerification: c.RequireUserVerification,
 		CloneWarning:            string(c.CloneWarning),
 		UserHandleResolver:      c.UserHandleResolver,
+
+		AttestationPreference:       c.AttestationPreference,
+		RequireAttestationStatement: c.RequireAttestationStatement,
+		AAGUIDAllowlist:             append([]string(nil), c.AAGUIDAllowlist...),
+		AAGUIDDenylist:              append([]string(nil), c.AAGUIDDenylist...),
+		AuthenticatorNames:          c.AuthenticatorNames,
+		AuthenticatorName:           c.AuthenticatorName,
 	}
 }
 
@@ -597,6 +610,12 @@ func asConfigFromRoot(c *AuthorizationServerConfig) internalas.Config {
 		JAR:                            c.JAR,
 		JWTBearer:                      jwtBearerConfigFromRoot(c.JWTBearer),
 		CIBA:                           cibaConfigToInternal(c.CIBA),
+		DeviceAuthorization:            c.DeviceAuthorization,
+		TokenPolicy:                    c.TokenPolicy,
+		RAR:                            c.RAR,
+		IDJAG:                          c.IDJAG,
+		RateLimits:                     c.RateLimits,
+		RegistrationTokenTTL:           c.RegistrationTokenTTL,
 	}
 }
 

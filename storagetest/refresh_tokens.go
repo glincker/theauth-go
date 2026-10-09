@@ -139,6 +139,22 @@ func testRefreshTokens(t *testing.T, store theauth.OAuthServerStorage) {
 		}
 	})
 
+	t.Run("AuthorizationDetailsRoundTrip", func(t *testing.T) {
+		hash := sha256Hash([]byte("rt-rar"))
+		tok := makeToken(hash, newID())
+		tok.AuthorizationDetails = []byte(`[{"type":"payment","actions":["initiate"]}]`)
+		if err := store.InsertRefreshToken(ctx, tok); err != nil {
+			t.Fatal(err)
+		}
+		got, err := store.RefreshTokenByHash(ctx, hash)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if string(normalizeJSON(got.AuthorizationDetails)) != string(normalizeJSON(tok.AuthorizationDetails)) {
+			t.Fatalf("authorization_details lost: %s", got.AuthorizationDetails)
+		}
+	})
+
 	t.Run("RevokeByAuthCode", func(t *testing.T) {
 		rs, ok := store.(interface {
 			RevokeRefreshTokensByAuthCode(ctx context.Context, codeHash, reason string) ([]string, error)

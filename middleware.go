@@ -8,7 +8,9 @@ import (
 	"log/slog"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/glincker/theauth-go/v2/internal/httpsec"
 	"github.com/glincker/theauth-go/v2/internal/httpx"
@@ -313,6 +315,33 @@ func firstToken(v string) string {
 
 var extractClientIPTrusting = ratelimit.ClientIP
 
+// newAllower returns the per-key limiter behind RateLimitByIP and
+// RateLimitByEmail. Without Config.Stores.RateLimiter it is the in-process
+// limiter, one independent bucket set per call. With a shared limiter the keys
+// carry a rule name and a per-call sequence number, so separate middleware
+// instances still get separate budgets and every replica that wires routes in
+// the same order shares them. A backend error fails open: a limiter outage
+// should not lock every user out of sign-in.
+func (a *TheAuth) newAllower(rule string, perMinute int) func(context.Context, string) bool {
+	if a.stores.RateLimiter == nil {
+		k := ratelimit.New(perMinute)
+		return func(_ context.Context, key string) bool { return k.Allow(key) }
+	}
+	prefix := "mw:" + rule + ":" + strconv.Itoa(int(a.rlSeq.Add(1))) + ":"
+	lim := a.stores.RateLimiter
+	return func(ctx context.Context, key string) bool {
+		if key == "" {
+			return true
+		}
+		d, err := lim.Allow(ctx, prefix+key, perMinute, time.Minute)
+		if err != nil {
+			slog.Warn("theauth: rate limiter backend failed, allowing request", "rule", rule, "err", err.Error())
+			return true
+		}
+		return d.Allowed
+	}
+}
+
 // RateLimitByIP returns a middleware that limits requests per source IP to
 // perMinute per minute. Use on credential endpoints (signin, signup, forgot,
 // reset). The limiter lives on the returned handler. Multiple calls produce
@@ -324,13 +353,13 @@ var extractClientIPTrusting = ratelimit.ClientIP
 // the empty allowlist (no XFF trust), which is the safe behavior on a
 // direct public-internet bind (security audit H4, 2026-06-20).
 func (a *TheAuth) RateLimitByIP(perMinute int) func(http.Handler) http.Handler {
-	k := ratelimit.New(perMinute)
+	allow := a.newAllower("ip", perMinute)
 	trusted := a.trustedProxies
 	blocked := a.hooks.Counter(MetricRateLimitBlockedTotal, Labels{AttrRule: "ip"})
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			ip := extractClientIPTrusting(r, trusted)
-			if !k.Allow(ip) {
+			if !allow(r.Context(), ip) {
 				blocked.Inc()
 				w.Header().Set("Retry-After", "60")
 				httpx.Error(w, http.StatusTooManyRequests, "rate_limited")
@@ -346,7 +375,7 @@ func (a *TheAuth) RateLimitByIP(perMinute int) func(http.Handler) http.Handler {
 // so downstream handlers can re-read it. Requests without a parseable email
 // are passed through unlimited (handler will reject them on its own).
 func (a *TheAuth) RateLimitByEmail(perMinute int) func(http.Handler) http.Handler {
-	k := ratelimit.New(perMinute)
+	allow := a.newAllower("email", perMinute)
 	blocked := a.hooks.Counter(MetricRateLimitBlockedTotal, Labels{AttrRule: "email"})
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -368,7 +397,7 @@ func (a *TheAuth) RateLimitByEmail(perMinute int) func(http.Handler) http.Handle
 				return
 			}
 			key := a.normalizeEmail(body.Email)
-			if !k.Allow(key) {
+			if !allow(r.Context(), key) {
 				blocked.Inc()
 				w.Header().Set("Retry-After", "60")
 				httpx.Error(w, http.StatusTooManyRequests, "rate_limited")

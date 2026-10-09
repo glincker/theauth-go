@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/ed25519"
 	"net/netip"
+	"sync/atomic"
 	"strings"
 	"time"
 
@@ -32,6 +33,7 @@ import (
 	"github.com/glincker/theauth-go/v2/internal/throttle"
 	internaltotp "github.com/glincker/theauth-go/v2/internal/totp"
 	internalwebauthn "github.com/glincker/theauth-go/v2/internal/webauthn"
+	"github.com/glincker/theauth-go/v2/kv"
 )
 
 // Config holds the wiring for a TheAuth instance.
@@ -100,6 +102,14 @@ type Config struct {
 	// netip.MustParsePrefix("172.16.0.0/12"). For a single-host LB front
 	// end pass a /32 (or /128 for IPv6) literal.
 	TrustedProxies []netip.Prefix
+
+	// Stores plugs in the shared state backends: the rate limiter behind
+	// RateLimitByIP, RateLimitByEmail and the AS endpoint limits, the DPoP
+	// proof replay cache, and the CIMD document cache. Nil fields keep the
+	// in-process defaults, which are per replica. Behind several replicas set
+	// them to a shared adapter (kv.FromCache(sqlkv or kv/redis)) so limits and
+	// replay protection hold across instances. See the kv package.
+	Stores kv.Stores
 
 	// TrustedOrigins lists extra origins (scheme://host[:port]) allowed to
 	// send cookie-authenticated state-changing requests. The BaseURL origin
@@ -333,6 +343,8 @@ type TheAuth struct {
 	rateLimitPerIP    int
 	rateLimitPerEmail int
 	trustedProxies    []netip.Prefix
+	stores            kv.Stores
+	rlSeq             atomic.Uint32
 	trustedOrigins    []string
 	csrfDisabled      bool
 	apiTokens         *apitokens.Service
@@ -510,6 +522,7 @@ func New(cfg Config) (*TheAuth, error) {
 		rateLimitPerIP:             cfg.RateLimitPerIP,
 		rateLimitPerEmail:          cfg.RateLimitPerEmail,
 		trustedProxies:             append([]netip.Prefix(nil), cfg.TrustedProxies...),
+		stores:                     cfg.Stores,
 		trustedOrigins:             trustedOrigins,
 		csrfDisabled:               cfg.DisableCSRFProtection,
 		storageRaw:                 cfg.storageRaw,

@@ -3,6 +3,7 @@ package as
 import (
 	"context"
 	"crypto/subtle"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
@@ -32,6 +33,10 @@ type TokenRequest struct {
 	RefreshToken string
 	Resource     string
 	Scope        []string
+
+	// AuthorizationDetails is the raw RFC 9396 parameter. On the code and
+	// refresh grants it may narrow what the grant carries.
+	AuthorizationDetails string
 
 	// DPoPProof, when non-empty, is the raw value of the request's DPoP
 	// header. When populated and the AS has DPoP enabled, the token
@@ -68,6 +73,9 @@ type TokenResponse struct {
 	RefreshToken    string `json:"refresh_token,omitempty"`
 	Scope           string `json:"scope"`
 	IssuedTokenType string `json:"issued_token_type,omitempty"`
+
+	// AuthorizationDetails echoes the RFC 9396 details the token carries.
+	AuthorizationDetails json.RawMessage `json:"authorization_details,omitempty"`
 }
 
 // ExchangeAuthorizationCode redeems a one-time authorization code for an
@@ -121,16 +129,21 @@ func (s *Service) ExchangeAuthorizationCode(ctx context.Context, req TokenReques
 		return TokenResponse{}, models.ErrOAuthInvalidResource
 	}
 	scope := codeRow.Scope
+	details, err := s.narrowAuthorizationDetails(client, req.AuthorizationDetails, codeRow.AuthorizationDetails)
+	if err != nil {
+		return TokenResponse{}, err
+	}
 	jkt, err := s.dpopThumbprintForRequest(req)
 	if err != nil {
 		return TokenResponse{}, err
 	}
 	return s.mintAccessAndRefresh(ctx, mintInput{
-		ClientID: client.ClientID,
-		UserID:   &codeRow.UserID,
-		Scope:    scope,
-		Resource: codeRow.Resource,
-		DPoPJKT:  jkt,
+		ClientID:             client.ClientID,
+		UserID:               &codeRow.UserID,
+		Scope:                scope,
+		Resource:             codeRow.Resource,
+		DPoPJKT:              jkt,
+		AuthorizationDetails: details,
 		// AuthCodeHash lets a later replay of this code revoke the family.
 		AuthCodeHash: codeKey,
 	})
@@ -202,6 +215,10 @@ func (s *Service) RefreshAccessToken(ctx context.Context, req TokenRequest) (res
 			return TokenResponse{}, fmt.Errorf("%w: proof key does not match the bound key", ErrDPoPInvalid)
 		}
 	}
+	details, err := s.narrowAuthorizationDetails(client, req.AuthorizationDetails, rt.AuthorizationDetails)
+	if err != nil {
+		return TokenResponse{}, err
+	}
 	// Revoke the old refresh token before issuing the new pair, so a
 	// crash mid-mint cannot leave both alive (the new mint is idempotent
 	// on its fresh family ID). The revoke is conditional: if a concurrent
@@ -214,12 +231,13 @@ func (s *Service) RefreshAccessToken(ctx context.Context, req TokenRequest) (res
 		return TokenResponse{}, fmt.Errorf("revoke prior refresh: %w", err)
 	}
 	return s.mintAccessAndRefresh(ctx, mintInput{
-		ClientID: client.ClientID,
-		UserID:   rt.UserID,
-		Scope:    scope,
-		Resource: resource,
-		FamilyID: &rt.FamilyID,
-		DPoPJKT:  jkt,
+		ClientID:             client.ClientID,
+		UserID:               rt.UserID,
+		Scope:                scope,
+		Resource:             resource,
+		FamilyID:             &rt.FamilyID,
+		DPoPJKT:              jkt,
+		AuthorizationDetails: details,
 	})
 }
 
@@ -239,15 +257,14 @@ type mintInput struct {
 	// AuthCodeHash is the storage key of the authorization code the
 	// family was issued from; empty on refresh and other grants.
 	AuthCodeHash string
+	// AuthorizationDetails is the RFC 9396 JSON the tokens carry. It becomes
+	// the authorization_details claim and is kept on the refresh token.
+	AuthorizationDetails []byte
 }
 
 // mintAccessAndRefresh signs a fresh access token JWT and stores a fresh
 // hashed refresh token in the same rotation family.
 func (s *Service) mintAccessAndRefresh(ctx context.Context, in mintInput) (TokenResponse, error) {
-	signingKey, priv, err := s.CurrentSigningKey()
-	if err != nil {
-		return TokenResponse{}, err
-	}
 	now := time.Now().UTC()
 	accessExp := now.Add(s.Cfg.AccessTokenTTL)
 	jti := ulid.New().String()
@@ -280,10 +297,20 @@ func (s *Service) mintAccessAndRefresh(ctx context.Context, in mintInput) (Token
 		// resource server keys its dispatching logic off of this.
 		tokenType = "DPoP"
 	}
+	detailsClaim, err := authorizationDetailsClaim(in.AuthorizationDetails)
+	if err != nil {
+		return TokenResponse{}, fmt.Errorf("authorization_details claim: %w", err)
+	}
+	if detailsClaim != nil {
+		if claims.Extra == nil {
+			claims.Extra = map[string]any{}
+		}
+		claims.Extra["authorization_details"] = detailsClaim
+	}
 	if err := s.applyOnTokenIssued(ctx, &claims); err != nil {
 		return TokenResponse{}, err
 	}
-	access, err := jwt.Sign(claims, signingKey.KID, priv)
+	access, err := s.issueAccessToken(ctx, in.ClientID, claims)
 	if err != nil {
 		return TokenResponse{}, fmt.Errorf("sign access token: %w", err)
 	}
@@ -297,28 +324,30 @@ func (s *Service) mintAccessAndRefresh(ctx context.Context, in mintInput) (Token
 		familyID = *in.FamilyID
 	}
 	rt := models.RefreshToken{
-		ID:           ulid.New(),
-		Hash:         refreshHash,
-		FamilyID:     familyID,
-		ClientID:     in.ClientID,
-		UserID:       in.UserID,
-		Scope:        in.Scope,
-		Resource:     in.Resource,
-		ParentJTI:    jti,
-		DPoPJKT:      in.DPoPJKT,
-		AuthCodeHash: in.AuthCodeHash,
-		IssuedAt:     now,
-		ExpiresAt:    now.Add(s.Cfg.RefreshTokenTTL),
+		ID:                   ulid.New(),
+		Hash:                 refreshHash,
+		FamilyID:             familyID,
+		ClientID:             in.ClientID,
+		UserID:               in.UserID,
+		Scope:                in.Scope,
+		Resource:             in.Resource,
+		ParentJTI:            jti,
+		DPoPJKT:              in.DPoPJKT,
+		AuthCodeHash:         in.AuthCodeHash,
+		AuthorizationDetails: in.AuthorizationDetails,
+		IssuedAt:             now,
+		ExpiresAt:            now.Add(s.Cfg.RefreshTokenTTL),
 	}
 	if err := s.Storage.InsertRefreshToken(ctx, rt); err != nil {
 		return TokenResponse{}, fmt.Errorf("insert refresh token: %w", err)
 	}
 	return TokenResponse{
-		AccessToken:  access,
-		TokenType:    tokenType,
-		ExpiresIn:    int(s.Cfg.AccessTokenTTL.Seconds()),
-		RefreshToken: refreshToken,
-		Scope:        scopeJoin(in.Scope),
+		AccessToken:          access,
+		TokenType:            tokenType,
+		ExpiresIn:            int(s.Cfg.AccessTokenTTL.Seconds()),
+		RefreshToken:         refreshToken,
+		Scope:                scopeJoin(in.Scope),
+		AuthorizationDetails: authorizationDetailsRaw(claims.Extra),
 	}, nil
 }
 
@@ -370,7 +399,10 @@ func (s *Service) AuthenticateClient(ctx context.Context, clientID, clientSecret
 		if clientSecret == "" || len(client.ClientSecretHash) == 0 {
 			return nil, models.ErrOAuthInvalidClient
 		}
-		ok, err := crypto.VerifyPassword(clientSecret, string(client.ClientSecretHash))
+		ok, err := s.verifyClientSecret(ctx, clientSecret, string(client.ClientSecretHash))
+		if errors.Is(err, models.ErrOAuthServerBusy) {
+			return nil, err
+		}
 		if err != nil || !ok {
 			// Failures are never cached: an attacker presenting a wrong
 			// secret must keep paying Argon2id on every attempt so the

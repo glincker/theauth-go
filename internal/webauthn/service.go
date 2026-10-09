@@ -22,6 +22,7 @@ package webauthn
 import (
 	"bytes"
 	"context"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -121,6 +122,94 @@ type Config struct {
 	// UserHandleResolver maps a foreign user handle to its owner; nil keeps
 	// the library-handle-only behavior.
 	UserHandleResolver func(ctx context.Context, credentialID, userHandle []byte) (models.ULID, error)
+
+	// AttestationPreference is the conveyance preference sent to the
+	// authenticator: none (default), indirect, direct or enterprise.
+	AttestationPreference string
+	// RequireAttestationStatement rejects registrations whose attestation
+	// format is "none".
+	RequireAttestationStatement bool
+	// AAGUIDAllowlist, when non-empty, limits registration to these
+	// authenticator models (UUID strings).
+	AAGUIDAllowlist []string
+	// AAGUIDDenylist rejects these authenticator models. Checked before the
+	// allowlist.
+	AAGUIDDenylist []string
+	// AuthenticatorNames maps a lowercase hyphenated AAGUID to a display name.
+	AuthenticatorNames map[string]string
+	// AuthenticatorName is an optional lookup consulted before
+	// AuthenticatorNames.
+	AuthenticatorName func(aaguid string) string
+}
+
+// ErrAAGUIDNotAllowed is returned by FinishRegistration when the
+// authenticator model is denied by the configured AAGUID policy.
+var ErrAAGUIDNotAllowed = errors.New("theauth: authenticator model is not permitted by the AAGUID policy")
+
+// ErrAttestationRequired is returned when RequireAttestationStatement is set
+// and the authenticator sent no attestation statement.
+var ErrAttestationRequired = errors.New("theauth: an attestation statement is required")
+
+// NormalizeAAGUID converts a UUID string (with or without dashes, any case)
+// to the lowercase hyphenated form. ok is false for anything that is not 16
+// bytes of hex.
+func NormalizeAAGUID(s string) (string, bool) {
+	h := strings.ToLower(strings.ReplaceAll(strings.TrimSpace(s), "-", ""))
+	b, err := hex.DecodeString(h)
+	if err != nil || len(b) != 16 {
+		return "", false
+	}
+	return FormatAAGUID(b), true
+}
+
+// FormatAAGUID renders 16 raw bytes as a lowercase hyphenated UUID. Other
+// lengths return the plain hex.
+func FormatAAGUID(b []byte) string {
+	h := hex.EncodeToString(b)
+	if len(b) != 16 {
+		return h
+	}
+	return h[0:8] + "-" + h[8:12] + "-" + h[12:16] + "-" + h[16:20] + "-" + h[20:]
+}
+
+// AuthenticatorName returns the display name configured for an AAGUID, or
+// "" when none is known.
+func (s *Service) AuthenticatorName(aaguid []byte) string {
+	if s == nil || s.cfg == nil {
+		return ""
+	}
+	id := FormatAAGUID(aaguid)
+	if s.cfg.AuthenticatorName != nil {
+		if n := s.cfg.AuthenticatorName(id); n != "" {
+			return n
+		}
+	}
+	return s.names[id]
+}
+
+func (s *Service) checkAAGUID(aaguid []byte) error {
+	id := FormatAAGUID(aaguid)
+	if _, bad := s.deny[id]; bad {
+		return ErrAAGUIDNotAllowed
+	}
+	if len(s.allow) > 0 {
+		if _, ok := s.allow[id]; !ok {
+			return ErrAAGUIDNotAllowed
+		}
+	}
+	return nil
+}
+
+func aaguidSet(name string, in []string) (map[string]struct{}, error) {
+	out := make(map[string]struct{}, len(in))
+	for _, v := range in {
+		n, ok := NormalizeAAGUID(v)
+		if !ok {
+			return nil, fmt.Errorf("theauth: WebAuthn.%s: %q is not a valid AAGUID", name, v)
+		}
+		out[n] = struct{}{}
+	}
+	return out, nil
 }
 
 // Clone-warning policies for a sign count that fails to advance.
@@ -151,6 +240,9 @@ type Service struct {
 	wa       *gowebauthn.WebAuthn
 	cfg      *Config
 	renamer  Renamer
+
+	allow, deny map[string]struct{}
+	names       map[string]string
 
 	// challenges is the in-memory map of in-flight challenges keyed by
 	// the opaque token returned from BeginRegistration / BeginLogin.
@@ -188,11 +280,35 @@ func NewService(storage Storage, sessions SessionIssuer, em audit.Emitter, cfg *
 	if display == "" {
 		display = cfg.RPID
 	}
+	pref := protocol.ConveyancePreference(cfg.AttestationPreference)
+	switch pref {
+	case "":
+		pref = protocol.PreferNoAttestation
+	case protocol.PreferNoAttestation, protocol.PreferIndirectAttestation,
+		protocol.PreferDirectAttestation, protocol.PreferEnterpriseAttestation:
+	default:
+		return nil, fmt.Errorf("theauth: WebAuthn.AttestationPreference %q must be none, indirect, direct or enterprise", cfg.AttestationPreference)
+	}
+	var err error
+	if s.allow, err = aaguidSet("AAGUIDAllowlist", cfg.AAGUIDAllowlist); err != nil {
+		return nil, err
+	}
+	if s.deny, err = aaguidSet("AAGUIDDenylist", cfg.AAGUIDDenylist); err != nil {
+		return nil, err
+	}
+	s.names = make(map[string]string, len(cfg.AuthenticatorNames))
+	for k, v := range cfg.AuthenticatorNames {
+		n, ok := NormalizeAAGUID(k)
+		if !ok {
+			return nil, fmt.Errorf("theauth: WebAuthn.AuthenticatorNames: %q is not a valid AAGUID", k)
+		}
+		s.names[n] = v
+	}
 	waCfg := &gowebauthn.Config{
 		RPID:                  cfg.RPID,
 		RPDisplayName:         display,
 		RPOrigins:             cfg.RPOrigins,
-		AttestationPreference: "none",
+		AttestationPreference: pref,
 	}
 	if cfg.RequireUserVerification {
 		waCfg.AuthenticatorSelection = protocol.AuthenticatorSelection{
@@ -392,6 +508,12 @@ func (s *Service) FinishRegistration(
 	cred, err := s.wa.CreateCredential(wu, *chal.session, parsed)
 	if err != nil {
 		return models.WebAuthnCredential{}, false, models.NewError(models.CodeWebAuthn, "create credential failed", err)
+	}
+	if s.cfg.RequireAttestationStatement && parsed.Response.AttestationObject.Format == "none" {
+		return models.WebAuthnCredential{}, false, models.NewError(models.CodeWebAuthn, ErrAttestationRequired.Error(), ErrAttestationRequired)
+	}
+	if err := s.checkAAGUID(cred.Authenticator.AAGUID); err != nil {
+		return models.WebAuthnCredential{}, false, models.NewError(models.CodeWebAuthn, err.Error(), err)
 	}
 	transports := make([]string, 0, len(cred.Transport))
 	for _, t := range cred.Transport {

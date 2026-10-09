@@ -44,7 +44,7 @@ import (
 //
 // Default rate limits: 5/min per source IP on every credential endpoint, plus
 // 3/min per email on signin + forgot (most attack-surface). All limits are
-// in-memory + per-process; replace at the LB layer for multi-instance deploys.
+// in-memory + per-process unless Config.Stores.RateLimiter supplies a shared one.
 func (a *TheAuth) Mount(r chi.Router) {
 	r.Group(func(r chi.Router) {
 		r.Use(a.securityMiddleware, a.auditContextMiddleware)
@@ -497,6 +497,7 @@ func (a *TheAuth) mountAS(r chi.Router) {
 		return
 	}
 	h := ashandlers.New(a.as, userFromRequest, a.dcrRegistrationTokenHashes)
+	h.SetClientIP(func(r *http.Request) string { return extractClientIPTrusting(r, a.trustedProxies) })
 	var registerLimit func(http.Handler) http.Handler
 	if cap := a.as.Cfg.RegistrationRateLimitPerMinute; cap > 0 {
 		registerLimit = a.RateLimitByIP(cap)

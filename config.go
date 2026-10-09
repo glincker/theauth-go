@@ -184,6 +184,31 @@ type WebAuthnConfig struct {
 	// authoritative: login is refused unless the resolver returns that same
 	// user. Nil (the default) accepts only theauth user handles.
 	UserHandleResolver func(ctx context.Context, credentialID, userHandle []byte) (ULID, error)
+
+	// AttestationPreference is the attestation conveyance requested from
+	// authenticators: "none" (default), "indirect", "direct" or
+	// "enterprise". The upstream library verifies the statement formats it
+	// supports; trust anchors (FIDO MDS) are not configured here.
+	AttestationPreference string
+
+	// RequireAttestationStatement rejects registrations whose attestation
+	// format is "none". Pair with AttestationPreference "direct".
+	RequireAttestationStatement bool
+
+	// AAGUIDAllowlist, when non-empty, accepts only these authenticator
+	// models (UUID strings). Registration of anything else fails.
+	AAGUIDAllowlist []string
+
+	// AAGUIDDenylist rejects these authenticator models. It wins over the
+	// allowlist.
+	AAGUIDDenylist []string
+
+	// AuthenticatorNames maps an AAGUID to a display name for UIs.
+	AuthenticatorNames map[string]string
+
+	// AuthenticatorName is an optional lookup consulted before
+	// AuthenticatorNames, receiving a lowercase hyphenated AAGUID.
+	AuthenticatorName func(aaguid string) string
 }
 
 // CloneWarningPolicy selects the response to a sign count regression.
@@ -477,7 +502,67 @@ type AuthorizationServerConfig struct {
 	// if it does not, CIBA endpoints are not mounted regardless of this
 	// setting. Default nil disables CIBA.
 	CIBA *CIBAConfig
+
+	// DeviceAuthorization enables the RFC 8628 device grant when non-nil:
+	// POST /oauth/device_authorization, the device_code grant at
+	// /oauth/token, and a user-code page at /oauth/device. The storage must
+	// also implement DeviceAuthorizationStorage (memory, Postgres and MySQL
+	// do). Clients opt in by registering the
+	// urn:ietf:params:oauth:grant-type:device_code grant type. Default nil
+	// disables it.
+	DeviceAuthorization *DeviceAuthorizationConfig
+
+	// TokenPolicy enables per-client access token policy: extra signing
+	// algorithms (ES256, RS256) and opaque reference tokens. Nil keeps every
+	// client on EdDSA JWTs. Opaque tokens need a storage that implements
+	// OpaqueTokenStorage (memory, Postgres and MySQL do).
+	TokenPolicy *TokenPolicyConfig
+
+	// RAR enables RFC 9396 Rich Authorization Requests: the
+	// authorization_details parameter on /oauth/authorize, PAR, JAR and the
+	// token endpoint, and the claim in access tokens and introspection. Nil
+	// rejects the parameter.
+	RAR *RARConfig
+
+	// IDJAG enables issuing Identity Assertion JWT Authorization Grants
+	// through token exchange, and redeeming them at the jwt-bearer grant
+	// (which also needs JWTBearer with the issuing server as a trusted
+	// issuer). Nil disables both.
+	IDJAG *IDJAGConfig
+
+	// RateLimits tunes the per-IP and per-client limits on /oauth/token,
+	// /oauth/revoke, /oauth/introspect, /oauth/par, /oauth/bc-authorize and
+	// /oauth/device_authorization, and the cap on concurrent Argon2id
+	// client-secret verifications. Nil applies the defaults (120 requests per
+	// IP per minute, 300 secret-bearing requests per client per minute, up to
+	// 8 concurrent verifications). Set a field negative to turn it off.
+	RateLimits *ASRateLimits
+
+	// RegistrationTokenTTL is the default lifetime of an initial access token
+	// created through CreateRegistrationToken or the admin API. Default 24h.
+	RegistrationTokenTTL time.Duration
 }
+
+// TokenPolicyConfig is the root alias for the per-client token policy.
+type TokenPolicyConfig = internalas.TokenPolicyConfig
+
+// RARConfig is the root alias for the RFC 9396 settings.
+type RARConfig = internalas.RARConfig
+
+// IDJAGConfig is the root alias for the ID-JAG settings.
+type IDJAGConfig = internalas.IDJAGConfig
+
+// DeviceAuthorizationConfig is the root alias for the RFC 8628 settings.
+type DeviceAuthorizationConfig = internalas.DeviceConfig
+
+// DevicePage is the view model handed to DeviceAuthorizationConfig.Page.
+type DevicePage = internalas.DevicePage
+
+// ASRateLimits is the root alias for the AS endpoint limits.
+type ASRateLimits = internalas.RateLimits
+
+// CreateRegistrationTokenInput describes an initial access token to mint.
+type CreateRegistrationTokenInput = internalas.CreateRegistrationTokenInput
 
 // JWTBearerConfig controls RFC 7523 JWT client authentication and the
 // JWT Bearer grant type. All fields have safe defaults.
@@ -765,6 +850,12 @@ func validateASConfig(cfg *AuthorizationServerConfig, encryptionKey []byte) erro
 		JAR:                            cfg.JAR,
 		JWTBearer:                      jwtBearerConfigFromRoot(cfg.JWTBearer),
 		CIBA:                           cibaConfigToInternal(cfg.CIBA),
+		DeviceAuthorization:            cfg.DeviceAuthorization,
+		TokenPolicy:                    cfg.TokenPolicy,
+		RAR:                            cfg.RAR,
+		IDJAG:                          cfg.IDJAG,
+		RateLimits:                     cfg.RateLimits,
+		RegistrationTokenTTL:           cfg.RegistrationTokenTTL,
 	}
 	if err := internalas.Validate(&internal, encryptionKey); err != nil {
 		return err
@@ -785,6 +876,8 @@ func validateASConfig(cfg *AuthorizationServerConfig, encryptionKey []byte) erro
 	cfg.IntrospectionCacheTTL = internal.IntrospectionCacheTTL
 	cfg.Clock = internal.Clock
 	cfg.LoginURL = internal.LoginURL
+	cfg.RateLimits = internal.RateLimits
+	cfg.RegistrationTokenTTL = internal.RegistrationTokenTTL
 	// Mirror CIBA defaults back.
 	if cfg.CIBA != nil && internal.CIBA != nil {
 		cfg.CIBA.DefaultExpiry = internal.CIBA.DefaultExpiry

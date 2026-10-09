@@ -261,3 +261,45 @@ func TestOIDCDiscoveryValidation(t *testing.T) {
 		t.Fatal("plain ExchangeCode without nonce must fail")
 	}
 }
+
+func TestOIDCDiscoveryOverrides(t *testing.T) {
+	idp := newIdP(t)
+	ctx := context.Background()
+	base := oidc.Config{Issuer: idp.srv.URL, ClientID: "c", ClientSecret: "s", AllowInsecureHTTP: true}
+	tests := []struct {
+		name     string
+		mod      func(*oidc.Config)
+		wantErr  bool
+		wantAuth string
+	}{
+		{"discovery url override", func(c *oidc.Config) { c.DiscoveryURL = idp.srv.URL + "/.well-known/openid-configuration" }, false, idp.srv.URL + "/authorize"},
+		{"bad discovery url", func(c *oidc.Config) { c.DiscoveryURL = idp.srv.URL + "/nope" }, true, ""},
+		{"endpoint override", func(c *oidc.Config) {
+			c.Endpoints.AuthorizationEndpoint = "http://idp.local/custom-authorize"
+		}, false, "http://idp.local/custom-authorize"},
+		{"override must be https", func(c *oidc.Config) {
+			c.AllowInsecureHTTP = false
+			c.Issuer = "https://idp.invalid"
+			c.DisableDiscovery = true
+			c.Endpoints = oidc.Endpoints{AuthorizationEndpoint: "http://a", TokenEndpoint: "https://t", JWKSURI: "https://j"}
+		}, true, ""},
+		{"disabled discovery with endpoints", func(c *oidc.Config) {
+			c.DisableDiscovery = true
+			c.Endpoints = oidc.Endpoints{AuthorizationEndpoint: "http://a/auth", TokenEndpoint: "http://a/tok", JWKSURI: "http://a/jwks"}
+		}, false, "http://a/auth"},
+		{"disabled discovery missing endpoints", func(c *oidc.Config) { c.DisableDiscovery = true }, true, ""},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := base
+			tc.mod(&cfg)
+			p, err := oidc.New(ctx, cfg)
+			if (err != nil) != tc.wantErr {
+				t.Fatalf("err=%v wantErr=%v", err, tc.wantErr)
+			}
+			if err == nil && !strings.HasPrefix(p.AuthURL("s", "c", "http://x/cb", nil), tc.wantAuth+"?") {
+				t.Fatalf("auth url %q does not start with %q", p.AuthURL("s", "c", "http://x/cb", nil), tc.wantAuth)
+			}
+		})
+	}
+}
