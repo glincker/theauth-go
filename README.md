@@ -1,6 +1,6 @@
 # theauth-go
 
-**Authentication and authorization library for Go.** Mount it into your own `net/http` or `chi` server for password, magic link, OAuth 2.1 / OIDC login providers, passkeys (WebAuthn), TOTP, SAML SSO, SCIM, scoped API tokens, RFC 8628 device login for CLIs, agent identity, MCP authorization and a policy engine. Your data stays in your own database: memory, SQLite, Postgres or MySQL. MIT licensed, no hosted service.
+**Auth for AI agents and humans in Go: MCP OAuth 2.1 server, agent identity and delegation, DPoP, passkeys, device flow.** Mount it into your own `net/http` or `chi` server. Your data stays in your own database (memory, SQLite, Postgres or MySQL). MIT licensed, no hosted service.
 
 [![Go Reference](https://pkg.go.dev/badge/github.com/glincker/theauth-go/v2.svg)](https://pkg.go.dev/github.com/glincker/theauth-go/v2)
 [![Go Report Card](https://goreportcard.com/badge/github.com/glincker/theauth-go/v2)](https://goreportcard.com/report/github.com/glincker/theauth-go/v2)
@@ -10,7 +10,6 @@
 [![Discord](https://img.shields.io/discord/829168897080557579?style=flat-square&logo=discord&logoColor=white&label=discord&color=5865F2)](https://discord.gg/Ar5pcaZB99)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![SLSA 3](https://slsa.dev/images/gh-badge-level3.svg)](https://github.com/glincker/theauth-go/releases)
-[![Discord](https://img.shields.io/discord/829168897080557579?style=flat-square&logo=discord&logoColor=white&label=discord&color=5865F2)](https://discord.gg/Ar5pcaZB99)
 
 **[Website](https://theauth.dev)** &middot; **[Docs](https://docs.theauth.dev/go)** &middot; **[pkg.go.dev](https://pkg.go.dev/github.com/glincker/theauth-go/v2)** &middot; **[Packages](#packages)** &middot; **[theAuth for TypeScript](https://github.com/glincker/theauth)** (**[TypeScript packages](https://github.com/glincker/theauth#packages)**)
 
@@ -39,53 +38,17 @@ The module path ends in `/v2`. The first resolvable v2 tag is `v2.6.0`, and the 
 
 ## Packages
 
-One Go module at the root plus three nested modules (`mcpresource`, `storage/sqlite`, `audit/sinks/otlp`) that carry their own dependencies. Everything else is a package inside the root module. The matching TypeScript packages are listed in the [theAuth README](https://github.com/glincker/theauth#packages).
+One Go module at the root plus three nested modules (`mcpresource`, `storage/sqlite`, `audit/sinks/otlp`) that carry their own dependencies. Everything else is a package inside the root module. Full index on [pkg.go.dev](https://pkg.go.dev/github.com/glincker/theauth-go/v2).
 
-| Package | Purpose | pkg.go.dev | Source | Docs |
-|---|---|---|---|---|
-| **Core** | | | | |
-| `github.com/glincker/theauth-go/v2` | Root module `theauth`: server, sessions, OAuth 2.1 authorization server, agent identity, MCP authorization | [pkg.go.dev](https://pkg.go.dev/github.com/glincker/theauth-go/v2) | [repo root](https://github.com/glincker/theauth-go) | [docs](https://docs.theauth.dev/go/getting-started/overview) |
-| `github.com/glincker/theauth-go/v2/admin` | Shared helpers for the `/admin/v1` HTTP surface | [pkg.go.dev](https://pkg.go.dev/github.com/glincker/theauth-go/v2/admin) | [admin](https://github.com/glincker/theauth-go/tree/main/admin) |  |
-| `github.com/glincker/theauth-go/v2/crypto` | Password hashing and crypto primitives | [pkg.go.dev](https://pkg.go.dev/github.com/glincker/theauth-go/v2/crypto) | [crypto](https://github.com/glincker/theauth-go/tree/main/crypto) |  |
-| `github.com/glincker/theauth-go/v2/email` | `Sender` interface and email delivery helpers | [pkg.go.dev](https://pkg.go.dev/github.com/glincker/theauth-go/v2/email) | [email](https://github.com/glincker/theauth-go/tree/main/email) |  |
-| `github.com/glincker/theauth-go/v2/policy` | Small dependency-free authorization (policy) engine | [pkg.go.dev](https://pkg.go.dev/github.com/glincker/theauth-go/v2/policy) | [policy](https://github.com/glincker/theauth-go/tree/main/policy) | [docs](https://docs.theauth.dev/go/guides/policy-engine) |
-| `github.com/glincker/theauth-go/v2/clientauth` | Let any Go CLI authenticate against a theauth-go server (device login) | [pkg.go.dev](https://pkg.go.dev/github.com/glincker/theauth-go/v2/clientauth) | [clientauth](https://github.com/glincker/theauth-go/tree/main/clientauth) | [docs](https://docs.theauth.dev/go/guides/cli-login) |
-| `github.com/glincker/theauth-go/mcpresource` | Separate module: one-import resource server SDK for MCP servers | [pkg.go.dev](https://pkg.go.dev/github.com/glincker/theauth-go/mcpresource) | [mcpresource](https://github.com/glincker/theauth-go/tree/main/mcpresource) | [docs](https://docs.theauth.dev/go/concepts/resource-server) |
-| **Storage** | | | | |
-| `github.com/glincker/theauth-go/v2/storage` | `Storage` interface and capability re-exports | [pkg.go.dev](https://pkg.go.dev/github.com/glincker/theauth-go/v2/storage) | [storage](https://github.com/glincker/theauth-go/tree/main/storage) | [docs](https://docs.theauth.dev/go/reference/storage) |
-| `github.com/glincker/theauth-go/v2/storage/memory` | In-process storage, for tests and demos | [pkg.go.dev](https://pkg.go.dev/github.com/glincker/theauth-go/v2/storage/memory) | [storage/memory](https://github.com/glincker/theauth-go/tree/main/storage/memory) | [docs](https://docs.theauth.dev/go/getting-started/storage-backends) |
-| `github.com/glincker/theauth-go/storage/sqlite` | Separate module: embedded SQLite backend | [pkg.go.dev](https://pkg.go.dev/github.com/glincker/theauth-go/storage/sqlite) | [storage/sqlite](https://github.com/glincker/theauth-go/tree/main/storage/sqlite) | [docs](https://docs.theauth.dev/go/guides/sqlite-storage) |
-| `github.com/glincker/theauth-go/v2/storage/postgres` | PostgreSQL backend | [pkg.go.dev](https://pkg.go.dev/github.com/glincker/theauth-go/v2/storage/postgres) | [storage/postgres](https://github.com/glincker/theauth-go/tree/main/storage/postgres) | [docs](https://docs.theauth.dev/go/guides/postgres-mysql-storage) |
-| `github.com/glincker/theauth-go/v2/storage/mysql` | MySQL 8.x backend | [pkg.go.dev](https://pkg.go.dev/github.com/glincker/theauth-go/v2/storage/mysql) | [storage/mysql](https://github.com/glincker/theauth-go/tree/main/storage/mysql) | [docs](https://docs.theauth.dev/go/guides/postgres-mysql-storage) |
-| `github.com/glincker/theauth-go/v2/storagetest` | Public contract test suite for custom storage backends | [pkg.go.dev](https://pkg.go.dev/github.com/glincker/theauth-go/v2/storagetest) | [storagetest](https://github.com/glincker/theauth-go/tree/main/storagetest) | [docs](https://docs.theauth.dev/go/guides/custom-storage-backend) |
-| `github.com/glincker/theauth-go/v2/otp` | Email and SMS one-time codes with cooldown and lockout | [pkg.go.dev](https://pkg.go.dev/github.com/glincker/theauth-go/v2/otp) | [otp](https://github.com/glincker/theauth-go/tree/main/otp) | [docs](./docs/otp.md) |
-| `github.com/glincker/theauth-go/v2/openapi` | OpenAPI 3.1 generator for a mounted chi router | [pkg.go.dev](https://pkg.go.dev/github.com/glincker/theauth-go/v2/openapi) | [openapi](https://github.com/glincker/theauth-go/tree/main/openapi) | [docs](./docs/cli.md) |
-| **Audit sinks** | | | | |
-| `github.com/glincker/theauth-go/audit/sinks/otlp` | Separate module: export audit events over OTLP | not yet indexed | [audit/sinks/otlp](https://github.com/glincker/theauth-go/tree/main/audit/sinks/otlp) |  |
-| `github.com/glincker/theauth-go/v2/audit/sinks/splunkhec` | Forward audit batches to Splunk HEC | [pkg.go.dev](https://pkg.go.dev/github.com/glincker/theauth-go/v2/audit/sinks/splunkhec) | [audit/sinks/splunkhec](https://github.com/glincker/theauth-go/tree/main/audit/sinks/splunkhec) | [docs](https://docs.theauth.dev/go/guides/audit-log-splunk) |
-| `github.com/glincker/theauth-go/v2/audit/sinks/webhook` | POST audit events to a webhook | [pkg.go.dev](https://pkg.go.dev/github.com/glincker/theauth-go/v2/audit/sinks/webhook) | [audit/sinks/webhook](https://github.com/glincker/theauth-go/tree/main/audit/sinks/webhook) |  |
-| **OAuth and OIDC providers** | | | | |
-| `github.com/glincker/theauth-go/v2/provider` | Namespace root for the built-in OAuth 2.0 / OIDC providers | [pkg.go.dev](https://pkg.go.dev/github.com/glincker/theauth-go/v2/provider) | [provider](https://github.com/glincker/theauth-go/tree/main/provider) | [docs](https://docs.theauth.dev/go/guides/add-oauth-provider) |
-| `github.com/glincker/theauth-go/v2/provider/apple` | Sign In with Apple login provider | [pkg.go.dev](https://pkg.go.dev/github.com/glincker/theauth-go/v2/provider/apple) | [provider/apple](https://github.com/glincker/theauth-go/tree/main/provider/apple) |  |
-| `github.com/glincker/theauth-go/v2/provider/bitbucket` | Bitbucket Cloud login provider | [pkg.go.dev](https://pkg.go.dev/github.com/glincker/theauth-go/v2/provider/bitbucket) | [provider/bitbucket](https://github.com/glincker/theauth-go/tree/main/provider/bitbucket) |  |
-| `github.com/glincker/theauth-go/v2/provider/discord` | Discord login provider | [pkg.go.dev](https://pkg.go.dev/github.com/glincker/theauth-go/v2/provider/discord) | [provider/discord](https://github.com/glincker/theauth-go/tree/main/provider/discord) |  |
-| `github.com/glincker/theauth-go/v2/provider/facebook` | Facebook (Meta) login provider | [pkg.go.dev](https://pkg.go.dev/github.com/glincker/theauth-go/v2/provider/facebook) | [provider/facebook](https://github.com/glincker/theauth-go/tree/main/provider/facebook) |  |
-| `github.com/glincker/theauth-go/v2/provider/github` | GitHub login provider | [pkg.go.dev](https://pkg.go.dev/github.com/glincker/theauth-go/v2/provider/github) | [provider/github](https://github.com/glincker/theauth-go/tree/main/provider/github) |  |
-| `github.com/glincker/theauth-go/v2/provider/gitlab` | GitLab login provider | [pkg.go.dev](https://pkg.go.dev/github.com/glincker/theauth-go/v2/provider/gitlab) | [provider/gitlab](https://github.com/glincker/theauth-go/tree/main/provider/gitlab) |  |
-| `github.com/glincker/theauth-go/v2/provider/google` | Google login provider | [pkg.go.dev](https://pkg.go.dev/github.com/glincker/theauth-go/v2/provider/google) | [provider/google](https://github.com/glincker/theauth-go/tree/main/provider/google) |  |
-| `github.com/glincker/theauth-go/v2/provider/linkedin` | LinkedIn login provider | [pkg.go.dev](https://pkg.go.dev/github.com/glincker/theauth-go/v2/provider/linkedin) | [provider/linkedin](https://github.com/glincker/theauth-go/tree/main/provider/linkedin) |  |
-| `github.com/glincker/theauth-go/v2/provider/microsoft` | Microsoft Entra login provider | [pkg.go.dev](https://pkg.go.dev/github.com/glincker/theauth-go/v2/provider/microsoft) | [provider/microsoft](https://github.com/glincker/theauth-go/tree/main/provider/microsoft) |  |
-| `github.com/glincker/theauth-go/v2/provider/oidc` | Generic OIDC login provider | [pkg.go.dev](https://pkg.go.dev/github.com/glincker/theauth-go/v2/provider/oidc) | [provider/oidc](https://github.com/glincker/theauth-go/tree/main/provider/oidc) | [docs](https://docs.theauth.dev/go/guides/add-oauth-provider) |
-| `github.com/glincker/theauth-go/v2/provider/generic` | Table-driven OAuth providers (Spotify, Dropbox, Zoom, Kakao, Naver, Patreon, Box, Salesforce, Figma, Codeberg) | [pkg.go.dev](https://pkg.go.dev/github.com/glincker/theauth-go/v2/provider/generic) | [provider/generic](https://github.com/glincker/theauth-go/tree/main/provider/generic) | [docs](./docs/provider-catalog.md) |
-| `github.com/glincker/theauth-go/v2/provider/slack` | Slack login provider | [pkg.go.dev](https://pkg.go.dev/github.com/glincker/theauth-go/v2/provider/slack) | [provider/slack](https://github.com/glincker/theauth-go/tree/main/provider/slack) |  |
-| `github.com/glincker/theauth-go/v2/provider/twitch` | Twitch login provider | [pkg.go.dev](https://pkg.go.dev/github.com/glincker/theauth-go/v2/provider/twitch) | [provider/twitch](https://github.com/glincker/theauth-go/tree/main/provider/twitch) |  |
-| `github.com/glincker/theauth-go/v2/provider/x` | X (formerly Twitter) login provider | [pkg.go.dev](https://pkg.go.dev/github.com/glincker/theauth-go/v2/provider/x) | [provider/x](https://github.com/glincker/theauth-go/tree/main/provider/x) |  |
-| **Commands** | | | | |
-| `github.com/glincker/theauth-go/v2/cmd/theauth-go` | Developer CLI: secret generation and OpenAPI output | [pkg.go.dev](https://pkg.go.dev/github.com/glincker/theauth-go/v2/cmd/theauth-go) | [cmd/theauth-go](https://github.com/glincker/theauth-go/tree/main/cmd/theauth-go) | [docs](./docs/cli.md) |
-| `github.com/glincker/theauth-go/v2/cmd/theauth-doctor` | Security doctor CLI | [pkg.go.dev](https://pkg.go.dev/github.com/glincker/theauth-go/v2/cmd/theauth-doctor) | [cmd/theauth-doctor](https://github.com/glincker/theauth-go/tree/main/cmd/theauth-doctor) | [docs](https://docs.theauth.dev/go/guides/security-doctor) |
-| `github.com/glincker/theauth-go/v2/cmd/theauth-migrate` | Migration CLI for importing users | [pkg.go.dev](https://pkg.go.dev/github.com/glincker/theauth-go/v2/cmd/theauth-migrate) | [cmd/theauth-migrate](https://github.com/glincker/theauth-go/tree/main/cmd/theauth-migrate) | [docs](https://docs.theauth.dev/go/migrations/migration-guide) |
-| `github.com/glincker/theauth-go/v2/cmd/theauth-migrate/auth0` | Auth0 user-pool export reader | [pkg.go.dev](https://pkg.go.dev/github.com/glincker/theauth-go/v2/cmd/theauth-migrate/auth0) | [cmd/theauth-migrate/auth0](https://github.com/glincker/theauth-go/tree/main/cmd/theauth-migrate/auth0) | [docs](https://docs.theauth.dev/go/guides/migrate-from-auth0) |
-| `github.com/glincker/theauth-go/v2/cmd/theauth-migrate/cognito` | AWS Cognito user-pool export reader | [pkg.go.dev](https://pkg.go.dev/github.com/glincker/theauth-go/v2/cmd/theauth-migrate/cognito) | [cmd/theauth-migrate/cognito](https://github.com/glincker/theauth-go/tree/main/cmd/theauth-migrate/cognito) | [docs](https://docs.theauth.dev/go/guides/migrate-from-cognito) |
+| Group | Packages |
+|---|---|
+| Core | `theauth-go/v2` (server, sessions, OAuth 2.1 authorization server, agent identity, MCP authorization), `admin`, `crypto`, `email`, [`policy`](https://docs.theauth.dev/go/guides/policy-engine), [`clientauth`](https://docs.theauth.dev/go/guides/cli-login) (device login for Go CLIs), [`otp`](./docs/otp.md), `openapi`, [`mcpresource`](https://docs.theauth.dev/go/concepts/resource-server) (separate module) |
+| Storage | `storage`, `storage/memory`, `storage/postgres`, `storage/mysql`, `storage/sqlite` (separate module), [`storagetest`](https://docs.theauth.dev/go/guides/custom-storage-backend) |
+| Audit sinks | `audit/sinks/splunkhec`, `audit/sinks/webhook`, `audit/sinks/otlp` (separate module) |
+| Providers | `provider/` apple, bitbucket, discord, facebook, github, gitlab, google, linkedin, microsoft, slack, twitch, x, oidc, and [`generic`](./docs/provider-catalog.md) for 10 more (Spotify, Dropbox, Zoom, Kakao, Naver, Patreon, Box, Salesforce, Figma, Codeberg) |
+| Commands | [`theauth-go`](./docs/cli.md) (secrets, OpenAPI), [`theauth-doctor`](https://docs.theauth.dev/go/guides/security-doctor) (security doctor), [`theauth-migrate`](https://docs.theauth.dev/go/migrations/migration-guide) (Auth0 and Cognito import) |
+
+The TypeScript packages are listed in the [theAuth README](https://github.com/glincker/theauth#packages).
 
 ## Quick start: net/http and SQLite
 
@@ -262,6 +225,15 @@ auth, _ := theauth.New(theauth.Config{
 
 Details and the Redis adapter are in [docs/pluggable-stores.md](./docs/pluggable-stores.md).
 
+## How it compares
+
+Short version, based on each project's public docs. Verify before you decide.
+
+- **Auth0, Clerk, Cognito**: managed services with hosted UIs and support contracts. theauth-go is a library you embed and run yourself, so you own the database and the ops work. Migration tools for Auth0 and Cognito are included.
+- **Better Auth**: a TypeScript library with a large plugin ecosystem. If your backend is TypeScript, use the [TypeScript SDK](https://github.com/glincker/theauth) or Better Auth. theauth-go is for Go services.
+- **Ory, Keycloak**: standalone servers you deploy and talk to over HTTP. theauth-go runs in your process. You give up their admin UIs and larger feature surface.
+- **Rolling your own** on `golang.org/x/oauth2` and a session table: fine for one provider. Gets expensive once you add passkeys, device login, token exchange and revocation.
+
 ## Storage backends
 
 Persistence is split into small capability interfaces, and `New` fails at startup if a feature you enabled has no matching capability. Full matrix: [Capability interfaces](https://docs.theauth.dev/go/concepts/capability-interfaces).
@@ -319,8 +291,8 @@ Runnable apps live in [`examples/`](./examples), each with its own `go.mod` and 
 
 - [Documentation](https://docs.theauth.dev/go) and [API reference on pkg.go.dev](https://pkg.go.dev/github.com/glincker/theauth-go/v2)
 - [CHANGELOG](CHANGELOG.md), [STABILITY](https://docs.theauth.dev/go/reference/stability), [ROADMAP](docs/ROADMAP.md)
-- [Security policy](.github/SECURITY.md): report vulnerabilities privately, not in public issues
-- [Contributing](.github/CONTRIBUTING.md), [Discussions](https://github.com/glincker/theauth-go/discussions), [Discord](https://discord.gg/Ar5pcaZB99)
+- [Security policy](.github/SECURITY.md): report vulnerabilities privately to support@glincker.com or through GitHub advisories, not in public issues
+- [Contributing](.github/CONTRIBUTING.md), [Discussions](https://github.com/glincker/theauth-go/discussions), [GLINR Discord](https://discord.gg/Ar5pcaZB99)
 - [AGENTS.md](docs/AGENTS.md) and [llms.txt](llms.txt) for AI coding assistants
 - [License: MIT](LICENSE)
 
