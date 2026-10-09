@@ -53,6 +53,14 @@ type ClientRegistrationRequest struct {
 	Jwks            json.RawMessage `json:"jwks,omitempty"`
 	SoftwareID      string          `json:"software_id,omitempty"`
 	SoftwareVersion string          `json:"software_version,omitempty"`
+
+	// AccessTokenFormat is "jwt" or "opaque"; see Config.TokenPolicy.
+	AccessTokenFormat string `json:"access_token_format,omitempty"`
+	// AccessTokenSignedResponseAlg picks the JWS alg for JWT access tokens.
+	AccessTokenSignedResponseAlg string `json:"access_token_signed_response_alg,omitempty"`
+	// AuthorizationDetailsTypes lists the RFC 9396 types the client may
+	// request (RFC 9396 section 10).
+	AuthorizationDetailsTypes []string `json:"authorization_details_types,omitempty"`
 }
 
 // RegisterClient validates the request, mints a client_id (and a secret
@@ -81,47 +89,56 @@ func (s *Service) RegisterClient(ctx context.Context, req ClientRegistrationRequ
 	if err := validateRegistrationRequest(&req, anonymous); err != nil {
 		return models.RegisteredClient{}, err
 	}
+	if err := s.validateTokenMetadata(req, anonymous); err != nil {
+		return models.RegisteredClient{}, err
+	}
 	clientID := "client-" + ulid.New().String()
 	now := time.Now().UTC()
 	client := models.OAuthClient{
-		ID:                      ulid.New(),
-		ClientID:                clientID,
-		ClientName:              req.ClientName,
-		RedirectURIs:            req.RedirectURIs,
-		GrantTypes:              req.GrantTypes,
-		ResponseTypes:           req.ResponseTypes,
-		Scope:                   req.Scope,
-		TokenEndpointAuthMethod: req.TokenEndpointAuthMethod,
-		ApplicationType:         req.ApplicationType,
-		Contacts:                req.Contacts,
-		LogoURI:                 req.LogoURI,
-		PolicyURI:               req.PolicyURI,
-		TosURI:                  req.TosURI,
-		JwksURI:                 req.JwksURI,
-		Jwks:                    []byte(req.Jwks),
-		SoftwareID:              req.SoftwareID,
-		SoftwareVersion:         req.SoftwareVersion,
-		AnonymousRegistered:     anonymous,
-		CreatedAt:               now,
-		UpdatedAt:               now,
+		ID:                           ulid.New(),
+		ClientID:                     clientID,
+		ClientName:                   req.ClientName,
+		RedirectURIs:                 req.RedirectURIs,
+		GrantTypes:                   req.GrantTypes,
+		ResponseTypes:                req.ResponseTypes,
+		Scope:                        req.Scope,
+		TokenEndpointAuthMethod:      req.TokenEndpointAuthMethod,
+		ApplicationType:              req.ApplicationType,
+		Contacts:                     req.Contacts,
+		LogoURI:                      req.LogoURI,
+		PolicyURI:                    req.PolicyURI,
+		TosURI:                       req.TosURI,
+		JwksURI:                      req.JwksURI,
+		Jwks:                         []byte(req.Jwks),
+		SoftwareID:                   req.SoftwareID,
+		SoftwareVersion:              req.SoftwareVersion,
+		AccessTokenFormat:            req.AccessTokenFormat,
+		AccessTokenSignedResponseAlg: req.AccessTokenSignedResponseAlg,
+		AuthorizationDetailsTypes:    req.AuthorizationDetailsTypes,
+		AnonymousRegistered:          anonymous,
+		CreatedAt:                    now,
+		UpdatedAt:                    now,
 	}
 	resp := models.RegisteredClient{
-		ClientID:                clientID,
-		ClientIDIssuedAt:        now.Unix(),
-		RedirectURIs:            req.RedirectURIs,
-		GrantTypes:              req.GrantTypes,
-		ResponseTypes:           req.ResponseTypes,
-		Scope:                   req.Scope,
-		TokenEndpointAuthMethod: req.TokenEndpointAuthMethod,
-		ApplicationType:         req.ApplicationType,
-		ClientName:              req.ClientName,
-		Contacts:                req.Contacts,
-		LogoURI:                 req.LogoURI,
-		PolicyURI:               req.PolicyURI,
-		TosURI:                  req.TosURI,
-		JwksURI:                 req.JwksURI,
-		SoftwareID:              req.SoftwareID,
-		SoftwareVersion:         req.SoftwareVersion,
+		ClientID:                     clientID,
+		ClientIDIssuedAt:             now.Unix(),
+		RedirectURIs:                 req.RedirectURIs,
+		GrantTypes:                   req.GrantTypes,
+		ResponseTypes:                req.ResponseTypes,
+		Scope:                        req.Scope,
+		TokenEndpointAuthMethod:      req.TokenEndpointAuthMethod,
+		ApplicationType:              req.ApplicationType,
+		ClientName:                   req.ClientName,
+		Contacts:                     req.Contacts,
+		LogoURI:                      req.LogoURI,
+		PolicyURI:                    req.PolicyURI,
+		TosURI:                       req.TosURI,
+		JwksURI:                      req.JwksURI,
+		SoftwareID:                   req.SoftwareID,
+		SoftwareVersion:              req.SoftwareVersion,
+		AccessTokenFormat:            req.AccessTokenFormat,
+		AccessTokenSignedResponseAlg: req.AccessTokenSignedResponseAlg,
+		AuthorizationDetailsTypes:    req.AuthorizationDetailsTypes,
 	}
 	if req.TokenEndpointAuthMethod != models.ClientAuthNone {
 		secret, err := crypto.NewToken()
@@ -244,4 +261,25 @@ func validateRedirectURI(raw string) error {
 // {error: "invalid_client_metadata", error_description: <message>}.
 func wrapInvalidReg(msg string) error {
 	return &models.TheAuthError{Code: "invalid_client_metadata", Message: msg, Inner: models.ErrOAuthInvalidRequest}
+}
+
+// validateTokenMetadata vets the access token policy and RAR metadata of a
+// registration request. Anonymous registrants may not set them: they pick
+// server-side behaviour (key generation, token storage) that only a trusted
+// registrant should control.
+func (s *Service) validateTokenMetadata(req ClientRegistrationRequest, anonymous bool) error {
+	set := req.AccessTokenFormat != "" || req.AccessTokenSignedResponseAlg != "" || len(req.AuthorizationDetailsTypes) > 0
+	if !set {
+		return nil
+	}
+	if anonymous {
+		return wrapInvalidReg("access token policy and authorization_details_types need an authenticated registration")
+	}
+	if err := s.ValidateClientTokenPolicy(req.AccessTokenFormat, req.AccessTokenSignedResponseAlg); err != nil {
+		return wrapInvalidReg(err.Error())
+	}
+	if err := s.ValidateClientRARTypes(req.AuthorizationDetailsTypes); err != nil {
+		return wrapInvalidReg(err.Error())
+	}
+	return nil
 }

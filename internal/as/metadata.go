@@ -63,6 +63,10 @@ type ASMetadata struct {
 	// DeviceAuthorizationEndpoint (RFC 8628 section 4). Omitted when the
 	// device grant is disabled.
 	DeviceAuthorizationEndpoint string `json:"device_authorization_endpoint,omitempty"`
+
+	// AuthorizationDetailsTypesSupported (RFC 9396 section 10). Omitted
+	// when RAR is not enabled.
+	AuthorizationDetailsTypesSupported []string `json:"authorization_details_types_supported,omitempty"`
 }
 
 // ASMetadataDoc builds the metadata document. The result is
@@ -163,6 +167,8 @@ func (s *Service) ASMetadataDoc() (ASMetadata, error) {
 		meta.DeviceAuthorizationEndpoint = s.Cfg.Issuer + "/oauth/device_authorization"
 	}
 
+	meta.AuthorizationDetailsTypesSupported = s.RARTypes()
+
 	return meta, nil
 }
 
@@ -181,6 +187,8 @@ func (s *Service) grantTypesAdvertised() []string {
 	out := []string{models.GrantTypeAuthorizationCode, models.GrantTypeRefreshToken}
 	if s.AgentPolicy != nil {
 		out = append(out, models.GrantTypeClientCredentials, models.GrantTypeTokenExchange)
+	} else if s.Cfg.IDJAG != nil && len(s.Cfg.IDJAG.Audiences) > 0 {
+		out = append(out, models.GrantTypeTokenExchange)
 	}
 	if s.Cfg.JWTBearer != nil {
 		out = append(out, models.GrantTypeJWTBearer)

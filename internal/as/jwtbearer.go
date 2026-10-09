@@ -59,6 +59,7 @@ var allowedClientAssertionAlgs = map[string]bool{
 // genericJWTHeader carries only the JOSE header fields we need.
 type genericJWTHeader struct {
 	Alg string `json:"alg"`
+	Typ string `json:"typ"`
 	Kid string `json:"kid"`
 }
 
@@ -266,12 +267,14 @@ func (s *Service) JWTBearerGrant(ctx context.Context, req TokenRequest, assertio
 	if _, ok := s.ResourceByIdentifier(req.Resource); !ok {
 		return TokenResponse{}, models.ErrOAuthInvalidResource
 	}
+	grantScope := req.Scope
+	if header.Typ == jwt.TypeIDJAG {
+		if grantScope, err = s.vetIDJAGRedemption(ctx, req, claims.raw); err != nil {
+			return TokenResponse{}, err
+		}
+	}
 	// Mint access token (no refresh: the external JWT is the renewable credential).
 	jtiOut := ulid.New().String()
-	signingKey, priv, serr := s.CurrentSigningKey()
-	if serr != nil {
-		return TokenResponse{}, serr
-	}
 	accessClaims := jwt.Claims{
 		Iss:      s.Cfg.Issuer,
 		Sub:      userID.String(),
@@ -280,10 +283,13 @@ func (s *Service) JWTBearerGrant(ctx context.Context, req TokenRequest, assertio
 		Iat:      now.Unix(),
 		Jti:      jtiOut,
 		ClientID: req.ClientID,
-		Scope:    scopeJoin(req.Scope),
+		Scope:    scopeJoin(grantScope),
 		Typ:      jwt.TypeAccessToken,
 	}
-	access, aerr := jwt.Sign(accessClaims, signingKey.KID, priv)
+	if herr := s.applyOnTokenIssued(ctx, &accessClaims); herr != nil {
+		return TokenResponse{}, herr
+	}
+	access, aerr := s.issueAccessToken(ctx, req.ClientID, accessClaims)
 	if aerr != nil {
 		return TokenResponse{}, fmt.Errorf("sign jwt-bearer token: %w", aerr)
 	}
@@ -291,7 +297,7 @@ func (s *Service) JWTBearerGrant(ctx context.Context, req TokenRequest, assertio
 		"issuer":   claims.Iss,
 		"subject":  claims.Sub,
 		"resource": req.Resource,
-		"scope":    req.Scope,
+		"scope":    grantScope,
 		"jti":      jtiOut,
 		"grant":    models.GrantTypeJWTBearer,
 	})
@@ -299,7 +305,7 @@ func (s *Service) JWTBearerGrant(ctx context.Context, req TokenRequest, assertio
 		AccessToken: access,
 		TokenType:   "Bearer",
 		ExpiresIn:   int(s.Cfg.AccessTokenTTL.Seconds()),
-		Scope:       scopeJoin(req.Scope),
+		Scope:       scopeJoin(grantScope),
 	}, nil
 }
 

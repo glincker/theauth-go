@@ -74,6 +74,8 @@ func scanOAuthClient(row pgRowScanner) (theauth.OAuthClient, error) {
 		redirects, grants, responses, ctcs  []string
 		anonymous                           bool
 		createdAt, updatedAt                pgtype.Timestamptz
+		tokenFormat, tokenAlg               string
+		detailTypes                         []string
 	)
 	if err := row.Scan(
 		&id, &clientID, &secretHash, &name, &redirects,
@@ -82,6 +84,7 @@ func scanOAuthClient(row pgRowScanner) (theauth.OAuthClient, error) {
 		&jwksURI, &jwks, &softID, &softVer, &ownerKind,
 		&ownerUser, &ownerOrg, &ownerAgent,
 		&anonymous, &regAccessHash, &createdAt, &updatedAt,
+		&tokenFormat, &tokenAlg, &detailTypes,
 	); err != nil {
 		return theauth.OAuthClient{}, err
 	}
@@ -104,6 +107,10 @@ func scanOAuthClient(row pgRowScanner) (theauth.OAuthClient, error) {
 		Jwks:                    jwks,
 		SoftwareID:              softID,
 		SoftwareVersion:         softVer,
+
+		AccessTokenFormat:            tokenFormat,
+		AccessTokenSignedResponseAlg: tokenAlg,
+		AuthorizationDetailsTypes:    detailTypes,
 		Owner: theauth.ClientOwner{
 			UserID:         pgUUIDToULIDPtr(ownerUser),
 			OrganizationID: pgUUIDToULIDPtr(ownerOrg),

@@ -207,6 +207,10 @@ var (
 	// ErrOAuthUnsupportedResponseType maps to "unsupported_response_type".
 	ErrOAuthUnsupportedResponseType = models.ErrOAuthUnsupportedResponseType
 
+	// ErrOAuthInvalidAuthorizationDetails maps to the RFC 9396 error
+	// "invalid_authorization_details".
+	ErrOAuthInvalidAuthorizationDetails = models.ErrOAuthInvalidAuthorizationDetails
+
 	// ErrOAuthInvalidResource maps to RFC 8707 "invalid_target".
 	ErrOAuthInvalidResource = models.ErrOAuthInvalidResource
 

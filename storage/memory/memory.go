@@ -44,6 +44,7 @@ type Store struct {
 	tokens tokenState
 	// OAuth device authorizations + registration tokens. See memory_device.go.
 	devauth devAuthState
+	opaque  opaqueState
 }
 
 func New() *Store {

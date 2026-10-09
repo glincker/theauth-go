@@ -23,29 +23,43 @@ type ClientOwner struct {
 // server. Persisted by RFC 7591 dynamic client registration (POST /oauth/register)
 // and by future admin/account flows. Fields mirror RFC 7591 client metadata.
 type OAuthClient struct {
-	ID                      ULID        `json:"-"`
-	ClientID                string      `json:"client_id"`
-	ClientSecretHash        []byte      `json:"-"`
-	ClientName              string      `json:"client_name"`
-	RedirectURIs            []string    `json:"redirect_uris"`
-	GrantTypes              []string    `json:"grant_types"`
-	ResponseTypes           []string    `json:"response_types"`
-	Scope                   string      `json:"scope"`
-	TokenEndpointAuthMethod string      `json:"token_endpoint_auth_method"`
-	ApplicationType         string      `json:"application_type"`
-	Contacts                []string    `json:"contacts,omitempty"`
-	LogoURI                 string      `json:"logo_uri,omitempty"`
-	PolicyURI               string      `json:"policy_uri,omitempty"`
-	TosURI                  string      `json:"tos_uri,omitempty"`
-	JwksURI                 string      `json:"jwks_uri,omitempty"`
-	Jwks                    []byte      `json:"jwks,omitempty"`
-	SoftwareID              string      `json:"software_id,omitempty"`
-	SoftwareVersion         string      `json:"software_version,omitempty"`
-	Owner                   ClientOwner `json:"-"`
-	AnonymousRegistered     bool        `json:"-"`
-	RegistrationAccessHash  []byte      `json:"-"`
-	CreatedAt               time.Time   `json:"client_id_issued_at,omitempty"`
-	UpdatedAt               time.Time   `json:"-"`
+	ID                      ULID     `json:"-"`
+	ClientID                string   `json:"client_id"`
+	ClientSecretHash        []byte   `json:"-"`
+	ClientName              string   `json:"client_name"`
+	RedirectURIs            []string `json:"redirect_uris"`
+	GrantTypes              []string `json:"grant_types"`
+	ResponseTypes           []string `json:"response_types"`
+	Scope                   string   `json:"scope"`
+	TokenEndpointAuthMethod string   `json:"token_endpoint_auth_method"`
+	ApplicationType         string   `json:"application_type"`
+	Contacts                []string `json:"contacts,omitempty"`
+	LogoURI                 string   `json:"logo_uri,omitempty"`
+	PolicyURI               string   `json:"policy_uri,omitempty"`
+	TosURI                  string   `json:"tos_uri,omitempty"`
+	JwksURI                 string   `json:"jwks_uri,omitempty"`
+	Jwks                    []byte   `json:"jwks,omitempty"`
+	SoftwareID              string   `json:"software_id,omitempty"`
+	SoftwareVersion         string   `json:"software_version,omitempty"`
+	// AccessTokenFormat selects how access tokens issued to this client are
+	// encoded: AccessTokenFormatJWT (RFC 9068, default) or
+	// AccessTokenFormatOpaque (random reference token, introspection only).
+	// Empty inherits the server default.
+	AccessTokenFormat string `json:"access_token_format,omitempty"`
+	// AccessTokenSignedResponseAlg is the JWS alg used to sign this client's
+	// JWT access tokens (EdDSA, ES256 or RS256). Empty inherits the server
+	// default. Ignored for opaque tokens.
+	AccessTokenSignedResponseAlg string `json:"access_token_signed_response_alg,omitempty"`
+	// AuthorizationDetailsTypes lists the RFC 9396 authorization_details
+	// types the client may request. Empty allows every type the server
+	// supports.
+	AuthorizationDetailsTypes []string `json:"authorization_details_types,omitempty"`
+
+	Owner                  ClientOwner `json:"-"`
+	AnonymousRegistered    bool        `json:"-"`
+	RegistrationAccessHash []byte      `json:"-"`
+	CreatedAt              time.Time   `json:"client_id_issued_at,omitempty"`
+	UpdatedAt              time.Time   `json:"-"`
 }
 
 // AuthorizationCode is a single-use 60-second TTL record bound to a client,
@@ -61,8 +75,11 @@ type AuthorizationCode struct {
 	CodeChallenge       string
 	CodeChallengeMethod string
 	Nonce               string
-	ExpiresAt           time.Time
-	CreatedAt           time.Time
+	// AuthorizationDetails is the RFC 9396 authorization_details array the
+	// user approved, as JSON. Nil when the request carried none.
+	AuthorizationDetails []byte
+	ExpiresAt            time.Time
+	CreatedAt            time.Time
 }
 
 // RefreshToken is the opaque, hashed, rotated-on-use refresh artefact backing
@@ -92,6 +109,9 @@ type RefreshToken struct {
 	// minted from a code. Used to revoke the family when the code is
 	// replayed (RFC 6749 section 4.1.2).
 	AuthCodeHash string
+	// AuthorizationDetails is the RFC 9396 authorization_details array
+	// granted to this family, as JSON. Nil when none were granted.
+	AuthorizationDetails []byte
 }
 
 // JWKSKey is one signing key in the AS's JWKS state machine. State transitions:
@@ -165,7 +185,30 @@ const ClientAssertionTypeJWTBearer = "urn:ietf:params:oauth:client-assertion-typ
 // Token type URNs used by the RFC 8693 token-exchange grant.
 const (
 	TokenTypeAccessToken = "urn:ietf:params:oauth:token-type:access_token"
+	// TokenTypeIDJAG identifies an Identity Assertion JWT Authorization
+	// Grant (draft-ietf-oauth-identity-assertion-authz-grant).
+	TokenTypeIDJAG = "urn:ietf:params:oauth:token-type:id-jag"
 )
+
+// Access token formats selectable per client.
+const (
+	AccessTokenFormatJWT    = "jwt"
+	AccessTokenFormatOpaque = "opaque"
+)
+
+// OpaqueAccessToken is the server-side record behind a reference (opaque)
+// access token. Only the SHA-256 hash of the token is stored. Claims holds the
+// JSON of the claim set a JWT would have carried, so introspection answers
+// identically for both formats.
+type OpaqueAccessToken struct {
+	Hash      []byte
+	JTI       string
+	ClientID  string
+	Claims    []byte
+	IssuedAt  time.Time
+	ExpiresAt time.Time
+	RevokedAt *time.Time
+}
 
 // Response type constants. OAuth 2.1 supports only "code".
 const (
@@ -328,4 +371,8 @@ type RegisteredClient struct {
 	JwksURI                 string   `json:"jwks_uri,omitempty"`
 	SoftwareID              string   `json:"software_id,omitempty"`
 	SoftwareVersion         string   `json:"software_version,omitempty"`
+
+	AccessTokenFormat            string   `json:"access_token_format,omitempty"`
+	AccessTokenSignedResponseAlg string   `json:"access_token_signed_response_alg,omitempty"`
+	AuthorizationDetailsTypes    []string `json:"authorization_details_types,omitempty"`
 }

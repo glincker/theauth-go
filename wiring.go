@@ -186,6 +186,11 @@ func validateConfig(cfg *Config) (providers map[string]Provider, sp samlParsed, 
 		if _, ok := cfg.storageRaw.(OAuthServerStorage); !ok {
 			return nil, samlParsed{}, nil, ErrStorageMissingOAuthMethods
 		}
+		if tp := cfg.AuthorizationServer.TokenPolicy; tp != nil && tp.DefaultAccessTokenFormat == AccessTokenFormatOpaque {
+			if _, ok := cfg.storageRaw.(OpaqueTokenStorage); !ok {
+				return nil, samlParsed{}, nil, errors.New("theauth: TokenPolicy.DefaultAccessTokenFormat opaque needs a storage that implements OpaqueTokenStorage")
+			}
+		}
 	}
 
 	// v2.0 agent identity + delegation.
@@ -606,6 +611,9 @@ func asConfigFromRoot(c *AuthorizationServerConfig) internalas.Config {
 		JWTBearer:                      jwtBearerConfigFromRoot(c.JWTBearer),
 		CIBA:                           cibaConfigToInternal(c.CIBA),
 		DeviceAuthorization:            c.DeviceAuthorization,
+		TokenPolicy:                    c.TokenPolicy,
+		RAR:                            c.RAR,
+		IDJAG:                          c.IDJAG,
 		RateLimits:                     c.RateLimits,
 		RegistrationTokenTTL:           c.RegistrationTokenTTL,
 	}

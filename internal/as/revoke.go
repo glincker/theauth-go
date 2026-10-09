@@ -55,10 +55,13 @@ func (s *Service) RevokeToken(ctx context.Context, token, tokenTypeHint, clientI
 		s.revokeAccessToken(ctx, token, client.ClientID)
 		return nil
 	}
+	hash := crypto.HashToken(token)
+	if s.revokeOpaqueAccessToken(ctx, hash, client.ClientID) {
+		return nil
+	}
 	if tokenTypeHint == "access_token" {
 		return nil
 	}
-	hash := crypto.HashToken(token)
 	// security re-audit L3 (2026-06-22): explicit revoke should walk the
 	// entire rotation family (parent + all children) so that rotating a
 	// compromised token before calling revoke does not leave the fresh
@@ -92,4 +95,23 @@ func (s *Service) revokeAccessToken(ctx context.Context, token, clientID string)
 		return
 	}
 	_ = s.denyAccessJTI(ctx, claims.Jti, time.Unix(claims.Exp, 0))
+}
+
+// revokeOpaqueAccessToken revokes a reference access token issued to
+// clientID and reports whether the token was one. Opaque tokens are stateful,
+// so revocation does not depend on the jti denylist being enabled.
+func (s *Service) revokeOpaqueAccessToken(ctx context.Context, hash []byte, clientID string) bool {
+	store, ok := s.opaqueStore()
+	if !ok {
+		return false
+	}
+	rec, err := store.OpaqueAccessTokenByHash(ctx, hash)
+	if err != nil || rec == nil {
+		return false
+	}
+	if rec.ClientID == clientID {
+		_ = store.RevokeOpaqueAccessToken(ctx, hash)
+		s.purgeIntrospectCache()
+	}
+	return true
 }
