@@ -17,6 +17,7 @@ package kv
 
 import (
 	"context"
+	"math"
 	"time"
 )
 
@@ -110,7 +111,13 @@ func (l WindowLimiter) Allow(ctx context.Context, key string, limit int, window 
 	if n > int64(limit) {
 		return Decision{Allowed: false, RetryAfter: window}, nil
 	}
-	return Decision{Allowed: true, Remaining: limit - int(n)}, nil
+	// n <= limit here, so the difference is in [0, limit]. Clamp before
+	// narrowing to int so the conversion is provably in range.
+	remaining := int64(limit) - n
+	if remaining > math.MaxInt32 {
+		remaining = math.MaxInt32
+	}
+	return Decision{Allowed: true, Remaining: int(remaining)}, nil
 }
 
 // Stores bundles the three pluggable pieces. Any nil field means "use the
