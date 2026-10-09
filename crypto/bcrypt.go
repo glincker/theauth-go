@@ -45,12 +45,16 @@ func VerifyLegacyBcrypt(plain, hash string) (bool, error) {
 // only when a bcrypt hash was accepted, or an Argon2id hash with parameters
 // below the current baseline matched, and was re-hashed successfully.
 func VerifyPasswordWithLegacyFallback(plain, storedHash string, allowLegacy bool) (matched bool, newArgon2Hash string, err error) {
-	if IsBcryptHash(storedHash) {
+	if IsLegacyHash(storedHash) {
 		if !allowLegacy {
 			// If legacy support is disabled, treat as invalid hash format.
 			return false, "", ErrInvalidPasswordHash
 		}
-		ok, bcryptErr := VerifyLegacyBcrypt(plain, storedHash)
+		verify := VerifyLegacyBcrypt
+		if IsPBKDF2Hash(storedHash) {
+			verify = VerifyLegacyPBKDF2
+		}
+		ok, bcryptErr := verify(plain, storedHash)
 		if bcryptErr != nil {
 			return false, "", bcryptErr
 		}

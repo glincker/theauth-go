@@ -46,7 +46,9 @@ func HashPassword(plain string) (string, error) {
 	if _, err := rand.Read(salt); err != nil {
 		return "", err
 	}
+	release := acquireHashSlot()
 	key := argon2.IDKey([]byte(plain), salt, argonTime, argonMemoryKiB, argonThreads, argonKeyLen)
+	release()
 	enc := base64.RawStdEncoding.EncodeToString
 	return fmt.Sprintf(
 		"$argon2id$v=%d$m=%d,t=%d,p=%d$%s$%s",
@@ -81,7 +83,9 @@ func VerifyPassword(plain, phc string) (bool, error) {
 	if err != nil {
 		return false, ErrInvalidPasswordHash
 	}
+	release := acquireHashSlot()
 	got := argon2.IDKey([]byte(plain), salt, time, memory, threads, uint32(len(want)))
+	release()
 	return subtle.ConstantTimeCompare(got, want) == 1, nil
 }
 

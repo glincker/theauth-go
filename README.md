@@ -266,8 +266,8 @@ Set `Config.WebAuthn` and use a storage backend that implements `WebAuthnStorage
 **Does it support MCP authorization?**
 Yes. The library can act as the OAuth 2.1 authorization server and publishes protected resource metadata. The separate zero dependency `mcpresource` module validates tokens inside an MCP resource server. See [MCP authorization](https://docs.theauth.dev/go/concepts/mcp-authorization) and [`examples/mcp-server`](./examples/mcp-server).
 
-**How do I migrate from Auth0 or Cognito?**
-Follow [Migrate from Auth0](https://docs.theauth.dev/go/guides/migrate-from-auth0) or [Migrate from Cognito](https://docs.theauth.dev/go/guides/migrate-from-cognito). Coming from hand-rolled sessions: [Migrate from hand-rolled sessions](https://docs.theauth.dev/go/guides/migrate-from-hand-rolled-sessions).
+**How do I migrate from Auth0, Cognito or Keycloak?**
+Follow [Migrate from Auth0](https://docs.theauth.dev/go/guides/migrate-from-auth0), [Migrate from Cognito](https://docs.theauth.dev/go/guides/migrate-from-cognito) or [Migrate from Keycloak](https://github.com/glincker/theauth-go/blob/main/docs/MIGRATING-FROM-KEYCLOAK.md). Password hashes carry over and upgrade to Argon2id at each user's first login. Coming from hand-rolled sessions: [Migrate from hand-rolled sessions](https://docs.theauth.dev/go/guides/migrate-from-hand-rolled-sessions).
 
 **Which Go versions are supported?**
 The root module declares Go 1.25. `storage/sqlite` is a separate module and needs Go 1.26.

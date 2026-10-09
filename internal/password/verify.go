@@ -9,12 +9,12 @@ import (
 	"github.com/glincker/theauth-go/v2/internal/models"
 )
 
-// VerifyCredential checks plain against a stored hash. A bcrypt hash with
+// VerifyCredential checks plain against a stored hash. A legacy (bcrypt or PBKDF2) hash with
 // allowLegacy off is a plain mismatch, not an error. newHash is non-empty when
 // a legacy hash matched and should be persisted; a rehash failure is logged and
 // the match still stands.
 func VerifyCredential(plain, stored string, allowLegacy bool) (ok bool, newHash string, err error) {
-	if crypto.IsBcryptHash(stored) && !allowLegacy {
+	if crypto.IsLegacyHash(stored) && !allowLegacy {
 		return false, "", nil
 	}
 	ok, newHash, err = crypto.VerifyPasswordWithLegacyFallback(plain, stored, allowLegacy)

@@ -35,6 +35,13 @@ type Storage interface {
 	UserByID(ctx context.Context, id models.ULID) (*models.User, error)
 }
 
+// SessionUserStorage is an optional Storage extension that returns a session
+// and its user together. Adapters that can do it in one round trip (a join)
+// implement it; validate then skips the separate user lookup.
+type SessionUserStorage interface {
+	SessionAndUserByTokenHash(ctx context.Context, hash []byte) (*models.Session, *models.User, error)
+}
+
 // Service holds the dependencies needed to issue and validate sessions.
 // Constructed once in theauth.New and reused for the lifetime of the
 // process.
@@ -171,7 +178,14 @@ func (s *Service) validate(ctx context.Context, token string, touch bool) (*mode
 	if token == "" {
 		return nil, nil, models.ErrInvalidToken
 	}
-	sess, err := s.storage.SessionByTokenHash(ctx, crypto.HashToken(token))
+	var sess *models.Session
+	var user *models.User
+	var err error
+	if joined, ok := s.storage.(SessionUserStorage); ok {
+		sess, user, err = joined.SessionAndUserByTokenHash(ctx, crypto.HashToken(token))
+	} else {
+		sess, err = s.storage.SessionByTokenHash(ctx, crypto.HashToken(token))
+	}
 	if errors.Is(err, models.ErrStorageNotFound) {
 		return nil, nil, models.ErrInvalidToken
 	}
@@ -194,9 +208,11 @@ func (s *Service) validate(ctx context.Context, token string, touch bool) (*mode
 			return nil, nil, err
 		}
 	}
-	user, err := s.storage.UserByID(ctx, sess.UserID)
-	if err != nil {
-		return nil, nil, err
+	if user == nil {
+		user, err = s.storage.UserByID(ctx, sess.UserID)
+		if err != nil {
+			return nil, nil, err
+		}
 	}
 	if touch && s.policy.Toucher != nil && s.policy.TouchInterval > 0 &&
 		now.Sub(last) >= s.policy.TouchInterval && s.gate.allow(sess.ID, now, s.policy.TouchInterval) {

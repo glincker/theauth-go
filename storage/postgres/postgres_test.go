@@ -15,7 +15,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-func testPool(t *testing.T) *pgxpool.Pool {
+func testPool(t testing.TB) *pgxpool.Pool {
 	t.Helper()
 	url := os.Getenv("POSTGRES_TEST_URL")
 	if url == "" {

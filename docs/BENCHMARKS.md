@@ -1,5 +1,7 @@
 # theauth-go Benchmark Gate
 
+These are CPU micro-benchmarks against the in-memory adapter. For throughput and latency against Postgres under concurrent load, see [SCALE.md](SCALE.md).
+
 A curated benchmark suite and a regression gate (default threshold 25%) live
 in `scripts/bench-gate.sh` and `benchgate/curated.txt`. The `bench` GitHub
 Actions workflow runs the suite on manual dispatch and on a weekly schedule,

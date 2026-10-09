@@ -84,6 +84,7 @@ func ApplyBundle(ctx context.Context, st Storage, b *Bundle, opts ApplyOptions) 
 	// Build a lookup map: source_id -> theauth ULID so we can link oauth +
 	// password rows after users are inserted.
 	sourceToULID := make(map[string]theauth.ULID, len(b.Users))
+	existingSource := make(map[string]bool)
 
 	var result ApplyResult
 
@@ -104,6 +105,7 @@ func ApplyBundle(ctx context.Context, st Storage, b *Bundle, opts ApplyOptions) 
 			if existing != nil {
 				log("SKIP duplicate email %q (source_id=%s)", ur.Email, ur.SourceID)
 				sourceToULID[ur.SourceID] = existing.ID
+				existingSource[ur.SourceID] = true
 				result.UsersDuplicate++
 				continue
 			}
@@ -167,6 +169,10 @@ func ApplyBundle(ctx context.Context, st Storage, b *Bundle, opts ApplyOptions) 
 		uid, ok := sourceToULID[pr.SourceUserID]
 		if !ok {
 			log("SKIP passwords[%d]: source_user_id %q not mapped to a user", i, pr.SourceUserID)
+			continue
+		}
+		if existingSource[pr.SourceUserID] {
+			log("SKIP passwords[%d]: user already existed, keeping its current password", i)
 			continue
 		}
 		if err := st.SetUserPassword(ctx, uid, pr.Hash); err != nil {

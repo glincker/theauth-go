@@ -155,3 +155,36 @@ func TestApplierInvalidBundle(t *testing.T) {
 		t.Fatal("expected error for invalid bundle; got nil")
 	}
 }
+
+// Re-running an import must not put a legacy hash back over a password the
+// user has since upgraded or changed.
+func TestApplierRerunKeepsExistingPasswords(t *testing.T) {
+	ctx := context.Background()
+	st := memory.New()
+	b := sampleBundle()
+	b.Passwords = []internal.PasswordRecord{{SourceUserID: "user-b", Hash: "$2b$10$legacylegacylegacylegacyle", Algo: "bcrypt"}}
+
+	if _, err := internal.ApplyBundle(ctx, st, b, internal.ApplyOptions{Out: &bytes.Buffer{}}); err != nil {
+		t.Fatal(err)
+	}
+	bob, err := st.UserByEmail(ctx, "bob@example.com")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := st.SetUserPassword(ctx, bob.ID, "$argon2id$upgraded"); err != nil {
+		t.Fatal(err)
+	}
+
+	res, err := internal.ApplyBundle(ctx, st, b, internal.ApplyOptions{Out: &bytes.Buffer{}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.PasswordsSet != 0 {
+		t.Errorf("second run set %d passwords, want 0", res.PasswordsSet)
+	}
+	got, _ := st.UserByEmail(ctx, "bob@example.com")
+	hash, _ := st.UserPasswordHashByID(ctx, got.ID)
+	if hash != "$argon2id$upgraded" {
+		t.Errorf("password hash after re-run = %q, want the upgraded hash kept", hash)
+	}
+}

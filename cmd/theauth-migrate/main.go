@@ -7,6 +7,8 @@
 //	theauth-migrate cognito  --input PATH --apply --storage [memory|postgres] [--dsn DSN] [--dry-run]
 //	theauth-migrate auth0    --export PATH [--output PATH] [--force-password-reset]
 //	theauth-migrate auth0    --input PATH --apply --storage [memory|postgres] [--dsn DSN] [--dry-run]
+//	theauth-migrate keycloak --export PATH [--output PATH] [--force-password-reset]
+//	theauth-migrate keycloak --input PATH --apply --storage [memory|postgres] [--dsn DSN] [--dry-run]
 //	theauth-migrate validate --input PATH
 package main
 
@@ -35,6 +37,11 @@ func main() {
 			_, _ = fmt.Fprintf(os.Stderr, "auth0: %v\n", err)
 			os.Exit(1)
 		}
+	case "keycloak":
+		if err := runKeycloak(os.Args[2:]); err != nil {
+			_, _ = fmt.Fprintf(os.Stderr, "keycloak: %v\n", err)
+			os.Exit(1)
+		}
 	case "validate":
 		if err := runValidate(os.Args[2:]); err != nil {
 			_, _ = fmt.Fprintf(os.Stderr, "validate: %v\n", err)
@@ -50,12 +57,16 @@ func main() {
 }
 
 func printUsage() {
-	fmt.Fprint(os.Stderr, `theauth-migrate - migrate users from Cognito or Auth0 to theauth-go
+	fmt.Fprint(os.Stderr, `theauth-migrate - migrate users from Cognito, Auth0 or Keycloak to theauth-go
 
 SUBCOMMANDS
 
   cognito   Convert a Cognito user export to the theauth-go intermediate format,
             or apply the intermediate format to a storage backend.
+
+  keycloak  Convert a Keycloak realm export to the theauth-go intermediate format,
+            or apply the intermediate format to a storage backend. Password
+            hashes (pbkdf2) carry over and upgrade to Argon2id at first login.
 
   auth0     Convert an Auth0 user export to the theauth-go intermediate format,
             or apply the intermediate format to a storage backend.
