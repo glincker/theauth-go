@@ -286,6 +286,9 @@ func (s *Service) JWTBearerGrant(ctx context.Context, req TokenRequest, assertio
 		Scope:    scopeJoin(grantScope),
 		Typ:      jwt.TypeAccessToken,
 	}
+	if herr := s.applyOnTokenIssued(ctx, &accessClaims); herr != nil {
+		return TokenResponse{}, herr
+	}
 	access, aerr := s.issueAccessToken(ctx, req.ClientID, accessClaims)
 	if aerr != nil {
 		return TokenResponse{}, fmt.Errorf("sign jwt-bearer token: %w", aerr)

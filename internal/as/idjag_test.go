@@ -297,3 +297,44 @@ func TestIDJAGRedeemNeedsConfig(t *testing.T) {
 		t.Fatal("an id-jag must be refused when IDJAG is not enabled")
 	}
 }
+
+func TestJWTBearerGrantRunsOnTokenIssued(t *testing.T) {
+	priv, _ := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	issuers := []theauth.TrustedJWTIssuer{{
+		Issuer: jagIDP, JWKSURL: jwksServerForECKey(t, &priv.PublicKey),
+		AllowedAlgorithms: []string{"ES256"}, SubjectMapper: theauth.SubMapper{},
+	}}
+	store := memory.New()
+	key := make([]byte, 32)
+	_, _ = rand.Read(key)
+	called := false
+	a, err := theauth.New(theauth.Config{
+		Storage: store, BaseURL: "https://auth.example.com", EncryptionKey: key,
+		LifecycleHooks: &theauth.LifecycleHooks{OnTokenIssued: func(_ context.Context, c map[string]any) (map[string]any, error) {
+			called = true
+			c["tenant_id"] = "t1"
+			return c, nil
+		}},
+		AuthorizationServer: &theauth.AuthorizationServerConfig{
+			Issuer: "https://auth.example.com", DisableRotation: true,
+			Resources: []theauth.ProtectedResource{{Identifier: jagResource, Scopes: []string{"api.read"}}},
+			JWTBearer: &theauth.JWTBearerConfig{TrustedJWTIssuers: issuers, AllowPrivateJWKSNetworks: true,
+				AssertionMaxAge: 5 * time.Minute, ReplayCacheTTL: 10 * time.Minute},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(a.Close)
+	assertion := buildBearerGrantAssertion(t, priv, jagIDP, "https://auth.example.com", ulid.New().String(),
+		ulid.New().String(), time.Now(), time.Now().Add(5*time.Minute))
+	resp, err := a.JWTBearerGrant(context.Background(), theauth.TokenRequest{
+		GrantType: models.GrantTypeJWTBearer, Resource: jagResource, Scope: []string{"api.read"},
+	}, assertion)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !called || jwtClaim(t, resp.AccessToken, "tenant_id") != "t1" {
+		t.Fatal("OnTokenIssued did not run for the jwt-bearer grant")
+	}
+}
