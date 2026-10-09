@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/glincker/theauth-go/v2/crypto"
 	"github.com/glincker/theauth-go/v2/email"
 	"github.com/glincker/theauth-go/v2/internal/agent"
 	"github.com/glincker/theauth-go/v2/internal/apitokens"
@@ -279,13 +280,20 @@ type Config struct {
 // These are designed for migration windows; disable them once users have
 // been migrated and re-hashed.
 type PasswordPolicyConfig struct {
-	// AllowLegacyBcrypt enables the bcrypt fallback in VerifyPassword. When
-	// true, hashes starting with "$2a$", "$2b$", or "$2x$" are verified with
-	// golang.org/x/crypto/bcrypt. On a successful match the password is
+	// AllowLegacyBcrypt enables the legacy-hash fallback in VerifyPassword for
+	// migrated users. When true, bcrypt hashes ("$2a$", "$2b$", "$2x$", from
+	// Auth0 and others) and PBKDF2 hashes ("$pbkdf2-sha256$", "$pbkdf2-sha512$",
+	// from Keycloak) are verified. On a successful match the password is
 	// transparently re-hashed with Argon2id and persisted by the library;
 	// hosts that mirror hashes can observe it via OnLegacyHashAccepted.
 	// With false, a bcrypt hash fails as invalid credentials. Set to false (default) in all non-migration deployments.
 	AllowLegacyBcrypt bool
+
+	// HashConcurrency bounds how many Argon2id hashes or verifications run at
+	// once across the process; extra sign-ins wait their turn instead of each
+	// allocating 64 MiB. Default NumCPU/4 (at least 1), which measured as the
+	// throughput knee. The bound is process-wide, the last New call wins.
+	HashConcurrency int
 
 	// MinLength is the minimum password length in bytes. Default 12.
 	MinLength int
@@ -460,6 +468,7 @@ type TheAuth struct {
 // this function stays a short orchestrator.
 func New(cfg Config) (*TheAuth, error) {
 	applyConfigDefaults(&cfg)
+	crypto.SetHashConcurrency(cfg.PasswordPolicy.HashConcurrency)
 
 	providers, sp, dcrTokenHashes, err := validateConfig(&cfg)
 	if err != nil {

@@ -28,7 +28,8 @@ theauth-go is not a SaaS or hosted IdP. It is a Go library you mount into your o
 - [Capability interfaces and choosing a storage backend](https://docs.theauth.dev/go/concepts/capability-interfaces): feature matrix per backend.
 - [Migrating from hand-rolled sessions](https://docs.theauth.dev/go/guides/migrate-from-hand-rolled-sessions).
 - [examples/single-binary-sqlite](https://github.com/glincker/theauth-go/tree/main/examples/single-binary-sqlite): runnable app, `cmd/mycli`, smoke test.
-- [Migrating from Auth0](https://docs.theauth.dev/go/guides/migrate-from-auth0) / [Migrating from Cognito](https://docs.theauth.dev/go/guides/migrate-from-cognito).
+- [Migrating from Auth0](https://docs.theauth.dev/go/guides/migrate-from-auth0) / [Migrating from Cognito](https://docs.theauth.dev/go/guides/migrate-from-cognito) / [Migrating from Keycloak](https://github.com/glincker/theauth-go/blob/main/docs/MIGRATING-FROM-KEYCLOAK.md).
+- [Scale and capacity](https://github.com/glincker/theauth-go/blob/main/docs/SCALE.md): measured throughput, latency and memory against Postgres, with a reproducible load test.
 
 ## Quick start
 

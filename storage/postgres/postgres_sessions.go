@@ -9,6 +9,7 @@ import (
 
 	"github.com/glincker/theauth-go/v2"
 	"github.com/glincker/theauth-go/v2/storage"
+	sqlcgen "github.com/glincker/theauth-go/v2/storage/postgres/sqlc"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 )
@@ -23,7 +24,11 @@ auth_level, active_organization_id, last_seen_at, elevated_until, credential_id`
 
 const liveSession = `revoked_at IS NULL AND expires_at > $%d`
 
-func scanSession(r pgx.Row) (theauth.Session, error) {
+func scanSession(r pgx.Row) (theauth.Session, error) { return scanSessionWith(r) }
+
+// scanSessionWith scans the sessionCols columns followed by extra destinations,
+// for queries that join more columns onto a session row.
+func scanSessionWith(r pgx.Row, extra ...any) (theauth.Session, error) {
 	var (
 		id, userID, org         pgtype.UUID
 		hash                    []byte
@@ -32,7 +37,8 @@ func scanSession(r pgx.Row) (theauth.Session, error) {
 		created, expires        pgtype.Timestamptz
 		revoked, seen, elevated pgtype.Timestamptz
 	)
-	if err := r.Scan(&id, &userID, &hash, &ua, &ip, &created, &expires, &revoked, &level, &org, &seen, &elevated, &cred); err != nil {
+	dest := append([]any{&id, &userID, &hash, &ua, &ip, &created, &expires, &revoked, &level, &org, &seen, &elevated, &cred}, extra...)
+	if err := r.Scan(dest...); err != nil {
 		return theauth.Session{}, err
 	}
 	s := theauth.Session{
@@ -217,4 +223,25 @@ RETURNING id, user_id, credential_id, session_ttl, created_at, expires_at, consu
 		SessionTTL: time.Duration(ttl), CreatedAt: tsToTime(created), ExpiresAt: tsToTime(expires),
 		ConsumedAt: tsToTimePtr(consumed),
 	}, nil
+}
+
+const sessionUserCols = `s.id, s.user_id, s.token_hash, s.user_agent, s.ip, s.created_at, s.expires_at, s.revoked_at,
+s.auth_level, s.active_organization_id, s.last_seen_at, s.elevated_until, s.credential_id`
+
+// SessionAndUserByTokenHash returns a session and its user in one round trip,
+// instead of the two sequential queries SessionByTokenHash plus UserByID cost.
+func (s *Store) SessionAndUserByTokenHash(ctx context.Context, hash []byte) (*theauth.Session, *theauth.User, error) {
+	var u sqlcgen.User
+	sess, err := scanSessionWith(s.pool.QueryRow(ctx, `SELECT `+sessionUserCols+`,
+u.id, u.email, u.email_verified_at, u.name, u.avatar_url, u.created_at, u.updated_at, u.password_hash
+FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.token_hash = $1`, hash),
+		&u.ID, &u.Email, &u.EmailVerifiedAt, &u.Name, &u.AvatarUrl, &u.CreatedAt, &u.UpdatedAt, &u.PasswordHash)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, nil, storage.ErrNotFound
+		}
+		return nil, nil, fmt.Errorf("postgres: get session and user: %w", err)
+	}
+	user := rowToUser(u)
+	return &sess, &user, nil
 }
