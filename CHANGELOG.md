@@ -6,7 +6,17 @@ adheres to [Semantic Versioning](https://semver.org/) from v1.0 forward.
 
 ## [Unreleased]
 
+### Added
+
+- Per-client access token policy: `access_token_signed_response_alg` (EdDSA, ES256, RS256) and `access_token_format` (`jwt` or `opaque`), enabled with `AuthorizationServer.TokenPolicy`. See `docs/access-token-policy.md`.
+- Rich Authorization Requests (RFC 9396): `AuthorizationServer.RAR`, `authorization_details` on authorize, PAR, JAR and the token endpoint, token and introspection claims, narrowing on refresh, `authorization_details_types` client metadata. See `docs/rich-authorization-requests.md`.
+- ID-JAG: `AuthorizationServer.IDJAG` issues assertions through token exchange and redeems them at the jwt-bearer grant. See `docs/id-jag.md`.
+- `theauth.OpaqueTokenStorage` (memory, Postgres, MySQL) and `storagetest.RunOpaqueTokens`.
+
 ### Upgrade notes
+
+- **Run migration `0021_token_policy_rar`** on Postgres and MySQL. It adds three columns to `oauth_clients`, one `authorization_details` column each to `oauth_authorization_codes` and `oauth_refresh_tokens`, and the `oauth_opaque_access_tokens` table. Custom adapters should persist `OAuthClient.AccessTokenFormat`, `AccessTokenSignedResponseAlg`, `AuthorizationDetailsTypes`, and `AuthorizationDetails` on codes and refresh tokens.
+- `AuthorizationServer.SigningAlg` now accepts `ES256` and `RS256` besides `EdDSA`. `Service.CurrentSigningKey` returns a `crypto.Signer` instead of `ed25519.PrivateKey` (internal package).
 
 - **Authorization codes are hashed at rest.** Migration `0019_as_security_hardening` deletes any plaintext code still stored (codes live 60 seconds, so in-flight authorizations must be restarted). Custom storage adapters are unaffected: the service hashes before calling storage.
 - **Run the new migration.** `0019` adds `dpop_jkt` and `auth_code_hash` to `oauth_refresh_tokens` and creates `oauth_revoked_jtis` (postgres and mysql). Custom adapters should persist `RefreshToken.DPoPJKT` and `RefreshToken.AuthCodeHash`, and may implement `RevokeRefreshTokensByAuthCode`, `DenyAccessToken` and `IsAccessTokenDenied`.
