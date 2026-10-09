@@ -6,12 +6,21 @@ adheres to [Semantic Versioning](https://semver.org/) from v1.0 forward.
 
 ## [Unreleased]
 
+## [2.8.0] - 2026-10-09
+
 ### Added
 
+- `crypto.SetHashConcurrency` and `crypto.DefaultHashConcurrency`: Argon2id hashing and verification now run behind a bound (default NumCPU divided by the Argon2id thread count) so a burst of sign-ins no longer multiplies memory. Measured before the bound: 128 concurrent sign-ins used 7.5 GB RSS. See `docs/SCALE.md`.
+- `cmd/theauth-migrate` with a Keycloak reader and applier: users, PBKDF2 credentials and federated identities move over, and the first login upgrades the hash to Argon2id. See `docs/MIGRATING-FROM-KEYCLOAK.md`.
+- `cmd/theauth-loadtest`, a load-test harness, and `docs/BENCHMARKS.md` with the method for reproducing numbers.
 - Per-client access token policy: `access_token_signed_response_alg` (EdDSA, ES256, RS256) and `access_token_format` (`jwt` or `opaque`), enabled with `AuthorizationServer.TokenPolicy`. See `docs/access-token-policy.md`.
 - Rich Authorization Requests (RFC 9396): `AuthorizationServer.RAR`, `authorization_details` on authorize, PAR, JAR and the token endpoint, token and introspection claims, narrowing on refresh, `authorization_details_types` client metadata. See `docs/rich-authorization-requests.md`.
 - ID-JAG: `AuthorizationServer.IDJAG` issues assertions through token exchange and redeems them at the jwt-bearer grant. See `docs/id-jag.md`.
 - `theauth.OpaqueTokenStorage` (memory, Postgres, MySQL) and `storagetest.RunOpaqueTokens`.
+
+### Changed
+
+- Session lookup resolves the session and its user in one query instead of two.
 
 ### Upgrade notes
 
@@ -1486,7 +1495,8 @@ revocation, chi-friendly middleware, in-memory and Postgres storage
 adapters.
 
 
-[Unreleased]: https://github.com/glincker/theauth-go/compare/v2.7.1...HEAD
+[Unreleased]: https://github.com/glincker/theauth-go/compare/v2.8.0...HEAD
+[2.8.0]: https://github.com/glincker/theauth-go/compare/v2.7.1...v2.8.0
 [2.7.1]: https://github.com/glincker/theauth-go/compare/v2.7.0...v2.7.1
 [2.7.0]: https://github.com/glincker/theauth-go/compare/v2.6.0...v2.7.0
 [2.6.0]: https://github.com/glincker/theauth-go/compare/v2.5.0...v2.6.0
