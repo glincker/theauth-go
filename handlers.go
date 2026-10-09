@@ -368,19 +368,33 @@ func (s totpServiceAdapter) FinishEnrollment(ctx context.Context, userID ULID, e
 }
 
 func (s totpServiceAdapter) Verify(ctx context.Context, pendingSessionToken, code string) (string, Session, error) {
-	_, sess, err := s.a.VerifyTOTP(ctx, pendingSessionToken, code)
+	_, sess, err := s.a.totpSvc.Verify(ctx, pendingSessionToken, code)
 	if err != nil {
 		return "", Session{}, err
 	}
-	return s.a.RotateSession(ctx, sess)
+	return s.rotateAndFireSignin(ctx, sess)
 }
 
 func (s totpServiceAdapter) ConsumeRecoveryCode(ctx context.Context, pendingSessionToken, code string) (string, Session, error) {
-	_, sess, err := s.a.ConsumeRecoveryCode(ctx, pendingSessionToken, code)
+	_, sess, err := s.a.totpSvc.ConsumeRecoveryCode(ctx, pendingSessionToken, code)
 	if err != nil {
 		return "", Session{}, err
 	}
-	return s.a.RotateSession(ctx, sess)
+	return s.rotateAndFireSignin(ctx, sess)
+}
+
+// rotateAndFireSignin swaps the upgraded pending session for a fresh one
+// and fires OnSignin with the session the client will actually hold. The
+// public VerifyTOTP/ConsumeRecoveryCode forwarders fire for direct library
+// callers; this adapter bypasses them so the hook is not fired twice and
+// never sees the about-to-be-revoked pre-rotation session.
+func (s totpServiceAdapter) rotateAndFireSignin(ctx context.Context, sess Session) (string, Session, error) {
+	tok, ns, err := s.a.RotateSession(ctx, sess)
+	if err != nil {
+		return "", Session{}, err
+	}
+	s.a.fireOnSigninForUserID(ctx, ns.UserID, &ns)
+	return tok, ns, nil
 }
 
 func (s totpServiceAdapter) Status(ctx context.Context, userID ULID) (TOTPStatus, error) {

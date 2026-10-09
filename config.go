@@ -227,12 +227,16 @@ const (
 // synchronously on the request goroutine after the underlying operation
 // succeeds and before the HTTP response is written.
 //
-// A non-nil error returned from a hook is logged at Warn level via slog and
-// does NOT fail the request: the request that triggered the hook has already
-// succeeded, and rolling back is not possible without coordinated storage
-// transactions. Use hooks for fire-and-observe behavior (provisioning,
-// analytics, notifications). For request-failing side effects, wrap at the
-// handler boundary.
+// OnSignup, OnSignin, OnPasswordChange, OnMFAEnabled and OnOrgSwitch are
+// observe-only. They run after the action has committed (the user row, the
+// session, the new password hash), so a non-nil error cannot undo it safely
+// without coordinated storage transactions. A returned error is logged at
+// Warn level via slog and reported to OnHookError when set; it does NOT
+// fail the request. Use them for provisioning, analytics and notifications,
+// and set OnHookError to alert on failures. There is deliberately no
+// "veto" on an after-the-fact hook. To refuse a signup or sign-in before it
+// is committed, gate it where the identity is known up front: wrap the
+// mounted route, or check the address before calling the library.
 //
 // Panics in hooks are recovered and logged via slog; the request continues
 // as if the hook had returned nil.
@@ -242,14 +246,23 @@ const (
 // updated map. Returning a non-nil error from OnTokenIssued does fail token
 // issuance because the token has not yet been minted.
 //
-// Wiring status (v2.5): every hook below is wired. OnSignup fires from
-// password, magic-link, OAuth callback, SAML, and a user's first-ever
-// WebAuthn credential (passkey registration has no true account-creation
-// moment, so the first credential is the closest equivalent). OnSignin
-// fires from password, magic-link, and OAuth callback. OnTokenIssued
-// fires from every OAuth access-token grant. OnOrgSwitch fires only from
-// the explicit SetActiveOrganization call, not from auto-provisioned
-// personal orgs.
+// Wiring status: every hook below is wired. OnSignup fires from password,
+// magic-link, OAuth callback, SAML, and a user's first-ever WebAuthn
+// credential (passkey registration has no true account-creation moment, so
+// the first credential is the closest equivalent). OnSignin fires once per
+// successful sign-in, from password (without a second factor), the TOTP or
+// recovery-code step that completes a password sign-in held at pending_2fa,
+// magic-link, OAuth callback, passkey login and SAML. It does not fire for
+// the pending_2fa intermediate, for step-up, or for session rotation.
+// OnMFAEnabled fires when TOTP enrollment is confirmed; recovery codes are
+// created in that same step, and passkeys in this library are a
+// single-factor sign-in method rather than a second factor, so neither
+// fires it (MFAKindWebAuthn and MFAKindRecoveryCodes are reserved). The
+// otp package only proves control of a destination and issues no session,
+// so it has no hook. OnTokenIssued fires from every OAuth access-token
+// grant. OnOrgSwitch fires only from the explicit SetActiveOrganization
+// call, not from auto-provisioned personal orgs.
+//
 // OAuthConflictPayload is passed to LifecycleHooks.OnOAuthConflict when a
 // sign-in OAuth email matches an existing user who registered via a different
 // provider. The consumer creates a verification challenge and returns the URL
@@ -279,6 +292,15 @@ type LifecycleHooks struct {
 	// verification challenge and return the redirect URL for it. When nil the
 	// sign-in proceeds normally (silent provider linking).
 	OnOAuthConflict func(ctx context.Context, p OAuthConflictPayload) (redirectURL string, err error)
+
+	// OnHookError, when set, is called with the hook name (for example
+	// "OnSignup") and the error whenever an observe-only hook returns an
+	// error or panics (a panic is wrapped in an error). It runs in addition
+	// to the slog line, never instead of it, so hosts can alert or count
+	// failures instead of only logging them. It runs synchronously on the
+	// request goroutine, so keep it fast; a panic inside it is recovered.
+	// It does not change request outcomes. Nil keeps the default behavior.
+	OnHookError func(ctx context.Context, hook string, err error)
 }
 
 // TenancyConfig (v2.5) wires opt-in tenant-provisioning behavior so

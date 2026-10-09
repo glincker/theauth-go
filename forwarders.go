@@ -38,21 +38,39 @@ func coalesceLifecycleHooks(h *LifecycleHooks) *LifecycleHooks {
 
 // runLifecycleHook is the panic-and-error-safe runner shared by every
 // fireOn* helper. Errors are logged at Warn level; panics are recovered
-// and logged at Error level. The triggering operation is never failed by
-// a hook (semantic: hooks are fire-and-observe; for request-failing side
-// effects, wrap at the HTTP boundary).
-func runLifecycleHook(ctx context.Context, name string, fn func() error) {
+// and logged at Error level. Either outcome is also reported to onErr
+// (LifecycleHooks.OnHookError) when set, with panics wrapped in an error.
+// The triggering operation is never failed by a hook: these hooks run
+// after the action committed, so they are observe-only (see the
+// LifecycleHooks doc for the reasoning).
+func runLifecycleHook(ctx context.Context, name string, onErr func(context.Context, string, error), fn func() error) {
 	if fn == nil {
 		return
 	}
 	defer func() {
 		if r := recover(); r != nil {
 			slog.ErrorContext(ctx, "theauth: lifecycle hook panicked", "hook", name, "panic", r)
+			reportHookError(ctx, name, onErr, fmt.Errorf("theauth: lifecycle hook %s panicked: %v", name, r))
 		}
 	}()
 	if err := fn(); err != nil {
 		slog.WarnContext(ctx, "theauth: lifecycle hook returned error", "hook", name, "err", err.Error())
+		reportHookError(ctx, name, onErr, err)
 	}
+}
+
+// reportHookError invokes the host's OnHookError callback, shielding the
+// request from a panic inside the callback itself.
+func reportHookError(ctx context.Context, name string, onErr func(context.Context, string, error), err error) {
+	if onErr == nil {
+		return
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			slog.ErrorContext(ctx, "theauth: OnHookError callback panicked", "hook", name, "panic", r)
+		}
+	}()
+	onErr(ctx, name, err)
 }
 
 // fireOnSignup dispatches LifecycleHooks.OnSignup. Silent no-op when the
@@ -61,7 +79,7 @@ func (a *TheAuth) fireOnSignup(ctx context.Context, user *User, method SignupMet
 	if a.lifecycle.OnSignup == nil || user == nil {
 		return
 	}
-	runLifecycleHook(ctx, "OnSignup", func() error {
+	runLifecycleHook(ctx, "OnSignup", a.lifecycle.OnHookError, func() error {
 		return a.lifecycle.OnSignup(ctx, user, method)
 	})
 }
@@ -72,9 +90,23 @@ func (a *TheAuth) fireOnSignin(ctx context.Context, user *User, sess *Session) {
 	if a.lifecycle.OnSignin == nil || user == nil || sess == nil {
 		return
 	}
-	runLifecycleHook(ctx, "OnSignin", func() error {
+	runLifecycleHook(ctx, "OnSignin", a.lifecycle.OnHookError, func() error {
 		return a.lifecycle.OnSignin(ctx, user, sess)
 	})
+}
+
+// fireOnSigninForUserID loads the user and dispatches OnSignin. Used by
+// paths whose service layer returns a session but not the user row
+// (passkey, SAML, TOTP). Skips the storage read when no hook is set.
+func (a *TheAuth) fireOnSigninForUserID(ctx context.Context, userID ULID, sess *Session) {
+	if a.lifecycle.OnSignin == nil {
+		return
+	}
+	user, err := a.storage.UserByID(ctx, userID)
+	if err != nil || user == nil {
+		return
+	}
+	a.fireOnSignin(ctx, user, sess)
 }
 
 // fireOnPasswordChange dispatches LifecycleHooks.OnPasswordChange. Silent
@@ -83,7 +115,7 @@ func (a *TheAuth) fireOnPasswordChange(ctx context.Context, user *User) {
 	if a.lifecycle.OnPasswordChange == nil || user == nil {
 		return
 	}
-	runLifecycleHook(ctx, "OnPasswordChange", func() error {
+	runLifecycleHook(ctx, "OnPasswordChange", a.lifecycle.OnHookError, func() error {
 		return a.lifecycle.OnPasswordChange(ctx, user)
 	})
 }
@@ -94,7 +126,7 @@ func (a *TheAuth) fireOnMFAEnabled(ctx context.Context, user *User, kind MFAKind
 	if a.lifecycle.OnMFAEnabled == nil || user == nil {
 		return
 	}
-	runLifecycleHook(ctx, "OnMFAEnabled", func() error {
+	runLifecycleHook(ctx, "OnMFAEnabled", a.lifecycle.OnHookError, func() error {
 		return a.lifecycle.OnMFAEnabled(ctx, user, kind)
 	})
 }
@@ -105,7 +137,7 @@ func (a *TheAuth) fireOnOrgSwitch(ctx context.Context, user *User, orgID string)
 	if a.lifecycle.OnOrgSwitch == nil || user == nil {
 		return
 	}
-	runLifecycleHook(ctx, "OnOrgSwitch", func() error {
+	runLifecycleHook(ctx, "OnOrgSwitch", a.lifecycle.OnHookError, func() error {
 		return a.lifecycle.OnOrgSwitch(ctx, user, orgID)
 	})
 }
@@ -292,7 +324,8 @@ func (a *TheAuth) signupWithPassword(ctx context.Context, emailAddr, pw string) 
 // to passwordSvc.Signin, then dispatches the LifecycleHooks.OnSignin hook
 // when the returned SigninStep indicates a full sign-in (not a step-up
 // intermediate). pending_2fa intermediates do NOT fire OnSignin; the hook
-// fires on the subsequent TOTP/WebAuthn verify that completes the session.
+// fires on the subsequent VerifyTOTP or ConsumeRecoveryCode that completes
+// the session.
 func (a *TheAuth) signinWithPassword(ctx context.Context, emailAddr, pw, userAgent, ip string) (string, *User, SigninStep, error) {
 	token, user, step, err := a.passwordSvc.Signin(ctx, emailAddr, pw, userAgent, ip)
 	if err != nil || step != SigninStepFull || user == nil {
@@ -373,15 +406,28 @@ func (a *TheAuth) IssuePending2FA(ctx context.Context, userID ULID, ua, ip strin
 
 // VerifyTOTP consumes a 6-digit code against the user's confirmed secret,
 // upgrades their pending session to full, and returns the (same) token
-// with the upgraded session row. Forwards to totpSvc.Verify.
+// with the upgraded session row. Forwards to totpSvc.Verify, then fires
+// OnSignin: this is the moment a password sign-in that was held at
+// pending_2fa becomes a full session.
 func (a *TheAuth) VerifyTOTP(ctx context.Context, pendingSessionToken, code string) (string, Session, error) {
-	return a.totpSvc.Verify(ctx, pendingSessionToken, code)
+	token, sess, err := a.totpSvc.Verify(ctx, pendingSessionToken, code)
+	if err != nil {
+		return token, sess, err
+	}
+	a.fireOnSigninForUserID(ctx, sess.UserID, &sess)
+	return token, sess, nil
 }
 
 // ConsumeRecoveryCode upgrades a pending session by consuming one unused
-// recovery code. Forwards to totpSvc.ConsumeRecoveryCode.
+// recovery code. Forwards to totpSvc.ConsumeRecoveryCode, then fires
+// OnSignin like VerifyTOTP.
 func (a *TheAuth) ConsumeRecoveryCode(ctx context.Context, pendingSessionToken, code string) (string, Session, error) {
-	return a.totpSvc.ConsumeRecoveryCode(ctx, pendingSessionToken, code)
+	token, sess, err := a.totpSvc.ConsumeRecoveryCode(ctx, pendingSessionToken, code)
+	if err != nil {
+		return token, sess, err
+	}
+	a.fireOnSigninForUserID(ctx, sess.UserID, &sess)
+	return token, sess, nil
 }
 
 // ---------- WebAuthn forwarders ----------
@@ -423,9 +469,16 @@ func (a *TheAuth) BeginPasskeyLogin(ctx context.Context) (*protocol.CredentialAs
 
 // FinishPasskeyLogin validates the navigator.credentials.get response,
 // looks up the credential by ID, advances the stored sign counter, and
-// issues a session. Forwards to webauthnSvc.FinishLogin.
+// issues a session. Forwards to webauthnSvc.FinishLogin, then fires
+// OnSignin for the session just issued. A passkey login is a single strong
+// factor, so there is no pending intermediate to skip.
 func (a *TheAuth) FinishPasskeyLogin(ctx context.Context, challengeToken string, body io.Reader, ua, ip string) (string, Session, error) {
-	return a.webauthnSvc.FinishLogin(ctx, challengeToken, body, ua, ip)
+	token, sess, err := a.webauthnSvc.FinishLogin(ctx, challengeToken, body, ua, ip)
+	if err != nil {
+		return token, sess, err
+	}
+	a.fireOnSigninForUserID(ctx, sess.UserID, &sess)
+	return token, sess, nil
 }
 
 // Note: the previous unexported helpers finishRegistrationFromRequest /
@@ -977,9 +1030,8 @@ func (a *TheAuth) BeginSAMLLogin(ctx context.Context, connectionID ULID, relaySt
 
 // FinishSAMLLogin validates an inbound SAMLResponse, runs find-or-create,
 // issues a session, and returns its token. Fires OnSignup with
-// SignupMethodSAML when the user row was created during this call.
-// (OnSignin is intentionally not fired here: per docs/ROADMAP.md it ships
-// only for password, magic-link, and OAuth callback paths so far.)
+// SignupMethodSAML when the user row was created during this call, then
+// OnSignin for the session just issued.
 func (a *TheAuth) FinishSAMLLogin(ctx context.Context, connectionID ULID, samlResponseB64 string, ua, ip string) (string, Session, error) {
 	token, sess, isNew, err := a.samlSvc.FinishLogin(ctx, connectionID, samlResponseB64, ua, ip)
 	if err != nil {
@@ -990,6 +1042,7 @@ func (a *TheAuth) FinishSAMLLogin(ctx context.Context, connectionID ULID, samlRe
 			a.fireOnSignup(ctx, user, SignupMethodSAML)
 		}
 	}
+	a.fireOnSigninForUserID(ctx, sess.UserID, &sess)
 	return token, sess, nil
 }
 
