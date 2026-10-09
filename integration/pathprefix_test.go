@@ -33,6 +33,19 @@ func (c *captureSender) last() string {
 	return c.body
 }
 
+// waitFor polls the captured mail until it contains want, because senders may
+// deliver asynchronously and an earlier message can still be the latest.
+func (c *captureSender) waitFor(want string) string {
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		body := c.last()
+		if strings.Contains(body, want) || time.Now().After(deadline) {
+			return body
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+}
+
 func newPrefixServer(t *testing.T, prefix string) (*httptest.Server, *theauth.TheAuth, *captureSender) {
 	t.Helper()
 	snd := &captureSender{}
@@ -127,7 +140,7 @@ func TestCustomPathPrefixEndToEnd(t *testing.T) {
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("magic-link: %d", resp.StatusCode)
 	}
-	if body := snd.last(); !strings.Contains(body, "http://localhost"+p+"/magic-link/verify?token=") {
+	if body := snd.waitFor("http://localhost" + p + "/magic-link/verify?token="); !strings.Contains(body, "http://localhost"+p+"/magic-link/verify?token=") {
 		t.Fatalf("magic link missing prefix: %q", body)
 	}
 
@@ -135,7 +148,7 @@ func TestCustomPathPrefixEndToEnd(t *testing.T) {
 	if resp.StatusCode >= 500 {
 		t.Fatalf("forgot: %d", resp.StatusCode)
 	}
-	if body := snd.last(); !strings.Contains(body, p+"/email-password/reset?token=") {
+	if body := snd.waitFor(p + "/email-password/reset?token="); !strings.Contains(body, p+"/email-password/reset?token=") {
 		t.Fatalf("reset link missing prefix: %q", body)
 	}
 }

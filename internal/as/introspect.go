@@ -52,6 +52,9 @@ type IntrospectionResponse struct {
 	// of the proof key). Resource servers compare this against the
 	// thumbprint of the inbound DPoP proof on every protected call.
 	Cnf *ConfirmationClaim `json:"cnf,omitempty"`
+	// AuthorizationDetails carries the RFC 9396 details the token was
+	// granted, when it has any.
+	AuthorizationDetails json.RawMessage `json:"authorization_details,omitempty"`
 }
 
 // ConfirmationClaim is the JSON shape of the RFC 7800 cnf claim. Only
@@ -115,6 +118,11 @@ func (s *Service) IntrospectToken(ctx context.Context, token, clientID, clientSe
 		s.introspectCacheSet(token, expectedAud, body)
 		return resp, body, nil
 	}
+	if opaque, ok := s.introspectOpaque(ctx, token, expectedAud); ok {
+		body, _ = json.Marshal(opaque)
+		s.introspectCacheSet(token, expectedAud, body)
+		return opaque, body, nil
+	}
 	resp := s.introspectRefreshToken(ctx, token)
 	body, _ = json.Marshal(resp)
 	s.introspectCacheSet(token, expectedAud, body)
@@ -122,10 +130,29 @@ func (s *Service) IntrospectToken(ctx context.Context, token, clientID, clientSe
 }
 
 func (s *Service) introspectJWT(ctx context.Context, token, expectedAud string) IntrospectionResponse {
-	claims, err := jwt.Verify(token, s.PublicKeyByKID, expectedAud, time.Now())
+	claims, err := s.verifyAccessJWT(token, expectedAud, time.Now())
 	if err != nil {
 		return IntrospectionResponse{Active: false}
 	}
+	return s.introspectClaims(ctx, claims)
+}
+
+// introspectOpaque answers for a reference access token.
+func (s *Service) introspectOpaque(ctx context.Context, token, expectedAud string) (IntrospectionResponse, bool) {
+	claims, ok := s.lookupOpaqueClaims(ctx, token)
+	if !ok {
+		return IntrospectionResponse{}, false
+	}
+	if expectedAud != "" && claims.Aud != expectedAud {
+		return IntrospectionResponse{Active: false}, true
+	}
+	return s.introspectClaims(ctx, claims), true
+}
+
+// introspectClaims turns a verified access token claim set into the RFC 7662
+// response, applying the denylist and the actor chain checks. JWT and opaque
+// tokens share it so both answer identically.
+func (s *Service) introspectClaims(ctx context.Context, claims jwt.Claims) IntrospectionResponse {
 	// Audience binding is mandatory: tokens without an aud claim are
 	// rejected.
 	if claims.Aud == "" {
@@ -145,6 +172,8 @@ func (s *Service) introspectJWT(ctx context.Context, token, expectedAud string) 
 		Aud:       claims.Aud,
 		Iss:       claims.Iss,
 		Jti:       claims.Jti,
+
+		AuthorizationDetails: authorizationDetailsRaw(claims.Extra),
 	}
 	// Populate the act chain and delegation_grant_id from the JWT
 	// Extras so the cached body carries them and a downstream resource

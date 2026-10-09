@@ -10,8 +10,10 @@ import (
 	"github.com/glincker/theauth-go/v2/crypto"
 	"github.com/glincker/theauth-go/v2/internal/cimd"
 	"github.com/glincker/theauth-go/v2/internal/dpop"
+	"github.com/glincker/theauth-go/v2/internal/jwt"
 	"github.com/glincker/theauth-go/v2/internal/models"
 	"github.com/glincker/theauth-go/v2/internal/pathprefix"
+	"github.com/glincker/theauth-go/v2/kv"
 )
 
 // Config wires the OAuth 2.1 + MCP authorization server runtime. Mirror of
@@ -29,9 +31,24 @@ type Config struct {
 	// set from the resource (RFC 8707 + RFC 9068).
 	Resources []models.ProtectedResource
 
-	// SigningAlg defaults to EdDSA (Ed25519). Phase 1 + 2 ships Ed25519
-	// only.
+	// SigningAlg is the default JWS algorithm for access tokens: EdDSA
+	// (Ed25519, the default), ES256 or RS256. Individual clients may select
+	// another alg listed in TokenPolicy.SigningAlgs.
 	SigningAlg string
+
+	// TokenPolicy enables per-client access token policy: extra signing
+	// algorithms and opaque (reference) access tokens. Nil keeps every
+	// client on the default JWT/EdDSA behaviour.
+	TokenPolicy *TokenPolicyConfig
+
+	// RAR enables OAuth 2.0 Rich Authorization Requests (RFC 9396) when
+	// non-nil. Nil rejects any authorization_details parameter.
+	RAR *RARConfig
+
+	// IDJAG enables issuing Identity Assertion JWT Authorization Grants via
+	// token exchange and redeeming them at the jwt-bearer grant. Nil
+	// disables both.
+	IDJAG *IDJAGConfig
 
 	// KeyRotationPeriod defaults to 30 days. The rotation goroutine
 	// promotes next -> current -> previous and generates a fresh next at
@@ -81,6 +98,14 @@ type Config struct {
 	// Tests pass a fake clock to assert revocation propagation
 	// deterministically instead of sleeping past IntrospectionCacheTTL.
 	Clock Clock
+
+	// ClockSkew is the tolerance applied when validating time claims
+	// (exp, nbf, iat) on every JWT this AS verifies: access tokens in
+	// introspection, revocation and token exchange, JAR request objects,
+	// client assertions and jwt-bearer assertions. It also widens the
+	// DPoP proof iat window. Zero (the default) means no tolerance, which
+	// is the pre-existing behavior. Negative values are treated as zero.
+	ClockSkew time.Duration
 
 	// OnTokenIssued mirrors root LifecycleHooks.OnTokenIssued. Nil is a
 	// no-op. When set, it runs immediately before every access token JWT
@@ -159,6 +184,24 @@ type Config struct {
 	// Requires the Storage to also implement CIBAStorage; otherwise CIBA
 	// is silently disabled even if this field is non-nil.
 	CIBA *CIBAConfig
+
+	// RateLimits tunes per-IP and per-client request limits on the AS
+	// endpoints and the cap on concurrent client-secret verifications.
+	// Nil applies the defaults; see RateLimits.
+	RateLimits *RateLimits
+
+	// Stores supplies the shared state backends (rate limiter, replay cache,
+	// cache). Nil fields fall back to one in-process kv.Memory.
+	Stores kv.Stores
+
+	// DeviceAuthorization (RFC 8628) enables POST /oauth/device_authorization
+	// and the device_code grant when non-nil. Requires the Storage to also
+	// implement DeviceAuthorizationStorage.
+	DeviceAuthorization *DeviceConfig
+
+	// RegistrationTokenTTL is the default lifetime of an initial access
+	// token created through the admin API. Default 24h.
+	RegistrationTokenTTL time.Duration
 }
 
 // JWTBearerConfig is the internal mirror of the root JWTBearerConfig.
@@ -206,8 +249,17 @@ func Validate(cfg *Config, encryptionKey []byte) error {
 	if cfg.SigningAlg == "" {
 		cfg.SigningAlg = "EdDSA"
 	}
-	if cfg.SigningAlg != "EdDSA" {
+	if !jwt.SupportedAlg(cfg.SigningAlg) {
 		return models.ErrASUnsupportedAlg
+	}
+	if err := validateTokenPolicy(cfg); err != nil {
+		return err
+	}
+	if err := validateRAR(cfg.RAR); err != nil {
+		return err
+	}
+	if err := validateIDJAG(cfg); err != nil {
+		return err
 	}
 	if cfg.KeyRotationPeriod <= 0 {
 		cfg.KeyRotationPeriod = 30 * 24 * time.Hour
@@ -232,6 +284,9 @@ func Validate(cfg *Config, encryptionKey []byte) error {
 	}
 	if cfg.Clock == nil {
 		cfg.Clock = realClock{}
+	}
+	if cfg.ClockSkew < 0 {
+		cfg.ClockSkew = 0
 	}
 	if cfg.LoginURL == "" {
 		cfg.LoginURL = pathprefix.Default + "/login"
@@ -281,6 +336,13 @@ func Validate(cfg *Config, encryptionKey []byte) error {
 				cfg.JWTBearer.TrustedJWTIssuers[i].AllowedAlgorithms = []string{"ES256", "RS256", "EdDSA"}
 			}
 		}
+	}
+	applyRateLimitDefaults(cfg)
+	if cfg.RegistrationTokenTTL <= 0 {
+		cfg.RegistrationTokenTTL = 24 * time.Hour
+	}
+	if cfg.DeviceAuthorization != nil {
+		applyDeviceDefaults(cfg.DeviceAuthorization)
 	}
 	// CIBA defaults.
 	if cfg.CIBA != nil {

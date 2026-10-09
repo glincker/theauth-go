@@ -8,6 +8,7 @@ import (
 	accounthandlers "github.com/glincker/theauth-go/v2/internal/account"
 	adminhandlers "github.com/glincker/theauth-go/v2/internal/admin"
 	agenthandlers "github.com/glincker/theauth-go/v2/internal/agent/handlers"
+	ashandlers "github.com/glincker/theauth-go/v2/internal/as/handlers"
 	"github.com/glincker/theauth-go/v2/internal/httpx"
 	"github.com/glincker/theauth-go/v2/internal/identitylink"
 	"github.com/glincker/theauth-go/v2/internal/models"
@@ -86,7 +87,10 @@ func (a *TheAuth) mountAdmin(r chi.Router) {
 		func(permission string) func(http.Handler) http.Handler {
 			return a.RequirePermission(permission)
 		},
-		a.mountAdminAgents,
+		func(r chi.Router) {
+			a.mountAdminAgents(r)
+			a.mountAdminRegistrationTokens(r)
+		},
 	)
 }
 
@@ -157,6 +161,17 @@ type adminOrgAdapter struct{ a *TheAuth }
 
 func (s adminOrgAdapter) OrganizationMemberRole(ctx context.Context, orgID, userID models.ULID) (string, error) {
 	return s.a.storage.OrganizationMemberRole(ctx, orgID, userID)
+}
+
+// mountAdminRegistrationTokens wires the initial access token routes under the
+// org-scoped admin tree when the AS is on and the storage can hold them.
+func (a *TheAuth) mountAdminRegistrationTokens(r chi.Router) {
+	if a.as == nil {
+		return
+	}
+	ashandlers.NewAdmin(a.as, userFromRequest).Mount(r, func(permission string) func(http.Handler) http.Handler {
+		return a.RequirePermission(permission)
+	})
 }
 
 // mountAdminAgents wires the agent + delegation routes via the

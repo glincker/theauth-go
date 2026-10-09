@@ -53,6 +53,8 @@ func (h *Handler) handleBCAuthorize(w http.ResponseWriter, r *http.Request) {
 // /oauth/bc-authorize.
 func writeBCAuthorizeError(w http.ResponseWriter, err error) {
 	switch {
+	case isBusy(err):
+		writeBusy(w)
 	case errors.Is(err, models.ErrCIBADisabled):
 		http.NotFound(w, nil)
 	case errors.Is(err, models.ErrOAuthInvalidClient):
@@ -70,6 +72,8 @@ func writeBCAuthorizeError(w http.ResponseWriter, err error) {
 // writeCIBATokenError maps CIBA token-poll errors to the RFC 9509 wire codes.
 func writeCIBATokenError(w http.ResponseWriter, err error) {
 	switch {
+	case isBusy(err):
+		writeBusy(w)
 	case errors.Is(err, models.ErrCIBAAuthorizationPending):
 		writeOAuthError(w, http.StatusBadRequest, "authorization_pending", "user has not yet approved the request")
 	case errors.Is(err, models.ErrCIBASlowDown):

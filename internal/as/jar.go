@@ -106,6 +106,10 @@ type jarClaims struct {
 	CodeChallenge       string `json:"code_challenge,omitempty"`
 	CodeChallengeMethod string `json:"code_challenge_method,omitempty"`
 	Resource            string `json:"resource,omitempty"`
+
+	// AuthorizationDetails is the RFC 9396 array (RFC 9101 allows any
+	// request parameter inside the object).
+	AuthorizationDetails json.RawMessage `json:"authorization_details,omitempty"`
 }
 
 // ParseRequestObject validates and decodes a JAR request object JWT.
@@ -180,13 +184,14 @@ func (s *Service) ParseRequestObject(ctx interface{ Done() <-chan struct{} }, ra
 
 	// Validate registered claims.
 	now := time.Now()
-	if claims.Exp == 0 || time.Unix(claims.Exp, 0).Before(now) {
+	skew := s.Cfg.ClockSkew
+	if claims.Exp == 0 || time.Unix(claims.Exp, 0).Add(skew).Before(now) {
 		return AuthorizeRequest{}, fmt.Errorf("%w: request object expired", models.ErrOAuthInvalidRequest)
 	}
-	if claims.Iat != 0 && time.Unix(claims.Iat, 0).After(now.Add(5*time.Minute)) {
+	if claims.Iat != 0 && time.Unix(claims.Iat, 0).After(now.Add(5*time.Minute+skew)) {
 		return AuthorizeRequest{}, fmt.Errorf("%w: request object iat is in the future", models.ErrOAuthInvalidRequest)
 	}
-	if claims.Nbf != 0 && time.Unix(claims.Nbf, 0).After(now) {
+	if claims.Nbf != 0 && time.Unix(claims.Nbf, 0).Add(-skew).After(now) {
 		return AuthorizeRequest{}, fmt.Errorf("%w: request object not yet valid", models.ErrOAuthInvalidRequest)
 	}
 
@@ -210,6 +215,8 @@ func (s *Service) ParseRequestObject(ctx interface{ Done() <-chan struct{} }, ra
 		CodeChallenge:       claims.CodeChallenge,
 		CodeChallengeMethod: claims.CodeChallengeMethod,
 		Resource:            claims.Resource,
+
+		AuthorizationDetails: string(claims.AuthorizationDetails),
 	}, nil
 }
 
@@ -566,6 +573,9 @@ func BuildJARJWT(priv *ecdsa.PrivateKey, clientID, issuer string, req AuthorizeR
 		"code_challenge":        req.CodeChallenge,
 		"code_challenge_method": req.CodeChallengeMethod,
 		"resource":              req.Resource,
+	}
+	if req.AuthorizationDetails != "" {
+		claims["authorization_details"] = json.RawMessage(req.AuthorizationDetails)
 	}
 	payloadJSON, err := json.Marshal(claims)
 	if err != nil {

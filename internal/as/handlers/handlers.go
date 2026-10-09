@@ -41,6 +41,7 @@ type Handler struct {
 	svc          *internalas.Service
 	userFromCtx  func(r *http.Request) (*models.User, bool)
 	bearerHashes [][32]byte
+	clientIP     func(r *http.Request) string
 }
 
 // New constructs a Handler. The userFromCtx shim pulls the
@@ -59,13 +60,19 @@ func New(svc *internalas.Service, userFromCtx func(r *http.Request) (*models.Use
 // when the operator opted out of the cap.
 func (h *Handler) Mount(r chi.Router, authn func(http.Handler) http.Handler, registerLimit func(http.Handler) http.Handler) {
 	r.Get("/.well-known/oauth-authorization-server", h.handleASMetadata)
+	// RFC 8414 section 3.1: when the issuer has a path component the
+	// well-known segment is inserted between host and path. The OIDC
+	// discovery name is served too, since MCP clients probe both.
+	r.Get("/.well-known/oauth-authorization-server/*", h.handleASMetadataPath)
+	r.Get("/.well-known/openid-configuration", h.handleASMetadata)
+	r.Get("/.well-known/openid-configuration/*", h.handleASMetadataPath)
 	r.Get("/.well-known/oauth-protected-resource", h.handleProtectedResourceMetadata)
 	r.Get("/.well-known/oauth-protected-resource/*", h.handleProtectedResourceMetadata)
 	r.Get("/oauth/jwks", h.handleJWKS)
 	r.With(authn).Get("/oauth/authorize", h.handleAuthorize)
-	r.Post("/oauth/token", h.handleToken)
-	r.Post("/oauth/revoke", h.handleRevoke)
-	r.Post("/oauth/introspect", h.handleIntrospect)
+	r.With(h.limited).Post("/oauth/token", h.handleToken)
+	r.With(h.limited).Post("/oauth/revoke", h.handleRevoke)
+	r.With(h.limited).Post("/oauth/introspect", h.handleIntrospect)
 	if registerLimit != nil {
 		r.With(registerLimit).Post("/oauth/register", h.handleRegister)
 	} else {
@@ -76,11 +83,15 @@ func (h *Handler) Mount(r chi.Router, authn func(http.Handler) http.Handler, reg
 	// handler keeps the router clean: unknown routes get a 405 rather than a
 	// runtime error body.
 	if h.svc.IsPAREnabled() {
-		r.Post("/oauth/par", h.handlePAR)
+		r.With(h.limited).Post("/oauth/par", h.handlePAR)
 	}
 	// CIBA: only mount when CIBA is configured and storage supports it.
 	if h.svc.IsCIBAEnabled() {
-		r.Post("/oauth/bc-authorize", h.handleBCAuthorize)
+		r.With(h.limited).Post("/oauth/bc-authorize", h.handleBCAuthorize)
+	}
+	// RFC 8628 device grant: start endpoint plus the user-code page.
+	if h.svc.IsDeviceEnabled() {
+		h.mountDevice(r, authn)
 	}
 }
 
@@ -97,6 +108,22 @@ func (h *Handler) handleASMetadata(w http.ResponseWriter, _ *http.Request) {
 	_ = json.NewEncoder(w).Encode(doc)
 }
 
+// handleASMetadataPath serves the RFC 8414 path-inserted form. The path
+// after the well-known segment must equal the issuer path, otherwise the
+// request is for a different issuer and gets a 404.
+func (h *Handler) handleASMetadataPath(w http.ResponseWriter, r *http.Request) {
+	want := "/" + strings.Trim(chi.URLParam(r, "*"), "/")
+	got := ""
+	if u, err := url.Parse(h.svc.Cfg.Issuer); err == nil {
+		got = "/" + strings.Trim(u.Path, "/")
+	}
+	if want != got {
+		http.NotFound(w, r)
+		return
+	}
+	h.handleASMetadata(w, r)
+}
+
 func (h *Handler) handleProtectedResourceMetadata(w http.ResponseWriter, r *http.Request) {
 	resourceID := chi.URLParam(r, "*")
 	var ident string
@@ -106,6 +133,11 @@ func (h *Handler) handleProtectedResourceMetadata(w http.ResponseWriter, r *http
 		if _, ok := h.svc.ResourceByIdentifier(ident); !ok {
 			if _, ok := h.svc.ResourceByIdentifier(strings.TrimPrefix(resourceID, "/")); ok {
 				ident = strings.TrimPrefix(resourceID, "/")
+			} else if id, ok := h.resourceByPath(resourceID); ok {
+				// RFC 9728 section 3.1: the suffix is the resource path,
+				// and the resource may live on a different origin than
+				// the issuer.
+				ident = id
 			}
 		}
 	default:
@@ -123,6 +155,22 @@ func (h *Handler) handleProtectedResourceMetadata(w http.ResponseWriter, r *http
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "public, max-age=300")
 	_ = json.NewEncoder(w).Encode(doc)
+}
+
+// resourceByPath finds a configured resource whose identifier path equals
+// the well-known suffix (trailing slash ignored).
+func (h *Handler) resourceByPath(suffix string) (string, bool) {
+	want := "/" + strings.Trim(suffix, "/")
+	for _, res := range h.svc.Cfg.Resources {
+		u, err := url.Parse(res.Identifier)
+		if err != nil {
+			continue
+		}
+		if "/"+strings.Trim(u.Path, "/") == want {
+			return res.Identifier, true
+		}
+	}
+	return "", false
 }
 
 func (h *Handler) handleJWKS(w http.ResponseWriter, _ *http.Request) {
@@ -216,6 +264,8 @@ func (h *Handler) handleAuthorize(w http.ResponseWriter, r *http.Request) {
 			CodeChallengeMethod: q.Get("code_challenge_method"),
 			Resource:            q.Get("resource"),
 			Nonce:               q.Get("nonce"),
+
+			AuthorizationDetails: q.Get("authorization_details"),
 		}
 	}
 
@@ -241,6 +291,7 @@ func hasInlineAuthorizeParams(q url.Values, clientID string) bool {
 	check := []string{
 		"response_type", "redirect_uri", "scope", "state",
 		"code_challenge", "code_challenge_method", "resource", "nonce",
+		"authorization_details",
 	}
 	for _, k := range check {
 		if q.Get(k) != "" {
@@ -287,11 +338,17 @@ func (h *Handler) handlePAR(w http.ResponseWriter, r *http.Request) {
 			CodeChallengeMethod: r.PostFormValue("code_challenge_method"),
 			Resource:            r.PostFormValue("resource"),
 			Nonce:               r.PostFormValue("nonce"),
+
+			AuthorizationDetails: r.PostFormValue("authorization_details"),
 		}
 	}
 
 	resp, err := h.svc.PushAuthorize(r.Context(), req)
 	if err != nil {
+		if isBusy(err) {
+			writeBusy(w)
+			return
+		}
 		code := mapOAuthErrorCode(err)
 		status := http.StatusBadRequest
 		if code == oauthErrInvalidClient {
@@ -353,20 +410,30 @@ func (h *Handler) handleToken(w http.ResponseWriter, r *http.Request) {
 	// scrubs them, and trusting them lets a proof minted for another origin
 	// pass the htu check.
 	httpURL := h.svc.TokenEndpointURL()
+	// authorization_details is honoured on the code and refresh grants only.
+	// Ignoring it elsewhere would hand out a token narrower or wider than
+	// the caller believes, so refuse it.
+	if r.PostFormValue("authorization_details") != "" &&
+		grantType != models.GrantTypeAuthorizationCode && grantType != models.GrantTypeRefreshToken {
+		writeOAuthError(w, http.StatusBadRequest, oauthErrInvalidAuthorizationDetails, "authorization_details is not supported for this grant")
+		return
+	}
 	switch grantType {
 	case models.GrantTypeAuthorizationCode:
 		req := internalas.TokenRequest{
-			GrantType:           grantType,
-			ClientID:            clientID,
-			ClientSecret:        clientSecret,
-			Code:                r.PostFormValue("code"),
-			CodeVerifier:        r.PostFormValue("code_verifier"),
-			RedirectURI:         r.PostFormValue("redirect_uri"),
-			DPoPProof:           dpopHeader,
-			HTTPMethod:          r.Method,
-			HTTPURL:             httpURL,
-			ClientAssertionType: clientAssertionType,
-			ClientAssertion:     clientAssertion,
+			GrantType:    grantType,
+			ClientID:     clientID,
+			ClientSecret: clientSecret,
+			Code:         r.PostFormValue("code"),
+			CodeVerifier: r.PostFormValue("code_verifier"),
+			RedirectURI:  r.PostFormValue("redirect_uri"),
+
+			AuthorizationDetails: r.PostFormValue("authorization_details"),
+			DPoPProof:            dpopHeader,
+			HTTPMethod:           r.Method,
+			HTTPURL:              httpURL,
+			ClientAssertionType:  clientAssertionType,
+			ClientAssertion:      clientAssertion,
 		}
 		resp, err := h.svc.ExchangeAuthorizationCode(r.Context(), req)
 		if err != nil {
@@ -376,17 +443,19 @@ func (h *Handler) handleToken(w http.ResponseWriter, r *http.Request) {
 		writeTokenJSON(w, resp)
 	case models.GrantTypeRefreshToken:
 		req := internalas.TokenRequest{
-			GrantType:           grantType,
-			ClientID:            clientID,
-			ClientSecret:        clientSecret,
-			RefreshToken:        r.PostFormValue("refresh_token"),
-			Resource:            r.PostFormValue("resource"),
-			Scope:               scopeSplit(r.PostFormValue("scope")),
-			DPoPProof:           dpopHeader,
-			HTTPMethod:          r.Method,
-			HTTPURL:             httpURL,
-			ClientAssertionType: clientAssertionType,
-			ClientAssertion:     clientAssertion,
+			GrantType:    grantType,
+			ClientID:     clientID,
+			ClientSecret: clientSecret,
+			RefreshToken: r.PostFormValue("refresh_token"),
+			Resource:     r.PostFormValue("resource"),
+
+			AuthorizationDetails: r.PostFormValue("authorization_details"),
+			Scope:                scopeSplit(r.PostFormValue("scope")),
+			DPoPProof:            dpopHeader,
+			HTTPMethod:           r.Method,
+			HTTPURL:              httpURL,
+			ClientAssertionType:  clientAssertionType,
+			ClientAssertion:      clientAssertion,
 		}
 		resp, err := h.svc.RefreshAccessToken(r.Context(), req)
 		if err != nil {
@@ -462,6 +531,26 @@ func (h *Handler) handleToken(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		writeTokenJSON(w, resp)
+	case models.GrantTypeDeviceCode:
+		req := internalas.DeviceTokenRequest{
+			TokenRequest: internalas.TokenRequest{
+				GrantType:           grantType,
+				ClientID:            clientID,
+				ClientSecret:        clientSecret,
+				DPoPProof:           dpopHeader,
+				HTTPMethod:          r.Method,
+				HTTPURL:             httpURL,
+				ClientAssertionType: clientAssertionType,
+				ClientAssertion:     clientAssertion,
+			},
+			DeviceCode: r.PostFormValue("device_code"),
+		}
+		resp, err := h.svc.PollDeviceToken(r.Context(), req)
+		if err != nil {
+			h.writeDeviceTokenError(w, err)
+			return
+		}
+		writeTokenJSON(w, resp)
 	default:
 		writeOAuthError(w, http.StatusBadRequest, oauthErrUnsupportedGrantType, "grant_type not supported")
 	}
@@ -497,6 +586,10 @@ func writeTokenJSON(w http.ResponseWriter, resp internalas.TokenResponse) {
 }
 
 func writeTokenError(w http.ResponseWriter, err error) {
+	if isBusy(err) {
+		writeBusy(w)
+		return
+	}
 	code := mapOAuthErrorCode(err)
 	status := http.StatusBadRequest
 	if code == oauthErrInvalidClient {
@@ -516,6 +609,10 @@ func (h *Handler) handleRevoke(w http.ResponseWriter, r *http.Request) {
 	token := r.PostFormValue("token")
 	hint := r.PostFormValue("token_type_hint")
 	if err := h.svc.RevokeToken(r.Context(), token, hint, clientID, clientSecret); err != nil {
+		if isBusy(err) {
+			writeBusy(w)
+			return
+		}
 		if errors.Is(err, models.ErrOAuthInvalidClient) {
 			writeOAuthError(w, http.StatusUnauthorized, oauthErrInvalidClient, "client authentication failed")
 			return
@@ -538,6 +635,10 @@ func (h *Handler) handleIntrospect(w http.ResponseWriter, r *http.Request) {
 	aud := r.PostFormValue("resource")
 	_, body, err := h.svc.IntrospectToken(r.Context(), token, clientID, clientSecret, aud)
 	if err != nil {
+		if isBusy(err) {
+			writeBusy(w)
+			return
+		}
 		if errors.Is(err, models.ErrOAuthInvalidClient) {
 			writeOAuthError(w, http.StatusUnauthorized, oauthErrInvalidClient, "client authentication failed")
 			return
@@ -561,6 +662,7 @@ func (h *Handler) handleRegister(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	anonymous := true
+	var spent *models.RegistrationToken
 	authz := strings.TrimSpace(r.Header.Get("Authorization"))
 	if authz != "" {
 		if !strings.HasPrefix(strings.ToLower(authz), "bearer ") {
@@ -569,12 +671,32 @@ func (h *Handler) handleRegister(w http.ResponseWriter, r *http.Request) {
 		}
 		rawToken := strings.TrimSpace(authz[len("bearer "):])
 		if !h.dcrBearerValid(rawToken) {
-			writeOAuthError(w, http.StatusUnauthorized, "access_denied", "invalid initial access token")
-			return
+			// Not one of the static operator tokens: try stored, scoped,
+			// single-use registration tokens.
+			t, terr := h.svc.RedeemRegistrationToken(r.Context(), rawToken, req)
+			switch {
+			case terr == nil:
+				spent = t
+			case errors.Is(terr, models.ErrRegistrationTokenScope):
+				writeOAuthError(w, http.StatusBadRequest, "invalid_client_metadata", "registration request exceeds the scope of the initial access token")
+				return
+			case errors.Is(terr, models.ErrRegistrationTokenInvalid):
+				writeOAuthError(w, http.StatusUnauthorized, "access_denied", "invalid initial access token")
+				return
+			default:
+				writeOAuthError(w, http.StatusInternalServerError, oauthErrServerError, "registration token check failed")
+				return
+			}
 		}
 		anonymous = false
 	}
 	resp, err := h.svc.RegisterClient(r.Context(), req, anonymous)
+	if err != nil && spent != nil {
+		h.svc.RefundRegistrationToken(r.Context(), spent.ID)
+	}
+	if err == nil && spent != nil {
+		h.svc.RegistrationSucceeded(r.Context(), spent, resp.ClientID)
+	}
 	if err != nil {
 		if errors.Is(err, models.ErrOAuthRegistrationDenied) {
 			writeOAuthError(w, http.StatusUnauthorized, "access_denied", "anonymous registration not permitted")
@@ -668,6 +790,8 @@ func mapOAuthErrorCode(err error) string {
 		return oauthErrInvalidGrant
 	case errors.Is(err, models.ErrOAuthInvalidScope):
 		return oauthErrInvalidScope
+	case errors.Is(err, models.ErrOAuthInvalidAuthorizationDetails):
+		return oauthErrInvalidAuthorizationDetails
 	case errors.Is(err, models.ErrOAuthUnsupportedGrantType):
 		return oauthErrUnsupportedGrantType
 	case errors.Is(err, models.ErrOAuthUnsupportedResponseType):
@@ -696,6 +820,8 @@ const (
 	oauthErrAccessDenied            = "access_denied"
 	oauthErrServerError             = "server_error"
 	oauthErrInvalidTarget           = "invalid_target"
+	// RFC 9396 section 5.
+	oauthErrInvalidAuthorizationDetails = "invalid_authorization_details"
 	// RFC 9449 wire codes returned from the token endpoint when a DPoP
 	// proof is missing, malformed, or rejected.
 	oauthErrInvalidDPoPProof = "invalid_dpop_proof"

@@ -27,6 +27,7 @@ func (s *Store) InsertOAuthClient(ctx context.Context, c theauth.OAuthClient) (t
 	grants, _ := json.Marshal(nilToEmptySlice(c.GrantTypes))
 	responses, _ := json.Marshal(nilToEmptySlice(c.ResponseTypes))
 	contacts, _ := json.Marshal(nilToEmptySlice(c.Contacts))
+	detailTypes, _ := json.Marshal(nilToEmptySlice(c.AuthorizationDetailsTypes))
 
 	_, err := s.db.ExecContext(ctx, `
 INSERT INTO oauth_clients (
@@ -35,8 +36,9 @@ INSERT INTO oauth_clients (
     application_type, contacts, logo_uri, policy_uri, tos_uri,
     jwks_uri, jwks, software_id, software_version, owner_kind,
     owner_user_id, owner_organization_id, owner_agent_id,
-    anonymous_registered, registration_access_hash, created_at, updated_at
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    anonymous_registered, registration_access_hash, created_at, updated_at,
+    access_token_format, access_token_signed_response_alg, authorization_details_types
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		ulidToBytes(c.ID),
 		c.ClientID,
 		nullBytesToSlice(c.ClientSecretHash),
@@ -63,6 +65,9 @@ INSERT INTO oauth_clients (
 		nullBytesToSlice(c.RegistrationAccessHash),
 		timeUTC(now),
 		timeUTC(updated),
+		c.AccessTokenFormat,
+		c.AccessTokenSignedResponseAlg,
+		string(detailTypes),
 	)
 	if err != nil {
 		return theauth.OAuthClient{}, err
@@ -81,7 +86,8 @@ SELECT id, client_id, client_secret_hash, client_name, redirect_uris,
        application_type, contacts, logo_uri, policy_uri, tos_uri,
        jwks_uri, jwks, software_id, software_version, owner_kind,
        owner_user_id, owner_organization_id, owner_agent_id,
-       anonymous_registered, registration_access_hash, created_at, updated_at
+       anonymous_registered, registration_access_hash, created_at, updated_at,
+       access_token_format, access_token_signed_response_alg, authorization_details_types
 FROM oauth_clients WHERE client_id = ?`, clientID)
 	c, err := scanOAuthClient(row)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -98,6 +104,7 @@ func (s *Store) UpdateOAuthClient(ctx context.Context, c theauth.OAuthClient) (t
 	grants, _ := json.Marshal(nilToEmptySlice(c.GrantTypes))
 	responses, _ := json.Marshal(nilToEmptySlice(c.ResponseTypes))
 	contacts, _ := json.Marshal(nilToEmptySlice(c.Contacts))
+	detailTypes, _ := json.Marshal(nilToEmptySlice(c.AuthorizationDetailsTypes))
 
 	res, err := s.db.ExecContext(ctx, `
 UPDATE oauth_clients SET
@@ -105,12 +112,15 @@ UPDATE oauth_clients SET
     scope = ?, token_endpoint_auth_method = ?, application_type = ?,
     contacts = ?, logo_uri = ?, policy_uri = ?, tos_uri = ?,
     jwks_uri = ?, jwks = ?, software_id = ?, software_version = ?,
+    access_token_format = ?, access_token_signed_response_alg = ?,
+    authorization_details_types = ?,
     updated_at = ?
 WHERE client_id = ?`,
 		c.ClientName, redirects, grants, responses,
 		c.Scope, c.TokenEndpointAuthMethod, c.ApplicationType,
 		contacts, c.LogoURI, c.PolicyURI, c.TosURI,
 		c.JwksURI, nullBytesToSlice(c.Jwks), c.SoftwareID, c.SoftwareVersion,
+		c.AccessTokenFormat, c.AccessTokenSignedResponseAlg, string(detailTypes),
 		timeUTC(time.Now()),
 		c.ClientID,
 	)
@@ -152,6 +162,7 @@ func scanOAuthClient(row interface{ Scan(...interface{}) error }) (theauth.OAuth
 		responsesJSON, ctcsJSON                 []byte
 		anonymous                               int8
 		createdAt, updatedAt                    time.Time
+		tokenFormat, tokenAlg, detailTypesJSON  string
 	)
 	if err := row.Scan(
 		&idB, &clientID, &secretHash, &name, &redirectsJSON,
@@ -160,6 +171,7 @@ func scanOAuthClient(row interface{ Scan(...interface{}) error }) (theauth.OAuth
 		&jwksURI, &jwks, &softID, &softVer, &ownerKind,
 		&ownerUserB, &ownerOrgB, &ownerAgentB,
 		&anonymous, &regAccessHash, &createdAt, &updatedAt,
+		&tokenFormat, &tokenAlg, &detailTypesJSON,
 	); err != nil {
 		return theauth.OAuthClient{}, err
 	}
@@ -168,6 +180,8 @@ func scanOAuthClient(row interface{ Scan(...interface{}) error }) (theauth.OAuth
 	_ = json.Unmarshal(grantsJSON, &grants)
 	_ = json.Unmarshal(responsesJSON, &responses)
 	_ = json.Unmarshal(ctcsJSON, &contacts)
+	var detailTypes []string
+	_ = json.Unmarshal([]byte(detailTypesJSON), &detailTypes)
 
 	return theauth.OAuthClient{
 		ID:                      bytesToULID(idB),
@@ -188,6 +202,10 @@ func scanOAuthClient(row interface{ Scan(...interface{}) error }) (theauth.OAuth
 		Jwks:                    jwks,
 		SoftwareID:              softID,
 		SoftwareVersion:         softVer,
+
+		AccessTokenFormat:            tokenFormat,
+		AccessTokenSignedResponseAlg: tokenAlg,
+		AuthorizationDetailsTypes:    detailTypes,
 		Owner: theauth.ClientOwner{
 			UserID:         bytesToULIDPtr(ownerUserB),
 			OrganizationID: bytesToULIDPtr(ownerOrgB),
@@ -211,8 +229,9 @@ func (s *Store) InsertAuthorizationCode(ctx context.Context, c theauth.Authoriza
 	_, err := s.db.ExecContext(ctx, `
 INSERT INTO oauth_authorization_codes
     (code, client_id, user_id, organization_id, redirect_uri, scope, resource,
-     code_challenge, code_challenge_method, nonce, expires_at, created_at)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+     code_challenge, code_challenge_method, nonce, expires_at, created_at,
+     authorization_details)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		c.Code,
 		c.ClientID,
 		ulidToBytes(c.UserID),
@@ -225,6 +244,7 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		c.Nonce,
 		timeUTC(c.ExpiresAt),
 		timeUTC(created),
+		nullBytesToSlice(c.AuthorizationDetails),
 	)
 	return err
 }
@@ -244,16 +264,19 @@ func (s *Store) ConsumeAuthorizationCode(ctx context.Context, code string) (*the
 		scopeJSON                       []byte
 		userIDB, orgIDB                 []byte
 		expiresAt, created              time.Time
+		details                         []byte
 	)
 	err = tx.QueryRowContext(ctx, `
 SELECT client_id, user_id, organization_id, redirect_uri, scope, resource,
-       code_challenge, code_challenge_method, nonce, expires_at, created_at
+       code_challenge, code_challenge_method, nonce, expires_at, created_at,
+       authorization_details
 FROM oauth_authorization_codes WHERE code = ?
 FOR UPDATE`,
 		code,
 	).Scan(
 		&clientID, &userIDB, &orgIDB, &redirectURI, &scopeJSON, &resource,
 		&codeChal, &codeChalMethod, &nonce, &expiresAt, &created,
+		&details,
 	)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, storage.ErrNotFound
@@ -287,6 +310,8 @@ FOR UPDATE`,
 		Nonce:               nonce,
 		ExpiresAt:           expiresAt.UTC(),
 		CreatedAt:           created.UTC(),
+
+		AuthorizationDetails: details,
 	}
 	return out, nil
 }
@@ -298,8 +323,9 @@ func (s *Store) InsertRefreshToken(ctx context.Context, t theauth.RefreshToken) 
 	_, err := s.db.ExecContext(ctx, `
 INSERT INTO oauth_refresh_tokens
     (id, hash, family_id, client_id, user_id, agent_id, scope, resource,
-     parent_jti, issued_at, expires_at, dpop_jkt, auth_code_hash)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+     parent_jti, issued_at, expires_at, dpop_jkt, auth_code_hash,
+     authorization_details)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		ulidToBytes(t.ID),
 		t.Hash,
 		ulidToBytes(t.FamilyID),
@@ -313,6 +339,7 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		timeUTC(t.ExpiresAt),
 		t.DPoPJKT,
 		t.AuthCodeHash,
+		nullBytesToSlice(t.AuthorizationDetails),
 	)
 	return err
 }
@@ -322,18 +349,18 @@ func (s *Store) RefreshTokenByHash(ctx context.Context, hash []byte) (*theauth.R
 		idB, familyIDB, userIDB, agentIDB []byte
 		clientID, resource, parentJTI     string
 		revNote, dpopJKT, authCodeHash    string
-		scopeJSON                         []byte
+		scopeJSON, details                []byte
 		issued, expires, revoked          sql.NullTime
 	)
 	err := s.db.QueryRowContext(ctx, `
 SELECT id, hash, family_id, client_id, user_id, agent_id, scope, resource,
        parent_jti, issued_at, expires_at, revoked_at, revocation_note,
-       dpop_jkt, auth_code_hash
+       dpop_jkt, auth_code_hash, authorization_details
 FROM oauth_refresh_tokens WHERE hash = ?`, hash,
 	).Scan(
 		&idB, &hash, &familyIDB, &clientID, &userIDB, &agentIDB, &scopeJSON, &resource,
 		&parentJTI, &issued, &expires, &revoked, &revNote,
-		&dpopJKT, &authCodeHash,
+		&dpopJKT, &authCodeHash, &details,
 	)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, storage.ErrNotFound
@@ -360,6 +387,8 @@ FROM oauth_refresh_tokens WHERE hash = ?`, hash,
 		RevocationNote: revNote,
 		DPoPJKT:        dpopJKT,
 		AuthCodeHash:   authCodeHash,
+
+		AuthorizationDetails: details,
 	}
 	return out, nil
 }

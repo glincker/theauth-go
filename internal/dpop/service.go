@@ -2,10 +2,13 @@ package dpop
 
 import (
 	"container/list"
+	"context"
 	"errors"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/glincker/theauth-go/v2/kv"
 )
 
 // service.go: top-level facade that ties proof verification, nonce
@@ -28,11 +31,13 @@ import (
 type Service struct {
 	allowedAlgs           map[string]struct{}
 	proofMaxAge           time.Duration
+	clockSkew             time.Duration
 	nonceTTL              time.Duration
 	requireNonceForTokens bool
 	requireForClients     map[string]struct{}
 	nonceSecret           []byte
 
+	replay  kv.ReplayCache
 	jtiMu   sync.Mutex
 	jtiCap  int
 	jtiList *list.List
@@ -55,6 +60,11 @@ type Config struct {
 	// ProofMaxAge bounds how far in the past or future the proof's iat
 	// claim may be. Defaults to 60 seconds.
 	ProofMaxAge time.Duration
+
+	// ClockSkew widens the acceptance window for the proof iat claim on
+	// top of ProofMaxAge, absorbing clock drift between the client and
+	// this server. Defaults to zero.
+	ClockSkew time.Duration
 
 	// NonceTTL bounds how long an issued DPoP-Nonce remains acceptable.
 	// Defaults to 10 minutes.
@@ -79,6 +89,11 @@ type Config struct {
 	// multiple AS instances share a nonce pool (sticky sessions not
 	// required).
 	NonceSecret []byte
+
+	// ReplayCache, when set, records proof jti values in a store shared by
+	// every replica instead of the per-process LRU. Backend errors fail
+	// closed (the proof is rejected). Nil keeps the in-process LRU.
+	ReplayCache kv.ReplayCache
 
 	// JTIReplayWindow caps the in-memory jti LRU size. Defaults to 4096.
 	// At 4096 entries and ~60-second ProofMaxAge a single AS can accept
@@ -123,10 +138,12 @@ func New(cfg Config) (*Service, error) {
 	return &Service{
 		allowedAlgs:           algSet,
 		proofMaxAge:           cfg.ProofMaxAge,
+		clockSkew:             cfg.ClockSkew,
 		nonceTTL:              cfg.NonceTTL,
 		requireNonceForTokens: cfg.RequireNonceForTokens,
 		requireForClients:     requireSet,
 		nonceSecret:           secret,
+		replay:                cfg.ReplayCache,
 		jtiCap:                cfg.JTIReplayWindow,
 		jtiList:               list.New(),
 		jtiSeen:               map[string]*list.Element{},
@@ -217,7 +234,7 @@ func (s *Service) Verify(proofJWT string, params VerifyParams) (*Proof, error) {
 		return nil, joinErr(ErrProofExpired, "iat", "missing")
 	}
 	iat := time.Unix(claims.IAT, 0)
-	if abs(now.Sub(iat)) > s.proofMaxAge {
+	if abs(now.Sub(iat)) > s.proofMaxAge+s.clockSkew {
 		return nil, joinErr(ErrProofExpired, "age", now.Sub(iat).String(), "max", s.proofMaxAge.String())
 	}
 	// Check 7: nonce. RequireNonce ALWAYS forces a nonce. When the
@@ -239,7 +256,11 @@ func (s *Service) Verify(proofJWT string, params VerifyParams) (*Proof, error) {
 	if claims.JTI == "" {
 		return nil, joinErr(ErrMalformedProof, "jti", "missing")
 	}
-	if !s.rememberJTI(claims.JTI, iat.Add(s.proofMaxAge)) {
+	fresh, err := s.checkJTI(claims.JTI, iat.Add(s.proofMaxAge))
+	if err != nil {
+		return nil, err
+	}
+	if !fresh {
 		return nil, ErrReplay
 	}
 	// Check 9: ath equals base64url(SHA-256(access_token)) when the
@@ -276,6 +297,23 @@ func (s *Service) VerifyAgainstConfirmation(proofJWT string, params VerifyParams
 		return nil, ErrJKTMismatch
 	}
 	return proof, nil
+}
+
+// checkJTI routes to the shared ReplayCache when configured, otherwise to the
+// in-process LRU. It returns true when the jti is new.
+func (s *Service) checkJTI(jti string, expires time.Time) (bool, error) {
+	if s.replay == nil {
+		return s.rememberJTI(jti, expires), nil
+	}
+	ttl := time.Until(expires)
+	if ttl < time.Second {
+		ttl = time.Second
+	}
+	seen, err := s.replay.Seen(context.Background(), "dpop:jti:"+jti, ttl)
+	if err != nil {
+		return false, joinErr(ErrReplayStore, "err", err.Error())
+	}
+	return !seen, nil
 }
 
 // rememberJTI records jti and returns true when it is new, false when it

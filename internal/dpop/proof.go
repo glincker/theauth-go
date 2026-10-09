@@ -140,6 +140,7 @@ var (
 	ErrNonceRequired    = errors.New("dpop: proof missing required nonce")
 	ErrNonceInvalid     = errors.New("dpop: proof nonce rejected")
 	ErrReplay           = errors.New("dpop: proof jti replay detected")
+	ErrReplayStore      = errors.New("dpop: replay cache unavailable")
 	ErrJKTMismatch      = errors.New("dpop: proof key thumbprint does not match cnf.jkt")
 )
 

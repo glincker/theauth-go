@@ -118,12 +118,30 @@ func Sign(claims Claims, kid string, priv ed25519.PrivateKey) (string, error) {
 	if len(priv) != ed25519.PrivateKeySize {
 		return "", errors.New("jwt: ed25519 private key has wrong length")
 	}
-	header := Header{Alg: AlgEdDSA, Typ: TypeAccessToken, Kid: kid}
+	return signPayload(claims, TypeAccessToken, kid, priv)
+}
+
+// TypeLogoutToken is the typ header value for OIDC Back-Channel Logout
+// tokens (OpenID Connect Back-Channel Logout 1.0 section 2.4).
+const TypeLogoutToken = "logout+jwt"
+
+// SignPayload signs an arbitrary JSON payload with an explicit typ header.
+// The back-channel logout token uses it because its claim set (events, sid)
+// does not fit Claims.
+func SignPayload(payload map[string]any, typ, kid string, priv ed25519.PrivateKey) (string, error) {
+	if len(priv) != ed25519.PrivateKeySize {
+		return "", errors.New("jwt: ed25519 private key has wrong length")
+	}
+	return signPayload(payload, typ, kid, priv)
+}
+
+func signPayload(payload any, typ, kid string, priv ed25519.PrivateKey) (string, error) {
+	header := Header{Alg: AlgEdDSA, Typ: typ, Kid: kid}
 	headerJSON, err := json.Marshal(header)
 	if err != nil {
 		return "", err
 	}
-	payloadJSON, err := json.Marshal(claims)
+	payloadJSON, err := json.Marshal(payload)
 	if err != nil {
 		return "", err
 	}
@@ -164,6 +182,11 @@ type VerifyOptions struct {
 	// mode for tokens minted before typ was always set). A present but
 	// different typ is still rejected.
 	AllowMissingTyp bool
+	// Skew is the clock-skew tolerance applied to exp and nbf. A token is
+	// treated as expired only once now exceeds exp+Skew, and as not yet
+	// valid only while now is earlier than nbf-Skew. Zero means no
+	// tolerance.
+	Skew time.Duration
 }
 
 // VerifyOpts is Verify with explicit options.
@@ -215,10 +238,10 @@ func VerifyOpts(token string, resolve ResolveKey, expectedAud string, now time.T
 	if err := json.Unmarshal(payloadBytes, &c); err != nil {
 		return Claims{}, fmt.Errorf("jwt: payload parse: %w", err)
 	}
-	if c.Exp == 0 || time.Unix(c.Exp, 0).Before(now) {
+	if c.Exp == 0 || time.Unix(c.Exp, 0).Add(opts.Skew).Before(now) {
 		return Claims{}, errors.New("jwt: token expired")
 	}
-	if c.Nbf != 0 && time.Unix(c.Nbf, 0).After(now) {
+	if c.Nbf != 0 && time.Unix(c.Nbf, 0).Add(-opts.Skew).After(now) {
 		return Claims{}, errors.New("jwt: token not yet valid")
 	}
 	if expectedAud != "" && c.Aud != expectedAud {

@@ -6,7 +6,17 @@ adheres to [Semantic Versioning](https://semver.org/) from v1.0 forward.
 
 ## [Unreleased]
 
+### Added
+
+- Per-client access token policy: `access_token_signed_response_alg` (EdDSA, ES256, RS256) and `access_token_format` (`jwt` or `opaque`), enabled with `AuthorizationServer.TokenPolicy`. See `docs/access-token-policy.md`.
+- Rich Authorization Requests (RFC 9396): `AuthorizationServer.RAR`, `authorization_details` on authorize, PAR, JAR and the token endpoint, token and introspection claims, narrowing on refresh, `authorization_details_types` client metadata. See `docs/rich-authorization-requests.md`.
+- ID-JAG: `AuthorizationServer.IDJAG` issues assertions through token exchange and redeems them at the jwt-bearer grant. See `docs/id-jag.md`.
+- `theauth.OpaqueTokenStorage` (memory, Postgres, MySQL) and `storagetest.RunOpaqueTokens`.
+
 ### Upgrade notes
+
+- **Run migration `0021_token_policy_rar`** on Postgres and MySQL. It adds three columns to `oauth_clients`, one `authorization_details` column each to `oauth_authorization_codes` and `oauth_refresh_tokens`, and the `oauth_opaque_access_tokens` table. Custom adapters should persist `OAuthClient.AccessTokenFormat`, `AccessTokenSignedResponseAlg`, `AuthorizationDetailsTypes`, and `AuthorizationDetails` on codes and refresh tokens.
+- `AuthorizationServer.SigningAlg` now accepts `ES256` and `RS256` besides `EdDSA`. `Service.CurrentSigningKey` returns a `crypto.Signer` instead of `ed25519.PrivateKey` (internal package).
 
 - **Authorization codes are hashed at rest.** Migration `0019_as_security_hardening` deletes any plaintext code still stored (codes live 60 seconds, so in-flight authorizations must be restarted). Custom storage adapters are unaffected: the service hashes before calling storage.
 - **Run the new migration.** `0019` adds `dpop_jkt` and `auth_code_hash` to `oauth_refresh_tokens` and creates `oauth_revoked_jtis` (postgres and mysql). Custom adapters should persist `RefreshToken.DPoPJKT` and `RefreshToken.AuthCodeHash`, and may implement `RevokeRefreshTokensByAuthCode`, `DenyAccessToken` and `IsAccessTokenDenied`.
@@ -32,6 +42,26 @@ adheres to [Semantic Versioning](https://semver.org/) from v1.0 forward.
 - `mcpresource`: JWKS max-stale bound (`WithJWKSMaxStale`, default 1 hour).
 - Argon2id hashes below the current cost are rehashed on login.
 - `docs/THREAT-MODEL.md` restored for the authorization server and corrected: codes were not hashed before this release.
+
+- **`X-Forwarded-For` is now read from the right.** For a request from a `TrustedProxies` peer, the client address is the first entry, walking right to left, that is not itself a trusted proxy. Before, the leftmost entry was used, which a client could forge. If your chain has more than one proxy hop, list every hop in `TrustedProxies`.
+- **OAuth endpoints are rate limited by default** when `AuthorizationServer` is set: 120 requests per IP per minute across `/oauth/token`, `/oauth/revoke`, `/oauth/introspect`, `/oauth/par`, `/oauth/bc-authorize` and `/oauth/device_authorization`, 300 secret-bearing requests per client per minute, and at most 8 concurrent Argon2id client-secret verifications (over the cap: `503 temporarily_unavailable`). Tune or disable with `AuthorizationServerConfig.RateLimits`.
+- Postgres and MySQL gain migration `0020` (device authorizations, registration tokens). `Migrate` applies it.
+
+### Added
+
+- `Config.Stores` and the `kv` package: `RateLimiter`, `ReplayCache` and `Cache` interfaces with memory (default), SQL (`kv/sqlkv`, Postgres, MySQL, SQLite) and Redis (`kv/redis`, driver-free) adapters, and the `kv/kvtest` contract suite. Wired into `RateLimitByIP`, `RateLimitByEmail`, the OAuth endpoint limits, DPoP `jti` replay and the CIMD cache.
+- RFC 8628 device authorization grant on the authorization server: `POST /oauth/device_authorization`, the `device_code` grant, a themable user-code page with a JSON API at `/oauth/device`, `slow_down`, expiry, attempt limits, HMAC-hashed codes at rest, metadata advertisement. `AuthorizationServerConfig.DeviceAuthorization`, `DeviceAuthorizationStorage`, `storagetest.RunDeviceAuthorizations`. Memory, Postgres and MySQL.
+- Registration tokens (initial access tokens) for `POST /oauth/register`: one-time or limited use, scoped, expiring, hashed at rest, `CreateRegistrationToken`/`ListRegistrationTokens`/`RevokeRegistrationToken`, an org-scoped admin API, audit events. `RegistrationTokenStorage`, `storagetest.RunRegistrationTokens`.
+- `AuthorizationServerConfig.RateLimits` (`ASRateLimits`).
+- `examples/cli-device-login`: a stdlib-only CLI and a demo server.
+- `otp` package: email and SMS one-time codes with a pluggable `Sender` (`EmailSender`, `TwilioSender`, `SenderFunc`), resend cooldown, attempt limit, lockout, HMAC-at-rest codes and constant-time comparison. State lives in a `kv.Cache`.
+- `provider/generic`: table-driven OAuth provider factory with 10 built-in providers (Spotify, Dropbox, Zoom, Kakao, Naver, Patreon, Box, Salesforce, Figma, Codeberg) and custom `Spec` support.
+- `provider/oidc`: `Config.DiscoveryURL`, `Config.Endpoints` and `Config.DisableDiscovery` for IdPs with non-standard discovery.
+- `openapi` package (`openapi.Generate`) and the `cmd/theauth-go` CLI with `secret` and `openapi` commands.
+
+### Fixed
+
+- A malformed form body on the rate-limited OAuth endpoints still returns `invalid_request`.
 
 ## [2.7.1] - 2026-10-07
 

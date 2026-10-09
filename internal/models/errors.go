@@ -85,8 +85,8 @@ var (
 	ErrASIssuerRequired = errors.New("theauth: AuthorizationServer.Issuer is required")
 
 	// ErrASUnsupportedAlg is returned by New for any signing algorithm other
-	// than EdDSA.
-	ErrASUnsupportedAlg = errors.New("theauth: AuthorizationServer.SigningAlg must be EdDSA")
+	// than EdDSA, ES256 and RS256.
+	ErrASUnsupportedAlg = errors.New("theauth: AuthorizationServer.SigningAlg must be EdDSA, ES256 or RS256")
 
 	// ErrOAuthInvalidRequest maps to the OAuth 2.1 "invalid_request" error.
 	ErrOAuthInvalidRequest = errors.New("theauth: invalid_request")
@@ -105,6 +105,10 @@ var (
 
 	// ErrOAuthUnsupportedResponseType maps to "unsupported_response_type".
 	ErrOAuthUnsupportedResponseType = errors.New("theauth: unsupported_response_type")
+
+	// ErrOAuthInvalidAuthorizationDetails maps to the RFC 9396 section 5 error
+	// "invalid_authorization_details".
+	ErrOAuthInvalidAuthorizationDetails = errors.New("theauth: invalid_authorization_details")
 
 	// ErrOAuthInvalidResource maps to RFC 8707 "invalid_target".
 	ErrOAuthInvalidResource = errors.New("theauth: invalid_target")

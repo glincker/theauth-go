@@ -117,29 +117,55 @@ func (k *Keyed) Stop() {
 	k.stopOnce.Do(func() { close(k.stop) })
 }
 
-// ClientIP returns the best-effort client IP for the
-// request. The X-Forwarded-For header is consulted ONLY when the incoming
-// r.RemoteAddr belongs to one of the operator-configured trusted prefixes;
-// on a public-internet deployment with no proxy in front, that allowlist
-// is empty and XFF is ignored, so an attacker cannot trivially bypass
-// per-IP rate limits by forging the header (security audit H4,
-// 2026-06-20).
+// ClientIP returns the best-effort client IP for the request.
 //
-// When the request arrives from a trusted proxy the first segment of XFF
-// (the original client) is returned. Otherwise the function returns the
-// connection-level RemoteAddr without a port.
+// X-Forwarded-For is consulted only when r.RemoteAddr belongs to one of the
+// operator-configured trusted prefixes; with no proxy in front the allowlist
+// is empty and the header is ignored, so a client cannot dodge per-IP limits
+// by forging it (security audit H4, 2026-06-20).
+//
+// When the peer is a trusted proxy the header is read from the right: each
+// proxy appends the address it received the request from, so only the entries
+// at the right edge were written by infrastructure you control. The walk skips
+// entries that are themselves trusted proxies and returns the first address
+// that is not, which is the nearest hop a trusted proxy actually observed.
+// Everything to the left of it is client-supplied and never trusted. If an
+// entry is not a valid IP the walk stops and the connection address is
+// returned. If every entry is a trusted proxy the leftmost one is returned.
+// Multiple X-Forwarded-For header lines are treated as one comma-joined list.
 func ClientIP(r *http.Request, trusted []netip.Prefix) string {
 	remoteHost := RemoteAddrHost(r)
-	if len(trusted) > 0 && RemoteIsTrusted(remoteHost, trusted) {
-		if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
-			parts := strings.Split(xff, ",")
-			ip := strings.TrimSpace(parts[0])
-			if ip != "" {
-				return ip
+	if len(trusted) == 0 || !RemoteIsTrusted(remoteHost, trusted) {
+		return remoteHost
+	}
+	var hops []string
+	for _, line := range r.Header.Values("X-Forwarded-For") {
+		for _, part := range strings.Split(line, ",") {
+			if p := strings.TrimSpace(part); p != "" {
+				hops = append(hops, p)
 			}
 		}
 	}
+	for i := len(hops) - 1; i >= 0; i-- {
+		addr, err := netip.ParseAddr(hops[i])
+		if err != nil {
+			return remoteHost
+		}
+		addr = addr.Unmap()
+		if !prefixesContain(trusted, addr) || i == 0 {
+			return addr.String()
+		}
+	}
 	return remoteHost
+}
+
+func prefixesContain(trusted []netip.Prefix, addr netip.Addr) bool {
+	for _, p := range trusted {
+		if p.Contains(addr) {
+			return true
+		}
+	}
+	return false
 }
 
 // RemoteAddrHost strips the port from r.RemoteAddr; if the address has no

@@ -1,6 +1,10 @@
 package as
 
-import "time"
+import (
+	"time"
+
+	"github.com/glincker/theauth-go/v2/internal/jwt"
+)
 
 // Clock is the time source used by the introspection cache and the
 // chain-cache TTL. Config.Validate defaults this to realClock when nil, so
@@ -15,3 +19,9 @@ type Clock interface {
 type realClock struct{}
 
 func (realClock) Now() time.Time { return time.Now() }
+
+// verifyAccessJWT verifies an access token JWT issued by this AS, applying
+// the configured clock-skew tolerance to exp and nbf.
+func (s *Service) verifyAccessJWT(token, expectedAud string, now time.Time) (jwt.Claims, error) {
+	return jwt.VerifyWith(token, s.VerificationKey, jwt.TypeAccessToken, expectedAud, now, jwt.VerifyOptions{Skew: s.Cfg.ClockSkew})
+}
