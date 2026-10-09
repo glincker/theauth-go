@@ -3,6 +3,7 @@ package as
 import (
 	"context"
 	"crypto"
+	"crypto/ecdh"
 	"crypto/ecdsa"
 	"crypto/ed25519"
 	"crypto/elliptic"
@@ -84,8 +85,8 @@ func (s *Service) generateKeypair(alg, state string) (models.JWKSKey, error) {
 		}
 		public = jwk{
 			Kty: "EC", Crv: "P-256",
-			X: base64.RawURLEncoding.EncodeToString(priv.PublicKey.X.FillBytes(make([]byte, 32))),
-			Y: base64.RawURLEncoding.EncodeToString(priv.PublicKey.Y.FillBytes(make([]byte, 32))),
+			X: base64.RawURLEncoding.EncodeToString(priv.X.FillBytes(make([]byte, 32))),
+			Y: base64.RawURLEncoding.EncodeToString(priv.Y.FillBytes(make([]byte, 32))),
 		}
 		if secret, err = x509.MarshalPKCS8PrivateKey(priv); err != nil {
 			return models.JWKSKey{}, fmt.Errorf("marshal ecdsa key: %w", err)
@@ -97,8 +98,8 @@ func (s *Service) generateKeypair(alg, state string) (models.JWKSKey, error) {
 		}
 		public = jwk{
 			Kty: "RSA",
-			N:   base64.RawURLEncoding.EncodeToString(priv.PublicKey.N.Bytes()),
-			E:   base64.RawURLEncoding.EncodeToString(big.NewInt(int64(priv.PublicKey.E)).Bytes()),
+			N:   base64.RawURLEncoding.EncodeToString(priv.N.Bytes()),
+			E:   base64.RawURLEncoding.EncodeToString(big.NewInt(int64(priv.E)).Bytes()),
 		}
 		if secret, err = x509.MarshalPKCS8PrivateKey(priv); err != nil {
 			return models.JWKSKey{}, fmt.Errorf("marshal rsa key: %w", err)
@@ -179,7 +180,14 @@ func parsePublicJWK(raw []byte) (string, crypto.PublicKey, bool) {
 			return "", nil, false
 		}
 		pub := &ecdsa.PublicKey{Curve: elliptic.P256(), X: new(big.Int).SetBytes(x), Y: new(big.Int).SetBytes(y)}
-		if !pub.Curve.IsOnCurve(pub.X, pub.Y) {
+		if len(x) > 32 || len(y) > 32 {
+			return "", nil, false
+		}
+		point := make([]byte, 65)
+		point[0] = 4
+		pub.X.FillBytes(point[1:33])
+		pub.Y.FillBytes(point[33:65])
+		if _, err := ecdh.P256().NewPublicKey(point); err != nil {
 			return "", nil, false
 		}
 		return jwt.AlgES256, pub, true

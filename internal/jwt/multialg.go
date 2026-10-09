@@ -131,7 +131,7 @@ func VerifyWith(token string, resolve KeyResolver, expectedTyp, expectedAud stri
 	if !SupportedAlg(h.Alg) {
 		return Claims{}, fmt.Errorf("jwt: unsupported alg %q", h.Alg)
 	}
-	if h.Typ != expectedTyp && !(h.Typ == "" && opts.AllowMissingTyp) {
+	if h.Typ != expectedTyp && (h.Typ != "" || !opts.AllowMissingTyp) {
 		return Claims{}, fmt.Errorf("jwt: unsupported typ %q", h.Typ)
 	}
 	if h.Kid == "" {

@@ -10,7 +10,7 @@ ALTER TABLE oauth_refresh_tokens      ADD COLUMN authorization_details bytea;
 
 -- Only the SHA-256 hash of an opaque token is stored. claims holds the JSON
 -- claim set a JWT would have carried so introspection answers the same way.
-CREATE TABLE oauth_opaque_access_tokens (
+CREATE TABLE IF NOT EXISTS oauth_opaque_access_tokens (
     hash       bytea PRIMARY KEY,
     jti        text NOT NULL,
     client_id  text NOT NULL,
@@ -19,4 +19,4 @@ CREATE TABLE oauth_opaque_access_tokens (
     expires_at timestamptz NOT NULL,
     revoked_at timestamptz
 );
-CREATE INDEX idx_oauth_opaque_access_tokens_expires ON oauth_opaque_access_tokens(expires_at);
+CREATE INDEX IF NOT EXISTS idx_oauth_opaque_access_tokens_expires ON oauth_opaque_access_tokens(expires_at);
