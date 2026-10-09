@@ -226,6 +226,23 @@ const (
 // GrantTypeCIBA is the CIBA grant type URN per RFC 9509.
 const GrantTypeCIBA = models.GrantTypeCIBA
 
+// ---------- Token policy, RAR and ID-JAG (AS) ----------
+
+// OpaqueAccessToken is the server-side record behind a reference access
+// token. Only the SHA-256 hash of the token is stored.
+type OpaqueAccessToken = models.OpaqueAccessToken
+
+// Access token formats a client can be registered with
+// (OAuthClient.AccessTokenFormat).
+const (
+	AccessTokenFormatJWT    = models.AccessTokenFormatJWT
+	AccessTokenFormatOpaque = models.AccessTokenFormatOpaque
+)
+
+// TokenTypeIDJAG is the token type URN of an Identity Assertion JWT
+// Authorization Grant, used as requested_token_type and issued_token_type.
+const TokenTypeIDJAG = models.TokenTypeIDJAG
+
 // ---------- RFC 8628 device authorization grant (AS) ----------
 
 // DeviceAuthorization is the persistent record of one OAuth device flow served

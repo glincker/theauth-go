@@ -186,6 +186,18 @@ type DeviceAuthorizationStorage interface {
 	DeleteExpiredDeviceAuthorizations(ctx context.Context, before time.Time) (int64, error)
 }
 
+// OpaqueTokenStorage is the optional persistence extension behind opaque
+// (reference) access tokens, enabled per client through
+// AuthorizationServerConfig.TokenPolicy. Only token hashes are stored.
+// Lookups return ErrStorageNotFound on a miss. Revoking an unknown token is
+// not an error. Run storagetest.RunOpaqueTokens against a custom
+// implementation.
+type OpaqueTokenStorage interface {
+	InsertOpaqueAccessToken(ctx context.Context, t OpaqueAccessToken) error
+	OpaqueAccessTokenByHash(ctx context.Context, hash []byte) (*OpaqueAccessToken, error)
+	RevokeOpaqueAccessToken(ctx context.Context, hash []byte) error
+}
+
 // RegistrationTokenStorage is the optional persistence extension for initial
 // access tokens (admin API plus POST /oauth/register). Run
 // storagetest.RunRegistrationTokens against a custom implementation.

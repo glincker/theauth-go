@@ -47,6 +47,46 @@ func testOAuthClients(t *testing.T, store theauth.OAuthServerStorage) {
 		}
 	})
 
+	t.Run("TokenPolicyRoundTrip", func(t *testing.T) {
+		id := "st-policy-" + newID().String()
+		_, err := store.InsertOAuthClient(ctx, theauth.OAuthClient{
+			ID:                           newID(),
+			ClientID:                     id,
+			ClientName:                   "Policy Client",
+			RedirectURIs:                 []string{"https://example.com/callback"},
+			GrantTypes:                   []string{theauth.GrantTypeAuthorizationCode},
+			ResponseTypes:                []string{theauth.ResponseTypeCode},
+			TokenEndpointAuthMethod:      theauth.ClientAuthSecretBasic,
+			AccessTokenFormat:            theauth.AccessTokenFormatOpaque,
+			AccessTokenSignedResponseAlg: "ES256",
+			AuthorizationDetailsTypes:    []string{"payment", "account"},
+			CreatedAt:                    time.Now(),
+		})
+		if err != nil {
+			t.Fatalf("InsertOAuthClient: %v", err)
+		}
+		got, err := store.OAuthClientByClientID(ctx, id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got.AccessTokenFormat != theauth.AccessTokenFormatOpaque || got.AccessTokenSignedResponseAlg != "ES256" ||
+			len(got.AuthorizationDetailsTypes) != 2 || got.AuthorizationDetailsTypes[0] != "payment" {
+			t.Fatalf("token policy fields lost: %+v", got)
+		}
+		got.AccessTokenFormat = ""
+		got.AuthorizationDetailsTypes = []string{"account"}
+		if _, err := store.UpdateOAuthClient(ctx, *got); err != nil {
+			t.Fatal(err)
+		}
+		again, err := store.OAuthClientByClientID(ctx, id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if again.AccessTokenFormat != "" || len(again.AuthorizationDetailsTypes) != 1 {
+			t.Fatalf("update did not persist: %+v", again)
+		}
+	})
+
 	t.Run("NilSliceCoercion", func(t *testing.T) {
 		// Issue #40: backends must not return nil slices for array fields.
 		got, err := store.OAuthClientByClientID(ctx, clientID)
