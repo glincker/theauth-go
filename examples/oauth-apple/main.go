@@ -94,7 +94,7 @@ func main() {
 		if u, ok := theauth.UserFromContext(req.Context()); ok {
 			display := u.Email
 			if display == "" {
-				display = u.ID
+				display = u.ID.String()
 			}
 			_, _ = w.Write([]byte("hello, " + display))
 			return

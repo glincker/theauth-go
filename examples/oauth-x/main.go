@@ -76,7 +76,7 @@ func main() {
 		if u, ok := theauth.UserFromContext(req.Context()); ok {
 			name := u.Name
 			if name == "" {
-				name = u.ID
+				name = u.ID.String()
 			}
 			_, _ = w.Write([]byte("hello, @" + name))
 			return
