@@ -3,13 +3,14 @@
 **Auth for AI agents and humans in Go: MCP OAuth 2.1 server, agent identity and delegation, DPoP, passkeys, device flow.** Mount it into your own `net/http` or `chi` server. Your data stays in your own database (memory, SQLite, Postgres or MySQL). MIT licensed, no hosted service.
 
 [![Go Reference](https://pkg.go.dev/badge/github.com/glincker/theauth-go/v2.svg)](https://pkg.go.dev/github.com/glincker/theauth-go/v2)
-[![Go Report Card](https://goreportcard.com/badge/github.com/glincker/theauth-go/v2)](https://goreportcard.com/report/github.com/glincker/theauth-go/v2)
 [![Release](https://img.shields.io/github/v/release/glincker/theauth-go?label=latest)](https://github.com/glincker/theauth-go/releases)
 [![CI](https://github.com/glincker/theauth-go/actions/workflows/ci.yml/badge.svg)](https://github.com/glincker/theauth-go/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/glincker/theauth-go/branch/main/graph/badge.svg)](https://codecov.io/gh/glincker/theauth-go)
 [![Discord](https://img.shields.io/discord/829168897080557579?style=flat-square&logo=discord&logoColor=white&label=discord&color=5865F2)](https://discord.gg/Ar5pcaZB99)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![SLSA 3](https://slsa.dev/images/gh-badge-level3.svg)](https://github.com/glincker/theauth-go/releases)
+[![CodeQL](https://github.com/glincker/theauth-go/actions/workflows/codeql.yml/badge.svg)](https://github.com/glincker/theauth-go/actions/workflows/codeql.yml)
+[![Context7](https://img.shields.io/badge/context7-indexed-000000?style=flat&colorA=000000&colorB=000000)](https://context7.com/glincker/theauth-go)
 
 **[Website](https://theauth.dev)** &middot; **[Docs](https://docs.theauth.dev/go)** &middot; **[pkg.go.dev](https://pkg.go.dev/github.com/glincker/theauth-go/v2)** &middot; **[Packages](#packages)** &middot; **[theAuth for TypeScript](https://github.com/glincker/theauth)** (**[TypeScript packages](https://github.com/glincker/theauth#packages)**)
 
