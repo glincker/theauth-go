@@ -12,6 +12,10 @@ jobs:
   test:
     if: github.event_name != 'schedule'
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      # Lets codecov-action authenticate with a GitHub OIDC token when no CODECOV_TOKEN secret is set.
+      id-token: write
     env:
       GOWORK: off
     services:
@@ -43,18 +47,22 @@ jobs:
           --health-timeout 5s
           --health-retries 5
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-go@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
         with:
           go-version: "1.25"
       - run: go vet ./...
       - run: go test -race -timeout=300s -coverprofile=coverage.out ./...
         env:
           POSTGRES_TEST_URL: postgres://theauth:theauth@localhost:5432/theauth_test?sslmode=disable
-      - uses: codecov/codecov-action@v7
+      - uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7
         with:
           files: coverage.out
-          fail_ci_if_error: false
+          token: ${{ secrets.CODECOV_TOKEN }}
+          # Token wins when the secret exists, otherwise fall back to tokenless OIDC.
+          use_oidc: ${{ secrets.CODECOV_TOKEN == '' }}
+          # Surface upload failures on pushes to main instead of hiding them (a missing token was rejected silently).
+          fail_ci_if_error: ${{ github.event_name == 'push' }}
       - run: go test -bench=. -benchmem -run=^$ -benchtime=1x ./internal/bench/...
 
   fuzz:
@@ -78,8 +86,8 @@ jobs:
           - { pkg: ./integration, name: FuzzCallbackQueryParams }
           - { pkg: ./integration, name: FuzzCallbackProviderName }
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-go@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
         with:
           go-version: "1.25"
       - name: Fuzz ${{ matrix.target.name }}
@@ -91,14 +99,14 @@ jobs:
     env:
       GOWORK: off
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           fetch-depth: 0
       - run: git fetch origin main:refs/remotes/origin/main
-      - uses: actions/setup-go@v7
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
         with:
           go-version: "1.25"
-      - uses: golangci/golangci-lint-action@v9
+      - uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9
         with:
           version: v2.12.2
           args: --timeout=3m --new-from-rev=origin/main
@@ -107,8 +115,8 @@ jobs:
     if: github.event_name != 'schedule'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-go@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
         with:
           go-version: "1.26"
       - run: go vet ./storage/sqlite/... ./examples/single-binary-sqlite/...
