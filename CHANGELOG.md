@@ -6,6 +6,8 @@ adheres to [Semantic Versioning](https://semver.org/) from v1.0 forward.
 
 ## [Unreleased]
 
+## [2.9.0] - 2026-10-10
+
 ### Added
 
 - `LifecycleHooks.OnHookError(ctx, hook, err)`: called when an observe-only hook returns an error or panics, in addition to the existing slog line, so hosts can alert instead of only logging. Nil keeps today's behavior.
@@ -18,6 +20,12 @@ adheres to [Semantic Versioning](https://semver.org/) from v1.0 forward.
 ### Changed
 
 - Documentation: `OnSignup`, `OnSignin`, `OnPasswordChange`, `OnMFAEnabled` and `OnOrgSwitch` are documented as observe-only. They run after the action committed, so they cannot veto it.
+
+### Security
+
+- `golang.org/x/text` v0.40.0 to v0.41.0 in the root module (GO-2026-6629, reported as reachable by `govulncheck`).
+- `golang.org/x/net` v0.59.0 to v0.60.0 in `audit/sinks/otlp` (GO-2026-6617, 6612, 6611, 6610 and 6603).
+- `govulncheck` and dependency review now run in CI, and every example module builds standalone under `GOWORK=off`.
 
 ## [2.8.0] - 2026-10-09
 
@@ -1508,7 +1516,8 @@ revocation, chi-friendly middleware, in-memory and Postgres storage
 adapters.
 
 
-[Unreleased]: https://github.com/glincker/theauth-go/compare/v2.8.0...HEAD
+[Unreleased]: https://github.com/glincker/theauth-go/compare/v2.9.0...HEAD
+[2.9.0]: https://github.com/glincker/theauth-go/compare/v2.8.0...v2.9.0
 [2.8.0]: https://github.com/glincker/theauth-go/compare/v2.7.1...v2.8.0
 [2.7.1]: https://github.com/glincker/theauth-go/compare/v2.7.0...v2.7.1
 [2.7.0]: https://github.com/glincker/theauth-go/compare/v2.6.0...v2.7.0
