@@ -306,7 +306,7 @@ Runnable apps live in [`examples/`](./examples), each with its own `go.mod` and 
 
 - [Documentation](https://docs.theauth.dev/go) and [API reference on pkg.go.dev](https://pkg.go.dev/github.com/glincker/theauth-go/v2)
 - [CHANGELOG](CHANGELOG.md), [STABILITY](https://docs.theauth.dev/go/reference/stability), [ROADMAP](docs/ROADMAP.md)
-- [Security policy](.github/SECURITY.md): report vulnerabilities privately to support@glincker.com or through GitHub advisories, not in public issues
+- [Security policy](.github/SECURITY.md): report vulnerabilities privately to support@glinr.com or through GitHub advisories, not in public issues
 - [Contributing](.github/CONTRIBUTING.md), [Discussions](https://github.com/glincker/theauth-go/discussions), [GLINR Discord](https://discord.gg/Ar5pcaZB99)
 - [AGENTS.md](docs/AGENTS.md) and [llms.txt](llms.txt) for AI coding assistants
 - [License: MIT](LICENSE)
