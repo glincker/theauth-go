@@ -23,7 +23,7 @@ jobs:
         image: postgres:16
         env:
           POSTGRES_USER: theauth
-          POSTGRES_PASSWORD: theauth
+          POSTGRES_PASSWORD: pg-${{ github.run_id }}
           POSTGRES_DB: theauth_test
         ports: ["5432:5432"]
         options: >-
@@ -38,7 +38,7 @@ jobs:
       mysql:
         image: mysql:8
         env:
-          MYSQL_ROOT_PASSWORD: theauth
+          MYSQL_ROOT_PASSWORD: my-${{ github.run_id }}
           MYSQL_DATABASE: theauth_test
         ports: ["3306:3306"]
         options: >-
@@ -54,7 +54,7 @@ jobs:
       - run: go vet ./...
       - run: go test -race -timeout=300s -coverprofile=coverage.out ./...
         env:
-          POSTGRES_TEST_URL: postgres://theauth:theauth@localhost:5432/theauth_test?sslmode=disable
+          POSTGRES_TEST_URL: postgres://theauth:pg-${{ github.run_id }}@localhost:5432/theauth_test?sslmode=disable
       - uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7
         with:
           files: coverage.out
