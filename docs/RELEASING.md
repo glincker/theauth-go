@@ -63,6 +63,19 @@ Warning: anyone on the old path (including pseudo-versions of
 `github.com/glincker/theauth-go`) must change their imports to the `/v2` path.
 The old path stays frozen at v1.0.0. See https://docs.theauth.dev/go/migrations/to-v2-module-path.
 
+## Automated release PRs (release-please)
+
+`release-please` keeps one open PR that proposes the next version from the conventional commit titles on `main`.
+It is a convenience on top of the flow below, not a replacement for it:
+
+- It bumps `.release-please-manifest.json` and nothing else. `CHANGELOG.md` stays hand curated (`skip-changelog`),
+  so add the dated `## [X.Y.Z]` section, with `### Upgrade notes` first, to the release PR branch before merging.
+- Merging the release PR creates the `vX.Y.Z` tag and the GitHub release, and the tag push starts `release.yml`.
+- The tag it creates is not a locally signed tag. If you want a signed or annotated tag from your own key, skip the
+  release PR and use step 3 below. Both paths end in the same `release.yml` run.
+- Do not use `!` or a `BREAKING CHANGE` footer. A major bump needs the module path to move to `/v3`, which is a
+  deliberate migration. The nested modules (`mcpresource`, `storage/sqlite`, `audit/sinks/otlp`) are tagged by hand.
+
 ## Release checklist
 
 Order matters because sub-modules can only pin the root after the proxy serves it.
