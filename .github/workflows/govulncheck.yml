@@ -1,0 +1,51 @@
+name: govulncheck
+
+on:
+  pull_request:
+    paths:
+      - "**/go.mod"
+      - "**/go.sum"
+      - "**/*.go"
+  push:
+    branches: [main]
+  schedule:
+    - cron: "0 7 * * 3"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  # Scan each module on its own, the way consumers resolve it, not through go.work.
+  GOWORK: off
+
+jobs:
+  discover:
+    runs-on: ubuntu-latest
+    outputs:
+      modules: ${{ steps.find.outputs.modules }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - id: find
+        name: List every module that has a go.mod
+        run: |
+          modules=$(find . -name go.mod -not -path '*/node_modules/*' -not -path './.claude/*' -exec dirname {} \; | sed 's|^\./||' | sort | jq -R -s -c 'split("\n") | map(select(length > 0))')
+          echo "modules=${modules}" >> "$GITHUB_OUTPUT"
+
+  govulncheck:
+    needs: discover
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        module: ${{ fromJSON(needs.discover.outputs.modules) }}
+    steps:
+      - uses: golang/govulncheck-action@032d45514ae346b1db93c04b0c90b841c370344f # v1.1.0
+        with:
+          # Latest stable Go covers every module (go.mod floors are 1.25 and 1.26)
+          # and avoids reporting already-fixed standard library issues.
+          go-version-input: stable
+          check-latest: true
+          work-dir: ${{ matrix.module }}
+          go-package: ./...
+          cache: false
