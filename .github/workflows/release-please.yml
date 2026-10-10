@@ -1,0 +1,25 @@
+name: release-please
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  release-please:
+    runs-on: ubuntu-latest
+    steps:
+      # Opens and updates one release PR from the conventional commit history on main. CHANGELOG.md stays hand
+      # curated (skip-changelog), so add the dated section to the release PR branch before merging it.
+      # Merging the release PR creates the vX.Y.Z tag and GitHub release, which starts release.yml (goreleaser,
+      # cosign, SBOM, SLSA). GLINR_BOT_TOKEN is used so that tag push triggers release.yml; events created with
+      # the default GITHUB_TOKEN do not start workflows.
+      - uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
+        with:
+          token: ${{ secrets.GLINR_BOT_TOKEN || github.token }}
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
