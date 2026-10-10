@@ -12,6 +12,10 @@ jobs:
   test:
     if: github.event_name != 'schedule'
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      # Lets codecov-action authenticate with a GitHub OIDC token when no CODECOV_TOKEN secret is set.
+      id-token: write
     env:
       GOWORK: off
     services:
@@ -54,7 +58,11 @@ jobs:
       - uses: codecov/codecov-action@v7
         with:
           files: coverage.out
-          fail_ci_if_error: false
+          token: ${{ secrets.CODECOV_TOKEN }}
+          # Token wins when the secret exists, otherwise fall back to tokenless OIDC.
+          use_oidc: ${{ secrets.CODECOV_TOKEN == '' }}
+          # Surface upload failures on pushes to main instead of hiding them (a missing token was rejected silently).
+          fail_ci_if_error: ${{ github.event_name == 'push' }}
       - run: go test -bench=. -benchmem -run=^$ -benchtime=1x ./internal/bench/...
 
   fuzz:
