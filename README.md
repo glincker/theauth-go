@@ -37,6 +37,20 @@ go get github.com/glincker/theauth-go/storage/sqlite   # optional, embedded SQLi
 
 The module path ends in `/v2`. The first resolvable v2 tag is `v2.6.0`, and the old path without `/v2` is frozen at `v1.0.0`. See [Migrating to /v2](https://docs.theauth.dev/go/migrations/to-v2-module-path).
 
+### Verify releases
+
+Release assets are signed keyless with cosign through GitHub Actions OIDC. Download `checksums.txt`, `checksums.txt.sig` and `checksums.txt.cert` from the release, then verify (replace `v2.8.0` with your tag):
+
+```bash
+cosign verify-blob \
+  --certificate-identity "https://github.com/glincker/theauth-go/.github/workflows/release.yml@refs/tags/v2.8.0" \
+  --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
+  --signature checksums.txt.sig --certificate checksums.txt.cert checksums.txt
+sha256sum --ignore-missing -c checksums.txt
+```
+
+Each `theauth-go-v*.tar.gz` and its `.sbom.json` also ship with `.sig` and `.cert` files that verify the same way.
+
 ## Packages
 
 One Go module at the root plus three nested modules (`mcpresource`, `storage/sqlite`, `audit/sinks/otlp`) that carry their own dependencies. Everything else is a package inside the root module. Full index on [pkg.go.dev](https://pkg.go.dev/github.com/glincker/theauth-go/v2).

@@ -45,13 +45,13 @@ jobs:
 
     steps:
       - name: Checkout PR branch
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           # fetch-depth 0 ensures the base ref is reachable for checkout below.
           fetch-depth: 0
 
       - name: Set up Go
-        uses: actions/setup-go@v7
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
         with:
           go-version: "1.25"
           cache: true
@@ -118,7 +118,7 @@ jobs:
       # It is a fixed SHA, so the cache is stable across re-runs.
       - name: Restore base benchmark cache
         id: cache-base
-        uses: actions/cache@v6
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
           path: base-bench.txt
           key: bench-baseline-${{ steps.base.outputs.sha }}
@@ -162,7 +162,7 @@ jobs:
 
       - name: Save base benchmark to cache
         if: steps.cache-base.outputs.cache-hit != 'true' && env.SKIP_DIFF != 'true'
-        uses: actions/cache/save@v6
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
           path: base-bench.txt
           key: bench-baseline-${{ steps.base.outputs.sha }}
@@ -187,7 +187,7 @@ jobs:
       - name: Comment benchstat diff on PR
         if: github.event_name == 'pull_request' && env.SKIP_DIFF != 'true'
         continue-on-error: true
-        uses: actions/github-script@v9
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         with:
           script: |
             const diff = `${{ steps.benchstat.outputs.diff_output }}`;
@@ -239,7 +239,7 @@ jobs:
 
       - name: Upload benchmark artifacts
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: bench-results-${{ github.sha }}
           path: |
