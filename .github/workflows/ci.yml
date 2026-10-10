@@ -54,7 +54,9 @@ jobs:
       - uses: codecov/codecov-action@v7
         with:
           files: coverage.out
-          fail_ci_if_error: false
+          token: ${{ secrets.CODECOV_TOKEN }}
+          # Surface upload failures on pushes to main instead of hiding them (a missing token was rejected silently).
+          fail_ci_if_error: ${{ github.event_name == 'push' }}
       - run: go test -bench=. -benchmem -run=^$ -benchtime=1x ./internal/bench/...
 
   fuzz:
