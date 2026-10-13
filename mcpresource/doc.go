@@ -26,6 +26,11 @@
 // builds tools/list security metadata, and NewURLElicitation builds MCP URL
 // mode elicitations.
 //
+// A RevocationChecker (WithRevocationChecker) lets a server that validates
+// JWTs locally consult a denylist or the AS for tokens revoked before exp;
+// WithDeviceRevocationIntrospection does that for device tokens through the
+// introspection endpoint.
+//
 // The package validates the JWT signature against a cached JWKS, enforces the
 // audience claim against the configured resource URI, checks expiry with a
 // small skew tolerance, and walks the RFC 8693 actor chain via the AS

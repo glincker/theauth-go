@@ -155,6 +155,9 @@ func (s *Service) StartAuthorize(ctx context.Context, req AuthorizeRequest, user
 	}); err != nil {
 		return AuthorizeResult{}, err
 	}
+	if s.OIDCEnabled() && hasScope(scope, ScopeOpenID) {
+		s.linkCodeSession(ctx, codeStorageKey(codeStr), ac.SessionID)
+	}
 	redirectURL := buildAuthzRedirect(req.RedirectURI, codeStr, req.State, s.Cfg.Issuer)
 	return AuthorizeResult{RedirectURL: redirectURL}, nil
 }

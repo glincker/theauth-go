@@ -1,6 +1,9 @@
 package models
 
-import "time"
+import (
+	"encoding/json"
+	"time"
+)
 
 // v2.0 (phase 1 + 2) model additions: OAuth 2.1 Authorization Server primitives.
 // Agents, agent credentials, and delegation grants are deferred to phase 3 + 4
@@ -54,6 +57,19 @@ type OAuthClient struct {
 	// types the client may request. Empty allows every type the server
 	// supports.
 	AuthorizationDetailsTypes []string `json:"authorization_details_types,omitempty"`
+
+	// OIDC client metadata. All four are stored together in one JSON column.
+	// SubjectType is SubjectTypePublic or SubjectTypePairwise; empty inherits
+	// the server default.
+	SubjectType string `json:"subject_type,omitempty"`
+	// PostLogoutRedirectURIs lists where RP-initiated logout may send the
+	// user agent afterwards (exact match).
+	PostLogoutRedirectURIs []string `json:"post_logout_redirect_uris,omitempty"`
+	// BackchannelLogoutURI receives logout tokens (OpenID Connect
+	// Back-Channel Logout 1.0). Empty opts the client out.
+	BackchannelLogoutURI string `json:"backchannel_logout_uri,omitempty"`
+	// BackchannelLogoutSessionRequired asks for the sid claim in logout tokens.
+	BackchannelLogoutSessionRequired bool `json:"backchannel_logout_session_required,omitempty"`
 
 	Owner                  ClientOwner `json:"-"`
 	AnonymousRegistered    bool        `json:"-"`
@@ -207,6 +223,48 @@ const (
 	AccessTokenFormatJWT    = "jwt"
 	AccessTokenFormatOpaque = "opaque"
 )
+
+// Subject identifier types (OIDC Core section 8).
+const (
+	SubjectTypePublic   = "public"
+	SubjectTypePairwise = "pairwise"
+)
+
+// oidcClientMetadata is the JSON stored in the single oidc_metadata column.
+type oidcClientMetadata struct {
+	SubjectType                      string   `json:"subject_type,omitempty"`
+	PostLogoutRedirectURIs           []string `json:"post_logout_redirect_uris,omitempty"`
+	BackchannelLogoutURI             string   `json:"backchannel_logout_uri,omitempty"`
+	BackchannelLogoutSessionRequired bool     `json:"backchannel_logout_session_required,omitempty"`
+}
+
+// OIDCMetadataJSON encodes the OIDC client metadata for storage. It never
+// returns nil, so NOT NULL columns accept the result.
+func (c OAuthClient) OIDCMetadataJSON() []byte {
+	b, err := json.Marshal(oidcClientMetadata{
+		SubjectType:                      c.SubjectType,
+		PostLogoutRedirectURIs:           c.PostLogoutRedirectURIs,
+		BackchannelLogoutURI:             c.BackchannelLogoutURI,
+		BackchannelLogoutSessionRequired: c.BackchannelLogoutSessionRequired,
+	})
+	if err != nil {
+		return []byte("{}")
+	}
+	return b
+}
+
+// SetOIDCMetadataJSON decodes the stored OIDC client metadata. Empty or
+// malformed input leaves the fields at their zero values.
+func (c *OAuthClient) SetOIDCMetadataJSON(raw []byte) {
+	var m oidcClientMetadata
+	if len(raw) == 0 || json.Unmarshal(raw, &m) != nil {
+		return
+	}
+	c.SubjectType = m.SubjectType
+	c.PostLogoutRedirectURIs = m.PostLogoutRedirectURIs
+	c.BackchannelLogoutURI = m.BackchannelLogoutURI
+	c.BackchannelLogoutSessionRequired = m.BackchannelLogoutSessionRequired
+}
 
 // OpaqueAccessToken is the server-side record behind a reference (opaque)
 // access token. Only the SHA-256 hash of the token is stored. Claims holds the
@@ -387,4 +445,9 @@ type RegisteredClient struct {
 	AccessTokenFormat            string   `json:"access_token_format,omitempty"`
 	AccessTokenSignedResponseAlg string   `json:"access_token_signed_response_alg,omitempty"`
 	AuthorizationDetailsTypes    []string `json:"authorization_details_types,omitempty"`
+
+	SubjectType                      string   `json:"subject_type,omitempty"`
+	PostLogoutRedirectURIs           []string `json:"post_logout_redirect_uris,omitempty"`
+	BackchannelLogoutURI             string   `json:"backchannel_logout_uri,omitempty"`
+	BackchannelLogoutSessionRequired bool     `json:"backchannel_logout_session_required,omitempty"`
 }

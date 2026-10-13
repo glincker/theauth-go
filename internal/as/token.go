@@ -76,6 +76,10 @@ type TokenResponse struct {
 
 	// AuthorizationDetails echoes the RFC 9396 details the token carries.
 	AuthorizationDetails json.RawMessage `json:"authorization_details,omitempty"`
+
+	// IDToken is the OpenID Connect ID token, present when the grant carries
+	// the openid scope and the server is an OpenID Provider.
+	IDToken string `json:"id_token,omitempty"`
 }
 
 // ExchangeAuthorizationCode redeems a one-time authorization code for an
@@ -151,6 +155,8 @@ func (s *Service) ExchangeAuthorizationCode(ctx context.Context, req TokenReques
 		AuthTime:     codeRow.AuthTime,
 		ACR:          codeRow.ACR,
 		AMR:          codeRow.AMR,
+		Nonce:        codeRow.Nonce,
+		SessionID:    s.codeSession(ctx, codeKey),
 	})
 }
 
@@ -240,9 +246,10 @@ func (s *Service) RefreshAccessToken(ctx context.Context, req TokenRequest) (res
 		AuthorizationDetails: details,
 		// The authentication context is carried forward unchanged: a
 		// refresh never advances auth_time.
-		AuthTime: rt.AuthTime,
-		ACR:      rt.ACR,
-		AMR:      rt.AMR,
+		AuthTime:  rt.AuthTime,
+		ACR:       rt.ACR,
+		AMR:       rt.AMR,
+		SessionID: s.familySession(ctx, rt.FamilyID),
 	})
 }
 
@@ -271,6 +278,10 @@ type mintInput struct {
 	AuthTime time.Time
 	ACR      string
 	AMR      []string
+	// Nonce and SessionID feed the ID token: the authorize request nonce
+	// and the browser session the grant came from.
+	Nonce     string
+	SessionID string
 }
 
 // mintAccessAndRefresh signs a fresh access token JWT and stores a fresh
@@ -356,14 +367,32 @@ func (s *Service) mintAccessAndRefresh(ctx context.Context, in mintInput) (Token
 	if err := s.Storage.InsertRefreshToken(ctx, rt); err != nil {
 		return TokenResponse{}, fmt.Errorf("insert refresh token: %w", err)
 	}
-	return TokenResponse{
+	resp := TokenResponse{
 		AccessToken:          access,
 		TokenType:            tokenType,
 		ExpiresIn:            int(s.Cfg.AccessTokenTTL.Seconds()),
 		RefreshToken:         refreshToken,
 		Scope:                scopeJoin(in.Scope),
 		AuthorizationDetails: authorizationDetailsRaw(claims.Extra),
-	}, nil
+	}
+	if s.OIDCEnabled() && in.UserID != nil && hasScope(in.Scope, ScopeOpenID) {
+		s.linkFamilySession(ctx, familyID, in.SessionID, in.ClientID)
+		idToken, err := s.issueIDToken(ctx, idTokenInput{
+			ClientID:    in.ClientID,
+			UserID:      *in.UserID,
+			AccessToken: access,
+			Nonce:       in.Nonce,
+			SessionID:   in.SessionID,
+			AuthTime:    in.AuthTime,
+			ACR:         in.ACR,
+			AMR:         in.AMR,
+		})
+		if err != nil {
+			return TokenResponse{}, fmt.Errorf("issue id token: %w", err)
+		}
+		resp.IDToken = idToken
+	}
+	return resp, nil
 }
 
 // AuthenticateClient verifies client credentials. Confidential clients

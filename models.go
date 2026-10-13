@@ -239,6 +239,13 @@ const (
 	AccessTokenFormatOpaque = models.AccessTokenFormatOpaque
 )
 
+// Subject identifier types a client can be registered with
+// (OAuthClient.SubjectType).
+const (
+	SubjectTypePublic   = models.SubjectTypePublic
+	SubjectTypePairwise = models.SubjectTypePairwise
+)
+
 // TokenTypeIDJAG is the token type URN of an Identity Assertion JWT
 // Authorization Grant, used as requested_token_type and issued_token_type.
 const TokenTypeIDJAG = models.TokenTypeIDJAG

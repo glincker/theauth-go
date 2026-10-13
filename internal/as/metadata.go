@@ -2,6 +2,8 @@ package as
 
 import (
 	"errors"
+	"slices"
+	"sort"
 
 	"github.com/glincker/theauth-go/v2/internal/models"
 )
@@ -68,6 +70,16 @@ type ASMetadata struct {
 	// AuthorizationDetailsTypesSupported (RFC 9396 section 10). Omitted
 	// when RAR is not enabled.
 	AuthorizationDetailsTypesSupported []string `json:"authorization_details_types_supported,omitempty"`
+
+	// OpenID Provider fields (OIDC Discovery 1.0 section 3). Omitted unless
+	// Config.OIDC is set.
+	UserinfoEndpoint                  string   `json:"userinfo_endpoint,omitempty"`
+	EndSessionEndpoint                string   `json:"end_session_endpoint,omitempty"`
+	SubjectTypesSupported             []string `json:"subject_types_supported,omitempty"`
+	IDTokenSigningAlgValuesSupported  []string `json:"id_token_signing_alg_values_supported,omitempty"`
+	ClaimsSupported                   []string `json:"claims_supported,omitempty"`
+	BackchannelLogoutSupported        bool     `json:"backchannel_logout_supported,omitempty"`
+	BackchannelLogoutSessionSupported bool     `json:"backchannel_logout_session_supported,omitempty"`
 }
 
 // ASMetadataDoc builds the metadata document. The result is
@@ -170,6 +182,9 @@ func (s *Service) ASMetadataDoc() (ASMetadata, error) {
 
 	meta.AuthorizationDetailsTypesSupported = s.RARTypes()
 	meta.ACRValuesSupported = s.acrValuesSupported()
+	if s.OIDCEnabled() {
+		s.addOIDCMetadata(&meta)
+	}
 
 	return meta, nil
 }
@@ -204,4 +219,24 @@ func (s *Service) grantTypesAdvertised() []string {
 		out = append(out, models.GrantTypeDeviceCode)
 	}
 	return out
+}
+
+// addOIDCMetadata fills the OpenID Provider discovery fields.
+func (s *Service) addOIDCMetadata(meta *ASMetadata) {
+	meta.UserinfoEndpoint = s.Cfg.Issuer + "/oauth/userinfo"
+	meta.EndSessionEndpoint = s.Cfg.Issuer + "/oauth/end_session"
+	meta.SubjectTypesSupported = []string{models.SubjectTypePublic}
+	if len(s.Cfg.OIDC.PairwiseSalt) > 0 {
+		meta.SubjectTypesSupported = append(meta.SubjectTypesSupported, models.SubjectTypePairwise)
+	}
+	meta.IDTokenSigningAlgValuesSupported = s.SigningAlgsAdvertised()
+	meta.BackchannelLogoutSupported = true
+	meta.BackchannelLogoutSessionSupported = true
+	scopes := append(meta.ScopesSupported, ScopeOpenID, ScopeProfile, ScopeEmail)
+	sort.Strings(scopes)
+	meta.ScopesSupported = slices.Compact(scopes)
+	meta.ClaimsSupported = []string{
+		"sub", "iss", "aud", "exp", "iat", "auth_time", "nonce", "acr", "amr", "at_hash", "sid",
+		"name", "given_name", "family_name", "picture", "updated_at", "email", "email_verified",
+	}
 }

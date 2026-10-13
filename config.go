@@ -560,9 +560,18 @@ type AuthorizationServerConfig struct {
 	// minted single-use join tokens, enrollment at /oauth/devices/enroll, and
 	// the RFC 7523 jwt-bearer grant for registered devices, which issues
 	// short-lived access tokens with no refresh token. The storage must also
-	// implement DeviceIdentityStorage (memory, Postgres and MySQL do).
+	// implement DeviceIdentityStorage (memory, Postgres, MySQL and SQLite do).
 	DeviceTokens *DeviceTokensConfig
+
+	// OIDC turns the server into an OpenID Provider when non-nil: ID tokens
+	// for requests with the openid scope, GET/POST /oauth/userinfo,
+	// /oauth/end_session (RP-initiated logout), back-channel logout and
+	// pairwise subjects. See docs/oidc-provider.md.
+	OIDC *OIDCConfig
 }
+
+// OIDCConfig is the root alias for the OpenID Provider settings.
+type OIDCConfig = internalas.OIDCConfig
 
 // TokenPolicyConfig is the root alias for the per-client token policy.
 type TokenPolicyConfig = internalas.TokenPolicyConfig
@@ -890,6 +899,7 @@ func validateASConfig(cfg *AuthorizationServerConfig, encryptionKey []byte) erro
 		RateLimits:                     cfg.RateLimits,
 		RegistrationTokenTTL:           cfg.RegistrationTokenTTL,
 		DeviceTokens:                   cfg.DeviceTokens,
+		OIDC:                           cfg.OIDC,
 	}
 	if err := internalas.Validate(&internal, encryptionKey); err != nil {
 		return err

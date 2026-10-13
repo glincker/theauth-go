@@ -47,6 +47,11 @@ func (h *Handler) mountDeviceIdentity(r chi.Router) {
 }
 
 func (h *Handler) writeEnrollError(w http.ResponseWriter, err error) {
+	var limited *internalas.RateLimitedError
+	if errors.As(err, &limited) {
+		writeRateLimited(w, limited.RetryAfter)
+		return
+	}
 	switch {
 	case errors.Is(err, models.ErrDeviceEnrollmentInvalid):
 		writeOAuthError(w, http.StatusBadRequest, oauthErrInvalidGrant, "invalid join token, key or proof")

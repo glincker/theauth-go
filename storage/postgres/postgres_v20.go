@@ -28,7 +28,8 @@ INSERT INTO oauth_clients (
   jwks_uri, jwks, software_id, software_version, owner_kind,
   owner_user_id, owner_organization_id, owner_agent_id,
   anonymous_registered, registration_access_hash, created_at, updated_at,
-  access_token_format, access_token_signed_response_alg, authorization_details_types
+  access_token_format, access_token_signed_response_alg, authorization_details_types,
+  oidc_metadata
 ) VALUES (
   $1, $2, $3, $4, $5,
   $6, $7, $8, $9,
@@ -36,7 +37,8 @@ INSERT INTO oauth_clients (
   $15, $16, $17, $18, $19,
   $20, $21, $22,
   $23, $24, $25, $26,
-  $27, $28, $29
+  $27, $28, $29,
+  $30
 )
 RETURNING client_id, created_at, updated_at`
 	ownerKind := clientOwnerKindFor(c)
@@ -78,6 +80,7 @@ RETURNING client_id, created_at, updated_at`
 		c.AccessTokenFormat,
 		c.AccessTokenSignedResponseAlg,
 		emptyIfNilStrings(c.AuthorizationDetailsTypes),
+		string(c.OIDCMetadataJSON()),
 	)
 	var clientID string
 	var createdAt, updatedAt pgtype.Timestamptz
@@ -98,7 +101,8 @@ SELECT id, client_id, client_secret_hash, client_name, redirect_uris,
        jwks_uri, jwks, software_id, software_version, owner_kind,
        owner_user_id, owner_organization_id, owner_agent_id,
        anonymous_registered, registration_access_hash, created_at, updated_at,
-       access_token_format, access_token_signed_response_alg, authorization_details_types
+       access_token_format, access_token_signed_response_alg, authorization_details_types,
+       oidc_metadata
 FROM oauth_clients WHERE client_id = $1`
 	c, err := scanOAuthClient(s.pool.QueryRow(ctx, q, clientID))
 	if err != nil {
@@ -118,7 +122,7 @@ UPDATE oauth_clients SET
   contacts = $9, logo_uri = $10, policy_uri = $11, tos_uri = $12,
   jwks_uri = $13, jwks = $14, software_id = $15, software_version = $16,
   access_token_format = $17, access_token_signed_response_alg = $18,
-  authorization_details_types = $19,
+  authorization_details_types = $19, oidc_metadata = $20,
   updated_at = now()
 WHERE client_id = $1
 RETURNING updated_at`
@@ -142,6 +146,7 @@ RETURNING updated_at`
 		c.AccessTokenFormat,
 		c.AccessTokenSignedResponseAlg,
 		emptyIfNilStrings(c.AuthorizationDetailsTypes),
+		string(c.OIDCMetadataJSON()),
 	)
 	var updatedAt pgtype.Timestamptz
 	if err := row.Scan(&updatedAt); err != nil {

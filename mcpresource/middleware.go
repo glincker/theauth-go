@@ -57,10 +57,11 @@ func (v *Validator) Middleware(next http.Handler) http.Handler {
 //     + URL + access-token hash, then check the proof JWK thumbprint
 //     equals cnf.jkt. Tokens without cnf.jkt skip this step (Bearer
 //     semantics).
-//  4. If the token carries an act chain or delegation_grant_id, walk the
+//  4. Ask the optional RevocationChecker whether the token was revoked.
+//  5. If the token carries an act chain or delegation_grant_id, walk the
 //     chain against the AS introspection endpoint. Cached results live up to
 //     cacheTTL; an AS-reported inactive flips the cache invalid immediately.
-//  5. Build the Principal and return.
+//  6. Build the Principal and return.
 func (v *Validator) authenticate(r *http.Request, token, scheme string) (*Principal, error) {
 	now := time.Now()
 	claims, err := verifyJWT(token, v.resourceURI, v.jwks.Key, now, v.clockSkew, v.allowMissingTyp)
@@ -103,6 +104,9 @@ func (v *Validator) authenticate(r *http.Request, token, scheme string) (*Princi
 			return nil, err
 		}
 		principal.CnfJKT = jkt
+	}
+	if err := v.checkRevocation(r, token, principal); err != nil {
+		return nil, err
 	}
 	if claims.Act != nil || claims.DelegationGrantID != "" {
 		res, err := v.introspect.Lookup(token, v.resourceURI)
@@ -211,6 +215,7 @@ func principalFromClaims(c *claims) *Principal {
 		ACR:               c.Acr,
 		AMR:               append([]string(nil), c.Amr...),
 		AuthTime:          unix(c.AuthTime),
+		DeviceID:          c.DeviceID,
 	}
 	if c.Act != nil {
 		chain := flattenChain(c.Act)

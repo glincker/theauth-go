@@ -20,6 +20,7 @@ func TestCapabilityContracts(t *testing.T) {
 	}{
 		{"APITokens", func(t *testing.T, s *sqlitestore.Store) { storagetest.RunAPITokens(t, s) }},
 		{"DeviceCodes", func(t *testing.T, s *sqlitestore.Store) { storagetest.RunDeviceCodes(t, s) }},
+		{"DeviceIdentity", func(t *testing.T, s *sqlitestore.Store) { storagetest.RunDeviceIdentity(t, s) }},
 		{"SessionManagement", func(t *testing.T, s *sqlitestore.Store) { storagetest.RunSessionManagement(t, s) }},
 		{"MFACaps", func(t *testing.T, s *sqlitestore.Store) { storagetest.RunMFACaps(t, s) }},
 		{"AccountLifecycle", func(t *testing.T, s *sqlitestore.Store) { storagetest.RunAccountLifecycle(t, s) }},

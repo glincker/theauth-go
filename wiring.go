@@ -330,6 +330,7 @@ func wireServices(a *TheAuth, cfg Config, providers map[string]Provider, sp saml
 			Audit:            a,
 			Hooks:            a.hooks,
 			JWTBearerStorage: jwtBearerStore,
+			Users:            cfg.Storage,
 		})
 		var agentPolicy *agent.Config
 		if cfg.AgentIdentity != nil {
@@ -637,6 +638,7 @@ func asConfigFromRoot(c *AuthorizationServerConfig) internalas.Config {
 		RateLimits:                     c.RateLimits,
 		RegistrationTokenTTL:           c.RegistrationTokenTTL,
 		DeviceTokens:                   c.DeviceTokens,
+		OIDC:                           c.OIDC,
 	}
 }
 

@@ -78,6 +78,7 @@ func scanOAuthClient(row pgRowScanner) (theauth.OAuthClient, error) {
 		createdAt, updatedAt                pgtype.Timestamptz
 		tokenFormat, tokenAlg               string
 		detailTypes                         []string
+		oidcMeta                            string
 	)
 	if err := row.Scan(
 		&id, &clientID, &secretHash, &name, &redirects,
@@ -86,11 +87,11 @@ func scanOAuthClient(row pgRowScanner) (theauth.OAuthClient, error) {
 		&jwksURI, &jwks, &softID, &softVer, &ownerKind,
 		&ownerUser, &ownerOrg, &ownerAgent,
 		&anonymous, &regAccessHash, &createdAt, &updatedAt,
-		&tokenFormat, &tokenAlg, &detailTypes,
+		&tokenFormat, &tokenAlg, &detailTypes, &oidcMeta,
 	); err != nil {
 		return theauth.OAuthClient{}, err
 	}
-	return theauth.OAuthClient{
+	out := theauth.OAuthClient{
 		ID:                      pgUUIDToULID(id),
 		ClientID:                clientID,
 		ClientSecretHash:        secretHash,
@@ -122,7 +123,9 @@ func scanOAuthClient(row pgRowScanner) (theauth.OAuthClient, error) {
 		RegistrationAccessHash: regAccessHash,
 		CreatedAt:              tsToTime(createdAt),
 		UpdatedAt:              tsToTime(updatedAt),
-	}, nil
+	}
+	out.SetOIDCMetadataJSON([]byte(oidcMeta))
+	return out, nil
 }
 
 func scanJWKSKey(row pgRowScanner) (theauth.JWKSKey, error) {
