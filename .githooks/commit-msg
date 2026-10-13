@@ -1,0 +1,11 @@
+#!/bin/sh
+# Rejects dashes in the subject and AI attribution trailers, per CLAUDE.md.
+. "$(dirname "$0")/lib.sh"
+msg="$1"
+subject=$(head -n 1 "$msg")
+if printf '%s\n' "$subject" | has_dash; then
+	fail "commit subject must not contain em or en dashes"
+fi
+grep -q -i -E '^(co-authored-by|generated with).*(claude|anthropic|opus|sonnet|haiku)' "$msg" \
+	&& fail "remove the AI attribution trailer; commits are attributed to a single author"
+exit 0
