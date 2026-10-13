@@ -4,7 +4,7 @@ go 1.26.0
 
 require (
 	github.com/glincker/theauth-go/v2 v2.9.0
-	github.com/gofiber/fiber/v2 v2.52.9
+	github.com/gofiber/fiber/v2 v2.52.15
 )
 
 require (
