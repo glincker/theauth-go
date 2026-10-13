@@ -110,7 +110,28 @@ err := auth.RevokeDevice(ctx, deviceID)
 
 From then on the device's assertions fail with `invalid_grant`, and `/oauth/introspect` reports every token already issued to it as `active: false`, including answers that would otherwise come from the introspection cache.
 
-Resource servers that verify JWTs offline (`mcpresource` with a JWKS URL) do not see revocation until the token expires. The 10 minute default bounds that window; shorten `AccessTokenTTL` or introspect on sensitive calls when it matters.
+Resource servers that verify JWTs offline (`mcpresource` with a JWKS URL) do not see revocation until the token expires. The 10 minute default bounds that window; shorten `AccessTokenTTL` or add a revocation check.
+
+`mcpresource` has an optional, off by default hook for this, applied after signature, audience, expiry and DPoP checks:
+
+```go
+v := mcpresource.New("https://iot.example.com/api",
+    mcpresource.WithJWKS("https://auth.example.com/oauth/jwks"),
+    mcpresource.WithIntrospection("https://auth.example.com/oauth/introspect", clientID, clientSecret),
+    mcpresource.WithDeviceRevocationIntrospection(), // introspects tokens that carry device_id
+)
+```
+
+`WithDeviceRevocationIntrospection` calls the introspection endpoint only for tokens with a `device_id` claim and caches the answer for `WithCacheTTL`. For a denylist you own, pass your own checker instead:
+
+```go
+mcpresource.WithRevocationChecker(mcpresource.RevocationCheckerFunc(
+    func(ctx context.Context, token string, p *mcpresource.Principal) (bool, error) {
+        return denylist.Has(ctx, p.JWTID), nil // p.DeviceID is set for device tokens
+    }))
+```
+
+A revoked token gets `401 invalid_token`. If the checker returns an error the request is refused; `WithRevocationFailOpen()` lets it through instead.
 
 ## Admin API
 

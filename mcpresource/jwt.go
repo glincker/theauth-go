@@ -33,6 +33,9 @@ type claims struct {
 	Act               *actorClaim `json:"act,omitempty"`
 	DelegationGrantID string      `json:"delegation_grant_id,omitempty"`
 
+	// DeviceID is set on tokens issued to a registered device.
+	DeviceID string `json:"device_id,omitempty"`
+
 	// Acr and AuthTime (OIDC core / RFC 9470) describe how and when the
 	// user last authenticated; AuthTime is seconds since the epoch.
 	Acr      string   `json:"acr,omitempty"`
