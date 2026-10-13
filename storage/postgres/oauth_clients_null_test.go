@@ -3,6 +3,8 @@ package postgres
 import (
 	"context"
 	"os"
+	"path/filepath"
+	"sort"
 	"testing"
 
 	"github.com/glincker/theauth-go/v2"
@@ -11,7 +13,7 @@ import (
 )
 
 // oauthClientTestPool creates a pool against THEAUTH_TEST_PG_DSN and applies
-// all 14 migrations into a fresh schema so the test is isolated and repeatable.
+// every migration into a fresh schema so the test is isolated and repeatable.
 // The schema is dropped on cleanup.
 func oauthClientTestPool(t *testing.T) *pgxpool.Pool {
 	t.Helper()
@@ -36,26 +38,22 @@ func oauthClientTestPool(t *testing.T) *pgxpool.Pool {
 		pool.Close()
 	})
 
-	if _, err := pool.Exec(ctx, "SET search_path TO "+schema); err != nil {
-		t.Fatalf("set search_path: %v", err)
+	// search_path is per connection, so reconnect with it in the pool config.
+	pool.Close()
+	cfg, err := pgxpool.ParseConfig(dsn)
+	if err != nil {
+		t.Fatalf("parse dsn: %v", err)
+	}
+	cfg.ConnConfig.RuntimeParams["search_path"] = schema
+	if pool, err = pgxpool.NewWithConfig(ctx, cfg); err != nil {
+		t.Fatalf("reconnect: %v", err)
 	}
 
-	migrations := []string{
-		"migrations/0001_init.up.sql",
-		"migrations/0002_passwords.up.sql",
-		"migrations/0003_oauth_accounts.up.sql",
-		"migrations/0004_webauthn_credentials.up.sql",
-		"migrations/0005_totp.up.sql",
-		"migrations/0006_organizations.up.sql",
-		"migrations/0007_saml.up.sql",
-		"migrations/0008_scim.up.sql",
-		"migrations/0009_rbac.up.sql",
-		"migrations/0010_audit.up.sql",
-		"migrations/0011_oauth_clients_and_codes.up.sql",
-		"migrations/0012_agents.up.sql",
-		"migrations/0013_delegations.up.sql",
-		"migrations/0014_jwks_keys.up.sql",
+	migrations, err := filepath.Glob("migrations/*.up.sql")
+	if err != nil || len(migrations) == 0 {
+		t.Fatalf("list migrations: %v", err)
 	}
+	sort.Strings(migrations)
 	for _, path := range migrations {
 		sql, err := os.ReadFile(path)
 		if err != nil {
