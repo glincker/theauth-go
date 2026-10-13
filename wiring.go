@@ -393,6 +393,9 @@ func wireServices(a *TheAuth, cfg Config, providers map[string]Provider, sp saml
 	if err := a.setupLifecycle(&cfg); err != nil {
 		return err
 	}
+	if err := a.setupSharedSignals(&cfg); err != nil {
+		return err
+	}
 	if a.sessionSvc != nil {
 		a.totpSvc.SetSessionCap(a.sessionSvc)
 	}
