@@ -211,6 +211,25 @@ type RegistrationTokenStorage interface {
 	RefundRegistrationToken(ctx context.Context, id ULID) error
 }
 
+// DeviceIdentityStorage is the optional persistence extension for registered
+// constrained devices and their join tokens
+// (AuthorizationServer.DeviceTokens). Run storagetest.RunDeviceIdentity
+// against a custom implementation.
+type DeviceIdentityStorage interface {
+	InsertDevice(ctx context.Context, d Device) error
+	DeviceByID(ctx context.Context, id ULID) (*Device, error)
+	ListDevices(ctx context.Context, orgID *ULID) ([]Device, error)
+	RevokeDevice(ctx context.Context, id ULID, at time.Time) (bool, error)
+	TouchDevice(ctx context.Context, id ULID, at time.Time) error
+
+	InsertDeviceJoinToken(ctx context.Context, t DeviceJoinToken) error
+	DeviceJoinTokenByHash(ctx context.Context, hash []byte) (*DeviceJoinToken, error)
+	DeviceJoinTokenByID(ctx context.Context, id ULID) (*DeviceJoinToken, error)
+	RevokeDeviceJoinToken(ctx context.Context, id ULID, at time.Time) (bool, error)
+	RedeemDeviceJoinToken(ctx context.Context, id, deviceID ULID, now time.Time) (bool, error)
+	RefundDeviceJoinToken(ctx context.Context, id ULID) error
+}
+
 // UserStorage covers user records and email verification.
 type UserStorage interface {
 	CreateUser(ctx context.Context, u User) (User, error)

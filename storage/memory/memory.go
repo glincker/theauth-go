@@ -44,6 +44,7 @@ type Store struct {
 	tokens tokenState
 	// OAuth device authorizations + registration tokens. See memory_device.go.
 	devauth devAuthState
+	iotdev  iotDeviceState
 	opaque  opaqueState
 	// account lifecycle: forced password change, disable, trusted devices.
 	// See memory_lifecycle.go.

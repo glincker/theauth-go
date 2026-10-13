@@ -555,6 +555,13 @@ type AuthorizationServerConfig struct {
 	// RegistrationTokenTTL is the default lifetime of an initial access token
 	// created through CreateRegistrationToken or the admin API. Default 24h.
 	RegistrationTokenTTL time.Duration
+
+	// DeviceTokens enables constrained device identity when non-nil: admin
+	// minted single-use join tokens, enrollment at /oauth/devices/enroll, and
+	// the RFC 7523 jwt-bearer grant for registered devices, which issues
+	// short-lived access tokens with no refresh token. The storage must also
+	// implement DeviceIdentityStorage (memory, Postgres and MySQL do).
+	DeviceTokens *DeviceTokensConfig
 }
 
 // TokenPolicyConfig is the root alias for the per-client token policy.
@@ -569,11 +576,17 @@ type IDJAGConfig = internalas.IDJAGConfig
 // DeviceAuthorizationConfig is the root alias for the RFC 8628 settings.
 type DeviceAuthorizationConfig = internalas.DeviceConfig
 
+// DeviceTokensConfig is the root alias for the device identity settings.
+type DeviceTokensConfig = internalas.DeviceTokensConfig
+
 // DevicePage is the view model handed to DeviceAuthorizationConfig.Page.
 type DevicePage = internalas.DevicePage
 
 // ASRateLimits is the root alias for the AS endpoint limits.
 type ASRateLimits = internalas.RateLimits
+
+// CreateDeviceJoinTokenInput describes a device join token to mint.
+type CreateDeviceJoinTokenInput = internalas.CreateDeviceJoinTokenInput
 
 // CreateRegistrationTokenInput describes an initial access token to mint.
 type CreateRegistrationTokenInput = internalas.CreateRegistrationTokenInput
@@ -876,6 +889,7 @@ func validateASConfig(cfg *AuthorizationServerConfig, encryptionKey []byte) erro
 		IDJAG:                          cfg.IDJAG,
 		RateLimits:                     cfg.RateLimits,
 		RegistrationTokenTTL:           cfg.RegistrationTokenTTL,
+		DeviceTokens:                   cfg.DeviceTokens,
 	}
 	if err := internalas.Validate(&internal, encryptionKey); err != nil {
 		return err

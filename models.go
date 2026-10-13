@@ -261,6 +261,22 @@ const (
 // GrantTypeDeviceCode is the RFC 8628 grant type URN.
 const GrantTypeDeviceCode = models.GrantTypeDeviceCode
 
+// Device is a registered constrained device (see DeviceTokensConfig).
+type Device = models.Device
+
+// DeviceAttestationJoinToken is the attestation kind of a device enrolled with
+// a join token.
+const DeviceAttestationJoinToken = models.DeviceAttestationJoinToken
+
+// DeviceJoinToken is a single-use device enrollment token.
+type DeviceJoinToken = models.DeviceJoinToken
+
+// Device status values.
+const (
+	DeviceStatusActive  = models.DeviceStatusActive
+	DeviceStatusRevoked = models.DeviceStatusRevoked
+)
+
 // RegistrationToken is an initial access token for POST /oauth/register.
 type RegistrationToken = models.RegistrationToken
 
