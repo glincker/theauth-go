@@ -13,25 +13,15 @@ import (
 // Lives in this package (not in handlers) so the grant implementations
 // can call it without taking a dependency on the HTTP layer.
 
-// dpopThumbprintForRequest extracts and verifies the DPoP proof from
-// req. Returns:
+// dpopThumbprintForRequest extracts and verifies the DPoP proof from req. Returns:
 //
-//   - ("", nil)               when DPoP is disabled OR the client did not
-//     present a proof AND is not on the
-//     RequireDPoPForClients list.
-//   - (jkt, nil)              on a valid proof; jkt is the RFC 7638
-//     SHA-256 thumbprint of the proof key.
-//   - ("", ErrDPoPRequired)   when the client is on the required list
-//     but no proof was supplied.
-//   - ("", ErrDPoPNonceRequired) when nonce mode is on and the proof
-//     lacked a nonce. Handlers map this to a
-//     400 + DPoP-Nonce response header.
-//   - ("", ErrDPoPInvalid)    on any other verification failure
-//     (signature, htm, htu, iat, jti replay,
-//     malformed proof, unsupported alg).
+// ("", nil) when DPoP is disabled OR the client did not present a proof AND is not on the RequireDPoPForClients list.
+// (jkt, nil) on a valid proof; jkt is the RFC 7638 SHA-256 thumbprint of the proof key.
+// ("", ErrDPoPRequired) when the client is on the required list but no proof was supplied.
+// ("", ErrDPoPNonceRequired) when nonce mode is on and the proof lacked a nonce (handlers map this to 400 + DPoP-Nonce response header).
+// ("", ErrDPoPInvalid) on any other verification failure (signature, htm, htu, iat, jti replay, malformed proof, unsupported alg).
 //
-// The grant implementations call this helper exactly once and pass the
-// resulting jkt through to mintAccessAndRefresh.
+// The grant implementations call this helper exactly once and pass the resulting jkt through to mintAccessAndRefresh.
 func (s *Service) dpopThumbprintForRequest(req TokenRequest) (string, error) {
 	if s == nil || s.dpopSvc == nil {
 		// DPoP disabled. A client presenting a proof to a DPoP-unaware

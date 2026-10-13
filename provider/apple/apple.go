@@ -1,43 +1,16 @@
 // Package apple implements theauth.Provider against Sign In with Apple.
 //
-// Apple's protocol differs significantly from standard OAuth 2.0: it uses a
-// short-lived ES256 JWT as the client_secret rather than a static string.
-// This JWT must be minted on each token exchange request and signed with an
-// ECDSA P-256 private key (.p8 file) from Apple Developer console.
+// Apple's protocol uses a short-lived ES256 JWT as the client_secret instead of a static string. This JWT must be minted on each token exchange request and signed with an ECDSA P-256 private key (.p8 file) from Apple Developer console.
 //
-// # .p8 key file gotcha
+// .p8 keys are PEM-encoded PKCS#8 EC private keys. Parse with pem.Decode followed by x509.ParsePKCS8PrivateKey and cast to *ecdsa.PrivateKey. You can only download the .p8 file once; store it securely.
 //
-// Apple distributes private keys as .p8 files, which are PEM-encoded PKCS#8
-// EC private keys (not the raw SEC1 format). Parse them with:
+// Apple does not have a separate userinfo endpoint. User claims (sub, email, email_verified) come from the id_token JWT in the token exchange response. This package stores the raw id_token in ProviderToken.RefreshToken (prefixed with 'apple_id_token:') when no actual refresh token is returned. UserInfo() reads that field and decodes the id_token payload.
 //
-//	block, _ := pem.Decode(p8Bytes)
-//	key, err := x509.ParsePKCS8PrivateKey(block.Bytes)
-//	ecKey := key.(*ecdsa.PrivateKey)
+// For apps that receive a real refresh token, persist the first-sign-in user data (name, email) from the form POST body, since Apple does not repeat them after first authorization.
 //
-// You can only download the .p8 file once from Apple Developer console;
-// there is no way to re-download it. Store it securely.
+// Apple supports 'name' and 'email' scopes. Apple only returns name in the identity token on the FIRST sign-in per user per app.
 //
-// # id_token and the UserInfo surface
-//
-// Apple does not have a separate userinfo REST endpoint. User claims (sub,
-// email, email_verified) come from the id_token JWT returned in the token
-// exchange response. To bridge this to the standard theauth.Provider interface,
-// this package stores the raw id_token in the ProviderToken.RefreshToken
-// field (prefixed with "apple_id_token:") when no actual refresh token is
-// returned. UserInfo() reads that field and decodes the id_token payload.
-//
-// For apps that DO receive a real refresh token, callers should persist the
-// first-sign-in user data (name, email) from the form POST body, since Apple
-// does not repeat them after first authorization.
-//
-// # Scopes
-//
-// Apple supports "name" and "email". Apple only returns name in the identity
-// token on the FIRST sign-in per user per app. Sub is always present.
-//
-// References:
-// https://developer.apple.com/documentation/sign_in_with_apple/generate_and_validate_tokens
-// https://developer.apple.com/documentation/sign_in_with_apple/authenticating_users_with_sign_in_with_apple
+// References: https://developer.apple.com/documentation/sign_in_with_apple/generate_and_validate_tokens https://developer.apple.com/documentation/sign_in_with_apple/authenticating_users_with_sign_in_with_apple
 package apple
 
 import (

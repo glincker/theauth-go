@@ -119,20 +119,9 @@ func (k *Keyed) Stop() {
 
 // ClientIP returns the best-effort client IP for the request.
 //
-// X-Forwarded-For is consulted only when r.RemoteAddr belongs to one of the
-// operator-configured trusted prefixes; with no proxy in front the allowlist
-// is empty and the header is ignored, so a client cannot dodge per-IP limits
-// by forging it (security audit H4, 2026-06-20).
+// X-Forwarded-For is consulted only when r.RemoteAddr belongs to one of the operator-configured trusted prefixes; with no proxy the allowlist is empty and the header is ignored, so a client cannot dodge per-IP limits by forging it (security audit H4, 2026-06-20).
 //
-// When the peer is a trusted proxy the header is read from the right: each
-// proxy appends the address it received the request from, so only the entries
-// at the right edge were written by infrastructure you control. The walk skips
-// entries that are themselves trusted proxies and returns the first address
-// that is not, which is the nearest hop a trusted proxy actually observed.
-// Everything to the left of it is client-supplied and never trusted. If an
-// entry is not a valid IP the walk stops and the connection address is
-// returned. If every entry is a trusted proxy the leftmost one is returned.
-// Multiple X-Forwarded-For header lines are treated as one comma-joined list.
+// When the peer is a trusted proxy the header is read from the right: each proxy appends the address it received the request from, so only the entries at the right edge were written by infrastructure you control. The walk skips entries that are themselves trusted proxies and returns the first address that is not. Everything to the left is client-supplied and never trusted. If an entry is not a valid IP the walk stops and the connection address is returned. If every entry is a trusted proxy the leftmost one is returned. Multiple X-Forwarded-For header lines are treated as one comma-joined list.
 func ClientIP(r *http.Request, trusted []netip.Prefix) string {
 	remoteHost := RemoteAddrHost(r)
 	if len(trusted) == 0 || !RemoteIsTrusted(remoteHost, trusted) {

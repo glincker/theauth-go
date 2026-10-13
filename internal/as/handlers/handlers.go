@@ -1,22 +1,8 @@
-// Package handlers exposes the OAuth 2.1 + MCP authorization server
-// HTTP endpoints. Routes:
+// Package handlers exposes the OAuth 2.1 + MCP authorization server HTTP endpoints.
 //
-//	GET  /.well-known/oauth-authorization-server
-//	GET  /.well-known/oauth-protected-resource
-//	GET  /.well-known/oauth-protected-resource/*
-//	GET  /oauth/jwks
-//	GET  /oauth/authorize          (auth-gated)
-//	POST /oauth/token
-//	POST /oauth/revoke
-//	POST /oauth/introspect
-//	POST /oauth/register           (per-IP rate-limited when cap > 0)
+// Routes: GET /.well-known/oauth-authorization-server, GET /.well-known/oauth-protected-resource, GET /oauth/jwks, GET /oauth/authorize (auth-gated), POST /oauth/token, POST /oauth/revoke, POST /oauth/introspect, POST /oauth/register (rate-limited when cap > 0).
 //
-// Extracted from root handlers_oauth_server.go in PR F of the 2026-06
-// architecture reorg. The root *theauth.TheAuth constructs a Handler
-// here and Mount is invoked from the thin mountAS forwarder. The
-// scopeSplit helper that used to live in root scope_helpers.go now
-// lives in internal/as.scopeSplit (already present from PR C); this
-// package re-uses it via the unexported package-level function below.
+// Extracted from root handlers_oauth_server.go in PR F of the 2026-06 architecture reorg. The root *theauth.TheAuth constructs a Handler here and Mount is invoked from the thin mountAS forwarder.
 package handlers
 
 import (

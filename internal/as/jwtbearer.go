@@ -1,21 +1,10 @@
 package as
 
-// jwtbearer.go: RFC 7523 JWT client authentication (section 2.2) and the
-// jwt-bearer grant type (section 2.1).
+// jwtbearer.go: RFC 7523 JWT client authentication (section 2.2) and the jwt-bearer grant type (section 2.1).
 //
-// Client authentication path (section 2.2):
-//   POST /oauth/token with:
-//     client_assertion_type=urn:ietf:params:oauth:client-assertion-type:jwt-bearer
-//     client_assertion=<signed JWT>
-//   The client is authenticated when the JWT signature matches a key from
-//   the client's registered jwks_uri / inline jwks.
+// Client authentication path (section 2.2): POST /oauth/token with client_assertion_type=urn:ietf:params:oauth:client-assertion-type:jwt-bearer and client_assertion=<signed JWT>. The client is authenticated when the JWT signature matches a key from the client's registered jwks_uri/inline jwks.
 //
-// JWT Bearer grant (section 2.1):
-//   POST /oauth/token with:
-//     grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer
-//     assertion=<externally-issued JWT>
-//   An external JWT from a TrustedJWTIssuer is exchanged for a local access
-//   token. The sub/email claim is resolved to a local user via SubjectMapper.
+// JWT Bearer grant (section 2.1): POST /oauth/token with grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer and assertion=<externally-issued JWT>. An external JWT from a TrustedJWTIssuer is exchanged for a local access token. The sub/email claim is resolved to a local user via SubjectMapper.
 
 import (
 	"context"

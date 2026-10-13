@@ -11,22 +11,9 @@ import (
 	"time"
 )
 
-// nonce.go: server-issued DPoP-Nonce values per RFC 9449 section 8.
+// nonce.go: server-issued DPoP-Nonce values per RFC 9449 section 8. A nonce is a short opaque string the AS/resource server hands to the client via the DPoP-Nonce response header. The client must echo it back in the nonce claim of the next DPoP proof. Nonces stop a proof captured at time T from being replayable beyond NonceTTL even when the client's private key remains uncompromised.
 //
-// A nonce is a short opaque string the AS / resource server hands to the
-// client via the DPoP-Nonce response header. The client must echo it back
-// in the nonce claim of the next DPoP proof. Nonces stop a proof captured
-// at time T from being replayable beyond NonceTTL even when the client's
-// private key remains uncompromised.
-//
-// Storage model: stateless. Each nonce is the base64url encoding of
-// (issuedAtUnix || HMAC-SHA256(secret, issuedAtUnix)), keyed by a 32-byte
-// HMAC secret generated at Service.New time. Verification recomputes the
-// HMAC and rejects any nonce older than NonceTTL. No per-nonce server
-// state means there is no growth pressure and no replication concern, at
-// the cost of letting the same nonce be presented twice within the TTL
-// (which is fine: jti-replay protection on the proof itself catches a
-// duplicate use).
+// Storage model: stateless. Each nonce is the base64url encoding of (issuedAtUnix || HMAC-SHA256(secret, issuedAtUnix)), keyed by a 32-byte HMAC secret generated at Service.New time. Verification recomputes the HMAC and rejects any nonce older than NonceTTL. No per-nonce server state means there is no growth pressure and no replication concern, at the cost of letting the same nonce be presented twice within the TTL (jti-replay protection on the proof itself catches a duplicate use).
 
 // nonceVersion prefixes every issued nonce so the wire format can rev
 // without ambiguity. Version 1: 8-byte BE iat || 32-byte HMAC.

@@ -1,31 +1,12 @@
 // Example oauth-apple demonstrates Sign in with Apple.
 //
-// Apple's protocol uses a JWT-based client secret (ES256) instead of a static
-// client_secret string. You need four pieces from Apple Developer console:
-//   - Team ID (10-char string, e.g. "A1B2C3D4E5")
-//   - Key ID (10-char string, e.g. "ABCDE12345")
-//   - A .p8 private key file downloaded from Developer console
-//   - Services ID (bundle ID, e.g. "com.example.app.signin")
+// Apple's protocol uses a JWT-based client secret (ES256). You need four pieces from Apple Developer console: Team ID (10-char string), Key ID (10-char string), a .p8 private key file, and Services ID (bundle ID).
 //
-// .p8 file gotcha: Apple distributes keys as PEM-encoded PKCS#8 EC private
-// keys. Parse with x509.ParsePKCS8PrivateKey after pem.Decode. You can only
-// download the file ONCE from Apple Developer console.
+// .p8 file: Apple distributes keys as PEM-encoded PKCS#8 EC private keys. Parse with x509.ParsePKCS8PrivateKey after pem.Decode. You can only download the file ONCE from Apple Developer console.
 //
-// Run:
+// Run with APPLE_TEAM_ID, APPLE_KEY_ID, APPLE_BUNDLE_ID, and APPLE_KEY_FILE environment variables, then visit http://localhost:8092 and click 'Sign in with Apple'.
 //
-//	APPLE_TEAM_ID=A1B2C3D4E5 \
-//	APPLE_KEY_ID=ABCDE12345 \
-//	APPLE_BUNDLE_ID=com.example.app.signin \
-//	APPLE_KEY_FILE=/path/to/AuthKey_ABCDE12345.p8 \
-//	go run .
-//
-// Then visit http://localhost:8092 and click "Sign in with Apple".
-//
-// Prerequisites: in Apple Developer console, register a Services ID and
-// configure "Sign In with Apple" with the redirect URL:
-// http://localhost:8092/auth/providers/apple/callback
-// (Note: Apple requires HTTPS for production; for local testing use a
-// tunnel such as ngrok.)
+// Prerequisites: register a Services ID in Apple Developer console and configure 'Sign In with Apple' with the redirect URL: http://localhost:8092/auth/providers/apple/callback. Note: Apple requires HTTPS for production; for local testing use a tunnel such as ngrok.
 package main
 
 import (

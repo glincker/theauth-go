@@ -1,20 +1,11 @@
-// hooks is a runnable demo of Config.LifecycleHooks.
+// hooks is a runnable demo of Config.LifecycleHooks. It mounts the full /auth/* route set with TOTP enabled and wires every observe-only hook to a structured log line.
 //
-// It mounts the full /auth/* route set with TOTP enabled and wires every
-// observe-only hook to a structured log line, so you can watch each one
-// fire while you drive the API with curl:
+// POST /auth/signup -> OnSignup(password), OnSignin is not fired
+// POST /auth/signin -> OnSignin
+// POST /auth/totp/enroll/* -> OnMFAEnabled(totp) when enrollment is confirmed
+// POST /auth/totp/verify -> OnSignin (the second factor completes the sign-in)
 //
-//	POST /auth/signup        -> OnSignup(password), OnSignin is not fired
-//	POST /auth/signin        -> OnSignin
-//	POST /auth/totp/enroll/* -> OnMFAEnabled(totp) when enrollment is confirmed
-//	POST /auth/totp/verify   -> OnSignin (the second factor completes the sign-in)
-//
-// Passkey login, SAML, magic link and OAuth callback fire OnSignin the same
-// way; see the LifecycleHooks doc comment for the full list.
-//
-// Hooks run after the action committed, so they cannot veto it. A returned
-// error is logged and reported to OnHookError, and the request still
-// succeeds. Use OnHookError to alert instead of only logging.
+// Passkey login, SAML, magic link and OAuth callback fire OnSignin the same way. Hooks run after the action committed, so they cannot veto it. A returned error is logged and reported to OnHookError, and the request still succeeds. Use OnHookError to alert instead of only logging.
 package main
 
 import (

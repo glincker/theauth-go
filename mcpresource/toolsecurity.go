@@ -40,23 +40,13 @@ func SecuritySchemes(scopes ...string) []SecurityScheme {
 	return []SecurityScheme{{Type: "oauth2", Scopes: out}}
 }
 
-// ToolSecurity builds the MCP tool security metadata for a tool that needs
-// the given scopes. Merge it into each tool descriptor returned from
-// tools/list so clients can plan authorization before calling the tool.
+// ToolSecurity builds the MCP tool security metadata for a tool that needs the given scopes. Merge it into each tool descriptor returned from tools/list so clients can plan authorization before calling the tool.
 //
-// The wire shape, for ToolSecurity("files:read"):
+// Wire shape for ToolSecurity('files:read') is '{"securitySchemes": [{"type": "oauth2", "scopes": ["files:read"]}], "_meta": {...}}'.
 //
-//	{
-//	  "securitySchemes": [{"type": "oauth2", "scopes": ["files:read"]}],
-//	  "_meta": {"securitySchemes": [{"type": "oauth2", "scopes": ["files:read"]}]}
-//	}
+// Example: tool := map[string]any{'name': 'read_file', 'inputSchema': schema}; mcpresource.ToolSecurity('files:read').Apply(tool)
 //
-// Example, adding it to a tool map:
-//
-//	tool := map[string]any{"name": "read_file", "inputSchema": schema}
-//	mcpresource.ToolSecurity("files:read").Apply(tool)
-//
-// The metadata is advisory: enforcement still happens in RequireScope.
+// The metadata is advisory; enforcement still happens in RequireScope.
 func ToolSecurity(scopes ...string) ToolSecurityInfo {
 	return newToolSecurity(SecuritySchemes(scopes...))
 }

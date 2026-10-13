@@ -1,22 +1,8 @@
-// Package cimd implements RFC draft "Client ID Metadata Documents" (CIMD)
-// per the MCP Authorization specification 2025-11-25. CIMD lets an OAuth
-// client publish its RFC 7591 client metadata at a stable https URL whose
-// value IS the client_id; the authorization server fetches the document,
-// validates it, and uses the resulting metadata in place of a local
-// registration row.
+// Package cimd implements RFC draft 'Client ID Metadata Documents' (CIMD) per the MCP Authorization specification 2025-11-25. CIMD lets an OAuth client publish its RFC 7591 client metadata at a stable https URL whose value IS the client_id; the AS fetches the document, validates it, and uses the resulting metadata in place of a local registration row.
 //
-// CIMD demotes the RFC 7591 Dynamic Client Registration (DCR) flow this
-// library has shipped since v2.0 phase 1. DCR remains supported (no
-// breaking change) but CIMD is now the preferred client identification
-// mechanism. When the AS receives a token-endpoint or authorize-endpoint
-// request whose client_id parses as an https URL, the AS routes through
-// this package instead of consulting OAuthServerStorage.
+// CIMD demotes RFC 7591 Dynamic Client Registration (DCR), which remains supported (no breaking change). When the AS receives a token-endpoint or authorize-endpoint request whose client_id parses as an https URL, it routes through this package instead of consulting OAuthServerStorage.
 //
-// Security model: CIMD is open by default in the wild but this library
-// fails closed. The default TrustPolicy is DenyAll; operators must opt in
-// with AllowAnyHTTPS or AllowHTTPSHosts. This mirrors the H4 audit
-// finding (2026-06-20) for X-Forwarded-For: trust is explicit, never
-// implicit.
+// Security: CIMD is open by default in the wild but this library fails closed. The default TrustPolicy is DenyAll; operators must opt in with AllowAnyHTTPS or AllowHTTPSHosts. This mirrors security audit H4 (2026-06-20): trust is explicit, never implicit.
 package cimd
 
 import (
