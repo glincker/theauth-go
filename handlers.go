@@ -45,6 +45,9 @@ import (
 // Default rate limits: 5/min per source IP on every credential endpoint, plus 3/min per email on signin + forgot. All limits are in-memory unless Config.Stores.RateLimiter supplies a shared one.
 func (a *TheAuth) Mount(r chi.Router) {
 	r.Group(func(r chi.Router) {
+		if a.admission != nil {
+			r.Use(a.Admission(*a.admission))
+		}
 		r.Use(a.securityMiddleware, a.auditContextMiddleware)
 		a.mountRoutes(r)
 		a.mountAccountDelete(r)
