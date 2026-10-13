@@ -214,14 +214,14 @@ func (h *Handler) rememberDevice(w http.ResponseWriter, r *http.Request, want bo
 		slog.Warn("theauth: remember device failed", "user_id", userID.String(), "err", err.Error())
 		return
 	}
-	http.SetCookie(w, &http.Cookie{
+	http.SetCookie(w, &http.Cookie{ // NOSONAR go:S2092 Secure follows the configured session cookie policy
 		Name:     h.cookie.DeviceCookieName,
 		Value:    val,
 		Path:     "/",
 		HttpOnly: true,
 		// SecureFlag is the same setting the session cookie uses. It is true
 		// whenever BaseURL is https, and false only for plain http development.
-		Secure:   h.cookie.SecureFlag, // NOSONAR go:S2092 follows the configured session cookie policy
+		Secure:   h.cookie.SecureFlag,
 		SameSite: http.SameSiteLaxMode,
 		Expires:  exp,
 	})
