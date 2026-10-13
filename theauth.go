@@ -191,6 +191,12 @@ type Config struct {
 	// token) as a PII-minimal AuthEvent. Independent of Config.Audit.
 	AuthEventSink AuthEventSink
 
+	// SharedSignals enables the OpenID Shared Signals Framework 1.0
+	// transmitter (CAEP and RISC events, push and poll delivery) and an
+	// optional receiver. Requires AuthorizationServer. See
+	// docs/shared-signals.md. Nil keeps it off.
+	SharedSignals *SharedSignalsConfig
+
 	// TOTP enables time-based second-factor enrollment + verification when non-nil.
 	// Requires Config.EncryptionKey (already required by v0.3 OAuth) so the stored
 	// secret is encrypted at rest. New returns an error if TOTP is set without a key.
@@ -447,6 +453,10 @@ type TheAuth struct {
 	// unchanged.
 	as *internalas.Service
 
+	// signalsSvc is the Shared Signals Framework transmitter and receiver;
+	// nil unless Config.SharedSignals is set.
+	signalsSvc *sharedSignals
+
 	// v2.0 phase 3 + 4: agent identity + delegation policy. Nil when
 	// Config.AgentIdentity is not set; client_credentials and token-exchange
 	// grants short-circuit with unsupported_grant_type in that case.
@@ -646,6 +656,9 @@ func (a *TheAuth) Close() {
 	}
 	if a.samlSvc != nil {
 		a.samlSvc.Stop()
+	}
+	if a.signalsSvc != nil {
+		a.signalsSvc.cancel()
 	}
 	if a.as != nil {
 		a.as.Stop()

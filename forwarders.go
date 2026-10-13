@@ -502,6 +502,7 @@ func (a *TheAuth) FinishPasskeyLogin(ctx context.Context, challengeToken string,
 // auditSvc.Emit.
 func (a *TheAuth) EmitAudit(ctx context.Context, action string, target TargetRef, metadata map[string]any) {
 	a.dispatchAuthEvent(ctx, action, target, metadata)
+	a.sharedSignalsTap(ctx, action, target, metadata)
 	a.revocationFromAudit(ctx, action, target, metadata)
 	if a.auditSvc == nil {
 		return
