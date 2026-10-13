@@ -87,6 +87,47 @@ func testOAuthClients(t *testing.T, store theauth.OAuthServerStorage) {
 		}
 	})
 
+	t.Run("OIDCMetadataRoundTrip", func(t *testing.T) {
+		id := "st-oidc-" + newID().String()
+		_, err := store.InsertOAuthClient(ctx, theauth.OAuthClient{
+			ID:                               newID(),
+			ClientID:                         id,
+			ClientName:                       "OIDC Client",
+			RedirectURIs:                     []string{"https://rp.example.com/callback"},
+			GrantTypes:                       []string{theauth.GrantTypeAuthorizationCode},
+			ResponseTypes:                    []string{theauth.ResponseTypeCode},
+			TokenEndpointAuthMethod:          theauth.ClientAuthSecretBasic,
+			SubjectType:                      theauth.SubjectTypePairwise,
+			PostLogoutRedirectURIs:           []string{"https://rp.example.com/bye"},
+			BackchannelLogoutURI:             "https://rp.example.com/bc-logout",
+			BackchannelLogoutSessionRequired: true,
+			CreatedAt:                        time.Now(),
+		})
+		if err != nil {
+			t.Fatalf("InsertOAuthClient: %v", err)
+		}
+		got, err := store.OAuthClientByClientID(ctx, id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got.SubjectType != theauth.SubjectTypePairwise || got.BackchannelLogoutURI != "https://rp.example.com/bc-logout" ||
+			!got.BackchannelLogoutSessionRequired || len(got.PostLogoutRedirectURIs) != 1 {
+			t.Fatalf("oidc metadata lost: %+v", got)
+		}
+		got.SubjectType = ""
+		got.BackchannelLogoutURI = ""
+		if _, err := store.UpdateOAuthClient(ctx, *got); err != nil {
+			t.Fatal(err)
+		}
+		again, err := store.OAuthClientByClientID(ctx, id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if again.SubjectType != "" || again.BackchannelLogoutURI != "" || len(again.PostLogoutRedirectURIs) != 1 {
+			t.Fatalf("oidc update did not persist: %+v", again)
+		}
+	})
+
 	t.Run("NilSliceCoercion", func(t *testing.T) {
 		// Issue #40: backends must not return nil slices for array fields.
 		got, err := store.OAuthClientByClientID(ctx, clientID)
