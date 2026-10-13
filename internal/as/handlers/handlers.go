@@ -42,6 +42,9 @@ type Handler struct {
 	userFromCtx  func(r *http.Request) (*models.User, bool)
 	bearerHashes [][32]byte
 	clientIP     func(r *http.Request) string
+	// authContext reports how and when the request's session authenticated;
+	// nil leaves tokens without auth_time, acr and amr.
+	authContext func(r *http.Request) (internalas.AuthContext, bool)
 }
 
 // New constructs a Handler. The userFromCtx shim pulls the
@@ -264,17 +267,35 @@ func (h *Handler) handleAuthorize(w http.ResponseWriter, r *http.Request) {
 			CodeChallengeMethod: q.Get("code_challenge_method"),
 			Resource:            q.Get("resource"),
 			Nonce:               q.Get("nonce"),
+			ACRValues:           strings.Fields(q.Get("acr_values")),
+			Prompt:              q.Get("prompt"),
 
 			AuthorizationDetails: q.Get("authorization_details"),
 		}
+		maxAge, merr := internalas.ParseMaxAge(q.Get("max_age"))
+		if merr != nil {
+			writeOAuthError(w, http.StatusBadRequest, oauthErrInvalidRequest, "max_age must be a non-negative integer")
+			return
+		}
+		req.MaxAge = maxAge
 	}
 
 	user, _ := h.userFromCtx(r)
-	res, err := h.svc.StartAuthorize(r.Context(), req, user)
+	ctx := r.Context()
+	if user != nil && h.authContext != nil {
+		if ac, ok := h.authContext(r); ok {
+			ctx = internalas.WithAuthContext(ctx, ac)
+		}
+	}
+	res, err := h.svc.StartAuthorize(ctx, req, user)
 	if err != nil {
-		if internalas.IsLoginRequired(err) {
-			next := url.QueryEscape(r.URL.String())
-			http.Redirect(w, r, h.svc.Cfg.LoginURL+"?next="+next, http.StatusFound)
+		if internalas.IsLoginRequired(err) || internalas.IsReauthRequired(err) {
+			if req.Prompt == "none" {
+				// OIDC Core 3.1.2.6: prompt=none never shows a login page.
+				h.writeAuthorizeError(w, r, req, errLoginRequired)
+				return
+			}
+			http.Redirect(w, r, h.loginRedirect(r, req, internalas.IsReauthRequired(err)), http.StatusFound)
 			return
 		}
 		h.writeAuthorizeError(w, r, req, err)
@@ -291,7 +312,7 @@ func hasInlineAuthorizeParams(q url.Values, clientID string) bool {
 	check := []string{
 		"response_type", "redirect_uri", "scope", "state",
 		"code_challenge", "code_challenge_method", "resource", "nonce",
-		"authorization_details",
+		"authorization_details", "max_age", "acr_values", "prompt",
 	}
 	for _, k := range check {
 		if q.Get(k) != "" {
@@ -338,9 +359,17 @@ func (h *Handler) handlePAR(w http.ResponseWriter, r *http.Request) {
 			CodeChallengeMethod: r.PostFormValue("code_challenge_method"),
 			Resource:            r.PostFormValue("resource"),
 			Nonce:               r.PostFormValue("nonce"),
+			ACRValues:           strings.Fields(r.PostFormValue("acr_values")),
+			Prompt:              r.PostFormValue("prompt"),
 
 			AuthorizationDetails: r.PostFormValue("authorization_details"),
 		}
+		maxAge, merr := internalas.ParseMaxAge(r.PostFormValue("max_age"))
+		if merr != nil {
+			writeOAuthError(w, http.StatusBadRequest, oauthErrInvalidRequest, "max_age must be a non-negative integer")
+			return
+		}
+		req.MaxAge = maxAge
 	}
 
 	resp, err := h.svc.PushAuthorize(r.Context(), req)
@@ -777,6 +806,8 @@ func (h *Handler) dcrBearerValid(rawToken string) bool {
 // mapOAuthErrorCode maps internal sentinels to wire error codes.
 func mapOAuthErrorCode(err error) string {
 	switch {
+	case errors.Is(err, errLoginRequired):
+		return oauthErrLoginRequired
 	case errors.Is(err, models.ErrOAuthInvalidRequest),
 		errors.Is(err, models.ErrChainDepthExceeded),
 		errors.Is(err, models.ErrSubjectTokenInvalid),
@@ -811,6 +842,8 @@ func mapOAuthErrorCode(err error) string {
 // extracted handler does not import root just to read string
 // constants.
 const (
+	// oauthErrLoginRequired is the OIDC Core 3.1.2.6 error for prompt=none.
+	oauthErrLoginRequired           = "login_required"
 	oauthErrInvalidRequest          = "invalid_request"
 	oauthErrInvalidClient           = "invalid_client"
 	oauthErrInvalidGrant            = "invalid_grant"

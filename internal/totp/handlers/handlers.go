@@ -11,6 +11,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"net/http"
 	"time"
 
@@ -36,6 +37,13 @@ type Service interface {
 	RegenerateRecoveryCodes(ctx context.Context, userID models.ULID) ([]string, error)
 }
 
+// DeviceRemember is the optional Service capability behind "remember this
+// device". It stores a trusted-device record and returns the cookie value
+// and its expiry.
+type DeviceRemember interface {
+	RememberDevice(ctx context.Context, userID models.ULID, userAgent, ip string) (cookieValue string, expires time.Time, err error)
+}
+
 // CookieConfig captures the session cookie shape (name, secure, TTL)
 // needed to refresh the session cookie after a successful verify or
 // recovery flow.
@@ -43,6 +51,10 @@ type CookieConfig struct {
 	Name       string
 	SecureFlag bool
 	TTL        time.Duration
+	// DeviceCookieName, when set together with a Service that implements
+	// DeviceRemember, enables the rememberDevice body flag on verify and
+	// recovery.
+	DeviceCookieName string
 }
 
 // Handler owns the five TOTP HTTP endpoints. The userFromCtx
@@ -119,18 +131,20 @@ func (h *Handler) handleVerify(w http.ResponseWriter, r *http.Request) {
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, 1<<14)
 	var body struct {
-		Code string `json:"code"`
+		Code           string `json:"code"`
+		RememberDevice bool   `json:"rememberDevice"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.Code == "" {
 		httpx.Error(w, http.StatusBadRequest, "invalid body")
 		return
 	}
-	tok, _, err := h.svc.Verify(r.Context(), cookie.Value, body.Code)
+	tok, sess, err := h.svc.Verify(r.Context(), cookie.Value, body.Code)
 	if err != nil {
 		httpx.ErrToHTTP(w, err)
 		return
 	}
 	h.setSessionCookie(w, tok)
+	h.rememberDevice(w, r, body.RememberDevice, sess.UserID)
 	w.Header().Set("Content-Type", "application/json")
 	_, _ = w.Write([]byte(`{"ok":true,"step":"full"}`))
 }
@@ -143,18 +157,20 @@ func (h *Handler) handleRecovery(w http.ResponseWriter, r *http.Request) {
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, 1<<14)
 	var body struct {
-		Code string `json:"code"`
+		Code           string `json:"code"`
+		RememberDevice bool   `json:"rememberDevice"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.Code == "" {
 		httpx.Error(w, http.StatusBadRequest, "invalid body")
 		return
 	}
-	tok, _, err := h.svc.ConsumeRecoveryCode(r.Context(), cookie.Value, body.Code)
+	tok, sess, err := h.svc.ConsumeRecoveryCode(r.Context(), cookie.Value, body.Code)
 	if err != nil {
 		httpx.ErrToHTTP(w, err)
 		return
 	}
 	h.setSessionCookie(w, tok)
+	h.rememberDevice(w, r, body.RememberDevice, sess.UserID)
 	w.Header().Set("Content-Type", "application/json")
 	_, _ = w.Write([]byte(`{"ok":true,"step":"full"}`))
 }
@@ -179,6 +195,33 @@ func (h *Handler) setSessionCookie(w http.ResponseWriter, token string) {
 		Secure:   h.cookie.SecureFlag,
 		SameSite: http.SameSiteLaxMode,
 		Expires:  time.Now().Add(h.cookie.TTL),
+	})
+}
+
+// rememberDevice sets the trusted-device cookie after a successful second
+// factor when the client asked for it and the feature is enabled. A failure
+// is logged and ignored: the user is signed in either way.
+func (h *Handler) rememberDevice(w http.ResponseWriter, r *http.Request, want bool, userID models.ULID) {
+	if !want || h.cookie.DeviceCookieName == "" {
+		return
+	}
+	dr, ok := h.svc.(DeviceRemember)
+	if !ok {
+		return
+	}
+	val, exp, err := dr.RememberDevice(r.Context(), userID, r.UserAgent(), httpx.ClientIP(r))
+	if err != nil {
+		slog.Warn("theauth: remember device failed", "user_id", userID.String(), "err", err.Error())
+		return
+	}
+	http.SetCookie(w, &http.Cookie{
+		Name:     h.cookie.DeviceCookieName,
+		Value:    val,
+		Path:     "/",
+		HttpOnly: true,
+		Secure:   h.cookie.SecureFlag,
+		SameSite: http.SameSiteLaxMode,
+		Expires:  exp,
 	})
 }
 

@@ -1,6 +1,8 @@
 package postgres
 
 import (
+	"time"
+
 	"github.com/glincker/theauth-go/v2"
 	"github.com/jackc/pgx/v5/pgtype"
 )
@@ -143,4 +145,20 @@ func scanJWKSKey(row pgRowScanner) (theauth.JWKSKey, error) {
 		PromotedAt: tsToTimePtr(promoted),
 		RetiredAt:  tsToTimePtr(retired),
 	}, nil
+}
+
+// authTimeToTs maps the zero time to SQL NULL: a grant that recorded no
+// authentication time stores none.
+func authTimeToTs(t time.Time) pgtype.Timestamptz {
+	if t.IsZero() {
+		return pgtype.Timestamptz{}
+	}
+	return pgtype.Timestamptz{Time: t, Valid: true}
+}
+
+func authTimeFromTs(ts pgtype.Timestamptz) time.Time {
+	if !ts.Valid {
+		return time.Time{}
+	}
+	return ts.Time
 }

@@ -199,7 +199,7 @@ func (s *Service) vetIDJAGRedemption(ctx context.Context, req TokenRequest, raw 
 	if jti, _ := raw["jti"].(string); jti == "" {
 		return nil, models.ErrOAuthInvalidGrant
 	}
-	if res, _ := raw["resource"].(string); res != "" && res != req.Resource {
+	if res, _ := raw["resource"].(string); res != "" && !s.sameResource(res, req.Resource) {
 		return nil, models.ErrOAuthInvalidGrant
 	}
 	assertionScope := scopeSplit(stringClaim(raw, "scope"))
@@ -213,8 +213,8 @@ func (s *Service) vetIDJAGRedemption(ctx context.Context, req TokenRequest, raw 
 	if len(scope) == 0 {
 		return nil, models.ErrOAuthInvalidScope
 	}
-	resource, ok := s.ResourceByIdentifier(req.Resource)
-	if !ok {
+	resource, _, rerr := s.resolveResource(req.Resource)
+	if rerr != nil {
 		return nil, models.ErrOAuthInvalidResource
 	}
 	if _, err := validateScopeAgainstResource(scope, resource); err != nil {
@@ -229,4 +229,23 @@ func (s *Service) vetIDJAGRedemption(ctx context.Context, req TokenRequest, raw 
 func stringClaim(raw map[string]any, key string) string {
 	v, _ := raw[key].(string)
 	return v
+}
+
+// sameResource reports whether the resource an ID-JAG was issued for and the
+// resource presented at redemption name the same target. Identical strings
+// match; with ClientCompat.PathAudience (or a trailing slash) two spellings
+// match when both resolve to the same configured resource.
+func (s *Service) sameResource(claimed, presented string) bool {
+	if claimed == presented {
+		return true
+	}
+	if presented == "" {
+		return false
+	}
+	_, a, err := s.resolveResource(claimed)
+	if err != nil {
+		return false
+	}
+	_, b, err := s.resolveResource(presented)
+	return err == nil && a == b
 }

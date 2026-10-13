@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"time"
 
+	internalas "github.com/glincker/theauth-go/v2/internal/as"
 	ashandlers "github.com/glincker/theauth-go/v2/internal/as/handlers"
 	"github.com/glincker/theauth-go/v2/internal/httpx"
 	"github.com/glincker/theauth-go/v2/internal/models"
@@ -49,6 +50,7 @@ func (a *TheAuth) Mount(r chi.Router) {
 	r.Group(func(r chi.Router) {
 		r.Use(a.securityMiddleware, a.auditContextMiddleware)
 		a.mountRoutes(r)
+		a.mountAccountDelete(r)
 	})
 }
 
@@ -249,6 +251,10 @@ func errToHTTP(w http.ResponseWriter, err error) {
 			writeJSONError(w, http.StatusUnauthorized, te.Code, te.Message)
 		case CodeAlreadyEnrolled:
 			writeJSONError(w, http.StatusConflict, te.Code, te.Message)
+		case CodePasswordChangeRequired, CodeAccountDisabled, CodeReauthRequired:
+			writeJSONError(w, http.StatusForbidden, te.Code, te.Message)
+		case CodeSessionLimit:
+			writeJSONError(w, http.StatusConflict, te.Code, te.Message)
 		case CodeTOTPRequired:
 			writeJSONError(w, http.StatusOK, te.Code, te.Message)
 		default:
@@ -341,9 +347,10 @@ func (s passwordServiceAdapter) Reset(ctx context.Context, token, newPassword st
 // thin coordinator is what the root Mount calls.
 func (a *TheAuth) mountPasswordHandlers(r chi.Router, ipLimit, emailLimit func(http.Handler) http.Handler) {
 	h := passwordhandlers.New(passwordServiceAdapter{a: a}, passwordhandlers.CookieConfig{
-		Name:       a.cookieName,
-		SecureFlag: a.secureCookie,
-		TTL:        a.sessionTTL,
+		Name:             a.cookieName,
+		SecureFlag:       a.secureCookie,
+		TTL:              a.sessionTTL,
+		DeviceCookieName: a.deviceCookie,
 	})
 	h.Mount(r, ipLimit, emailLimit)
 }
@@ -406,16 +413,32 @@ func (s totpServiceAdapter) RegenerateRecoveryCodes(ctx context.Context, userID 
 }
 
 func (s totpServiceAdapter) Delete(ctx context.Context, userID ULID) error {
-	return s.a.totpSvc.Delete(ctx, userID)
+	if err := s.a.totpSvc.Delete(ctx, userID); err != nil {
+		return err
+	}
+	// Trust granted under the old second factor does not outlive it.
+	if s.a.devices != nil {
+		if _, err := s.a.devices.RevokeAll(ctx, userID); err != nil {
+			slog.Warn("theauth: revoke trusted devices after totp removal failed", "user_id", userID.String(), "err", err.Error())
+		}
+	}
+	return nil
+}
+
+// RememberDevice implements totp handlers' optional DeviceRemember
+// capability.
+func (s totpServiceAdapter) RememberDevice(ctx context.Context, userID ULID, userAgent, ip string) (string, time.Time, error) {
+	return s.a.rememberTrustedDevice(ctx, userID, userAgent, ip)
 }
 
 func (a *TheAuth) mountTOTP(r chi.Router, ipLimit func(http.Handler) http.Handler) {
 	h := totphandlers.New(
 		totpServiceAdapter{a: a},
 		totphandlers.CookieConfig{
-			Name:       a.cookieName,
-			SecureFlag: a.secureCookie,
-			TTL:        a.sessionTTL,
+			Name:             a.cookieName,
+			SecureFlag:       a.secureCookie,
+			TTL:              a.sessionTTL,
+			DeviceCookieName: a.deviceCookie,
 		},
 		func(r *http.Request) (*models.User, bool) {
 			return UserFromContext(r.Context())
@@ -512,9 +535,26 @@ func (a *TheAuth) mountAS(r chi.Router) {
 	}
 	h := ashandlers.New(a.as, userFromRequest, a.dcrRegistrationTokenHashes)
 	h.SetClientIP(func(r *http.Request) string { return extractClientIPTrusting(r, a.trustedProxies) })
+	h.SetAuthContext(a.asAuthContext)
 	var registerLimit func(http.Handler) http.Handler
 	if cap := a.as.Cfg.RegistrationRateLimitPerMinute; cap > 0 {
 		registerLimit = a.RateLimitByIP(cap)
 	}
 	h.Mount(r, a.Authn(), registerLimit)
+}
+
+// asAuthContext reports how and when the request's session authenticated
+// for the authorization server: auth_time is the later of sign-in and the
+// latest step-up, amr comes from AuthorizationServerConfig.SessionAMR and
+// defaults to ["pwd"]. The second result is false without a session.
+func (a *TheAuth) asAuthContext(r *http.Request) (internalas.AuthContext, bool) {
+	sess, ok := SessionFromContext(r.Context())
+	if !ok || sess == nil {
+		return internalas.AuthContext{}, false
+	}
+	amr := []string{"pwd"}
+	if fn := a.as.Cfg.SessionAMR; fn != nil {
+		amr = fn(r.Context(), sess)
+	}
+	return internalas.AuthContext{AuthTime: a.lastAuthAt(sess), AMR: amr}, true
 }

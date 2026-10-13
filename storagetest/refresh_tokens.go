@@ -3,6 +3,7 @@ package storagetest
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -152,6 +153,24 @@ func testRefreshTokens(t *testing.T, store theauth.OAuthServerStorage) {
 		}
 		if string(normalizeJSON(got.AuthorizationDetails)) != string(normalizeJSON(tok.AuthorizationDetails)) {
 			t.Fatalf("authorization_details lost: %s", got.AuthorizationDetails)
+		}
+	})
+
+	t.Run("AuthContextRoundTrip", func(t *testing.T) {
+		hash := sha256Hash([]byte("rt-actx"))
+		tok := makeToken(hash, newID())
+		tok.AuthTime = time.Now().Add(-time.Hour).UTC().Truncate(time.Second)
+		tok.ACR = "urn:theauth:acr:mfa"
+		tok.AMR = []string{"pwd", "otp"}
+		if err := store.InsertRefreshToken(ctx, tok); err != nil {
+			t.Fatal(err)
+		}
+		got, err := store.RefreshTokenByHash(ctx, hash)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !got.AuthTime.Equal(tok.AuthTime) || got.ACR != tok.ACR || strings.Join(got.AMR, " ") != "pwd otp" {
+			t.Fatalf("auth context lost: %+v", got)
 		}
 	})
 

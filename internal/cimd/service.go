@@ -100,6 +100,46 @@ type Config struct {
 	// within [MinCacheTTL, CacheTTL]: a publisher can never extend caching
 	// past CacheTTL. Off by default, which keeps the fixed CacheTTL.
 	HonorCacheControl bool
+
+	// AllowedRedirectSchemes lists extra private-use URI schemes a document
+	// may use in redirect_uris, beyond https, loopback http and reverse-DNS
+	// schemes (RFC 8252 section 7.1). It exists for clients such as Cursor
+	// that register a bare scheme like "cursor://anysphere.cursor-mcp/oauth".
+	// Entries must be lowercase and must not be http, https, javascript,
+	// data, file or another browser-executable scheme; Validate rejects
+	// them. Fragment and userinfo are still refused. Empty (the default)
+	// keeps the strict reverse-DNS rule. Listing a scheme trusts every
+	// document the TrustPolicy admits to claim it, and any app on the
+	// device can register the same scheme, so prefer PKCE-only public
+	// clients and a narrow TrustPolicy.
+	AllowedRedirectSchemes []string
+}
+
+// forbiddenRedirectSchemes can never be allowed as redirect schemes: they
+// execute in or navigate a browser context or reach local files.
+var forbiddenRedirectSchemes = map[string]struct{}{
+	"http": {}, "https": {}, "javascript": {}, "data": {}, "file": {},
+	"vbscript": {}, "blob": {}, "about": {}, "ftp": {},
+}
+
+// Validate checks AllowedRedirectSchemes: each entry must be a lowercase
+// URI scheme (RFC 3986) and not a forbidden browser scheme.
+func (c *Config) Validate() error {
+	for _, s := range c.AllowedRedirectSchemes {
+		if s == "" || s != strings.ToLower(s) {
+			return fmt.Errorf("cimd: AllowedRedirectSchemes entry %q must be a non-empty lowercase scheme", s)
+		}
+		if _, bad := forbiddenRedirectSchemes[s]; bad {
+			return fmt.Errorf("cimd: AllowedRedirectSchemes must not contain %q", s)
+		}
+		for i, r := range s {
+			letter := r >= 'a' && r <= 'z'
+			if !(letter || (i > 0 && (r >= '0' && r <= '9' || r == '+' || r == '-' || r == '.'))) {
+				return fmt.Errorf("cimd: AllowedRedirectSchemes entry %q is not a valid URI scheme", s)
+			}
+		}
+	}
+	return nil
 }
 
 // audit action names emitted by the Service. Named constants so the
@@ -476,7 +516,7 @@ func (s *Service) fetch(ctx context.Context, rawURL string) (Document, error) {
 		s.auditInvalid(ctx, rawURL, "body_too_large")
 		return Document{}, fmt.Errorf("%w: body exceeds %d bytes", ErrFetchFailed, s.cfg.MaxDocumentBytes)
 	}
-	doc, err := parseAndValidate(body, rawURL)
+	doc, err := parseAndValidate(body, rawURL, s.cfg.AllowedRedirectSchemes...)
 	if err != nil {
 		s.auditInvalid(ctx, rawURL, "document_invalid")
 		return Document{}, err

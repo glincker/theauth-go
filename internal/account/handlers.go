@@ -57,6 +57,16 @@ type Handler struct {
 	identityLink       IdentityLinkService
 	oauthLinkInitiator OAuthLinkInitiator
 	sessionToken       SessionTokenFromRequest
+	// selfDelete serves DELETE /account when set; selfDeleteGate wraps it
+	// (recent-auth check).
+	selfDelete     http.HandlerFunc
+	selfDeleteGate func(http.Handler) http.Handler
+}
+
+// WithSelfDelete mounts DELETE /account behind gate. It returns h.
+func (h *Handler) WithSelfDelete(handler http.HandlerFunc, gate func(http.Handler) http.Handler) *Handler {
+	h.selfDelete, h.selfDeleteGate = handler, gate
+	return h
 }
 
 // New constructs a Handler with agent + delegation services.
@@ -79,6 +89,9 @@ func (h *Handler) WithIdentityLink(svc IdentityLinkService, sessToken SessionTok
 func (h *Handler) Mount(r chi.Router, requireAuth func(http.Handler) http.Handler) {
 	r.Route("/account", func(r chi.Router) {
 		r.Use(requireAuth)
+		if h.selfDelete != nil && h.selfDeleteGate != nil {
+			r.With(h.selfDeleteGate).Delete("/", h.selfDelete)
+		}
 		r.Get("/agents", h.listAgents)
 		r.Post("/agents", h.createAgent)
 		r.Delete("/agents/{agentID}", h.revokeAgent)

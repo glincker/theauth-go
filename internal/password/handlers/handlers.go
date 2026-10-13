@@ -43,6 +43,9 @@ type CookieConfig struct {
 	Name       string
 	SecureFlag bool
 	TTL        time.Duration
+	// DeviceCookieName, when set, is read at signin so a remembered device
+	// can skip the TOTP prompt. Empty disables trusted devices.
+	DeviceCookieName string
 }
 
 // Handler owns the four password HTTP endpoints. It depends on the
@@ -119,7 +122,13 @@ func (h *Handler) handleSignin(w http.ResponseWriter, r *http.Request) {
 	}
 	ip := httpx.ClientIP(r)
 	ua := r.UserAgent()
-	sessToken, _, step, err := h.svc.Signin(r.Context(), email, pw, ua, ip)
+	ctx := r.Context()
+	if h.cookie.DeviceCookieName != "" {
+		if c, cerr := r.Cookie(h.cookie.DeviceCookieName); cerr == nil && c.Value != "" {
+			ctx = password.WithDeviceToken(ctx, c.Value)
+		}
+	}
+	sessToken, _, step, err := h.svc.Signin(ctx, email, pw, ua, ip)
 	if err != nil {
 		httpx.ErrToHTTP(w, err)
 		return

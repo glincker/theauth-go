@@ -87,8 +87,9 @@ func (s *Service) ValidatePassword(ctx context.Context, pw string) error {
 
 // AdminSetPassword replaces a user's password without a reset token, revokes
 // their sessions, and clears login and MFA lockouts. Intended for a
-// recover-admin command run by someone with host access.
-func (s *Service) AdminSetPassword(ctx context.Context, emailAddr, newPassword string) (models.ULID, error) {
+// recover-admin command run by someone with host access. With requireChange
+// the user must replace the password again before the next sign-in.
+func (s *Service) AdminSetPassword(ctx context.Context, emailAddr, newPassword string, requireChange bool) (models.ULID, error) {
 	emailAddr = s.normalizeEmail(emailAddr)
 	if err := s.ValidatePassword(ctx, newPassword); err != nil {
 		return models.ULID{}, err
@@ -106,6 +107,12 @@ func (s *Service) AdminSetPassword(ctx context.Context, emailAddr, newPassword s
 	}
 	if err := s.storage.SetUserPassword(ctx, user.ID, hash); err != nil {
 		return models.ULID{}, fmt.Errorf("theauth: admin password reset store: %w", err)
+	}
+	s.passwordChanged(ctx, user.ID)
+	if requireChange && s.cfg.Account != nil {
+		if err := s.cfg.Account.RequireChange(ctx, user.ID); err != nil {
+			return models.ULID{}, fmt.Errorf("theauth: admin password reset require change: %w", err)
+		}
 	}
 	if err := s.storage.RevokeUserSessions(ctx, user.ID); err != nil {
 		slog.Warn("theauth: revoke sessions after admin password reset failed", "user_id", user.ID.String(), "err", err.Error())

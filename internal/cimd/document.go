@@ -102,7 +102,7 @@ var ErrInvalidDocument = errors.New("cimd: invalid client metadata document")
 // parseAndValidate decodes raw JSON, applies CIMD invariants, and
 // returns the validated document. fetchURL is the URL the AS used to
 // retrieve the bytes; the document's client_id MUST equal it.
-func parseAndValidate(raw []byte, fetchURL string) (Document, error) {
+func parseAndValidate(raw []byte, fetchURL string, extraSchemes ...string) (Document, error) {
 	if len(raw) == 0 {
 		return Document{}, fmt.Errorf("%w: empty body", ErrInvalidDocument)
 	}
@@ -128,7 +128,7 @@ func parseAndValidate(raw []byte, fetchURL string) (Document, error) {
 		return Document{}, fmt.Errorf("%w: redirect_uris is required", ErrInvalidDocument)
 	}
 	for _, u := range doc.RedirectURIs {
-		if err := validateRedirectURI(u); err != nil {
+		if err := validateRedirectURIWith(u, extraSchemes); err != nil {
 			return Document{}, fmt.Errorf("%w: %v", ErrInvalidDocument, err)
 		}
 	}
@@ -212,7 +212,12 @@ func canonicalURL(raw string) string {
 // DCR path: https, loopback http (any port, RFC 8252 section 7.3), or a
 // reverse-DNS private-use scheme (RFC 8252 section 7.1). javascript:, data:,
 // file: and dotless custom schemes are refused. No fragment, no userinfo.
-func ValidateRedirectURI(raw string) error {
+func ValidateRedirectURI(raw string) error { return validateRedirectURIWith(raw, nil) }
+
+// validateRedirectURIWith is ValidateRedirectURI plus operator-listed
+// private-use schemes that skip the reverse-DNS rule. Everything else (no
+// fragment, no userinfo, absolute, forbidden schemes) still applies.
+func validateRedirectURIWith(raw string, extraSchemes []string) error {
 	if raw == "" {
 		return errors.New("empty redirect_uri")
 	}
@@ -245,6 +250,11 @@ func ValidateRedirectURI(raw string) error {
 	case "javascript", "data", "file", "vbscript", "blob", "about", "ftp":
 		return errors.New("redirect_uri scheme is not allowed")
 	}
+	for _, allowed := range extraSchemes {
+		if scheme == allowed {
+			return nil
+		}
+	}
 	labels := strings.Split(scheme, ".")
 	if len(labels) < 2 {
 		return errors.New("native redirect_uri scheme must be reverse-DNS")
@@ -261,5 +271,3 @@ func ValidateRedirectURI(raw string) error {
 	}
 	return nil
 }
-
-func validateRedirectURI(raw string) error { return ValidateRedirectURI(raw) }

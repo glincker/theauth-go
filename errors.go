@@ -139,6 +139,23 @@ const (
 	CodeLastAuthMethod   = models.CodeLastAuthMethod
 )
 
+// Account lifecycle codes.
+const (
+	// CodePasswordChangeRequired is returned at sign-in when the account is
+	// flagged MustChangePassword; the user must complete a password reset.
+	CodePasswordChangeRequired = models.CodePasswordChangeRequired
+	// CodeAccountDisabled is returned at sign-in for a disabled account.
+	CodeAccountDisabled = models.CodeAccountDisabled
+	// CodeReauthRequired means the session needs a recent authentication.
+	CodeReauthRequired = models.CodeReauthRequired
+	// CodeSessionLimit means the concurrent session cap rejected the sign-in.
+	CodeSessionLimit = models.CodeSessionLimit
+	// CodeProviderGrantRevoked means the upstream provider rejected the refresh token.
+	CodeProviderGrantRevoked = models.CodeProviderGrantRevoked
+	// CodeProviderNoRefresh means the stored provider grant cannot be refreshed.
+	CodeProviderNoRefresh = models.CodeProviderNoRefresh
+)
+
 // TheAuthError is the structured error type returned by v0.2+ service
 // methods. Callers can errors.As-extract it and switch on Code for stable
 // handling, or errors.Is-check against a value of the same Code for shorter

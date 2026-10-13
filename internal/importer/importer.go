@@ -73,6 +73,17 @@ type ImportedUser struct {
 	// PasswordHash is an Argon2id PHC string, or a bcrypt hash when Config.PasswordPolicy.AllowLegacyBcrypt is set.
 	PasswordHash string
 	CreatedAt    time.Time
+	// MustChangePassword flags the account so its first sign-in is refused
+	// with CodePasswordChangeRequired until the user completes a password
+	// reset. Use it for hashes that must not stay in use. The storage must
+	// implement MustChangeStore and the host must enable Config.AccountState.
+	MustChangePassword bool
+}
+
+// MustChangeStore is the optional storage capability behind
+// ImportedUser.MustChangePassword.
+type MustChangeStore interface {
+	SetMustChangePassword(ctx context.Context, userID ULID, required bool) error
 }
 
 // ImportUserTo inserts an existing user and its password hash into store, with no TheAuth instance.
@@ -83,6 +94,13 @@ func ImportUserTo(ctx context.Context, store UserStore, in ImportedUser) (User, 
 	email := strings.TrimSpace(in.Email)
 	if email == "" || len(email) > 320 || !strings.Contains(email, "@") {
 		return User{}, importInvalid("user email")
+	}
+	var flagger MustChangeStore
+	if in.MustChangePassword {
+		var ok bool
+		if flagger, ok = store.(MustChangeStore); !ok {
+			return User{}, fmt.Errorf("theauth: import user: %w: MustChangePassword needs AccountStateStorage", models.ErrStorageMissingCapability)
+		}
 	}
 	if _, err := store.UserByEmail(ctx, email); err == nil {
 		return User{}, fmt.Errorf("theauth: import user: %w", ErrImportDuplicate)
@@ -107,6 +125,11 @@ func ImportUserTo(ctx context.Context, store UserStore, in ImportedUser) (User, 
 	if in.PasswordHash != "" {
 		if err := store.SetUserPassword(ctx, u.ID, in.PasswordHash); err != nil {
 			return User{}, fmt.Errorf("theauth: import user: set password hash: %w", err)
+		}
+	}
+	if flagger != nil {
+		if err := flagger.SetMustChangePassword(ctx, u.ID, true); err != nil {
+			return User{}, fmt.Errorf("theauth: import user: flag must change password: %w", err)
 		}
 	}
 	return u, nil

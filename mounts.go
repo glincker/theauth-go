@@ -65,6 +65,26 @@ func (s adminAuditAdapter) HashEmailForAudit(email string) string {
 	return HashEmailForAudit(email)
 }
 
+// adminLifecycleAdapter implements adminhandlers.Lifecycle on top of root
+// *TheAuth.
+type adminLifecycleAdapter struct{ a *TheAuth }
+
+func (s adminLifecycleAdapter) SetMustChangePassword(ctx context.Context, userID models.ULID, required bool) error {
+	return s.a.SetMustChangePassword(ctx, userID, required)
+}
+
+func (s adminLifecycleAdapter) DisableUser(ctx context.Context, userID models.ULID) error {
+	return s.a.DisableUser(ctx, userID)
+}
+
+func (s adminLifecycleAdapter) EnableUser(ctx context.Context, userID models.ULID) error {
+	return s.a.EnableUser(ctx, userID)
+}
+
+func (s adminLifecycleAdapter) DeleteUser(ctx context.Context, userID models.ULID) error {
+	return s.a.DeleteUser(ctx, userID)
+}
+
 // mountAdmin wires the /admin/v1 routes via the extracted
 // internal/admin/handlers package. Called from Mount when
 // Config.Admin is non-nil.
@@ -81,6 +101,7 @@ func (a *TheAuth) mountAdmin(r chi.Router) {
 		userFromRequest,
 		sessionFromRequest,
 	)
+	h.WithLifecycle(adminLifecycleAdapter{a: a})
 	h.Mount(
 		r,
 		a.RequireAuth(),
@@ -313,6 +334,7 @@ func (a *TheAuth) mountAccount(r chi.Router) {
 		// the service was constructed (which it always is after New).
 		if a.identityLinkSvc != nil {
 			h := accounthandlers.New(nil, nil, userFromRequest)
+			a.withSelfDelete(h)
 			h.WithIdentityLink(
 				accountIdentityLinkAdapter{a: a},
 				a.sessionTokenFromRequest,
@@ -327,6 +349,7 @@ func (a *TheAuth) mountAccount(r chi.Router) {
 		accountDelegationAdapter{a: a},
 		userFromRequest,
 	)
+	a.withSelfDelete(h)
 	if a.identityLinkSvc != nil {
 		h.WithIdentityLink(
 			accountIdentityLinkAdapter{a: a},

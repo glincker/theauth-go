@@ -206,6 +206,7 @@ type Service struct {
 	stateTTL        time.Duration
 	cfg             Config
 	onOAuthConflict func(ctx context.Context, p ConflictPayload) (string, error) // may be nil
+	flight          flightGroup                                                  // single-flight for ProviderToken refreshes
 }
 
 // New constructs a Service. providers is a name-keyed map; storage satisfies
@@ -534,6 +535,14 @@ func (s *Service) Callback(ctx context.Context, providerName, code, state, bindi
 			return CallbackResult{}, nil, false, fmt.Errorf("theauth: onOAuthConflict hook: %w", hookErr)
 		}
 		return CallbackResult{}, nil, false, &models.OAuthConflictRedirectError{URL: redirectURL}
+	}
+
+	// Providers such as Google send the refresh token only on the first
+	// consent. Keep the stored one when this login did not bring a new one.
+	if len(refreshEnc) == 0 {
+		if prev, perr := s.storage.OAuthAccountByProviderUserID(ctx, providerName, pu.ID); perr == nil && prev != nil && prev.UserID == resolved.ID {
+			refreshEnc = prev.RefreshTokenEnc
+		}
 	}
 
 	now := time.Now()

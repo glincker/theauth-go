@@ -69,12 +69,12 @@ func (s *Service) ClientCredentialsToken(ctx context.Context, req TokenRequest) 
 	if agent.Status != models.AgentStatusActive {
 		return TokenResponse{}, models.ErrAgentInactive
 	}
-	if req.Resource == "" {
-		return TokenResponse{}, models.ErrOAuthInvalidResource
-	}
-	resource, ok := s.ResourceByIdentifier(req.Resource)
-	if !ok {
-		return TokenResponse{}, models.ErrOAuthInvalidResource
+	// ClientCompat: OptionalResource and PathAudience apply here exactly as
+	// on the authorization code grant. audience is the canonical identifier
+	// whenever a compat switch resolved the request.
+	resource, audience, rerr := s.resolveResource(req.Resource)
+	if rerr != nil {
+		return TokenResponse{}, rerr
 	}
 	// Scope narrowing: request must be a subset of the agent's
 	// permitted scope set AND the resource catalog. Empty request means
@@ -98,7 +98,7 @@ func (s *Service) ClientCredentialsToken(ctx context.Context, req TokenRequest) 
 	claims := jwt.Claims{
 		Iss:      s.Cfg.Issuer,
 		Sub:      models.AgentSubjectPrefix + agent.ID.String(),
-		Aud:      req.Resource,
+		Aud:      audience,
 		Exp:      now.Add(s.Cfg.AccessTokenTTL).Unix(),
 		Iat:      now.Unix(),
 		Jti:      jti,
@@ -125,7 +125,7 @@ func (s *Service) ClientCredentialsToken(ctx context.Context, req TokenRequest) 
 		"agent_id":  agent.ID.String(),
 		"client_id": client.ClientID,
 		"jti":       jti,
-		"resource":  req.Resource,
+		"resource":  audience,
 		"scope":     requested,
 		"grant":     models.GrantTypeClientCredentials,
 	})
@@ -233,22 +233,27 @@ func (s *Service) ExchangeToken(ctx context.Context, req TokenExchangeRequest) (
 	// Step 5: resource binding. RFC 8707 + 8693 require the resource
 	// parameter to equal the subject token's aud so audience confusion
 	// is impossible across exchange.
+	// ClientCompat.PathAudience lets the caller name a sub-path of the
+	// configured resource; it is compared to the subject token aud by its
+	// canonical identifier. Exact matches keep the pre-existing behavior.
 	resourceID := req.Resource
 	if resourceID == "" {
 		resourceID = subjectClaims.Aud
 	}
-	if resourceID == "" || resourceID != subjectClaims.Aud {
+	if resourceID == "" || subjectClaims.Aud == "" {
 		return TokenResponse{}, models.ErrOAuthInvalidResource
 	}
-	if _, ok := s.ResourceByIdentifier(resourceID); !ok {
+	_, resolvedAud, rerr := s.resolveResource(resourceID)
+	if rerr != nil || resolvedAud != subjectClaims.Aud {
 		return TokenResponse{}, models.ErrOAuthInvalidResource
 	}
+	resourceID = resolvedAud
 	// Step 5b (RFC 8693 section 2.1): when the caller specifies an
 	// audience parameter, it must name a known resource. This prevents
 	// audience-confusion attacks where the caller requests a token for a
 	// resource the AS does not manage.
 	if req.Audience != "" {
-		if _, ok := s.ResourceByIdentifier(req.Audience); !ok {
+		if _, _, aerr := s.resolveResource(req.Audience); aerr != nil {
 			return TokenResponse{}, models.ErrOAuthInvalidResource
 		}
 	}

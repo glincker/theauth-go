@@ -35,6 +35,18 @@ type AuthorizeRequest struct {
 	Resource            string
 	Nonce               string
 
+	// MaxAge is the OIDC max_age parameter in seconds; nil when absent. A
+	// session whose authentication is older, or any value of 0, requires
+	// re-authentication.
+	MaxAge *int64
+	// ACRValues is the acr_values parameter: acceptable authentication
+	// context classes. A session satisfies it when its acr equals one.
+	ACRValues []string
+	// Prompt is the OIDC prompt parameter. Only "none" is interpreted, by
+	// the handler: it answers login_required instead of redirecting to the
+	// login page.
+	Prompt string
+
 	// AuthorizationDetails is the raw RFC 9396 authorization_details JSON
 	// array, empty when the request carries none.
 	AuthorizationDetails string
@@ -66,7 +78,7 @@ func (s *Service) StartAuthorize(ctx context.Context, req AuthorizeRequest, user
 	ctx, span := s.Hooks.StartSpan(ctx, obs.SpanOAuthAuthorize)
 	defer func() {
 		status := obs.StatusSuccess
-		if err != nil && !errors.Is(err, errAuthorizeLoginRequired) {
+		if err != nil && !errors.Is(err, errAuthorizeLoginRequired) && !errors.Is(err, errAuthorizeReauthRequired) {
 			status = obs.StatusError
 			span.RecordError(err)
 			span.SetAttributes(obs.StringAttr(obs.AttrErrorCode, errorCode(err)))
@@ -115,11 +127,15 @@ func (s *Service) StartAuthorize(ctx context.Context, req AuthorizeRequest, user
 		// RedirectURL.
 		return AuthorizeResult{}, errAuthorizeLoginRequired
 	}
+	now := time.Now()
+	ac, haveAC := AuthContextFrom(ctx)
+	if s.reauthNeeded(req, ac, haveAC, now) {
+		return AuthorizeResult{}, errAuthorizeReauthRequired
+	}
 	codeStr, err := crypto.NewToken()
 	if err != nil {
 		return AuthorizeResult{}, err
 	}
-	now := time.Now()
 	if err := s.Storage.InsertAuthorizationCode(ctx, models.AuthorizationCode{
 		Code:                 codeStorageKey(codeStr),
 		ClientID:             client.ClientID,
@@ -131,6 +147,9 @@ func (s *Service) StartAuthorize(ctx context.Context, req AuthorizeRequest, user
 		CodeChallengeMethod:  req.CodeChallengeMethod,
 		Nonce:                req.Nonce,
 		AuthorizationDetails: details,
+		AuthTime:             ac.AuthTime.UTC(),
+		ACR:                  s.acrFor(ac),
+		AMR:                  ac.AMR,
 		ExpiresAt:            now.Add(s.Cfg.AuthorizationCodeTTL),
 		CreatedAt:            now,
 	}); err != nil {

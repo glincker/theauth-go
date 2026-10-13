@@ -40,6 +40,7 @@ type ASMetadata struct {
 	TokenEndpointAuthSigningAlgValuesSupported []string `json:"token_endpoint_auth_signing_alg_values_supported,omitempty"`
 	CodeChallengeMethodsSupported              []string `json:"code_challenge_methods_supported"`
 	ScopesSupported                            []string `json:"scopes_supported,omitempty"`
+	ACRValuesSupported                         []string `json:"acr_values_supported,omitempty"`
 	ServiceDocumentation                       string   `json:"service_documentation,omitempty"`
 	UILocalesSupported                         []string `json:"ui_locales_supported,omitempty"`
 	// DPoPSigningAlgValuesSupported is the RFC 9449 section 5.1 metadata
@@ -168,6 +169,7 @@ func (s *Service) ASMetadataDoc() (ASMetadata, error) {
 	}
 
 	meta.AuthorizationDetailsTypesSupported = s.RARTypes()
+	meta.ACRValuesSupported = s.acrValuesSupported()
 
 	return meta, nil
 }

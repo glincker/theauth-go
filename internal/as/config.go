@@ -206,6 +206,19 @@ type Config struct {
 	// ClientCompat relaxes individual strictness checks for real-world
 	// clients. The zero value is fully strict. See ClientCompat.
 	ClientCompat ClientCompat
+
+	// ACRValues maps an authentication method set to the acr string emitted
+	// in access tokens and introspection responses. Keys are ACRMethodKey
+	// values: distinct amr methods sorted and joined with "+", for example
+	// "pwd", "otp+pwd" or "hwk". Method sets without an entry use the
+	// default (ACRSingleFactor, or ACRMultiFactor for "mfa" or two or more
+	// methods). When non-empty the configured values are advertised as
+	// acr_values_supported.
+	ACRValues map[string]string
+
+	// SessionAMR reports a session's authentication methods; nil assumes
+	// ["pwd"].
+	SessionAMR func(ctx context.Context, sess *models.Session) []string
 }
 
 // JWTBearerConfig is the internal mirror of the root JWTBearerConfig.
@@ -261,6 +274,11 @@ func Validate(cfg *Config, encryptionKey []byte) error {
 	}
 	if err := validateRAR(cfg.RAR); err != nil {
 		return err
+	}
+	if cfg.CIMD != nil {
+		if err := cfg.CIMD.Validate(); err != nil {
+			return err
+		}
 	}
 	if err := validateIDJAG(cfg); err != nil {
 		return err

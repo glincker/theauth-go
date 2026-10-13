@@ -84,6 +84,24 @@ type PermissionGate func(permission string) func(http.Handler) http.Handler
 // constructor + service dependencies.
 type MountAgents func(r chi.Router)
 
+// Lifecycle is the optional account lifecycle surface. When supplied through
+// WithLifecycle, PATCH /users/{userID} accepts mustChangePassword and
+// disabled, and DELETE /users/{userID}/account deletes the account. Disabling
+// and deleting are global, so they require the super_admin role; forcing a
+// password change only requires users:admin.
+type Lifecycle interface {
+	SetMustChangePassword(ctx context.Context, userID models.ULID, required bool) error
+	DisableUser(ctx context.Context, userID models.ULID) error
+	EnableUser(ctx context.Context, userID models.ULID) error
+	DeleteUser(ctx context.Context, userID models.ULID) error
+}
+
+// WithLifecycle enables the account lifecycle endpoints. It returns h.
+func (h *Handler) WithLifecycle(l Lifecycle) *Handler {
+	h.lifecycle = l
+	return h
+}
+
 // Handler owns the 12 /admin/v1 endpoints (plus the requireOrgMatch
 // middleware that gates the entire /organizations/{orgID} subtree).
 type Handler struct {
@@ -93,6 +111,7 @@ type Handler struct {
 	pathPrefix  string
 	userFromCtx UserFromCtx
 	sessFromCtx SessionFromCtx
+	lifecycle   Lifecycle
 }
 
 // New constructs a Handler. pathPrefix is the operator-supplied
@@ -135,6 +154,9 @@ func (h *Handler) Mount(r chi.Router, requireAuth func(http.Handler) http.Handle
 			r.With(requirePermission(models.PermissionUsersInvite)).Post("/users", h.inviteUser)
 			r.With(requirePermission(models.PermissionUsersAdmin)).Patch("/users/{userID}", h.patchUser)
 			r.With(requirePermission(models.PermissionUsersAdmin)).Delete("/users/{userID}", h.removeUser)
+			if h.lifecycle != nil {
+				r.With(requirePermission(models.PermissionUsersAdmin)).Delete("/users/{userID}/account", h.deleteUserAccount)
+			}
 
 			r.With(requirePermission(models.PermissionSessionsRevoke)).Get("/sessions", h.listSessions)
 			r.With(requirePermission(models.PermissionSessionsRevoke)).Delete("/sessions/{sessionID}", h.revokeSession)
@@ -319,11 +341,16 @@ func (h *Handler) patchUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var body struct {
-		Status  string   `json:"status,omitempty"`
-		RoleIDs []string `json:"roleIds,omitempty"`
+		Status             string   `json:"status,omitempty"`
+		RoleIDs            []string `json:"roleIds,omitempty"`
+		MustChangePassword *bool    `json:"mustChangePassword,omitempty"`
+		Disabled           *bool    `json:"disabled,omitempty"`
 	}
 	if err := httpx.DecodeJSON(r, &body); err != nil {
 		admin.Write(w, http.StatusBadRequest, admin.CodeValidationInvalid, err.Error(), "")
+		return
+	}
+	if !h.applyLifecycle(w, r, userID, body.MustChangePassword, body.Disabled) {
 		return
 	}
 	actor, _ := h.userFromCtx(r)
@@ -389,6 +416,101 @@ func (h *Handler) patchUser(w http.ResponseWriter, r *http.Request) {
 		Roles []models.Role `json:"roles"`
 	}
 	httpx.WriteJSON(w, http.StatusOK, response{User: *u, Roles: roles})
+}
+
+// isSuperAdmin reports whether the caller holds the global super_admin role.
+func (h *Handler) isSuperAdmin(r *http.Request) bool {
+	user, _ := h.userFromCtx(r)
+	if user == nil {
+		return false
+	}
+	roles, err := h.storage.RolesForUser(r.Context(), user.ID, nil)
+	if err != nil {
+		return false
+	}
+	for _, role := range roles {
+		if role.Name == models.SystemRoleSuperAdmin {
+			return true
+		}
+	}
+	return false
+}
+
+// applyLifecycle applies the optional mustChangePassword and disabled fields
+// of a PATCH body. It writes the error response and returns false on failure.
+func (h *Handler) applyLifecycle(w http.ResponseWriter, r *http.Request, userID models.ULID, must, disabled *bool) bool {
+	if must == nil && disabled == nil {
+		return true
+	}
+	if h.lifecycle == nil {
+		admin.Write(w, http.StatusBadRequest, admin.CodeUnsupportedAction, "account lifecycle is not enabled", "")
+		return false
+	}
+	if disabled != nil && !h.isSuperAdmin(r) {
+		admin.Write(w, http.StatusForbidden, admin.CodeForbidden, "disabling an account requires the super_admin role", "")
+		return false
+	}
+	ctx := r.Context()
+	if must != nil {
+		if err := h.lifecycle.SetMustChangePassword(ctx, userID, *must); err != nil {
+			h.lifecycleError(w, err)
+			return false
+		}
+	}
+	if disabled != nil {
+		var err error
+		if *disabled {
+			err = h.lifecycle.DisableUser(ctx, userID)
+		} else {
+			err = h.lifecycle.EnableUser(ctx, userID)
+		}
+		if err != nil {
+			h.lifecycleError(w, err)
+			return false
+		}
+	}
+	return true
+}
+
+func (h *Handler) lifecycleError(w http.ResponseWriter, err error) {
+	switch {
+	case errors.Is(err, models.ErrStorageNotFound):
+		admin.Write(w, http.StatusNotFound, admin.CodeNotFound, "user not found", "")
+	case errors.Is(err, models.ErrLastOwner):
+		admin.Write(w, http.StatusConflict, admin.CodeRoleInUse, "user is the last owner of an organization", "")
+	case errors.Is(err, models.ErrStorageMissingCapability), errors.Is(err, models.ErrAccountStateDisabled):
+		admin.Write(w, http.StatusNotImplemented, admin.CodeUnsupportedAction, "storage does not support this action", "")
+	default:
+		admin.Write(w, http.StatusInternalServerError, admin.CodeInternal, "internal error", "")
+	}
+}
+
+// deleteUserAccount permanently deletes the account and everything that
+// belongs to it. Unlike removeUser it is global, so it needs super_admin.
+func (h *Handler) deleteUserAccount(w http.ResponseWriter, r *http.Request) {
+	orgID, _ := httpx.ParseULIDPath(r, "orgID")
+	userID, ok := httpx.ParseULIDPath(r, "userID")
+	if !ok {
+		admin.Write(w, http.StatusBadRequest, admin.CodeValidationInvalid, "invalid userID", "")
+		return
+	}
+	if !h.isSuperAdmin(r) {
+		admin.Write(w, http.StatusForbidden, admin.CodeForbidden, "deleting an account requires the super_admin role", "")
+		return
+	}
+	if actor, _ := h.userFromCtx(r); actor != nil && actor.ID == userID {
+		admin.Write(w, http.StatusBadRequest, admin.CodeValidationInvalid, "use DELETE /account to delete your own account", "")
+		return
+	}
+	if _, err := h.storage.OrganizationMemberRole(r.Context(), orgID, userID); err != nil {
+		admin.Write(w, http.StatusNotFound, admin.CodeUserNotInOrg, "user is not a member of this organization", "")
+		return
+	}
+	if err := h.lifecycle.DeleteUser(r.Context(), userID); err != nil {
+		h.lifecycleError(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (h *Handler) removeUser(w http.ResponseWriter, r *http.Request) {

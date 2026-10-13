@@ -50,6 +50,9 @@ type Service struct {
 	ttl     time.Duration
 	policy  Policy
 	gate    touchGate
+	// acct vetoes issuing a session; cap bounds concurrent sessions. See limits.go.
+	acct AccountGate
+	cap  Cap
 }
 
 // Toucher persists a session's last-seen time.
@@ -132,6 +135,12 @@ func (s *Service) Issue(ctx context.Context, user models.User, userAgent, ip str
 
 // IssueWith is Issue with per-session options.
 func (s *Service) IssueWith(ctx context.Context, user models.User, opts IssueOptions) (token string, sess models.Session, err error) {
+	if err := s.CheckAccount(ctx, user.ID); err != nil {
+		return "", models.Session{}, err
+	}
+	if err := s.EnforceCap(ctx, user.ID, models.ULID{}); err != nil {
+		return "", models.Session{}, err
+	}
 	token, err = crypto.NewToken()
 	if err != nil {
 		return "", models.Session{}, err

@@ -188,3 +188,25 @@ func TestApplierRerunKeepsExistingPasswords(t *testing.T) {
 		t.Errorf("password hash after re-run = %q, want the upgraded hash kept", hash)
 	}
 }
+
+func TestApplierFlagsRequiresPasswordReset(t *testing.T) {
+	ctx := context.Background()
+	st := memory.New()
+	result, err := internal.ApplyBundle(ctx, st, sampleBundle(), internal.ApplyOptions{})
+	if err != nil {
+		t.Fatalf("ApplyBundle: %v", err)
+	}
+	if result.MustChangeFlagged != 1 {
+		t.Fatalf("MustChangeFlagged = %d, want 1", result.MustChangeFlagged)
+	}
+	for email, want := range map[string]bool{"alice@example.com": true, "bob@example.com": false} {
+		u, err := st.UserByEmail(ctx, email)
+		if err != nil {
+			t.Fatalf("UserByEmail(%s): %v", email, err)
+		}
+		state, err := st.AccountStateByUserID(ctx, u.ID)
+		if err != nil || state.MustChangePassword != want {
+			t.Fatalf("%s MustChangePassword = %v (%v), want %v", email, state.MustChangePassword, err, want)
+		}
+	}
+}

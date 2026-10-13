@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/glincker/theauth-go/v2"
+	"github.com/glincker/theauth-go/v2/provider/internal/refresh"
 )
 
 const httpTimeout = 10 * time.Second
@@ -301,3 +302,21 @@ func lookup(doc any, path string) string {
 }
 
 func truthy(s string) bool { return s == "true" || s == "1" }
+
+// RefreshToken implements theauth.RefreshProvider with the standard
+// refresh_token grant (RFC 6749 section 6).
+func (p *provider) RefreshToken(ctx context.Context, refreshToken string) (*theauth.ProviderToken, error) {
+	tok, err := refresh.Do(ctx, refresh.Request{
+		Provider:     p.spec.Name,
+		TokenURL:     p.spec.TokenURL,
+		ClientID:     p.cfg.ClientID,
+		ClientSecret: p.cfg.ClientSecret,
+		RefreshToken: refreshToken,
+		BasicAuth:    p.spec.TokenBasicAuth,
+		Client:       p.client,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return tok, nil
+}

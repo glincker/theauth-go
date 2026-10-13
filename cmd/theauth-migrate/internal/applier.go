@@ -26,6 +26,13 @@ type Storage interface {
 	UpsertOAuthAccount(ctx context.Context, a theauth.OAuthAccount) (theauth.OAuthAccount, error)
 }
 
+// mustChangeStore is the optional capability (theauth.AccountStateStorage)
+// that lets the applier carry RequiresPasswordReset through as a forced
+// password change instead of only reporting it.
+type mustChangeStore interface {
+	SetMustChangePassword(ctx context.Context, userID theauth.ULID, required bool) error
+}
+
 // ApplyOptions controls behaviour of ApplyBundle.
 type ApplyOptions struct {
 	// DryRun performs validation and conflict detection only, no writes.
@@ -40,6 +47,10 @@ type ApplyResult struct {
 	UsersDuplicate        int
 	OAuthAccountsInserted int
 	PasswordsSet          int
+	// MustChangeFlagged counts users flagged MustChangePassword because the
+	// source marked their password as needing a reset. It stays zero when the
+	// storage does not implement AccountStateStorage.
+	MustChangeFlagged int
 	// PasswordResets is the list of (email, source_id) pairs for users who
 	// need a password-reset email. The caller should wire this to an email
 	// service.
@@ -132,6 +143,13 @@ func ApplyBundle(ctx context.Context, st Storage, b *Bundle, opts ApplyOptions) 
 			result.UsersInserted++
 
 			if ur.RequiresPasswordReset {
+				if mc, ok := st.(mustChangeStore); ok {
+					if err := mc.SetMustChangePassword(ctx, created.ID, true); err != nil {
+						result.Errors = append(result.Errors, fmt.Sprintf("SetMustChangePassword(%q): %v", ur.Email, err))
+					} else {
+						result.MustChangeFlagged++
+					}
+				}
 				result.PasswordResets = append(result.PasswordResets, PasswordResetNeeded{
 					Email:    ur.Email,
 					SourceID: ur.SourceID,

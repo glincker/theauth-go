@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"errors"
+	"strings"
 	"time"
 
 	"github.com/glincker/theauth-go/v2"
@@ -172,8 +173,8 @@ func (s *Store) InsertAuthorizationCode(ctx context.Context, c theauth.Authoriza
 INSERT INTO oauth_authorization_codes (
   code, client_id, user_id, organization_id, redirect_uri, scope, resource,
   code_challenge, code_challenge_method, nonce, expires_at, created_at,
-  authorization_details
-) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`
+  authorization_details, auth_time, acr, amr
+) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)`
 	created := c.CreatedAt
 	if created.IsZero() {
 		created = time.Now()
@@ -192,6 +193,9 @@ INSERT INTO oauth_authorization_codes (
 		timeToTs(c.ExpiresAt),
 		timeToTs(created),
 		nullableBytes(c.AuthorizationDetails),
+		authTimeToTs(c.AuthTime),
+		c.ACR,
+		strings.Join(c.AMR, " "),
 	)
 	return err
 }
@@ -204,7 +208,7 @@ DELETE FROM oauth_authorization_codes
 WHERE code = $1
 RETURNING code, client_id, user_id, organization_id, redirect_uri, scope, resource,
           code_challenge, code_challenge_method, nonce, expires_at, created_at,
-          authorization_details`
+          authorization_details, auth_time, acr, amr`
 	row := s.pool.QueryRow(ctx, q, code)
 	var (
 		out     theauth.AuthorizationCode
@@ -216,6 +220,8 @@ RETURNING code, client_id, user_id, organization_id, redirect_uri, scope, resour
 		nonce   string
 		method  string
 		details []byte
+		authAt  pgtype.Timestamptz
+		amr     string
 	)
 	err := row.Scan(
 		&out.Code,
@@ -231,6 +237,9 @@ RETURNING code, client_id, user_id, organization_id, redirect_uri, scope, resour
 		&expires,
 		&created,
 		&details,
+		&authAt,
+		&out.ACR,
+		&amr,
 	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -239,6 +248,8 @@ RETURNING code, client_id, user_id, organization_id, redirect_uri, scope, resour
 		return nil, err
 	}
 	out.AuthorizationDetails = details
+	out.AuthTime = authTimeFromTs(authAt)
+	out.AMR = strings.Fields(amr)
 	out.UserID = pgUUIDToULID(userID)
 	out.OrganizationID = pgUUIDToULIDPtr(orgID)
 	out.Scope = scope
@@ -255,8 +266,9 @@ func (s *Store) InsertRefreshToken(ctx context.Context, t theauth.RefreshToken) 
 	const q = `
 INSERT INTO oauth_refresh_tokens (
   id, hash, family_id, client_id, user_id, agent_id, scope, resource,
-  parent_jti, issued_at, expires_at, dpop_jkt, auth_code_hash, authorization_details
-) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`
+  parent_jti, issued_at, expires_at, dpop_jkt, auth_code_hash, authorization_details,
+  auth_time, acr, amr
+) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)`
 	_, err := s.pool.Exec(ctx, q,
 		ulidToPgUUID(t.ID),
 		t.Hash,
@@ -272,6 +284,9 @@ INSERT INTO oauth_refresh_tokens (
 		t.DPoPJKT,
 		t.AuthCodeHash,
 		nullableBytes(t.AuthorizationDetails),
+		authTimeToTs(t.AuthTime),
+		t.ACR,
+		strings.Join(t.AMR, " "),
 	)
 	return err
 }
@@ -280,7 +295,7 @@ func (s *Store) RefreshTokenByHash(ctx context.Context, hash []byte) (*theauth.R
 	const q = `
 SELECT id, hash, family_id, client_id, user_id, agent_id, scope, resource,
        parent_jti, issued_at, expires_at, revoked_at, revocation_note,
-       dpop_jkt, auth_code_hash, authorization_details
+       dpop_jkt, auth_code_hash, authorization_details, auth_time, acr, amr
 FROM oauth_refresh_tokens WHERE hash = $1`
 	row := s.pool.QueryRow(ctx, q, hash)
 	var (
@@ -293,10 +308,12 @@ FROM oauth_refresh_tokens WHERE hash = $1`
 		hashOut, details          []byte
 		scope                     []string
 		clientID                  string
+		authAt                    pgtype.Timestamptz
+		acr, amr                  string
 	)
 	err := row.Scan(&id, &hashOut, &familyID, &clientID, &userID, &agentID,
 		&scope, &resource, &parentJTI, &issued, &expires, &revoked, &note,
-		&dpopJKT, &authCodeHash, &details)
+		&dpopJKT, &authCodeHash, &details, &authAt, &acr, &amr)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, storage.ErrNotFound
@@ -321,6 +338,9 @@ FROM oauth_refresh_tokens WHERE hash = $1`
 		AuthCodeHash:   authCodeHash,
 
 		AuthorizationDetails: details,
+		AuthTime:             authTimeFromTs(authAt),
+		ACR:                  acr,
+		AMR:                  strings.Fields(amr),
 	}
 	return &out, nil
 }

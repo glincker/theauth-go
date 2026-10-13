@@ -15,6 +15,7 @@ import (
 	"github.com/glincker/theauth-go/v2"
 	"github.com/glincker/theauth-go/v2/crypto"
 	"github.com/glincker/theauth-go/v2/internal/ulid"
+	"github.com/glincker/theauth-go/v2/storage/memory"
 )
 
 // e2e_clientcompat_test.go: end-to-end runs of the Config.ClientCompat
@@ -90,6 +91,14 @@ func TestClientCompatRecordedShapes(t *testing.T) {
 			strictErrIs: theauth.ErrOAuthInvalidResource,
 		},
 		{
+			name:        "cursor, registered cursor:// private-use redirect, exact match",
+			fixture:     "cursor.json",
+			redirectURI: "cursor://anysphere.cursor-mcp/oauth/callback",
+			scope:       []string{"files.read", "offline_access"},
+			wantScope:   "files.read",
+			strictErrIs: theauth.ErrOAuthInvalidResource,
+		},
+		{
 			name:         "chatgpt, fixed https callback, sub-path resource, openid dropped",
 			fixture:      "chatgpt.json",
 			redirectURI:  "https://chatgpt.com/connector_platform_oauth_redirect",
@@ -105,7 +114,11 @@ func TestClientCompatRecordedShapes(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			clientID, httpClient := compatFixtureServer(t, tc.fixture)
 			withCIMD := func(c *theauth.AuthorizationServerConfig) {
-				c.CIMD = &theauth.CIMDConfig{TrustPolicy: theauth.AllowAnyHTTPS(), HTTPClient: httpClient, CacheTTL: time.Minute}
+				c.CIMD = &theauth.CIMDConfig{
+					TrustPolicy: theauth.AllowAnyHTTPS(), HTTPClient: httpClient, CacheTTL: time.Minute,
+					// The cursor fixture registers a bare cursor:// redirect.
+					AllowedRedirectSchemes: []string{"cursor"},
+				}
 			}
 			ctx := context.Background()
 			verifier, _ := crypto.NewCodeVerifier()
@@ -292,4 +305,64 @@ func TestClientCompatPARAndDCRLoopback(t *testing.T) {
 			t.Errorf("aud = %v", got)
 		}
 	})
+}
+
+// TestCursorSchemeNeedsOperatorOptIn pins that a Cursor-shaped document with
+// a bare cursor:// redirect is refused until the operator lists the scheme.
+func TestCursorSchemeNeedsOperatorOptIn(t *testing.T) {
+	clientID, httpClient := compatFixtureServer(t, "cursor.json")
+	ctx := context.Background()
+	verifier, _ := crypto.NewCodeVerifier()
+	user := theauth.User{ID: ulid.New(), Email: "carol@example.com"}
+	req := theauth.AuthorizeRequest{
+		ClientID:            clientID,
+		RedirectURI:         "cursor://anysphere.cursor-mcp/oauth/callback",
+		ResponseType:        "code",
+		Scope:               []string{"files.read"},
+		CodeChallenge:       crypto.CodeChallenge(verifier),
+		CodeChallengeMethod: "S256",
+		Resource:            compatResource,
+	}
+	for _, tc := range []struct {
+		name    string
+		schemes []string
+		wantErr bool
+	}{
+		{"default refuses", nil, true},
+		{"listed accepts", []string{"cursor"}, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			a, store := newASInstance(t, func(c *theauth.AuthorizationServerConfig) {
+				c.CIMD = &theauth.CIMDConfig{
+					TrustPolicy: theauth.AllowAnyHTTPS(), HTTPClient: httpClient, CacheTTL: time.Minute,
+					AllowedRedirectSchemes: tc.schemes,
+				}
+			})
+			if _, err := store.CreateUser(ctx, user); err != nil {
+				t.Fatal(err)
+			}
+			_, err := a.StartAuthorize(ctx, req, &user)
+			if (err != nil) != tc.wantErr {
+				t.Fatalf("StartAuthorize err = %v, wantErr %v", err, tc.wantErr)
+			}
+		})
+	}
+}
+
+// TestCIMDConfigRejectsUnsafeRedirectSchemes pins New-time validation.
+func TestCIMDConfigRejectsUnsafeRedirectSchemes(t *testing.T) {
+	for _, bad := range []string{"https", "javascript", "Cursor"} {
+		store := memory.New()
+		_, err := theauth.New(theauth.Config{
+			Storage: store, BaseURL: "https://auth.example.com", EncryptionKey: make([]byte, 32),
+			AuthorizationServer: &theauth.AuthorizationServerConfig{
+				Issuer:    "https://auth.example.com",
+				Resources: []theauth.ProtectedResource{{Identifier: compatResource, Scopes: []string{"files.read"}}},
+				CIMD:      &theauth.CIMDConfig{TrustPolicy: theauth.AllowAnyHTTPS(), AllowedRedirectSchemes: []string{bad}},
+			},
+		})
+		if err == nil {
+			t.Errorf("scheme %q accepted by theauth.New", bad)
+		}
+	}
 }

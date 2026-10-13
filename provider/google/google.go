@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/glincker/theauth-go/v2"
+	"github.com/glincker/theauth-go/v2/provider/internal/refresh"
 )
 
 // defaultScopes are the minimum OIDC scopes needed to populate
@@ -49,6 +50,11 @@ type Config struct {
 	AuthorizeURL string
 	TokenURL     string
 	UserInfoURL  string
+
+	// Offline asks Google for a refresh token (access_type=offline with
+	// prompt=consent) so GetProviderToken can renew the upstream access
+	// token. Leave false when you only use Google for sign-in.
+	Offline bool
 
 	// HTTPClient lets callers inject a custom client (timeouts, transport
 	// instrumentation, proxy). Defaults to a fresh client with httpTimeout.
@@ -110,6 +116,10 @@ func (p *provider) AuthURL(state, codeChallenge, redirectURI string, scopes []st
 	q.Set("state", state)
 	q.Set("code_challenge", codeChallenge)
 	q.Set("code_challenge_method", "S256")
+	if p.cfg.Offline {
+		q.Set("access_type", "offline")
+		q.Set("prompt", "consent")
+	}
 	return p.authorizeURL + "?" + q.Encode()
 }
 
@@ -247,4 +257,22 @@ func (p *provider) getJSON(ctx context.Context, endpoint, accessToken string, ds
 		return fmt.Errorf("status=%d body=%s", resp.StatusCode, string(body))
 	}
 	return json.Unmarshal(body, dst)
+}
+
+// RefreshToken implements theauth.RefreshProvider with the standard
+// refresh_token grant (RFC 6749 section 6).
+func (p *provider) RefreshToken(ctx context.Context, refreshToken string) (*theauth.ProviderToken, error) {
+	tok, err := refresh.Do(ctx, refresh.Request{
+		Provider:     "google",
+		TokenURL:     p.tokenURL,
+		ClientID:     p.cfg.ClientID,
+		ClientSecret: p.cfg.ClientSecret,
+		RefreshToken: refreshToken,
+		BasicAuth:    false,
+		Client:       p.client,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return tok, nil
 }

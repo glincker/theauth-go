@@ -148,6 +148,9 @@ func (s *Service) ExchangeAuthorizationCode(ctx context.Context, req TokenReques
 		AuthorizationDetails: details,
 		// AuthCodeHash lets a later replay of this code revoke the family.
 		AuthCodeHash: codeKey,
+		AuthTime:     codeRow.AuthTime,
+		ACR:          codeRow.ACR,
+		AMR:          codeRow.AMR,
 	})
 }
 
@@ -235,6 +238,11 @@ func (s *Service) RefreshAccessToken(ctx context.Context, req TokenRequest) (res
 		FamilyID:             &rt.FamilyID,
 		DPoPJKT:              jkt,
 		AuthorizationDetails: details,
+		// The authentication context is carried forward unchanged: a
+		// refresh never advances auth_time.
+		AuthTime: rt.AuthTime,
+		ACR:      rt.ACR,
+		AMR:      rt.AMR,
 	})
 }
 
@@ -257,6 +265,12 @@ type mintInput struct {
 	// AuthorizationDetails is the RFC 9396 JSON the tokens carry. It becomes
 	// the authorization_details claim and is kept on the refresh token.
 	AuthorizationDetails []byte
+	// AuthTime, ACR and AMR are the authentication context of the grant.
+	// They become the auth_time, acr and amr claims (each only when set) and
+	// are stored on the refresh token for carry-forward.
+	AuthTime time.Time
+	ACR      string
+	AMR      []string
 }
 
 // mintAccessAndRefresh signs a fresh access token JWT and stores a fresh
@@ -304,6 +318,7 @@ func (s *Service) mintAccessAndRefresh(ctx context.Context, in mintInput) (Token
 		}
 		claims.Extra["authorization_details"] = detailsClaim
 	}
+	setAuthContextClaims(&claims, in.AuthTime, in.ACR, in.AMR)
 	if err := s.applyOnTokenIssued(ctx, &claims); err != nil {
 		return TokenResponse{}, err
 	}
@@ -332,6 +347,9 @@ func (s *Service) mintAccessAndRefresh(ctx context.Context, in mintInput) (Token
 		DPoPJKT:              in.DPoPJKT,
 		AuthCodeHash:         in.AuthCodeHash,
 		AuthorizationDetails: in.AuthorizationDetails,
+		AuthTime:             in.AuthTime,
+		ACR:                  in.ACR,
+		AMR:                  in.AMR,
 		IssuedAt:             now,
 		ExpiresAt:            now.Add(s.Cfg.RefreshTokenTTL),
 	}

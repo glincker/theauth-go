@@ -24,7 +24,7 @@ func (s *Service) sharedLoad(ctx context.Context, key, rawURL string) (Document,
 	if err != nil || !ok {
 		return Document{}, false
 	}
-	doc, err := parseAndValidate(b, rawURL)
+	doc, err := parseAndValidate(b, rawURL, s.cfg.AllowedRedirectSchemes...)
 	if err != nil {
 		return Document{}, false
 	}

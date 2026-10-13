@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"github.com/glincker/theauth-go/v2/internal/httpsec"
-	"github.com/glincker/theauth-go/v2/internal/httpx"
 	"github.com/glincker/theauth-go/v2/internal/ratelimit"
 	"github.com/glincker/theauth-go/v2/internal/rbac"
 	internalscim "github.com/glincker/theauth-go/v2/internal/scim"
@@ -68,12 +67,12 @@ func (a *TheAuth) RequireAuth() func(http.Handler) http.Handler {
 		return authn(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			sess, ok := SessionFromContext(r.Context())
 			if !ok {
-				writeUnauthenticated(w, "auth.unauthenticated", "Missing or invalid session")
+				a.unauthenticated(w, r, "auth.unauthenticated", "Missing or invalid session")
 				return
 			}
 			// AuthLevel is "" on pre-v0.5 rows; treat as full for back compat.
 			if sess.AuthLevel != "" && sess.AuthLevel != AuthLevelFull {
-				writeUnauthenticated(w, "auth.step_up_required", "Session requires second-factor verification")
+				a.unauthenticated(w, r, "auth.step_up_required", "Session requires second-factor verification")
 				return
 			}
 			next.ServeHTTP(w, r)
@@ -89,7 +88,7 @@ func (a *TheAuth) RequirePendingOrFull() func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return authn(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if _, ok := SessionFromContext(r.Context()); !ok {
-				writeUnauthenticated(w, "auth.unauthenticated", "Missing or invalid session")
+				a.unauthenticated(w, r, "auth.unauthenticated", "Missing or invalid session")
 				return
 			}
 			next.ServeHTTP(w, r)
@@ -112,21 +111,21 @@ func (a *TheAuth) RequirePermission(perms ...string) func(http.Handler) http.Han
 	return func(next http.Handler) http.Handler {
 		return authn(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if a.rbacCfg == nil {
-				writeProblemJSON(w, http.StatusInternalServerError, "rbac.disabled", "RBAC is not enabled in Config", "")
+				a.problem(w, r, http.StatusInternalServerError, "rbac.disabled", "RBAC is not enabled in Config", "")
 				return
 			}
 			user, okU := UserFromContext(r.Context())
 			sess, okS := SessionFromContext(r.Context())
 			if !okU || !okS || user == nil || sess == nil {
-				writeUnauthenticated(w, "auth.unauthenticated", "Missing or invalid session")
+				a.unauthenticated(w, r, "auth.unauthenticated", "Missing or invalid session")
 				return
 			}
 			if sess.AuthLevel != "" && sess.AuthLevel != AuthLevelFull {
-				writeUnauthenticated(w, "auth.step_up_required", "Session requires second-factor verification")
+				a.unauthenticated(w, r, "auth.step_up_required", "Session requires second-factor verification")
 				return
 			}
 			if sess.ActiveOrganizationID == nil {
-				writeProblemJSON(w, http.StatusForbidden, "rbac.no_active_org", "Session has no active organization", "")
+				a.problem(w, r, http.StatusForbidden, "rbac.no_active_org", "Session has no active organization", "")
 				return
 			}
 			cache, ok := rbac.PermissionCacheFromContext(r.Context())
@@ -158,14 +157,14 @@ func (a *TheAuth) RequirePermission(perms ...string) func(http.Handler) http.Han
 				cache.Set = rbac.SetFromList(list)
 			})
 			if cache.Err != nil {
-				writeProblemJSON(w, http.StatusInternalServerError, "rbac.internal_error", "Permission lookup failed", "")
+				a.problem(w, r, http.StatusInternalServerError, "rbac.internal_error", "Permission lookup failed", "")
 				return
 			}
 			ctx := rbac.WithPermissionCache(r.Context(), cache)
 			if !cache.SuperAdmin {
 				for _, p := range perms {
 					if _, ok := cache.Set[p]; !ok {
-						writeProblemJSON(w, http.StatusForbidden, "rbac.forbidden", "Caller lacks required permission: "+p, "")
+						a.problem(w, r, http.StatusForbidden, "rbac.forbidden", "Caller lacks required permission: "+p, "")
 						return
 					}
 				}
@@ -174,11 +173,6 @@ func (a *TheAuth) RequirePermission(perms ...string) func(http.Handler) http.Han
 		}))
 	}
 }
-
-var (
-	writeProblemJSON     = httpx.WriteProblemJSON
-	writeUnauthenticated = httpx.WriteUnauthenticated
-)
 
 // ---------- SCIM bearer-auth middleware ----------
 
@@ -277,7 +271,7 @@ func (a *TheAuth) Handler() http.Handler {
 func (a *TheAuth) securityMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !a.csrfDisabled && !httpsec.OriginAllowed(r, a.baseURL, a.trustedOrigins) {
-			writeJSONError(w, http.StatusForbidden, "csrf_origin_rejected", "request origin is not trusted")
+			a.jsonError(w, r, http.StatusForbidden, "csrf_origin_rejected", "request origin is not trusted")
 			return
 		}
 		if a.requestIsSecure(r) {
@@ -362,7 +356,7 @@ func (a *TheAuth) RateLimitByIP(perMinute int) func(http.Handler) http.Handler {
 			if !allow(r.Context(), ip) {
 				blocked.Inc()
 				w.Header().Set("Retry-After", "60")
-				httpx.Error(w, http.StatusTooManyRequests, "rate_limited")
+				a.jsonError(w, r, http.StatusTooManyRequests, CodeRateLimited, "rate_limited")
 				return
 			}
 			next.ServeHTTP(w, r)
@@ -400,7 +394,7 @@ func (a *TheAuth) RateLimitByEmail(perMinute int) func(http.Handler) http.Handle
 			if !allow(r.Context(), key) {
 				blocked.Inc()
 				w.Header().Set("Retry-After", "60")
-				httpx.Error(w, http.StatusTooManyRequests, "rate_limited")
+				a.jsonError(w, r, http.StatusTooManyRequests, CodeRateLimited, "rate_limited")
 				return
 			}
 			next.ServeHTTP(w, r)

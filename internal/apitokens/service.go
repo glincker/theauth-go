@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"net/http"
 	"regexp"
 	"slices"
 	"strings"
@@ -91,6 +92,9 @@ type Service struct {
 	users UserLookup
 	now   func() time.Time
 	fails *attemptLimiter
+
+	// responder, when set, replaces the built-in middleware error bodies.
+	responder func(w http.ResponseWriter, r *http.Request, status int, code, message string)
 }
 
 // New builds the service from cfg and the raw storage, which must implement
