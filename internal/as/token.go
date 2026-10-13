@@ -112,8 +112,8 @@ func (s *Service) ExchangeAuthorizationCode(ctx context.Context, req TokenReques
 	if !codeRow.ExpiresAt.After(time.Now()) {
 		return TokenResponse{}, models.ErrOAuthInvalidGrant
 	}
-	if req.RedirectURI == "" || (req.RedirectURI != codeRow.RedirectURI &&
-		!(s.Cfg.ClientCompat.LoopbackAnyPort && s.loopbackEquivalent(req.RedirectURI, codeRow.RedirectURI))) {
+	loopbackMatch := s.Cfg.ClientCompat.LoopbackAnyPort && s.loopbackEquivalent(req.RedirectURI, codeRow.RedirectURI)
+	if req.RedirectURI == "" || (req.RedirectURI != codeRow.RedirectURI && !loopbackMatch) {
 		return TokenResponse{}, models.ErrOAuthRedirectURIMismatch
 	}
 	// PKCE S256: challenge = base64url(sha256(verifier)).

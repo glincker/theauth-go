@@ -134,7 +134,8 @@ func (c *Config) Validate() error {
 		}
 		for i, r := range s {
 			letter := r >= 'a' && r <= 'z'
-			if !(letter || (i > 0 && (r >= '0' && r <= '9' || r == '+' || r == '-' || r == '.'))) {
+			tail := i > 0 && (r >= '0' && r <= '9' || r == '+' || r == '-' || r == '.')
+			if !letter && !tail {
 				return fmt.Errorf("cimd: AllowedRedirectSchemes entry %q is not a valid URI scheme", s)
 			}
 		}
