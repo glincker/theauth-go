@@ -95,11 +95,11 @@ func (s *Service) EndSession(ctx context.Context, req EndSessionRequest) (EndSes
 		}
 		redirect = reg
 		if req.State != "" {
-			sep := "?"
 			if strings.Contains(reg, "?") {
-				sep = "&"
+				redirect = reg + "&state=" + url.QueryEscape(req.State)
+			} else {
+				redirect = reg + "?state=" + url.QueryEscape(req.State)
 			}
-			redirect = reg + sep + "state=" + url.QueryEscape(req.State)
 		}
 	}
 	if req.SessionID != "" && req.UserID != nil {
