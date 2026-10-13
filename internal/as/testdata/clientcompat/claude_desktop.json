@@ -1,0 +1,16 @@
+{
+  "_comment": "Representative of the public Claude Desktop MCP connector shape (loopback callback, no resource parameter, vendor scope). Not captured traffic.",
+  "client_id": "{{CLIENT_ID}}",
+  "client_name": "Claude",
+  "client_uri": "https://claude.ai",
+  "redirect_uris": ["http://127.0.0.1/callback", "http://[::1]/callback"],
+  "grant_types": ["authorization_code", "refresh_token"],
+  "response_types": ["code"],
+  "token_endpoint_auth_method": "none",
+  "scope": "files.read files.write claudeai",
+  "application_type": "native",
+  "software_id": "com.anthropic.claudefordesktop",
+  "software_version": "0.14.0",
+  "x-anthropic-client-kind": "desktop",
+  "dpop_bound_access_tokens": false
+}

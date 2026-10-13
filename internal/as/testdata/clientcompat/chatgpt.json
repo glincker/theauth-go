@@ -1,0 +1,15 @@
+{
+  "_comment": "Representative of the public ChatGPT connector shape (fixed https callback, resource addressed at an MCP sub-path, openid scope). Not captured traffic.",
+  "client_id": "{{CLIENT_ID}}",
+  "client_name": "ChatGPT",
+  "client_uri": "https://chatgpt.com",
+  "redirect_uris": ["https://chatgpt.com/connector_platform_oauth_redirect"],
+  "grant_types": ["authorization_code", "refresh_token"],
+  "response_types": ["code"],
+  "token_endpoint_auth_method": "none",
+  "scope": "files.read openid",
+  "application_type": "web",
+  "software_id": "com.openai.chatgpt.connectors",
+  "x-openai-connector-version": "2",
+  "id_token_signed_response_alg": "RS256"
+}

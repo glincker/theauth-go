@@ -1,0 +1,17 @@
+{
+  "_comment": "Representative of the public Cursor MCP client shape (loopback redirect, offline_access scope). Cursor also uses a bare cursor:// scheme, which CIMD validation refuses (RFC 8252 reverse-DNS rule) unless the operator lists it in CIMDConfig.AllowedRedirectSchemes. Not captured traffic.",
+  "client_id": "{{CLIENT_ID}}",
+  "client_name": "Cursor",
+  "client_uri": "https://cursor.com",
+  "logo_uri": "https://cursor.com/logo.png",
+  "redirect_uris": ["http://127.0.0.1:33418/oauth/callback", "cursor://anysphere.cursor-mcp/oauth/callback"],
+  "grant_types": ["authorization_code", "refresh_token"],
+  "response_types": ["code"],
+  "token_endpoint_auth_method": "none",
+  "scope": "files.read offline_access",
+  "application_type": "native",
+  "tos_uri": "https://cursor.com/terms-of-service",
+  "policy_uri": "https://cursor.com/privacy",
+  "contacts": ["security@cursor.example"],
+  "x-client-telemetry": {"channel": "stable", "build": 4217}
+}

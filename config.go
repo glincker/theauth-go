@@ -287,6 +287,11 @@ type LifecycleHooks struct {
 	OnMFAEnabled     func(ctx context.Context, user *User, kind MFAKind) error
 	OnTokenIssued    func(ctx context.Context, claims map[string]any) (map[string]any, error)
 	OnOrgSwitch      func(ctx context.Context, user *User, orgID string) error
+	// OnAccountDeleted fires after an account was deleted (DELETE /account,
+	// DeleteUser). It is observe-only: the delete already committed, user is
+	// the snapshot taken just before it, and an error or panic is only
+	// logged. Use it to clean up host-side data keyed by the user.
+	OnAccountDeleted func(ctx context.Context, user *User) error
 	// OnOAuthConflict fires when a sign-in OAuth email matches an existing user
 	// registered via a different provider. The hook must create a short-lived
 	// verification challenge and return the redirect URL for it. When nil the
@@ -490,6 +495,30 @@ type AuthorizationServerConfig struct {
 	// the denylist; they must introspect. Default false keeps access
 	// tokens stateless.
 	AccessTokenRevocation bool
+
+	// ClientCompat relaxes individual strictness checks so real-world MCP
+	// clients (Claude Desktop, Cursor, ChatGPT) interoperate: an optional
+	// resource parameter, dropping unknown scopes, port-agnostic loopback
+	// redirect URIs and sub-path audiences. Every switch defaults to false
+	// (strict). LoopbackAnyPort and DropUnknownScopes carry real security
+	// tradeoffs; see docs/client-compat.md before enabling them.
+	ClientCompat ClientCompatConfig
+
+	// ACRValues maps an authentication method set to the acr string put in
+	// access tokens and introspection responses (RFC 9470 step-up). Keys are
+	// the distinct amr methods sorted and joined with "+", for example
+	// "pwd", "otp+pwd" or "hwk". A method set without an entry uses the
+	// default: "urn:theauth:acr:1fa" for one method, "urn:theauth:acr:mfa"
+	// for "mfa" or two or more methods. Non-empty values are advertised as
+	// acr_values_supported. Nil keeps the defaults and advertises nothing.
+	ACRValues map[string]string
+
+	// SessionAMR reports the RFC 8176 authentication methods the session
+	// was established with, for the amr and acr claims. Sessions do not
+	// record their sign-in method, so nil assumes ["pwd"]; supply this
+	// (for example from your own login records) to emit "otp", "hwk" or
+	// "mfa" and satisfy a higher acr. Called on /oauth/authorize only.
+	SessionAMR func(ctx context.Context, sess *Session) []string
 
 	// PAR wires RFC 9126 Pushed Authorization Requests. When non-nil and
 	// the Storage backend implements PARStorage, POST /oauth/par is
@@ -722,6 +751,10 @@ func (m EmailMapper) Resolve(claims map[string]any) (ULID, error) {
 	return m.Lookup(email)
 }
 
+// ClientCompatConfig is the root-package alias for as.ClientCompat. Set it on
+// Config.AuthorizationServer.ClientCompat; the zero value is fully strict.
+type ClientCompatConfig = internalas.ClientCompat
+
 // PARConfig is the root-package alias for as.PARConfig. Consumers set
 // Config.AuthorizationServer.PAR to enable RFC 9126 support.
 type PARConfig = internalas.PARConfig
@@ -868,6 +901,8 @@ func validateASConfig(cfg *AuthorizationServerConfig, encryptionKey []byte) erro
 		DPoP:                           dpopConfigFromRoot(cfg.DPoP),
 		RequireState:                   cfg.RequireState,
 		AccessTokenRevocation:          cfg.AccessTokenRevocation,
+		ClientCompat:                   cfg.ClientCompat,
+		CIMD:                           cfg.CIMD,
 		PAR:                            cfg.PAR,
 		JAR:                            cfg.JAR,
 		JWTBearer:                      jwtBearerConfigFromRoot(cfg.JWTBearer),

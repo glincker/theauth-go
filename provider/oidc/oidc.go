@@ -13,7 +13,7 @@ import (
 	"time"
 
 	"github.com/glincker/theauth-go/v2"
-	"github.com/golang-jwt/jwt/v5"
+	"github.com/glincker/theauth-go/v2/provider/internal/refresh"
 )
 
 const httpTimeout = 10 * time.Second
@@ -47,6 +47,25 @@ type Config struct {
 	Endpoints Endpoints
 	// DisableDiscovery skips the discovery request. Requires Endpoints.
 	DisableDiscovery bool
+
+	// AdditionalAudiences lists extra aud values accepted besides ClientID,
+	// for example the client ids of a sibling mobile or SPA app that share
+	// your IdP. A token passes when its aud holds ClientID or any listed
+	// value. The azp rule is unchanged: a token with several audiences must
+	// carry azp equal to ClientID. Every listed audience is trusted to
+	// identify tokens meant for you, so list only values you control.
+	AdditionalAudiences []string
+
+	// AllowedTenants restricts a multi-tenant issuer (one containing
+	// "{tenantid}", or an Entra common, organizations or consumers issuer)
+	// to these tid values, compared case-insensitively. Empty accepts any
+	// tenant whose token iss matches its own tid; with the common endpoint
+	// that means any Entra tenant, so set it unless you want that. Ignored
+	// for single-tenant issuers, whose iss is compared exactly.
+	AllowedTenants []string
+
+	// Claims overrides which ID token claims fill the user profile.
+	Claims ClaimMapping
 }
 
 // Endpoints are manual overrides for discovered OIDC endpoints. Empty
@@ -74,6 +93,9 @@ type provider struct {
 	client *http.Client
 	keys   *keySet
 	basic  bool
+	// template is the {tenantid} issuer template, empty for a
+	// single-tenant issuer.
+	template string
 }
 
 // New discovers the issuer's endpoints and returns the provider. The
@@ -106,6 +128,9 @@ func New(ctx context.Context, cfg Config) (theauth.Provider, error) {
 			return nil, errors.New("oidc: DisableDiscovery needs Endpoints.AuthorizationEndpoint, TokenEndpoint and JWKSURI")
 		}
 		p.meta = metadata{Issuer: cfg.Issuer}
+		if isTemplateIssuer(cfg.Issuer) {
+			p.template = cfg.Issuer
+		}
 	} else if err := p.discover(ctx); err != nil {
 		return nil, err
 	}
@@ -118,6 +143,11 @@ func New(ctx context.Context, cfg Config) (theauth.Provider, error) {
 
 func (p *provider) discover(ctx context.Context) error {
 	u := strings.TrimSuffix(p.cfg.Issuer, "/") + "/.well-known/openid-configuration"
+	if isTemplateIssuer(p.cfg.Issuer) {
+		// A template has no discovery document of its own; read the
+		// shared multi-tenant one.
+		u = strings.TrimSuffix(strings.ReplaceAll(p.cfg.Issuer, tenantPlaceholder, "common"), "/") + "/.well-known/openid-configuration"
+	}
 	if p.cfg.DiscoveryURL != "" {
 		u = p.cfg.DiscoveryURL
 	}
@@ -127,21 +157,24 @@ func (p *provider) discover(ctx context.Context) error {
 	}
 	resp, err := p.client.Do(req)
 	if err != nil {
-		return fmt.Errorf("oidc: discovery: %w", err)
+		return p.fail(StageDiscovery, 0, err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode/100 != 2 {
-		return fmt.Errorf("oidc: discovery: status %d", resp.StatusCode)
+		return p.fail(StageDiscovery, resp.StatusCode, errors.New("unexpected status"))
 	}
 	body, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 	if err != nil {
 		return err
 	}
 	if err := json.Unmarshal(body, &p.meta); err != nil {
-		return fmt.Errorf("oidc: discovery parse: %w", err)
+		return p.fail(StageDiscovery, 0, errors.New("document is not valid JSON"))
 	}
-	if p.meta.Issuer != p.cfg.Issuer {
-		return fmt.Errorf("oidc: discovery issuer %q does not match configured %q", p.meta.Issuer, p.cfg.Issuer)
+	if !issuerAccepted(p.cfg.Issuer, p.meta.Issuer) {
+		return p.fail(StageDiscovery, 0, fmt.Errorf("issuer %q does not match configured %q", p.meta.Issuer, p.cfg.Issuer))
+	}
+	if isTemplateIssuer(p.meta.Issuer) {
+		p.template = p.meta.Issuer
 	}
 	if p.meta.AuthorizationEndpoint == "" || p.meta.TokenEndpoint == "" || p.meta.JWKSURI == "" {
 		return errors.New("oidc: discovery document is missing required endpoints")
@@ -249,7 +282,7 @@ func (p *provider) ExchangeCodeWithNonce(ctx context.Context, code, codeVerifier
 	}
 	resp, err := p.client.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("oidc: token exchange: %w", err)
+		return nil, p.fail(StageExchange, 0, err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 	body, err := io.ReadAll(io.LimitReader(resp.Body, 1<<16))
@@ -257,7 +290,7 @@ func (p *provider) ExchangeCodeWithNonce(ctx context.Context, code, codeVerifier
 		return nil, err
 	}
 	if resp.StatusCode/100 != 2 {
-		return nil, fmt.Errorf("oidc: token exchange: status %d", resp.StatusCode)
+		return nil, p.fail(StageExchange, resp.StatusCode, errors.New("token endpoint rejected the request"))
 	}
 	var tr struct {
 		AccessToken  string `json:"access_token"`
@@ -268,10 +301,10 @@ func (p *provider) ExchangeCodeWithNonce(ctx context.Context, code, codeVerifier
 		ExpiresIn    int64  `json:"expires_in"`
 	}
 	if err := json.Unmarshal(body, &tr); err != nil {
-		return nil, fmt.Errorf("oidc: token response: %w", err)
+		return nil, p.fail(StageExchange, 0, errors.New("token response is not valid JSON"))
 	}
 	if tr.IDToken == "" {
-		return nil, errors.New("oidc: token response has no id_token")
+		return nil, p.fail(StageExchange, 0, errors.New("token response has no id_token"))
 	}
 	claims, err := p.verify(ctx, tr.IDToken)
 	if err != nil {
@@ -279,7 +312,7 @@ func (p *provider) ExchangeCodeWithNonce(ctx context.Context, code, codeVerifier
 	}
 	got, _ := claims["nonce"].(string)
 	if subtle.ConstantTimeCompare([]byte(got), []byte(nonce)) != 1 {
-		return nil, errors.New("oidc: id_token nonce mismatch")
+		return nil, p.fail(StageVerify, 0, errors.New("id_token nonce mismatch"))
 	}
 	tok := &theauth.ProviderToken{
 		AccessToken:  tr.AccessToken,
@@ -294,30 +327,6 @@ func (p *provider) ExchangeCodeWithNonce(ctx context.Context, code, codeVerifier
 	return tok, nil
 }
 
-func (p *provider) verify(ctx context.Context, raw string) (jwt.MapClaims, error) {
-	claims := jwt.MapClaims{}
-	parser := jwt.NewParser(
-		jwt.WithValidMethods(p.cfg.AllowedAlgs),
-		jwt.WithIssuer(p.cfg.Issuer),
-		jwt.WithAudience(p.cfg.ClientID),
-		jwt.WithExpirationRequired(),
-		jwt.WithLeeway(30*time.Second),
-	)
-	_, err := parser.ParseWithClaims(raw, claims, func(t *jwt.Token) (any, error) {
-		kid, _ := t.Header["kid"].(string)
-		return p.keys.key(ctx, kid)
-	})
-	if err != nil {
-		return nil, fmt.Errorf("oidc: id_token: %w", err)
-	}
-	if aud, err := claims.GetAudience(); err == nil && len(aud) > 1 {
-		if azp, _ := claims["azp"].(string); azp != p.cfg.ClientID {
-			return nil, errors.New("oidc: id_token azp mismatch")
-		}
-	}
-	return claims, nil
-}
-
 // UserInfo derives the profile from the verified ID token, falling back to
 // the userinfo endpoint for a missing email.
 func (p *provider) UserInfo(ctx context.Context, token *theauth.ProviderToken) (*theauth.ProviderUser, error) {
@@ -328,12 +337,15 @@ func (p *provider) UserInfo(ctx context.Context, token *theauth.ProviderToken) (
 	if err != nil {
 		return nil, err
 	}
-	sub, _ := claims["sub"].(string)
+	cm := p.cfg.Claims
+	subClaim := cm.or("sub", cm.Subject)
+	emailClaim := cm.or("email", cm.Email)
+	sub, _ := claims[subClaim].(string)
 	if sub == "" {
-		return nil, errors.New("oidc: id_token has no sub")
+		return nil, p.fail(StageVerify, 0, fmt.Errorf("id_token has no %s claim", subClaim))
 	}
-	if _, ok := claims["email"]; !ok && p.meta.UserinfoEndpoint != "" && token.AccessToken != "" {
-		if extra, err := p.fetchUserinfo(ctx, token.AccessToken, sub); err == nil {
+	if _, ok := claims[emailClaim]; !ok && p.meta.UserinfoEndpoint != "" && token.AccessToken != "" {
+		if extra, err := p.fetchUserinfo(ctx, token.AccessToken, claimString(claims, "sub")); err == nil {
 			for k, v := range extra {
 				if _, set := claims[k]; !set {
 					claims[k] = v
@@ -342,11 +354,16 @@ func (p *provider) UserInfo(ctx context.Context, token *theauth.ProviderToken) (
 		}
 	}
 	u := &theauth.ProviderUser{ID: sub}
-	u.Email, _ = claims["email"].(string)
-	u.EmailVerified = truthy(claims["email_verified"])
-	u.Name, _ = claims["name"].(string)
-	u.AvatarURL, _ = claims["picture"].(string)
+	u.Email, _ = claims[emailClaim].(string)
+	u.EmailVerified = truthy(claims[cm.or("email_verified", cm.EmailVerified)])
+	u.Name, _ = claims[cm.or("name", cm.Name)].(string)
+	u.AvatarURL, _ = claims[cm.or("picture", cm.Picture)].(string)
 	return u, nil
+}
+
+func claimString(claims map[string]any, k string) string {
+	s, _ := claims[k].(string)
+	return s
 }
 
 func truthy(v any) bool {
@@ -354,7 +371,9 @@ func truthy(v any) bool {
 	case bool:
 		return x
 	case string:
-		return x == "true"
+		return x == "true" || x == "1"
+	case float64:
+		return x == 1
 	}
 	return false
 }
@@ -371,14 +390,38 @@ func (p *provider) fetchUserinfo(ctx context.Context, accessToken, sub string) (
 	}
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode/100 != 2 {
-		return nil, fmt.Errorf("oidc: userinfo status %d", resp.StatusCode)
+		return nil, p.fail(StageUserinfo, resp.StatusCode, errors.New("userinfo endpoint rejected the request"))
 	}
 	var out map[string]any
 	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<16)).Decode(&out); err != nil {
 		return nil, err
 	}
 	if s, _ := out["sub"].(string); s != sub {
-		return nil, errors.New("oidc: userinfo sub mismatch")
+		return nil, p.fail(StageUserinfo, 0, errors.New("userinfo sub mismatch"))
 	}
 	return out, nil
+}
+
+// RefreshToken implements theauth.RefreshProvider with the standard
+// refresh_token grant (RFC 6749 section 6).
+func (p *provider) RefreshToken(ctx context.Context, refreshToken string) (*theauth.ProviderToken, error) {
+	tok, err := refresh.Do(ctx, refresh.Request{
+		Provider:     "oidc",
+		TokenURL:     p.meta.TokenEndpoint,
+		ClientID:     p.cfg.ClientID,
+		ClientSecret: p.cfg.ClientSecret,
+		RefreshToken: refreshToken,
+		BasicAuth:    p.basic,
+		Client:       p.client,
+	})
+	if err != nil {
+		return nil, p.fail(StageRefresh, 0, err)
+	}
+	if tok.IDToken != "" {
+		// A refreshed ID token is optional; when present it must verify.
+		if _, verr := p.verify(ctx, tok.IDToken); verr != nil {
+			return nil, verr
+		}
+	}
+	return tok, nil
 }

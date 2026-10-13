@@ -53,3 +53,10 @@ docs/superpowers/
 .windsurf/
 *.local.md
 docs-local/
+
+# Built binaries
+/cmd/theauth-doctor/theauth-doctor
+/cmd/theauth-migrate/theauth-migrate
+/cmd/theauth-go/theauth-go
+/examples/cli-login/cli-login
+/examples/doctor-admin/doctor-admin

@@ -26,7 +26,7 @@ const (
 	jagIDP      = "https://idp.example.com"
 )
 
-func newIDJAGInstance(t *testing.T, jag *theauth.IDJAGConfig, issuers []theauth.TrustedJWTIssuer) (*theauth.TheAuth, *memory.Store) {
+func newIDJAGInstance(t *testing.T, jag *theauth.IDJAGConfig, issuers []theauth.TrustedJWTIssuer, mut ...func(*theauth.AuthorizationServerConfig)) (*theauth.TheAuth, *memory.Store) {
 	t.Helper()
 	store := memory.New()
 	key := make([]byte, 32)
@@ -44,6 +44,9 @@ func newIDJAGInstance(t *testing.T, jag *theauth.IDJAGConfig, issuers []theauth.
 			TrustedJWTIssuers: issuers, AllowPrivateJWKSNetworks: true,
 			ClientAssertionMaxAge: time.Minute, AssertionMaxAge: 5 * time.Minute, ReplayCacheTTL: 10 * time.Minute,
 		}
+	}
+	for _, m := range mut {
+		m(cfg)
 	}
 	a, err := theauth.New(theauth.Config{
 		Storage: store, BaseURL: "https://auth.example.com", EncryptionKey: key, AuthorizationServer: cfg,

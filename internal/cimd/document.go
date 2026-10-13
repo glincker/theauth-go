@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/url"
 	"strings"
+	"time"
 )
 
 // Document is the JSON shape the AS expects when it fetches a CIMD URL.
@@ -44,10 +45,24 @@ type Document struct {
 	ResponseTypes []string `json:"response_types,omitempty"`
 
 	// TokenEndpointAuthMethod is "none" for public clients (the common
-	// MCP case) or "client_secret_basic" / "client_secret_post" for
-	// confidential clients. CIMD is most useful for public clients
-	// because there is no place in the document to put a secret.
+	// MCP case) or "private_key_jwt" for confidential clients that publish
+	// their verification keys in Jwks or JwksURI. The client_secret_*
+	// methods are rejected: a CIMD document has no place for a secret.
 	TokenEndpointAuthMethod string `json:"token_endpoint_auth_method,omitempty"`
+
+	// JwksURI is the https URL of the client's JWK Set (RFC 7591). Required
+	// (or Jwks) when TokenEndpointAuthMethod is private_key_jwt. Mutually
+	// exclusive with Jwks.
+	JwksURI string `json:"jwks_uri,omitempty"`
+
+	// Jwks is the client's inline JWK Set (RFC 7591). Required (or JwksURI)
+	// when TokenEndpointAuthMethod is private_key_jwt.
+	Jwks json.RawMessage `json:"jwks,omitempty"`
+
+	// cacheTTL is the freshness hint derived from the HTTP Cache-Control
+	// header when Config.HonorCacheControl is on. Zero means no hint. It is
+	// unexported so it never reaches the shared cache or the wire.
+	cacheTTL time.Duration
 
 	// Scope is the space-separated set of scopes the client may request.
 	// The AS still narrows against the resource catalog on every grant.
@@ -87,7 +102,7 @@ var ErrInvalidDocument = errors.New("cimd: invalid client metadata document")
 // parseAndValidate decodes raw JSON, applies CIMD invariants, and
 // returns the validated document. fetchURL is the URL the AS used to
 // retrieve the bytes; the document's client_id MUST equal it.
-func parseAndValidate(raw []byte, fetchURL string) (Document, error) {
+func parseAndValidate(raw []byte, fetchURL string, extraSchemes ...string) (Document, error) {
 	if len(raw) == 0 {
 		return Document{}, fmt.Errorf("%w: empty body", ErrInvalidDocument)
 	}
@@ -113,7 +128,7 @@ func parseAndValidate(raw []byte, fetchURL string) (Document, error) {
 		return Document{}, fmt.Errorf("%w: redirect_uris is required", ErrInvalidDocument)
 	}
 	for _, u := range doc.RedirectURIs {
-		if err := validateRedirectURI(u); err != nil {
+		if err := validateRedirectURIWith(u, extraSchemes); err != nil {
 			return Document{}, fmt.Errorf("%w: %v", ErrInvalidDocument, err)
 		}
 	}
@@ -130,7 +145,43 @@ func parseAndValidate(raw []byte, fetchURL string) (Document, error) {
 	if doc.ApplicationType == "" {
 		doc.ApplicationType = "web"
 	}
+	if err := validateAuthMethod(doc); err != nil {
+		return Document{}, fmt.Errorf("%w: %v", ErrInvalidDocument, err)
+	}
 	return doc, nil
+}
+
+// validateAuthMethod enforces the token_endpoint_auth_method allowlist.
+// "none" and "private_key_jwt" are the only methods a metadata document can
+// express safely: there is nowhere to publish a client secret, so the
+// client_secret_* family (and anything unrecognised) is refused instead of
+// being copied through to a client row that could never authenticate.
+func validateAuthMethod(doc Document) error {
+	switch doc.TokenEndpointAuthMethod {
+	case "none":
+		return nil
+	case "private_key_jwt":
+		hasJWKS := len(doc.Jwks) > 0
+		hasURI := doc.JwksURI != ""
+		if hasJWKS == hasURI {
+			return errors.New("private_key_jwt requires exactly one of jwks or jwks_uri")
+		}
+		if hasURI {
+			u, err := url.Parse(doc.JwksURI)
+			if err != nil || !strings.EqualFold(u.Scheme, "https") || u.Hostname() == "" {
+				return errors.New("jwks_uri must be an absolute https URL")
+			}
+			return nil
+		}
+		var set struct {
+			Keys []json.RawMessage `json:"keys"`
+		}
+		if err := json.Unmarshal(doc.Jwks, &set); err != nil || len(set.Keys) == 0 {
+			return errors.New("jwks must be a JWK Set with at least one key")
+		}
+		return nil
+	}
+	return fmt.Errorf("token_endpoint_auth_method %q is not allowed in a client metadata document", doc.TokenEndpointAuthMethod)
 }
 
 // sameURL compares two URLs ignoring a single trailing slash. Both
@@ -161,7 +212,12 @@ func canonicalURL(raw string) string {
 // DCR path: https, loopback http (any port, RFC 8252 section 7.3), or a
 // reverse-DNS private-use scheme (RFC 8252 section 7.1). javascript:, data:,
 // file: and dotless custom schemes are refused. No fragment, no userinfo.
-func ValidateRedirectURI(raw string) error {
+func ValidateRedirectURI(raw string) error { return validateRedirectURIWith(raw, nil) }
+
+// validateRedirectURIWith is ValidateRedirectURI plus operator-listed
+// private-use schemes that skip the reverse-DNS rule. Everything else (no
+// fragment, no userinfo, absolute, forbidden schemes) still applies.
+func validateRedirectURIWith(raw string, extraSchemes []string) error {
 	if raw == "" {
 		return errors.New("empty redirect_uri")
 	}
@@ -194,6 +250,11 @@ func ValidateRedirectURI(raw string) error {
 	case "javascript", "data", "file", "vbscript", "blob", "about", "ftp":
 		return errors.New("redirect_uri scheme is not allowed")
 	}
+	for _, allowed := range extraSchemes {
+		if scheme == allowed {
+			return nil
+		}
+	}
 	labels := strings.Split(scheme, ".")
 	if len(labels) < 2 {
 		return errors.New("native redirect_uri scheme must be reverse-DNS")
@@ -210,5 +271,3 @@ func ValidateRedirectURI(raw string) error {
 	}
 	return nil
 }
-
-func validateRedirectURI(raw string) error { return ValidateRedirectURI(raw) }

@@ -107,7 +107,7 @@ func (s *Service) RequireAbility(ability string) func(http.Handler) http.Handler
 				return
 			}
 			if !p.Has(ability) {
-				httpx.WriteProblemJSON(w, http.StatusForbidden, "auth.forbidden", "Missing required ability: "+ability, "")
+				s.problem(w, r, http.StatusForbidden, "auth.forbidden", "Missing required ability: "+ability, "")
 				return
 			}
 			next.ServeHTTP(w, r.WithContext(s.withPrincipal(r.Context(), p)))
@@ -121,18 +121,18 @@ func (s *Service) principalFromRequest(w http.ResponseWriter, r *http.Request) (
 		if err != nil {
 			if !errors.Is(err, ErrAPITokenInvalid) {
 				slog.Error("theauth: API token authentication failed", "err", err.Error())
-				httpx.WriteProblemJSON(w, http.StatusInternalServerError, "auth.internal_error", "Authentication failed", "")
+				s.problem(w, r, http.StatusInternalServerError, "auth.internal_error", "Authentication failed", "")
 				return nil, false
 			}
 			w.Header().Set("WWW-Authenticate", `Bearer realm="theauth", error="invalid_token"`)
-			httpx.WriteProblemJSON(w, http.StatusUnauthorized, "auth.unauthenticated", "Invalid API token", "")
+			s.problem(w, r, http.StatusUnauthorized, "auth.unauthenticated", "Invalid API token", "")
 			return nil, false
 		}
 		return p, true
 	}
 	c, err := r.Cookie(s.host.CookieName())
 	if err != nil || c.Value == "" {
-		httpx.WriteUnauthenticated(w, "auth.unauthenticated", "Missing credentials")
+		s.unauthenticated(w, r, "auth.unauthenticated", "Missing credentials")
 		return nil, false
 	}
 	return s.sessionPrincipal(w, r, c.Value)
@@ -141,18 +141,41 @@ func (s *Service) principalFromRequest(w http.ResponseWriter, r *http.Request) (
 func (s *Service) sessionPrincipal(w http.ResponseWriter, r *http.Request, token string) (*Principal, bool) {
 	sess, user, err := s.host.ValidateSession(r.Context(), token)
 	if err != nil {
-		httpx.WriteUnauthenticated(w, "auth.unauthenticated", "Missing or invalid session")
+		s.unauthenticated(w, r, "auth.unauthenticated", "Missing or invalid session")
 		return nil, false
 	}
 	if sess.AuthLevel != "" && sess.AuthLevel != models.AuthLevelFull {
-		httpx.WriteUnauthenticated(w, "auth.step_up_required", "Session requires second-factor verification")
+		s.unauthenticated(w, r, "auth.step_up_required", "Session requires second-factor verification")
 		return nil, false
 	}
 	abilities, err := s.UserAbilities(r.Context(), user)
 	if err != nil {
 		slog.Error("theauth: resolve session abilities failed", "err", err.Error())
-		httpx.WriteProblemJSON(w, http.StatusInternalServerError, "auth.internal_error", "Authentication failed", "")
+		s.problem(w, r, http.StatusInternalServerError, "auth.internal_error", "Authentication failed", "")
 		return nil, false
 	}
 	return &Principal{Kind: PrincipalSession, UserID: user.ID, OwnerKind: OwnerKindUser, Abilities: abilities, user: user}, true
+}
+
+// SetErrorResponder routes this service's middleware error writes through
+// fn (Config.ErrorResponder). Nil restores the built-in problem+json bodies.
+func (s *Service) SetErrorResponder(fn func(w http.ResponseWriter, r *http.Request, status int, code, message string)) {
+	s.responder = fn
+}
+
+func (s *Service) problem(w http.ResponseWriter, r *http.Request, status int, code, detail, instance string) {
+	if s.responder != nil {
+		s.responder(w, r, status, code, detail)
+		return
+	}
+	httpx.WriteProblemJSON(w, status, code, detail, instance)
+}
+
+func (s *Service) unauthenticated(w http.ResponseWriter, r *http.Request, code, detail string) {
+	if s.responder != nil {
+		w.Header().Set("WWW-Authenticate", `Session realm="theauth", error="`+code+`"`)
+		s.responder(w, r, http.StatusUnauthorized, code, detail)
+		return
+	}
+	httpx.WriteUnauthenticated(w, code, detail)
 }

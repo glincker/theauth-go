@@ -24,7 +24,7 @@ func (s *Service) sharedLoad(ctx context.Context, key, rawURL string) (Document,
 	if err != nil || !ok {
 		return Document{}, false
 	}
-	doc, err := parseAndValidate(b, rawURL)
+	doc, err := parseAndValidate(b, rawURL, s.cfg.AllowedRedirectSchemes...)
 	if err != nil {
 		return Document{}, false
 	}
@@ -40,7 +40,11 @@ func (s *Service) sharedStore(ctx context.Context, key string, doc Document) {
 	if err != nil {
 		return
 	}
-	_ = s.cfg.Cache.Set(ctx, sharedKeyPrefix+key, b, s.cfg.CacheTTL)
+	ttl := s.cfg.CacheTTL
+	if doc.cacheTTL > 0 {
+		ttl = doc.cacheTTL
+	}
+	_ = s.cfg.Cache.Set(ctx, sharedKeyPrefix+key, b, ttl)
 }
 
 // sharedDelete drops one URL from the shared tier.

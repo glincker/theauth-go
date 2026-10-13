@@ -45,9 +45,23 @@ type Principal struct {
 	// Issuer is the JWT iss claim.
 	Issuer string
 
-	// Audience is the JWT aud claim (always equal to the configured
-	// resource URI; the middleware rejects mismatches before attaching).
+	// Audience is the configured resource URI. The middleware rejects any
+	// token whose aud claim (string or array) does not contain it.
 	Audience string
+
+	// Audiences is every aud value the token carried.
+	Audiences []string
+
+	// ACR is the acr claim: the authentication context class the user
+	// authenticated with. Empty when the token carries none.
+	ACR string
+
+	// AMR lists the amr claim (authentication methods).
+	AMR []string
+
+	// AuthTime is the auth_time claim: when the user last authenticated.
+	// Zero when the token carries none.
+	AuthTime time.Time
 
 	// JWTID is the JWT jti claim.
 	JWTID string
@@ -63,6 +77,10 @@ type Principal struct {
 	// inbound DPoP proof's JWK thumbprint equals this value, so
 	// handlers can trust the binding without re-verifying.
 	CnfJKT string
+
+	// authorizationDetails is the RFC 9396 authorization_details, exposed
+	// read-only through AuthorizationDetails.
+	authorizationDetails []AuthorizationDetail
 }
 
 // ctxKey is the unexported context key type used for principal storage.

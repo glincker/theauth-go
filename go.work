@@ -2,6 +2,9 @@ go 1.26.0
 
 use (
 	.
+	./adapters/echo
+	./adapters/fiber
+	./adapters/gin
 	./audit/sinks/otlp
 	./examples/chi-app
 	./examples/echo-app

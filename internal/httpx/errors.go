@@ -45,6 +45,10 @@ func ErrToHTTP(w http.ResponseWriter, err error) {
 			WriteJSONError(w, http.StatusUnauthorized, te.Code, te.Message)
 		case models.CodeAlreadyEnrolled:
 			WriteJSONError(w, http.StatusConflict, te.Code, te.Message)
+		case models.CodePasswordChangeRequired, models.CodeAccountDisabled, models.CodeReauthRequired:
+			WriteJSONError(w, http.StatusForbidden, te.Code, te.Message)
+		case models.CodeSessionLimit:
+			WriteJSONError(w, http.StatusConflict, te.Code, te.Message)
 		case models.CodeTOTPRequired:
 			WriteJSONError(w, http.StatusOK, te.Code, te.Message)
 		default:

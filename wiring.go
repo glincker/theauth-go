@@ -384,6 +384,12 @@ func wireServices(a *TheAuth, cfg Config, providers map[string]Provider, sp saml
 	if rc, ok := cfg.storageRaw.(RecoveryCodeStorage); ok {
 		a.totpSvc.SetRecoveryStore(rc)
 	}
+	if err := a.setupLifecycle(&cfg); err != nil {
+		return err
+	}
+	if a.sessionSvc != nil {
+		a.totpSvc.SetSessionCap(a.sessionSvc)
+	}
 	pwCfg := password.Config{
 		BaseURL:              cfg.BaseURL,
 		PathPrefix:           a.pathPrefix,
@@ -398,6 +404,12 @@ func wireServices(a *TheAuth, cfg Config, providers map[string]Provider, sp saml
 	}
 	if gate != nil {
 		pwCfg.Gate = gate
+	}
+	if a.acct != nil {
+		pwCfg.Account = a.acct
+	}
+	if a.devices != nil {
+		pwCfg.Devices = a.devices
 	}
 	pwSvc, err := password.NewService(cfg.Storage, cfg.EmailSender, a.sessionSvc, a.magicSvc, a.totpSvc, a, pwCfg)
 	if err != nil {
@@ -606,6 +618,9 @@ func asConfigFromRoot(c *AuthorizationServerConfig) internalas.Config {
 		DPoP:                           dpopConfigFromRoot(c.DPoP),
 		RequireState:                   c.RequireState,
 		AccessTokenRevocation:          c.AccessTokenRevocation,
+		ClientCompat:                   c.ClientCompat,
+		ACRValues:                      internalas.NormalizeACRValues(c.ACRValues),
+		SessionAMR:                     c.SessionAMR,
 		PAR:                            c.PAR,
 		JAR:                            c.JAR,
 		JWTBearer:                      jwtBearerConfigFromRoot(c.JWTBearer),

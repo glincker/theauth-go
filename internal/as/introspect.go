@@ -55,6 +55,11 @@ type IntrospectionResponse struct {
 	// AuthorizationDetails carries the RFC 9396 details the token was
 	// granted, when it has any.
 	AuthorizationDetails json.RawMessage `json:"authorization_details,omitempty"`
+	// AuthTime, ACR and AMR report the user authentication context the
+	// token was issued under (OIDC Core, RFC 9470), when it has one.
+	AuthTime int64    `json:"auth_time,omitempty"`
+	ACR      string   `json:"acr,omitempty"`
+	AMR      []string `json:"amr,omitempty"`
 }
 
 // ConfirmationClaim is the JSON shape of the RFC 7800 cnf claim. Only
@@ -187,6 +192,7 @@ func (s *Service) introspectClaims(ctx context.Context, claims jwt.Claims) Intro
 			resp.DelegationGrantID = sval
 		}
 	}
+	resp.AuthTime, resp.ACR, resp.AMR = authContextFromExtra(claims.Extra)
 	if v, ok := claims.Extra["cnf"]; ok {
 		if m, ok := v.(map[string]any); ok {
 			if jkt, ok := m["jkt"].(string); ok && jkt != "" {

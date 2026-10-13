@@ -44,6 +44,7 @@ Server faults on OAuth endpoints return a generic `server_error` description. De
 ## Resource server and sinks
 
 - `mcpresource` requires `typ: at+jwt` (RFC 9068) by default. `WithAllowMissingTyp()` tolerates an absent typ for servers that omit it; a wrong typ is always rejected. The same rule applies inside the AS (`jwt.Verify`; `jwt.VerifyOpts` has the tolerant mode).
+- `mcpresource` accepts only EdDSA, ES256 and RS256 access tokens. The key type must match the header `alg`, RSA keys under 2048 bits are dropped, and `aud` may be a string or an array that contains the resource URI. `RequireScope` and `RequireStepUp` enforce per-route scope and `acr` or `auth_time` requirements; `ToolSecurity` metadata in `tools/list` is advisory and not enforcement.
 - The JWKS cache serves stale keys during an outage only up to `WithJWKSMaxStale` (default 1 hour), then fails closed.
 - Webhook audit sink signatures cover `"<unix-seconds>." + body`, with the timestamp in `X-CloudEvents-Timestamp`. `webhook.Verify` checks the MAC in constant time and rejects timestamps outside a window (default 5 minutes), which bounds replay of a captured delivery.
 

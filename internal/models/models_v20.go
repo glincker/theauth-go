@@ -78,8 +78,14 @@ type AuthorizationCode struct {
 	// AuthorizationDetails is the RFC 9396 authorization_details array the
 	// user approved, as JSON. Nil when the request carried none.
 	AuthorizationDetails []byte
-	ExpiresAt            time.Time
-	CreatedAt            time.Time
+	// AuthTime, ACR and AMR describe how and when the user authenticated
+	// for this grant (OIDC Core auth_time, acr, amr). AuthTime is the zero
+	// time and ACR and AMR are empty when the session carried no such data.
+	AuthTime  time.Time
+	ACR       string
+	AMR       []string
+	ExpiresAt time.Time
+	CreatedAt time.Time
 }
 
 // RefreshToken is the opaque, hashed, rotated-on-use refresh artefact backing
@@ -112,6 +118,12 @@ type RefreshToken struct {
 	// AuthorizationDetails is the RFC 9396 authorization_details array
 	// granted to this family, as JSON. Nil when none were granted.
 	AuthorizationDetails []byte
+	// AuthTime, ACR and AMR carry the authentication context of the grant
+	// the family was first issued from. They are copied verbatim on every
+	// rotation: a refresh never advances AuthTime.
+	AuthTime time.Time
+	ACR      string
+	AMR      []string
 }
 
 // JWKSKey is one signing key in the AS's JWKS state machine. State transitions:

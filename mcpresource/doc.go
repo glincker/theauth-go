@@ -20,6 +20,12 @@
 //	    // walks innermost (delegated agent) to outermost (root).
 //	})
 //
+// Access tokens may be signed with EdDSA, ES256 or RS256 (RSA >= 2048 bits);
+// aud may be a string or an array. RequireScope and RequireStepUp add
+// per-route scope (RFC 6750) and step-up (RFC 9470) challenges, ToolSecurity
+// builds tools/list security metadata, and NewURLElicitation builds MCP URL
+// mode elicitations.
+//
 // The package validates the JWT signature against a cached JWKS, enforces the
 // audience claim against the configured resource URI, checks expiry with a
 // small skew tolerance, and walks the RFC 8693 actor chain via the AS

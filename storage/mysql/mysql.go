@@ -114,3 +114,19 @@ func nullStringScan(ns sql.NullString) string {
 	}
 	return ns.String
 }
+
+// authTimeToNull maps the zero time to SQL NULL: a grant that recorded no
+// authentication time stores none.
+func authTimeToNull(t time.Time) sql.NullTime {
+	if t.IsZero() {
+		return sql.NullTime{}
+	}
+	return sql.NullTime{Time: t.UTC(), Valid: true}
+}
+
+func authTimeFromNull(nt sql.NullTime) time.Time {
+	if !nt.Valid {
+		return time.Time{}
+	}
+	return nt.Time.UTC()
+}

@@ -8,7 +8,6 @@ import (
 
 	"github.com/glincker/theauth-go/v2/internal/agent"
 	"github.com/glincker/theauth-go/v2/internal/apitokens"
-	"github.com/glincker/theauth-go/v2/internal/httpx"
 	"github.com/glincker/theauth-go/v2/internal/models"
 	"github.com/glincker/theauth-go/v2/internal/revocation"
 )
@@ -206,8 +205,8 @@ func (a *TheAuth) RequireAbility(ability string) func(http.Handler) http.Handler
 	s, err := a.apiSvc()
 	if err != nil {
 		return func(http.Handler) http.Handler {
-			return http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-				httpx.WriteProblemJSON(w, http.StatusInternalServerError, "apitokens.disabled", "API tokens are not enabled in Config", "")
+			return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				a.problem(w, r, http.StatusInternalServerError, "apitokens.disabled", "API tokens are not enabled in Config", "")
 			})
 		}
 	}
@@ -221,7 +220,7 @@ func (a *TheAuth) RequireAbility(ability string) func(http.Handler) http.Handler
 func (a *TheAuth) AuthenticatePrincipal(w http.ResponseWriter, r *http.Request) (*http.Request, *Principal, bool) {
 	s, err := a.apiSvc()
 	if err != nil {
-		httpx.WriteProblemJSON(w, http.StatusInternalServerError, "apitokens.disabled", "API tokens are not enabled in Config", "")
+		a.problem(w, r, http.StatusInternalServerError, "apitokens.disabled", "API tokens are not enabled in Config", "")
 		return r, nil, false
 	}
 	return s.AuthenticatePrincipal(w, r)

@@ -18,6 +18,9 @@ type serializedAuthorizeRequest struct {
 	CodeChallengeMethod string   `json:"code_challenge_method"`
 	Resource            string   `json:"resource"`
 	Nonce               string   `json:"nonce,omitempty"`
+	MaxAge              *int64   `json:"max_age,omitempty"`
+	ACRValues           []string `json:"acr_values,omitempty"`
+	Prompt              string   `json:"prompt,omitempty"`
 
 	AuthorizationDetails string `json:"authorization_details,omitempty"`
 }
@@ -33,6 +36,9 @@ func serializeAuthorizeRequest(req AuthorizeRequest) ([]byte, error) {
 		CodeChallengeMethod: req.CodeChallengeMethod,
 		Resource:            req.Resource,
 		Nonce:               req.Nonce,
+		MaxAge:              req.MaxAge,
+		ACRValues:           req.ACRValues,
+		Prompt:              req.Prompt,
 
 		AuthorizationDetails: req.AuthorizationDetails,
 	})
@@ -53,6 +59,9 @@ func deserializeAuthorizeRequest(payload []byte) (AuthorizeRequest, error) {
 		CodeChallengeMethod: s.CodeChallengeMethod,
 		Resource:            s.Resource,
 		Nonce:               s.Nonce,
+		MaxAge:              s.MaxAge,
+		ACRValues:           s.ACRValues,
+		Prompt:              s.Prompt,
 
 		AuthorizationDetails: s.AuthorizationDetails,
 	}, nil

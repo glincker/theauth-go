@@ -746,6 +746,22 @@ func (a *TheAuth) StartAuthorize(ctx context.Context, req AuthorizeRequest, user
 	return a.as.StartAuthorize(ctx, req, user)
 }
 
+// AuthContext describes how and when the user behind an authorize request
+// authenticated (auth_time and amr). The /oauth/authorize handler builds it
+// from the session; callers of StartAuthorize that bypass the handler attach
+// one with WithAuthContext so tokens carry auth_time, acr and amr and
+// max_age and acr_values on AuthorizeRequest can be honored.
+type AuthContext = internalas.AuthContext
+
+// WithAuthContext returns a context carrying ac for StartAuthorize.
+func WithAuthContext(ctx context.Context, ac AuthContext) context.Context {
+	return internalas.WithAuthContext(ctx, ac)
+}
+
+// IsReauthRequired reports whether a StartAuthorize error means the user
+// must authenticate again (max_age exceeded or acr_values not met).
+func IsReauthRequired(err error) bool { return internalas.IsReauthRequired(err) }
+
 // IsLoginRequired reports whether the supplied error signals the
 // authorize path needs an authenticated user. Forwards to
 // internalas.IsLoginRequired; both packages share the same sentinel
@@ -765,9 +781,17 @@ func (a *TheAuth) NormalizeEmail(raw string) string { return a.normalizeEmail(ra
 // ResetPasswordAdmin sets a new password for the user with the given email
 // without a reset token, revokes their sessions and clears login and MFA
 // lockouts. It enforces the configured password policy and is meant for a
-// recover-admin command run by someone with host access.
-func (a *TheAuth) ResetPasswordAdmin(ctx context.Context, emailAddr, newPassword string) error {
-	userID, err := a.passwordSvc.AdminSetPassword(ctx, emailAddr, newPassword)
+// recover-admin command run by someone with host access. Pass
+// RequirePasswordChange to force the user to choose their own password.
+func (a *TheAuth) ResetPasswordAdmin(ctx context.Context, emailAddr, newPassword string, opts ...ResetPasswordOption) error {
+	var o resetPasswordOptions
+	for _, opt := range opts {
+		opt(&o)
+	}
+	if o.requireChange && (a.acct == nil || a.acct.state == nil) {
+		return ErrAccountStateDisabled
+	}
+	userID, err := a.passwordSvc.AdminSetPassword(ctx, emailAddr, newPassword, o.requireChange)
 	if err != nil {
 		return err
 	}

@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"strings"
 	"time"
 
 	"github.com/glincker/theauth-go/v2"
@@ -230,8 +231,8 @@ func (s *Store) InsertAuthorizationCode(ctx context.Context, c theauth.Authoriza
 INSERT INTO oauth_authorization_codes
     (code, client_id, user_id, organization_id, redirect_uri, scope, resource,
      code_challenge, code_challenge_method, nonce, expires_at, created_at,
-     authorization_details)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+     authorization_details, auth_time, acr, amr)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		c.Code,
 		c.ClientID,
 		ulidToBytes(c.UserID),
@@ -245,6 +246,9 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		timeUTC(c.ExpiresAt),
 		timeUTC(created),
 		nullBytesToSlice(c.AuthorizationDetails),
+		authTimeToNull(c.AuthTime),
+		c.ACR,
+		strings.Join(c.AMR, " "),
 	)
 	return err
 }
@@ -265,18 +269,20 @@ func (s *Store) ConsumeAuthorizationCode(ctx context.Context, code string) (*the
 		userIDB, orgIDB                 []byte
 		expiresAt, created              time.Time
 		details                         []byte
+		authAt                          sql.NullTime
+		acr, amr                        string
 	)
 	err = tx.QueryRowContext(ctx, `
 SELECT client_id, user_id, organization_id, redirect_uri, scope, resource,
        code_challenge, code_challenge_method, nonce, expires_at, created_at,
-       authorization_details
+       authorization_details, auth_time, acr, amr
 FROM oauth_authorization_codes WHERE code = ?
 FOR UPDATE`,
 		code,
 	).Scan(
 		&clientID, &userIDB, &orgIDB, &redirectURI, &scopeJSON, &resource,
 		&codeChal, &codeChalMethod, &nonce, &expiresAt, &created,
-		&details,
+		&details, &authAt, &acr, &amr,
 	)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, storage.ErrNotFound
@@ -312,6 +318,9 @@ FOR UPDATE`,
 		CreatedAt:           created.UTC(),
 
 		AuthorizationDetails: details,
+		AuthTime:             authTimeFromNull(authAt),
+		ACR:                  acr,
+		AMR:                  strings.Fields(amr),
 	}
 	return out, nil
 }
@@ -324,8 +333,8 @@ func (s *Store) InsertRefreshToken(ctx context.Context, t theauth.RefreshToken) 
 INSERT INTO oauth_refresh_tokens
     (id, hash, family_id, client_id, user_id, agent_id, scope, resource,
      parent_jti, issued_at, expires_at, dpop_jkt, auth_code_hash,
-     authorization_details)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+     authorization_details, auth_time, acr, amr)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		ulidToBytes(t.ID),
 		t.Hash,
 		ulidToBytes(t.FamilyID),
@@ -340,6 +349,9 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		t.DPoPJKT,
 		t.AuthCodeHash,
 		nullBytesToSlice(t.AuthorizationDetails),
+		authTimeToNull(t.AuthTime),
+		t.ACR,
+		strings.Join(t.AMR, " "),
 	)
 	return err
 }
@@ -351,16 +363,18 @@ func (s *Store) RefreshTokenByHash(ctx context.Context, hash []byte) (*theauth.R
 		revNote, dpopJKT, authCodeHash    string
 		scopeJSON, details                []byte
 		issued, expires, revoked          sql.NullTime
+		authAt                            sql.NullTime
+		acr, amr                          string
 	)
 	err := s.db.QueryRowContext(ctx, `
 SELECT id, hash, family_id, client_id, user_id, agent_id, scope, resource,
        parent_jti, issued_at, expires_at, revoked_at, revocation_note,
-       dpop_jkt, auth_code_hash, authorization_details
+       dpop_jkt, auth_code_hash, authorization_details, auth_time, acr, amr
 FROM oauth_refresh_tokens WHERE hash = ?`, hash,
 	).Scan(
 		&idB, &hash, &familyIDB, &clientID, &userIDB, &agentIDB, &scopeJSON, &resource,
 		&parentJTI, &issued, &expires, &revoked, &revNote,
-		&dpopJKT, &authCodeHash, &details,
+		&dpopJKT, &authCodeHash, &details, &authAt, &acr, &amr,
 	)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, storage.ErrNotFound
@@ -389,6 +403,9 @@ FROM oauth_refresh_tokens WHERE hash = ?`, hash,
 		AuthCodeHash:   authCodeHash,
 
 		AuthorizationDetails: details,
+		AuthTime:             authTimeFromNull(authAt),
+		ACR:                  acr,
+		AMR:                  strings.Fields(amr),
 	}
 	return out, nil
 }

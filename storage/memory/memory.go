@@ -45,6 +45,10 @@ type Store struct {
 	// OAuth device authorizations + registration tokens. See memory_device.go.
 	devauth devAuthState
 	opaque  opaqueState
+	// account lifecycle: forced password change, disable, trusted devices.
+	// See memory_lifecycle.go.
+	acctState map[theauth.ULID]theauth.AccountState
+	trusted   map[theauth.ULID]theauth.TrustedDevice
 }
 
 func New() *Store {

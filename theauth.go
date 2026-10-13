@@ -3,9 +3,10 @@ package theauth
 import (
 	"context"
 	"crypto/ed25519"
+	"net/http"
 	"net/netip"
-	"sync/atomic"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/glincker/theauth-go/v2/crypto"
@@ -32,6 +33,7 @@ import (
 	"github.com/glincker/theauth-go/v2/internal/testhooks"
 	"github.com/glincker/theauth-go/v2/internal/throttle"
 	internaltotp "github.com/glincker/theauth-go/v2/internal/totp"
+	"github.com/glincker/theauth-go/v2/internal/trusteddevice"
 	internalwebauthn "github.com/glincker/theauth-go/v2/internal/webauthn"
 	"github.com/glincker/theauth-go/v2/kv"
 )
@@ -120,6 +122,16 @@ type Config struct {
 	// cookie-authenticated POST/PUT/PATCH/DELETE requests. Leave false
 	// unless a fronting layer already enforces it.
 	DisableCSRFProtection bool
+
+	// ErrorResponder, when set, writes every error response the root
+	// middleware produces (Authn family, RequireAuth, RequirePermission,
+	// RequireAbility, the Origin check, rate limiters) so an app can emit its
+	// own error envelope. status is the HTTP status, code the stable machine
+	// code (for example "auth.unauthenticated") and message the human text.
+	// On a 401 the WWW-Authenticate challenge header is already set before
+	// the call. Nil keeps the built-in RFC 7807 / {"code","message"} bodies
+	// byte for byte. Handler-level routes under Mount keep their own bodies.
+	ErrorResponder func(w http.ResponseWriter, r *http.Request, status int, code, message string)
 
 	// SuppressTrustedProxiesWarning silences the startup WARN logged when
 	// TrustedProxies is empty. Set it when the server is exposed directly
@@ -284,6 +296,24 @@ type Config struct {
 	// EmailNFKC additionally applies Unicode NFKC folding when canonicalizing
 	// email addresses. Trimming and lowercasing always apply.
 	EmailNFKC bool
+
+	// ---- Account lifecycle and session policy ----
+
+	// AccountState enforces per-user lifecycle flags at every sign-in: the
+	// forced password change flag (SetMustChangePassword, ResetPasswordAdmin
+	// with RequirePasswordChange, importers) and DisableUser. Needs a
+	// storage implementing AccountStateStorage and its migration applied.
+	AccountState bool
+
+	// AccountDeletion mounts DELETE /account for self-service deletion when
+	// non-nil. The session must have authenticated recently (RequireRecentAuth).
+	AccountDeletion *AccountDeletionConfig
+
+	// SessionPolicy caps concurrent sessions per user. Nil means no cap.
+	SessionPolicy *SessionPolicy
+
+	// TrustedDevices enables remember-this-device for TOTP when non-nil.
+	TrustedDevices *TrustedDevicesConfig
 }
 
 // PasswordPolicyConfig holds optional password-verification extensions.
@@ -347,6 +377,7 @@ type TheAuth struct {
 	rlSeq             atomic.Uint32
 	trustedOrigins    []string
 	csrfDisabled      bool
+	errorResponder    func(w http.ResponseWriter, r *http.Request, status int, code, message string)
 	apiTokens         *apitokens.Service
 	revocations       RevocationBus
 
@@ -473,6 +504,14 @@ type TheAuth struct {
 	// deployments). Gated at account handler mount time so non-AccountUX
 	// consumers are unaffected.
 	identityLinkSvc *identitylink.Service
+
+	// Account lifecycle. acct gates sign-in and reacts to password changes;
+	// devices backs remember-this-device; deletion enables DELETE /account.
+	// See lifecycle.go.
+	acct         *accountLifecycle
+	devices      *trusteddevice.Service
+	deviceCookie string
+	deletion     *AccountDeletionConfig
 }
 
 // New validates the Config, applies defaults, and returns a ready TheAuth.
@@ -525,6 +564,7 @@ func New(cfg Config) (*TheAuth, error) {
 		stores:                     cfg.Stores,
 		trustedOrigins:             trustedOrigins,
 		csrfDisabled:               cfg.DisableCSRFProtection,
+		errorResponder:             cfg.ErrorResponder,
 		storageRaw:                 cfg.storageRaw,
 		emailNorm:                  newEmailNormalizer(cfg.EmailNFKC),
 		dcrRegistrationTokenHashes: dcrTokenHashes,
@@ -559,6 +599,9 @@ func New(cfg Config) (*TheAuth, error) {
 	}
 	if a.apiTokens, err = apitokens.New(tokenHost{a}, cfg.APITokens, cfg.storageRaw, a.storage, a.baseURL); err != nil {
 		return nil, err
+	}
+	if a.apiTokens != nil && cfg.ErrorResponder != nil {
+		a.apiTokens.SetErrorResponder(cfg.ErrorResponder)
 	}
 	return a, nil
 }

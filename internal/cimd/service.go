@@ -39,6 +39,10 @@ const (
 	// gcEvery is how often the cache GC sweep runs. 60s mirrors other
 	// in-tree GC loops (webauthn challenges, oauth state).
 	gcEvery = time.Minute
+	// MinCacheTTL is the floor applied when HonorCacheControl shortens a
+	// document's freshness window, so a max-age=0 publisher cannot force a
+	// network fetch on every request.
+	MinCacheTTL = 10 * time.Second
 )
 
 // Config wires the CIMD service. Mirrors the root theauth.CIMDConfig
@@ -89,6 +93,54 @@ type Config struct {
 	// DenyHost, when set, is consulted before any network IO; returning
 	// true rejects the URL's hostname. It runs in addition to TrustPolicy.
 	DenyHost func(host string) bool
+
+	// HonorCacheControl, when true, lets the publisher shorten how long a
+	// fetched document stays cached by sending Cache-Control max-age (or
+	// no-store / no-cache, which clamp to MinCacheTTL). The result is always
+	// within [MinCacheTTL, CacheTTL]: a publisher can never extend caching
+	// past CacheTTL. Off by default, which keeps the fixed CacheTTL.
+	HonorCacheControl bool
+
+	// AllowedRedirectSchemes lists extra private-use URI schemes a document
+	// may use in redirect_uris, beyond https, loopback http and reverse-DNS
+	// schemes (RFC 8252 section 7.1). It exists for clients such as Cursor
+	// that register a bare scheme like "cursor://anysphere.cursor-mcp/oauth".
+	// Entries must be lowercase and must not be http, https, javascript,
+	// data, file or another browser-executable scheme; Validate rejects
+	// them. Fragment and userinfo are still refused. Empty (the default)
+	// keeps the strict reverse-DNS rule. Listing a scheme trusts every
+	// document the TrustPolicy admits to claim it, and any app on the
+	// device can register the same scheme, so prefer PKCE-only public
+	// clients and a narrow TrustPolicy.
+	AllowedRedirectSchemes []string
+}
+
+// forbiddenRedirectSchemes can never be allowed as redirect schemes: they
+// execute in or navigate a browser context or reach local files.
+var forbiddenRedirectSchemes = map[string]struct{}{
+	"http": {}, "https": {}, "javascript": {}, "data": {}, "file": {},
+	"vbscript": {}, "blob": {}, "about": {}, "ftp": {},
+}
+
+// Validate checks AllowedRedirectSchemes: each entry must be a lowercase
+// URI scheme (RFC 3986) and not a forbidden browser scheme.
+func (c *Config) Validate() error {
+	for _, s := range c.AllowedRedirectSchemes {
+		if s == "" || s != strings.ToLower(s) {
+			return fmt.Errorf("cimd: AllowedRedirectSchemes entry %q must be a non-empty lowercase scheme", s)
+		}
+		if _, bad := forbiddenRedirectSchemes[s]; bad {
+			return fmt.Errorf("cimd: AllowedRedirectSchemes must not contain %q", s)
+		}
+		for i, r := range s {
+			letter := r >= 'a' && r <= 'z'
+			tail := i > 0 && (r >= '0' && r <= '9' || r == '+' || r == '-' || r == '.')
+			if !letter && !tail {
+				return fmt.Errorf("cimd: AllowedRedirectSchemes entry %q is not a valid URI scheme", s)
+			}
+		}
+	}
+	return nil
 }
 
 // audit action names emitted by the Service. Named constants so the
@@ -132,6 +184,8 @@ type Service struct {
 type cacheEntry struct {
 	doc       Document
 	fetchedAt time.Time
+	// ttl, when non-zero, overrides cfg.CacheTTL for this entry (Cache-Control).
+	ttl time.Duration
 	// err, when non-nil, marks a negative entry: the fetch failed and the
 	// same error is replayed until NegativeCacheTTL elapses.
 	err error
@@ -382,6 +436,9 @@ func (s *Service) entryTTL(e *cacheEntry) time.Duration {
 	if e.err != nil {
 		return s.cfg.NegativeCacheTTL
 	}
+	if e.ttl > 0 {
+		return e.ttl
+	}
 	return s.cfg.CacheTTL
 }
 
@@ -407,7 +464,7 @@ func (s *Service) fetchOnce(ctx context.Context, key, rawURL string) (Document, 
 
 	f.doc, f.err = s.fetch(context.WithoutCancel(ctx), rawURL)
 	if f.err == nil {
-		s.cache.Store(key, &cacheEntry{doc: f.doc, fetchedAt: time.Now()})
+		s.cache.Store(key, &cacheEntry{doc: f.doc, fetchedAt: time.Now(), ttl: f.doc.cacheTTL})
 	} else if s.cfg.NegativeCacheTTL > 0 {
 		s.cache.Store(key, &cacheEntry{fetchedAt: time.Now(), err: f.err})
 	}
@@ -460,10 +517,13 @@ func (s *Service) fetch(ctx context.Context, rawURL string) (Document, error) {
 		s.auditInvalid(ctx, rawURL, "body_too_large")
 		return Document{}, fmt.Errorf("%w: body exceeds %d bytes", ErrFetchFailed, s.cfg.MaxDocumentBytes)
 	}
-	doc, err := parseAndValidate(body, rawURL)
+	doc, err := parseAndValidate(body, rawURL, s.cfg.AllowedRedirectSchemes...)
 	if err != nil {
 		s.auditInvalid(ctx, rawURL, "document_invalid")
 		return Document{}, err
+	}
+	if s.cfg.HonorCacheControl {
+		doc.cacheTTL = s.cacheControlTTL(resp.Header.Get("Cache-Control"))
 	}
 	return doc, nil
 }
@@ -496,12 +556,10 @@ func cacheKey(raw string) string { return canonicalURL(raw) }
 // touches storage (CreatedAt / UpdatedAt are zero, ID is zero); the AS
 // authorize + token paths read only the OAuth-relevant fields.
 //
-// TokenEndpointAuthMethod is preserved as-is. Most CIMD clients are
-// public ("none"); confidential CIMD clients are uncommon because the
-// metadata document has no place for a secret. The AS still validates
-// credentials at /oauth/token via its standard AuthenticateClient path;
-// a CIMD-published confidential client with no stored secret will fail
-// invalid_client there, which is the correct behavior.
+// TokenEndpointAuthMethod has already passed the allowlist in
+// parseAndValidate: "none" for public clients, or "private_key_jwt" with the
+// published jwks / jwks_uri copied onto the client so the AS can verify
+// client assertions. A client_secret_* method never reaches this point.
 func synthesizeClient(doc Document) *models.OAuthClient {
 	return &models.OAuthClient{
 		ClientID:                doc.ClientID,
@@ -511,6 +569,8 @@ func synthesizeClient(doc Document) *models.OAuthClient {
 		ResponseTypes:           append([]string(nil), doc.ResponseTypes...),
 		Scope:                   doc.Scope,
 		TokenEndpointAuthMethod: doc.TokenEndpointAuthMethod,
+		JwksURI:                 doc.JwksURI,
+		Jwks:                    append([]byte(nil), doc.Jwks...),
 		ApplicationType:         doc.ApplicationType,
 		Contacts:                append([]string(nil), doc.Contacts...),
 		LogoURI:                 doc.LogoURI,

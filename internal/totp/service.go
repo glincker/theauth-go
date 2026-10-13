@@ -95,6 +95,16 @@ type Storage interface {
 	UserByID(ctx context.Context, id models.ULID) (*models.User, error)
 }
 
+// SessionCap makes room under the concurrent session cap when a pending
+// session is promoted to full. *session.Service satisfies it.
+type SessionCap interface {
+	CapRoom(ctx context.Context, userID, exclude models.ULID) error
+	EnforceCap(ctx context.Context, userID, exclude models.ULID) error
+}
+
+// SetSessionCap installs the concurrent session cap enforced at promotion.
+func (s *Service) SetSessionCap(c SessionCap) { s.sessionCap = c }
+
 // SessionValidator abstracts the session.Validate call so this package can
 // upgrade a pending session without importing internal/session. The
 // concrete *session.Service satisfies this interface naturally.
@@ -117,6 +127,7 @@ type Service struct {
 	cfg           *Config
 	encryptionKey []byte
 	recovery      RecoveryStore
+	sessionCap    SessionCap
 
 	// enrollments is the in-memory map of in-flight enrollments keyed by
 	// the EnrollmentID returned from BeginEnrollment.
@@ -469,6 +480,9 @@ func (s *Service) Verify(ctx context.Context, pendingSessionToken, code string) 
 	if err := s.checkMFA(ctx, sess.UserID); err != nil {
 		return "", models.Session{}, err
 	}
+	if err := s.capRoom(ctx, sess); err != nil {
+		return "", models.Session{}, err
+	}
 	secret, err := s.decryptSecret(ctx, sess.UserID)
 	if err != nil {
 		return "", models.Session{}, err
@@ -489,6 +503,9 @@ func (s *Service) Verify(ctx context.Context, pendingSessionToken, code string) 
 	}
 	s.mfaSucceeded(ctx, sess.UserID)
 	s.clearPendingFailure(sess.ID)
+	if err := s.enforceCap(ctx, sess); err != nil {
+		return "", models.Session{}, err
+	}
 	if err := s.storage.UpdateSessionAuthLevel(ctx, sess.ID, models.AuthLevelFull); err != nil {
 		return "", models.Session{}, err
 	}
@@ -511,6 +528,9 @@ func (s *Service) ConsumeRecoveryCode(ctx context.Context, pendingSessionToken, 
 	if err := s.checkMFA(ctx, sess.UserID); err != nil {
 		return "", models.Session{}, err
 	}
+	if err := s.capRoom(ctx, sess); err != nil {
+		return "", models.Session{}, err
+	}
 	if err := s.storage.ConsumeRecoveryCode(ctx, sess.UserID, code, time.Now()); err != nil {
 		if errors.Is(err, models.ErrStorageNotFound) {
 			s.mfaFailed(ctx, sess.UserID)
@@ -522,6 +542,9 @@ func (s *Service) ConsumeRecoveryCode(ctx context.Context, pendingSessionToken, 
 	}
 	s.mfaSucceeded(ctx, sess.UserID)
 	s.clearPendingFailure(sess.ID)
+	if err := s.enforceCap(ctx, sess); err != nil {
+		return "", models.Session{}, err
+	}
 	if err := s.storage.UpdateSessionAuthLevel(ctx, sess.ID, models.AuthLevelFull); err != nil {
 		return "", models.Session{}, err
 	}
@@ -540,6 +563,23 @@ func (s *Service) Delete(ctx context.Context, userID models.ULID) error {
 	}
 	s.auditEm.EmitAudit(ctx, "totp.disabled", models.TargetRef{Type: "user", ID: userID.String()}, nil)
 	return nil
+}
+
+// capRoom refuses early, before a one-time credential is spent, when the
+// concurrent session cap is in reject mode and full.
+func (s *Service) capRoom(ctx context.Context, sess *models.Session) error {
+	if s.sessionCap == nil {
+		return nil
+	}
+	return s.sessionCap.CapRoom(ctx, sess.UserID, sess.ID)
+}
+
+// enforceCap makes room for the session about to become full.
+func (s *Service) enforceCap(ctx context.Context, sess *models.Session) error {
+	if s.sessionCap == nil {
+		return nil
+	}
+	return s.sessionCap.EnforceCap(ctx, sess.UserID, sess.ID)
 }
 
 // decryptSecret loads the confirmed secret for a user and Decrypts it

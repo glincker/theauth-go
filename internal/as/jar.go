@@ -106,6 +106,9 @@ type jarClaims struct {
 	CodeChallenge       string `json:"code_challenge,omitempty"`
 	CodeChallengeMethod string `json:"code_challenge_method,omitempty"`
 	Resource            string `json:"resource,omitempty"`
+	MaxAge              *int64 `json:"max_age,omitempty"`
+	ACRValues           string `json:"acr_values,omitempty"`
+	Prompt              string `json:"prompt,omitempty"`
 
 	// AuthorizationDetails is the RFC 9396 array (RFC 9101 allows any
 	// request parameter inside the object).
@@ -215,6 +218,9 @@ func (s *Service) ParseRequestObject(ctx interface{ Done() <-chan struct{} }, ra
 		CodeChallenge:       claims.CodeChallenge,
 		CodeChallengeMethod: claims.CodeChallengeMethod,
 		Resource:            claims.Resource,
+		MaxAge:              claims.MaxAge,
+		ACRValues:           strings.Fields(claims.ACRValues),
+		Prompt:              claims.Prompt,
 
 		AuthorizationDetails: string(claims.AuthorizationDetails),
 	}, nil

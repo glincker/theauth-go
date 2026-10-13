@@ -232,7 +232,9 @@ func (a *TheAuth) RotateSession(ctx context.Context, old Session) (string, Sessi
 	if err != nil {
 		return "", Session{}, fmt.Errorf("theauth: rotate session: load user: %w", err)
 	}
-	tok, ns, err := a.issueSession(ctx, *user, old.UserAgent, old.IP)
+	// Rotation replaces a session one for one, so it must not trip the
+	// concurrent session cap.
+	tok, ns, err := a.issueSession(session.WithoutLimits(ctx), *user, old.UserAgent, old.IP)
 	if err != nil {
 		return "", Session{}, fmt.Errorf("theauth: rotate session: issue: %w", err)
 	}
@@ -269,6 +271,7 @@ func (a *TheAuth) ChangePassword(ctx context.Context, cur Session, currentPasswo
 	if err := a.storage.SetUserPassword(ctx, cur.UserID, newHash); err != nil {
 		return "", fmt.Errorf("theauth: change password: store: %w", err)
 	}
+	a.passwordChanged(ctx, cur.UserID)
 	if err := a.storage.RevokeUserSessions(ctx, cur.UserID); err != nil {
 		return "", fmt.Errorf("theauth: change password: revoke sessions: %w", err)
 	}
@@ -336,7 +339,7 @@ func (a *TheAuth) verifyStepUp(ctx context.Context, sess *Session, in StepUpInpu
 		}
 		// FinishLogin validates the assertion and bumps the sign count; the
 		// session it issues is discarded.
-		_, issued, err := a.webauthnSvc.FinishLogin(ctx, in.Challenge, bytes.NewReader(in.Assertion), sess.UserAgent, sess.IP)
+		_, issued, err := a.webauthnSvc.FinishLogin(session.WithoutLimits(ctx), in.Challenge, bytes.NewReader(in.Assertion), sess.UserAgent, sess.IP)
 		if err != nil {
 			return err
 		}
@@ -374,7 +377,7 @@ func (a *TheAuth) RequireRecentAuth(maxAge time.Duration) func(http.Handler) htt
 		return auth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			sess, _ := SessionFromContext(r.Context())
 			if sess == nil || time.Since(a.lastAuthAt(sess)) > maxAge {
-				writeProblemJSON(w, http.StatusForbidden, "auth.recent_auth_required", "Recent authentication required, POST "+a.pathPrefix+"/step-up", "")
+				a.problem(w, r, http.StatusForbidden, "auth.recent_auth_required", "Recent authentication required, POST "+a.pathPrefix+"/step-up", "")
 				return
 			}
 			next.ServeHTTP(w, r)
@@ -529,6 +532,7 @@ func (a *TheAuth) mountSessionManagement(r chi.Router, ipLimit func(http.Handler
 		}
 	}
 	r.With(auth, ipLimit).Post("/password/change", a.handlePasswordChange)
+	a.mountTrustedDevices(r)
 	if a.sx.linksCfg != nil {
 		r.With(ipLimit).Post("/session-link/consume", a.handleSessionLinkConsume)
 	}

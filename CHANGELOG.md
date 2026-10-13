@@ -6,6 +6,44 @@ adheres to [Semantic Versioning](https://semver.org/) from v1.0 forward.
 
 ## [Unreleased]
 
+### Added
+
+- `AuthorizationServer.ClientCompat` (`ClientCompatConfig`): opt-in switches for real-world MCP clients. `OptionalResource` defaults an absent `resource` to the sole configured resource (authorize, PAR, code and refresh token, jwt-bearer). `PathAudience` matches a requested sub-path to a configured resource and always issues the canonical `aud`. `DropUnknownScopes` drops scopes outside the catalog and client registration and returns the granted scope. `LoopbackAnyPort` (with `LoopbackAllowLocalhost`) matches loopback redirect URIs ignoring the port. All default to false. See `docs/client-compat.md`.
+- `CIMDConfig.HonorCacheControl`: opt-in `Cache-Control` max-age handling for CIMD documents, bounded by `cimd.MinCacheTTL` and `CIMDConfig.CacheTTL`.
+- CIMD documents accept `jwks` and `jwks_uri`, which are copied onto the resolved client for `private_key_jwt` authentication.
+- Client metadata fixtures and end-to-end tests shaped like Claude Desktop, Cursor and ChatGPT under `internal/as/testdata/clientcompat`.
+- `mcpresource`: `Validator.RequireScope` (RFC 6750 `insufficient_scope`) and `Validator.RequireStepUp` with `StepUp{ACRValues, MaxAge}` and `StepUp.Satisfied` (RFC 9470 `insufficient_user_authentication`). A zero `MaxAge` means no age requirement.
+- `mcpresource` now verifies ES256 and RS256 access tokens besides EdDSA (RSA keys under 2048 bits rejected, key type must match `alg`) and accepts `aud` as a string or an array.
+- `mcpresource`: `Denial`, `StepUpHint` and `WriteDenial` for structured 401 and 403 JSON bodies.
+- `mcpresource`: `SecuritySchemes`, `ToolSecurity`, `PublicToolSecurity` and `ToolSecurityInfo.Apply` for advisory `securitySchemes` metadata in MCP `tools/list`.
+- `mcpresource`: `NewURLElicitation` and `URLElicitationRequiredError` (JSON-RPC code -32042) for MCP URL mode elicitation.
+- `mcpresource`: `Principal.AuthorizationDetails()` (RFC 9396), `Principal.Audiences`, `ACR`, `AMR` and `AuthTime`.
+- Guide: [Protect MCP tools](https://docs.theauth.dev/go/guides/protect-mcp-tools).
+- Forced password change: `(*TheAuth).SetMustChangePassword`, `ResetPasswordAdmin(..., RequirePasswordChange())`, and `ImportedUser.MustChangePassword` flag an account so every sign-in path (password, magic link, OAuth, passkey, SAML, session link, TOTP step) is refused with `CodePasswordChangeRequired` (HTTP 403) until a password reset or change completes. The theauth-migrate applier now carries `RequiresPasswordReset` through as the flag (`ApplyResult.MustChangeFlagged`). Opt in with `Config.AccountState`; needs the new `AccountStateStorage` capability.
+- Account disable: `DisableUser` / `EnableUser` block sign-in, revoke sessions and API tokens, and answer `CodeAccountDisabled`.
+- Account deletion: `DeleteUser` and self-service `DELETE /account` (`Config.AccountDeletion`, gated by `RequireRecentAuth`) cascade over sessions, tokens, linked identities, passkeys, TOTP, API tokens, trusted devices, organization memberships and role grants, keep audit rows with the actor cleared, refuse to delete the last owner of an organization (`ErrLastOwner`), emit `account.deleted`, and fire the new observe-only `LifecycleHooks.OnAccountDeleted`. Needs the new `AccountDeleteStorage` capability.
+- Admin API: `PATCH /admin/v1/organizations/{orgID}/users/{userID}` accepts `mustChangePassword` and `disabled`, and `DELETE .../users/{userID}/account` deletes the account. Disable and delete require the `super_admin` role.
+- `(*TheAuth).GetProviderToken(ctx, userID, provider)` returns a usable upstream access token: it decrypts the stored token, refreshes an expired one with the stored refresh token (one upstream call per user and provider at a time), persists the rotated tokens, and returns `ErrProviderRefreshUnsupported`, `ErrProviderGrantRevoked` or `ErrProviderNotLinked`. Providers opt in through the new `RefreshProvider` interface, implemented by the google, microsoft, github, generic and oidc providers. `google.Config.Offline` requests a refresh token.
+- `Config.SessionPolicy` (`SessionPolicy.MaxConcurrentSessions`, `SessionEvictOldest` or `SessionReject`): caps concurrent full sessions per user at sign-in and at the TOTP step. Reject answers `CodeSessionLimit` (HTTP 409).
+- `Config.TrustedDevices`: remember-this-device for TOTP. `{"rememberDevice": true}` on `/auth/totp/verify` or `/auth/totp/recovery` sets a signed, hashed-at-rest cookie that skips the TOTP prompt on later password sign-ins for `TTL` (default 30 days). Revoked on password change, on TOTP removal and through `GET/DELETE /auth/trusted-devices`, `ListTrustedDevices`, `RevokeTrustedDevice` and `RevokeTrustedDevices`. Needs the new `TrustedDeviceStorage` capability.
+- Storage migrations: Postgres and MySQL `0022_account_lifecycle`, SQLite `0010_account_lifecycle`. Run them before enabling `AccountState` or `TrustedDevices`. `storagetest.RunAccountLifecycle` is the contract suite for the three new optional capabilities.
+- Authorization server authentication context: authorization codes and refresh token families record `auth_time`, `acr` and `amr` from the authorizing session, and JWT access tokens, opaque token claims and introspection responses carry them. A refresh carries the original values forward and never advances `auth_time`. `AuthorizationServerConfig.ACRValues` maps an `amr` method set (for example `"otp+pwd"`) to an acr string, with the documented defaults `urn:theauth:acr:1fa` and `urn:theauth:acr:mfa`; configured values are advertised as `acr_values_supported`. `AuthorizationServerConfig.SessionAMR` supplies the session's methods (default `["pwd"]`, since sessions do not record the sign-in method). This lets `mcpresource.RequireStepUp` be satisfied by our own tokens.
+- `/oauth/authorize` honors `max_age` and `acr_values` (also through PAR and JAR) and `prompt=none`: a session older than `max_age` or below the requested acr is sent to `LoginURL` with `reauth=1`, `max_age` and `acr_values` hints, or answered `login_required` for `prompt=none`. `AuthorizeRequest.MaxAge`, `ACRValues`, `Prompt`, `WithAuthContext`, `AuthContext` and `IsReauthRequired` expose the same for direct `StartAuthorize` callers.
+- `ClientCompat.OptionalResource` and `PathAudience` now also apply to the client_credentials grant, token exchange (RFC 8693) resource and audience checks, and ID-JAG redemption at the jwt-bearer grant.
+- `CIMDConfig.AllowedRedirectSchemes`: opt-in list of private-use redirect schemes (for example `cursor`) accepted in CIMD documents in addition to https, loopback and reverse-DNS schemes. Entries are validated at `New` (lowercase, never `http`, `https`, `javascript`, `data` or `file`). Default empty keeps today's behavior.
+- Storage migrations: Postgres and MySQL `0023_as_auth_context` add `auth_time`, `acr` and `amr` to `oauth_authorization_codes` and `oauth_refresh_tokens`. Run before deploying; existing rows read as no authentication context.
+- `Config.ErrorResponder`: one function `func(w, r, status, code, message)` that writes every error response from the root middleware (`Authn`, `RequireAuth`, `RequirePendingOrFull`, `RequirePermission`, `RequireAbility`, `RequireRecentAuth`, the rate limiters and the CSRF origin check). Nil keeps the current RFC 7807 and `{"code","message"}` bodies byte for byte; 401 responses keep their `WWW-Authenticate` header either way.
+- New nested modules `adapters/gin`, `adapters/echo` and `adapters/fiber`: native `Authn`, `RequireAuth` and `RequireAbility` middleware, `User`, `Session` and `Principal` accessors and a `Mount` helper under a prefix. Fiber goes through its net/http adaptor, so responses from `Mount` and the middleware are buffered (no SSE).
+- `provider/oidc`: `{tenantid}` template issuers and Entra `common`, `organizations` and `consumers` are validated against the token's `tid` claim (`Config.AllowedTenants` limits tenants); `Config.AdditionalAudiences` accepts extra `aud` values with the `azp` rule unchanged; `Config.Claims` (`ClaimMapping`) overrides profile claims; presets `oidc.Entra`, `Okta`, `Keycloak`, `Authentik` and `Auth0` fill in discovery URL, scopes and claim mapping; failures are `*oidc.Error` with `Provider`, `Stage` and `Status` and carry no secrets.
+
+### Fixed
+
+- An OAuth sign-in that returns no refresh token (Google after the first consent) no longer overwrites the stored refresh token with an empty one.
+
+### Security
+
+- CIMD `token_endpoint_auth_method` is now validated against an allowlist (`none`, `private_key_jwt`). `client_secret_*` and unknown methods are rejected, and `private_key_jwt` requires exactly one of `jwks` or `jwks_uri`. Previously the value was copied through unchecked. Unknown document fields are still ignored.
+
 ## [2.9.0] - 2026-10-10
 
 ### Added

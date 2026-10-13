@@ -99,26 +99,25 @@ func (s *Service) PushAuthorize(ctx context.Context, req AuthorizeRequest) (PARR
 	if req.CodeChallenge == "" || req.CodeChallengeMethod != "S256" {
 		return PARResponse{}, models.ErrOAuthInvalidRequest
 	}
-	if req.Resource == "" {
-		return PARResponse{}, models.ErrOAuthInvalidResource
-	}
-	if _, ok := s.ResourceByIdentifier(req.Resource); !ok {
-		return PARResponse{}, models.ErrOAuthInvalidResource
+	resource, audience, err := s.resolveResource(req.Resource)
+	if err != nil {
+		return PARResponse{}, err
 	}
 	client, err := s.ResolveClient(ctx, req.ClientID)
 	if err != nil {
 		return PARResponse{}, models.ErrOAuthInvalidClient
 	}
-	if !redirectURIRegistered(client.RedirectURIs, req.RedirectURI) {
+	if !s.redirectURIRegistered(client.RedirectURIs, req.RedirectURI) {
 		return PARResponse{}, models.ErrOAuthInvalidRequest
 	}
-	if _, err := validateScopeAgainstResource(req.Scope, models.ProtectedResource{}); err != nil {
-		// If resource scopes are empty that is fine; do full validation.
-		resource, _ := s.ResourceByIdentifier(req.Resource)
-		if _, e2 := validateScopeAgainstResource(req.Scope, resource); e2 != nil {
-			return PARResponse{}, e2
-		}
+	scope, err := s.narrowScopes(req.Scope, resource, client)
+	if err != nil {
+		return PARResponse{}, err
 	}
+	// Store the normalised values so the later authorize call sees the
+	// canonical audience and the already-narrowed scope.
+	req.Resource = audience
+	req.Scope = scope
 
 	// Mint request_uri.
 	token := make([]byte, 32)

@@ -1,6 +1,7 @@
 package mcpresource
 
 import (
+	"crypto"
 	"crypto/ed25519"
 	"crypto/rand"
 	"encoding/base64"
@@ -58,7 +59,7 @@ func TestJWKSMaxStaleBound(t *testing.T) {
 
 func TestVerifyJWTTypRequirement(t *testing.T) {
 	pub, priv, _ := ed25519.GenerateKey(rand.Reader)
-	resolve := func(string) (ed25519.PublicKey, error) { return pub, nil }
+	resolve := func(string, string) (crypto.PublicKey, error) { return pub, nil }
 	claims := map[string]any{"iss": "i", "sub": "u", "aud": "a", "exp": time.Now().Add(time.Hour).Unix(), "jti": "j"}
 	mk := func(typ string) string {
 		h := map[string]string{"alg": "EdDSA", "kid": "k"}

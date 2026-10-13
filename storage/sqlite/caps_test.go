@@ -22,6 +22,7 @@ func TestCapabilityContracts(t *testing.T) {
 		{"DeviceCodes", func(t *testing.T, s *sqlitestore.Store) { storagetest.RunDeviceCodes(t, s) }},
 		{"SessionManagement", func(t *testing.T, s *sqlitestore.Store) { storagetest.RunSessionManagement(t, s) }},
 		{"MFACaps", func(t *testing.T, s *sqlitestore.Store) { storagetest.RunMFACaps(t, s) }},
+		{"AccountLifecycle", func(t *testing.T, s *sqlitestore.Store) { storagetest.RunAccountLifecycle(t, s) }},
 	}
 	for _, tc := range suites {
 		t.Run(tc.name, func(t *testing.T) {

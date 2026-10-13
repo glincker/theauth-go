@@ -127,6 +127,11 @@ type Config struct {
 	AllowLegacyBcrypt bool
 	// OnLegacyHashAccepted is invoked in a goroutine after a legacy hash was upgraded and persisted.
 	OnLegacyHashAccepted func(userID, newArgon2idHash string)
+	// Account gates sign-in on account state (forced password change,
+	// disabled) and hears about password replacement. Nil disables both.
+	Account AccountLifecycle
+	// Devices lets a remembered device skip the TOTP prompt. Nil disables it.
+	Devices TrustedDeviceChecker
 }
 
 // Service holds the dependencies needed for password flows.
@@ -318,13 +323,18 @@ func (s *Service) Signin(ctx context.Context, emailAddr, password, userAgent, ip
 	if newHash != "" {
 		UpgradeAndNotify(ctx, s.storage.SetUserPassword, s.cfg.OnLegacyHashAccepted, user.ID, newHash)
 	}
+	// The credential is proven; refuse before any session (pending or full)
+	// exists when the account is disabled or must change its password.
+	if err := s.checkAccount(ctx, user, userAgent, ip); err != nil {
+		return "", nil, "", err
+	}
 	// v0.5 step-up: when TOTP is enrolled and confirmed for this user, mint
 	// a pending_2fa session instead of a full one. The caller (the HTTP
 	// handler) renders {"step":"totp_required"} so the client knows to
 	// prompt for the 6-digit code.
 	if s.cfg.TOTPEnabled {
 		secret, err := s.storage.TOTPSecretByUserID(ctx, user.ID)
-		if err == nil && secret != nil && secret.ConfirmedAt != nil {
+		if err == nil && secret != nil && secret.ConfirmedAt != nil && !s.trustedDevice(ctx, user.ID) {
 			pendTok, _, err := s.totpPending.IssuePending2FA(ctx, user.ID, userAgent, ip)
 			if err != nil {
 				return "", nil, "", err
@@ -460,6 +470,7 @@ func (s *Service) Reset(ctx context.Context, token, newPassword string) (models.
 	if err := s.storage.SetUserPassword(ctx, rt.UserID, hash); err != nil {
 		return models.ULID{}, err
 	}
+	s.passwordChanged(ctx, rt.UserID)
 	if err := s.storage.RevokeUserSessions(ctx, rt.UserID); err != nil {
 		// Non-fatal: log so ops know revocation did not complete, but the
 		// password change DID succeed.

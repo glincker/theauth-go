@@ -261,11 +261,14 @@ func (s *Service) JWTBearerGrant(ctx context.Context, req TokenRequest, assertio
 		return TokenResponse{}, models.ErrOAuthInvalidGrant
 	}
 	// Resource validation.
-	if req.Resource == "" {
-		return TokenResponse{}, models.ErrOAuthInvalidResource
+	_, audience, rerr := s.resolveResource(req.Resource)
+	if rerr != nil {
+		return TokenResponse{}, rerr
 	}
-	if _, ok := s.ResourceByIdentifier(req.Resource); !ok {
-		return TokenResponse{}, models.ErrOAuthInvalidResource
+	if req.Resource == "" {
+		// OptionalResource defaulted the audience; the ID-JAG vetting below
+		// compares against req.Resource.
+		req.Resource = audience
 	}
 	grantScope := req.Scope
 	if header.Typ == jwt.TypeIDJAG {
@@ -278,7 +281,7 @@ func (s *Service) JWTBearerGrant(ctx context.Context, req TokenRequest, assertio
 	accessClaims := jwt.Claims{
 		Iss:      s.Cfg.Issuer,
 		Sub:      userID.String(),
-		Aud:      req.Resource,
+		Aud:      audience,
 		Exp:      now.Add(s.Cfg.AccessTokenTTL).Unix(),
 		Iat:      now.Unix(),
 		Jti:      jtiOut,

@@ -63,11 +63,20 @@ func (v *Validator) Middleware(next http.Handler) http.Handler {
 //  5. Build the Principal and return.
 func (v *Validator) authenticate(r *http.Request, token, scheme string) (*Principal, error) {
 	now := time.Now()
-	claims, err := verifyJWT(token, v.resourceURI, v.jwks.PublicKey, now, v.clockSkew, v.allowMissingTyp)
+	claims, err := verifyJWT(token, v.resourceURI, v.jwks.Key, now, v.clockSkew, v.allowMissingTyp)
 	if err != nil {
 		return nil, err
 	}
 	principal := principalFromClaims(claims)
+	if v.resourceURI != "" {
+		// verifyJWT confirmed aud contains the resource URI.
+		principal.Audience = v.resourceURI
+	}
+	details, err := parseAuthorizationDetails(claims.AuthorizationDetails)
+	if err != nil {
+		return nil, err
+	}
+	principal.authorizationDetails = details
 	// DPoP binding: when the access token carries cnf.jkt the request
 	// MUST also carry a DPoP header signed by the matching key. The
 	// AS chose at issuance time whether to constrain; the resource
@@ -103,6 +112,13 @@ func (v *Validator) authenticate(r *http.Request, token, scheme string) (*Princi
 		if res == nil || !res.Active {
 			v.introspect.Invalidate(token)
 			return nil, errInactiveChain
+		}
+		if len(principal.authorizationDetails) == 0 {
+			d, err := parseAuthorizationDetails(res.AuthorizationDetails)
+			if err != nil {
+				return nil, err
+			}
+			principal.authorizationDetails = d
 		}
 	}
 	return principal, nil
@@ -188,9 +204,13 @@ func principalFromClaims(c *claims) *Principal {
 		IssuedAt:          unix(c.Iat),
 		ExpiresAt:         unix(c.Exp),
 		Issuer:            c.Iss,
-		Audience:          c.Aud,
+		Audience:          c.Aud.first(),
+		Audiences:         append([]string(nil), c.Aud...),
 		JWTID:             c.Jti,
 		DelegationGrantID: c.DelegationGrantID,
+		ACR:               c.Acr,
+		AMR:               append([]string(nil), c.Amr...),
+		AuthTime:          unix(c.AuthTime),
 	}
 	if c.Act != nil {
 		chain := flattenChain(c.Act)
@@ -269,10 +289,11 @@ func (v *Validator) deny(w http.ResponseWriter, r *http.Request, errCode, descri
 		value += ", resource_metadata=\"" + metadataURL + "\""
 	}
 	w.Header().Set("WWW-Authenticate", value)
-	w.Header().Set("Cache-Control", "no-store")
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusUnauthorized)
-	_, _ = w.Write([]byte(`{"error":"` + errCode + `"}`))
+	WriteDenial(w, http.StatusUnauthorized, Denial{
+		Error:            errCode,
+		ErrorDescription: description,
+		ResourceMetadata: metadataURL,
+	})
 }
 
 // protectedResourceMetadataURL builds the /.well-known/oauth-protected-resource
