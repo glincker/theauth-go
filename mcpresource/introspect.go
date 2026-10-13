@@ -25,11 +25,14 @@ type introspectionResult struct {
 	Exp               int64       `json:"exp,omitempty"`
 	Iat               int64       `json:"iat,omitempty"`
 	Sub               string      `json:"sub,omitempty"`
-	Aud               string      `json:"aud,omitempty"`
+	Aud               audience    `json:"aud,omitempty"`
 	Iss               string      `json:"iss,omitempty"`
 	Jti               string      `json:"jti,omitempty"`
 	Act               *actorClaim `json:"act,omitempty"`
 	DelegationGrantID string      `json:"delegation_grant_id,omitempty"`
+
+	// AuthorizationDetails is the raw RFC 9396 array, when the AS reports it.
+	AuthorizationDetails json.RawMessage `json:"authorization_details,omitempty"`
 }
 
 // actorClaim mirrors the RFC 8693 section 4.1 nested actor structure.
