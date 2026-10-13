@@ -491,6 +491,14 @@ type AuthorizationServerConfig struct {
 	// tokens stateless.
 	AccessTokenRevocation bool
 
+	// ClientCompat relaxes individual strictness checks so real-world MCP
+	// clients (Claude Desktop, Cursor, ChatGPT) interoperate: an optional
+	// resource parameter, dropping unknown scopes, port-agnostic loopback
+	// redirect URIs and sub-path audiences. Every switch defaults to false
+	// (strict). LoopbackAnyPort and DropUnknownScopes carry real security
+	// tradeoffs; see docs/client-compat.md before enabling them.
+	ClientCompat ClientCompatConfig
+
 	// PAR wires RFC 9126 Pushed Authorization Requests. When non-nil and
 	// the Storage backend implements PARStorage, POST /oauth/par is
 	// registered and GET /oauth/authorize accepts request_uri. Nil (the
@@ -722,6 +730,10 @@ func (m EmailMapper) Resolve(claims map[string]any) (ULID, error) {
 	return m.Lookup(email)
 }
 
+// ClientCompatConfig is the root-package alias for as.ClientCompat. Set it on
+// Config.AuthorizationServer.ClientCompat; the zero value is fully strict.
+type ClientCompatConfig = internalas.ClientCompat
+
 // PARConfig is the root-package alias for as.PARConfig. Consumers set
 // Config.AuthorizationServer.PAR to enable RFC 9126 support.
 type PARConfig = internalas.PARConfig
@@ -868,6 +880,7 @@ func validateASConfig(cfg *AuthorizationServerConfig, encryptionKey []byte) erro
 		DPoP:                           dpopConfigFromRoot(cfg.DPoP),
 		RequireState:                   cfg.RequireState,
 		AccessTokenRevocation:          cfg.AccessTokenRevocation,
+		ClientCompat:                   cfg.ClientCompat,
 		PAR:                            cfg.PAR,
 		JAR:                            cfg.JAR,
 		JWTBearer:                      jwtBearerConfigFromRoot(cfg.JWTBearer),

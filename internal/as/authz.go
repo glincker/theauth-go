@@ -89,21 +89,18 @@ func (s *Service) StartAuthorize(ctx context.Context, req AuthorizeRequest, user
 	if s.Cfg.RequireState && req.State == "" {
 		return AuthorizeResult{}, models.ErrOAuthInvalidRequest
 	}
-	if req.Resource == "" {
-		return AuthorizeResult{}, models.ErrOAuthInvalidResource
-	}
-	resource, ok := s.ResourceByIdentifier(req.Resource)
-	if !ok {
-		return AuthorizeResult{}, models.ErrOAuthInvalidResource
+	resource, audience, err := s.resolveResource(req.Resource)
+	if err != nil {
+		return AuthorizeResult{}, err
 	}
 	client, err := s.ResolveClient(ctx, req.ClientID)
 	if err != nil {
 		return AuthorizeResult{}, models.ErrOAuthInvalidClient
 	}
-	if !redirectURIRegistered(client.RedirectURIs, req.RedirectURI) {
+	if !s.redirectURIRegistered(client.RedirectURIs, req.RedirectURI) {
 		return AuthorizeResult{}, models.ErrOAuthInvalidRequest
 	}
-	scope, err := validateScopeAgainstResource(req.Scope, resource)
+	scope, err := s.narrowScopes(req.Scope, resource, client)
 	if err != nil {
 		return AuthorizeResult{}, err
 	}
@@ -129,7 +126,7 @@ func (s *Service) StartAuthorize(ctx context.Context, req AuthorizeRequest, user
 		UserID:               user.ID,
 		RedirectURI:          req.RedirectURI,
 		Scope:                scope,
-		Resource:             req.Resource,
+		Resource:             audience,
 		CodeChallenge:        req.CodeChallenge,
 		CodeChallengeMethod:  req.CodeChallengeMethod,
 		Nonce:                req.Nonce,
@@ -143,14 +140,16 @@ func (s *Service) StartAuthorize(ctx context.Context, req AuthorizeRequest, user
 	return AuthorizeResult{RedirectURL: redirectURL}, nil
 }
 
-// RedirectURIRegisteredFor reports whether uri exactly matches a redirect URI
-// registered for clientID. Callers must not redirect to uri otherwise.
+// RedirectURIRegisteredFor reports whether uri matches a redirect URI
+// registered for clientID (exactly, or port-agnostic for loopback URIs when
+// ClientCompat.LoopbackAnyPort is on). Callers must not redirect to uri
+// otherwise.
 func (s *Service) RedirectURIRegisteredFor(ctx context.Context, clientID, uri string) bool {
 	client, err := s.ResolveClient(ctx, clientID)
 	if err != nil || client == nil {
 		return false
 	}
-	return redirectURIRegistered(client.RedirectURIs, uri)
+	return s.redirectURIRegistered(client.RedirectURIs, uri)
 }
 
 // redirectURIRegistered returns true when the supplied URI exactly

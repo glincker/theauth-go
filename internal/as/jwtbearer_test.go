@@ -11,6 +11,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -26,30 +27,34 @@ import (
 // ---------- helpers ----------
 
 // newJWTBearerASInstance wires an AS with JWTBearer enabled.
-func newJWTBearerASInstance(t *testing.T, issuers []theauth.TrustedJWTIssuer) (*theauth.TheAuth, *memory.Store) {
+func newJWTBearerASInstance(t *testing.T, issuers []theauth.TrustedJWTIssuer, mut ...func(*theauth.AuthorizationServerConfig)) (*theauth.TheAuth, *memory.Store) {
 	t.Helper()
 	store := memory.New()
 	key := make([]byte, 32)
 	if _, err := rand.Read(key); err != nil {
 		t.Fatalf("rand: %v", err)
 	}
-	a, err := theauth.New(theauth.Config{
-		Storage:       store,
-		BaseURL:       "https://auth.example.com",
-		EncryptionKey: key,
-		AuthorizationServer: &theauth.AuthorizationServerConfig{
-			Issuer:          "https://auth.example.com",
-			Resources:       []theauth.ProtectedResource{{Identifier: "https://api.example.com/mcp", Scopes: []string{"api.read"}}},
-			DisableRotation: true,
-			JWTBearer: &theauth.JWTBearerConfig{
-				TrustedJWTIssuers:     issuers,
-				ClientAssertionMaxAge: 60 * time.Second,
-				AssertionMaxAge:       300 * time.Second,
-				ReplayCacheTTL:        600 * time.Second,
-				// Test JWKS servers are plain-http loopback httptest servers.
-				AllowPrivateJWKSNetworks: true,
-			},
+	asCfg := &theauth.AuthorizationServerConfig{
+		Issuer:          "https://auth.example.com",
+		Resources:       []theauth.ProtectedResource{{Identifier: "https://api.example.com/mcp", Scopes: []string{"api.read"}}},
+		DisableRotation: true,
+		JWTBearer: &theauth.JWTBearerConfig{
+			TrustedJWTIssuers:     issuers,
+			ClientAssertionMaxAge: 60 * time.Second,
+			AssertionMaxAge:       300 * time.Second,
+			ReplayCacheTTL:        600 * time.Second,
+			// Test JWKS servers are plain-http loopback httptest servers.
+			AllowPrivateJWKSNetworks: true,
 		},
+	}
+	for _, m := range mut {
+		m(asCfg)
+	}
+	a, err := theauth.New(theauth.Config{
+		Storage:             store,
+		BaseURL:             "https://auth.example.com",
+		EncryptionKey:       key,
+		AuthorizationServer: asCfg,
 	})
 	if err != nil {
 		t.Fatalf("New: %v", err)
@@ -580,5 +585,57 @@ func TestTokenExchangeAudienceWhitelist(t *testing.T) {
 	})
 	if err == nil {
 		t.Fatal("expected unknown audience to be rejected with invalid_target")
+	}
+}
+
+// ---------- TestJWTBearerGrantClientCompat ----------
+
+func TestJWTBearerGrantClientCompat(t *testing.T) {
+	const canonical = "https://api.example.com/mcp"
+	tests := []struct {
+		name     string
+		compat   theauth.ClientCompatConfig
+		resource string
+		wantErr  bool
+	}{
+		{"strict absent", theauth.ClientCompatConfig{}, "", true},
+		{"optional absent defaults to sole resource", theauth.ClientCompatConfig{OptionalResource: true}, "", false},
+		{"strict sub path", theauth.ClientCompatConfig{}, canonical + "/sse", true},
+		{"path audience sub path", theauth.ClientCompatConfig{PathAudience: true}, canonical + "/sse", false},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			priv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+			if err != nil {
+				t.Fatal(err)
+			}
+			issuers := []theauth.TrustedJWTIssuer{{
+				Issuer:            "https://idp.example.com",
+				JWKSURL:           jwksServerForECKey(t, &priv.PublicKey),
+				AllowedAlgorithms: []string{"ES256"},
+				SubjectMapper:     theauth.SubMapper{},
+			}}
+			a, _ := newJWTBearerASInstance(t, issuers, func(c *theauth.AuthorizationServerConfig) { c.ClientCompat = tc.compat })
+			now := time.Now()
+			assertion := buildBearerGrantAssertion(t, priv, "https://idp.example.com", "https://auth.example.com",
+				ulid.New().String(), ulid.New().String(), now, now.Add(5*time.Minute))
+			resp, err := a.JWTBearerGrant(context.Background(), theauth.TokenRequest{
+				GrantType: models.GrantTypeJWTBearer,
+				Resource:  tc.resource,
+				Scope:     []string{"api.read"},
+			}, assertion)
+			if tc.wantErr {
+				if !errors.Is(err, models.ErrOAuthInvalidResource) {
+					t.Fatalf("err = %v, want invalid_target", err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("JWTBearerGrant: %v", err)
+			}
+			if got := decodeJWTPayload(t, resp.AccessToken)["aud"]; got != canonical {
+				t.Errorf("aud = %v, want %q", got, canonical)
+			}
+		})
 	}
 }

@@ -40,7 +40,11 @@ func (s *Service) sharedStore(ctx context.Context, key string, doc Document) {
 	if err != nil {
 		return
 	}
-	_ = s.cfg.Cache.Set(ctx, sharedKeyPrefix+key, b, s.cfg.CacheTTL)
+	ttl := s.cfg.CacheTTL
+	if doc.cacheTTL > 0 {
+		ttl = doc.cacheTTL
+	}
+	_ = s.cfg.Cache.Set(ctx, sharedKeyPrefix+key, b, ttl)
 }
 
 // sharedDelete drops one URL from the shared tier.

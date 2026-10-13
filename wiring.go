@@ -606,6 +606,7 @@ func asConfigFromRoot(c *AuthorizationServerConfig) internalas.Config {
 		DPoP:                           dpopConfigFromRoot(c.DPoP),
 		RequireState:                   c.RequireState,
 		AccessTokenRevocation:          c.AccessTokenRevocation,
+		ClientCompat:                   c.ClientCompat,
 		PAR:                            c.PAR,
 		JAR:                            c.JAR,
 		JWTBearer:                      jwtBearerConfigFromRoot(c.JWTBearer),

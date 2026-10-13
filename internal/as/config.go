@@ -202,6 +202,10 @@ type Config struct {
 	// RegistrationTokenTTL is the default lifetime of an initial access
 	// token created through the admin API. Default 24h.
 	RegistrationTokenTTL time.Duration
+
+	// ClientCompat relaxes individual strictness checks for real-world
+	// clients. The zero value is fully strict. See ClientCompat.
+	ClientCompat ClientCompat
 }
 
 // JWTBearerConfig is the internal mirror of the root JWTBearerConfig.

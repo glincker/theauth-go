@@ -6,6 +6,24 @@ adheres to [Semantic Versioning](https://semver.org/) from v1.0 forward.
 
 ## [Unreleased]
 
+### Added
+
+- `AuthorizationServer.ClientCompat` (`ClientCompatConfig`): opt-in switches for real-world MCP clients. `OptionalResource` defaults an absent `resource` to the sole configured resource (authorize, PAR, code and refresh token, jwt-bearer). `PathAudience` matches a requested sub-path to a configured resource and always issues the canonical `aud`. `DropUnknownScopes` drops scopes outside the catalog and client registration and returns the granted scope. `LoopbackAnyPort` (with `LoopbackAllowLocalhost`) matches loopback redirect URIs ignoring the port. All default to false. See `docs/client-compat.md`.
+- `CIMDConfig.HonorCacheControl`: opt-in `Cache-Control` max-age handling for CIMD documents, bounded by `cimd.MinCacheTTL` and `CIMDConfig.CacheTTL`.
+- CIMD documents accept `jwks` and `jwks_uri`, which are copied onto the resolved client for `private_key_jwt` authentication.
+- Client metadata fixtures and end-to-end tests shaped like Claude Desktop, Cursor and ChatGPT under `internal/as/testdata/clientcompat`.
+- `mcpresource`: `Validator.RequireScope` (RFC 6750 `insufficient_scope`) and `Validator.RequireStepUp` with `StepUp{ACRValues, MaxAge}` and `StepUp.Satisfied` (RFC 9470 `insufficient_user_authentication`). A zero `MaxAge` means no age requirement.
+- `mcpresource` now verifies ES256 and RS256 access tokens besides EdDSA (RSA keys under 2048 bits rejected, key type must match `alg`) and accepts `aud` as a string or an array.
+- `mcpresource`: `Denial`, `StepUpHint` and `WriteDenial` for structured 401 and 403 JSON bodies.
+- `mcpresource`: `SecuritySchemes`, `ToolSecurity`, `PublicToolSecurity` and `ToolSecurityInfo.Apply` for advisory `securitySchemes` metadata in MCP `tools/list`.
+- `mcpresource`: `NewURLElicitation` and `URLElicitationRequiredError` (JSON-RPC code -32042) for MCP URL mode elicitation.
+- `mcpresource`: `Principal.AuthorizationDetails()` (RFC 9396), `Principal.Audiences`, `ACR`, `AMR` and `AuthTime`.
+- Guide: [Protect MCP tools](https://docs.theauth.dev/go/guides/protect-mcp-tools).
+
+### Security
+
+- CIMD `token_endpoint_auth_method` is now validated against an allowlist (`none`, `private_key_jwt`). `client_secret_*` and unknown methods are rejected, and `private_key_jwt` requires exactly one of `jwks` or `jwks_uri`. Previously the value was copied through unchecked. Unknown document fields are still ignored.
+
 ## [2.9.0] - 2026-10-10
 
 ### Added

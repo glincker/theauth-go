@@ -112,7 +112,8 @@ func (s *Service) ExchangeAuthorizationCode(ctx context.Context, req TokenReques
 	if !codeRow.ExpiresAt.After(time.Now()) {
 		return TokenResponse{}, models.ErrOAuthInvalidGrant
 	}
-	if req.RedirectURI == "" || req.RedirectURI != codeRow.RedirectURI {
+	if req.RedirectURI == "" || (req.RedirectURI != codeRow.RedirectURI &&
+		!(s.Cfg.ClientCompat.LoopbackAnyPort && s.loopbackEquivalent(req.RedirectURI, codeRow.RedirectURI))) {
 		return TokenResponse{}, models.ErrOAuthRedirectURIMismatch
 	}
 	// PKCE S256: challenge = base64url(sha256(verifier)).
@@ -125,8 +126,9 @@ func (s *Service) ExchangeAuthorizationCode(ctx context.Context, req TokenReques
 	if subtle.ConstantTimeCompare([]byte(computed), []byte(codeRow.CodeChallenge)) != 1 {
 		return TokenResponse{}, models.ErrOAuthPKCEMismatch
 	}
-	if _, ok := s.ResourceByIdentifier(codeRow.Resource); !ok {
-		return TokenResponse{}, models.ErrOAuthInvalidResource
+	_, audience, err := s.resolveResource(codeRow.Resource)
+	if err != nil {
+		return TokenResponse{}, err
 	}
 	scope := codeRow.Scope
 	details, err := s.narrowAuthorizationDetails(client, req.AuthorizationDetails, codeRow.AuthorizationDetails)
@@ -141,7 +143,7 @@ func (s *Service) ExchangeAuthorizationCode(ctx context.Context, req TokenReques
 		ClientID:             client.ClientID,
 		UserID:               &codeRow.UserID,
 		Scope:                scope,
-		Resource:             codeRow.Resource,
+		Resource:             audience,
 		DPoPJKT:              jkt,
 		AuthorizationDetails: details,
 		// AuthCodeHash lets a later replay of this code revoke the family.
@@ -185,20 +187,15 @@ func (s *Service) RefreshAccessToken(ctx context.Context, req TokenRequest) (res
 		return TokenResponse{}, models.ErrOAuthInvalidGrant
 	}
 	resource := rt.Resource
-	if req.Resource != "" {
-		if req.Resource != resource {
-			return TokenResponse{}, models.ErrOAuthInvalidResource
-		}
+	if req.Resource != "" && !s.resourceMatchesGrant(req.Resource, resource) {
+		return TokenResponse{}, models.ErrOAuthInvalidResource
 	}
 	// Narrowing: requested scope (if any) must be a subset of the
 	// existing refresh token's scope. Empty means "same scope" per RFC
 	// 6749 section 6.
-	scope := rt.Scope
-	if len(req.Scope) > 0 {
-		if !scopeSubset(req.Scope, rt.Scope) {
-			return TokenResponse{}, models.ErrOAuthInvalidScope
-		}
-		scope = req.Scope
+	scope, err := s.narrowRefreshScopes(req.Scope, rt.Scope)
+	if err != nil {
+		return TokenResponse{}, err
 	}
 	// RFC 9449 section 8: a refresh token issued to a DPoP-bound grant is
 	// bound to the same key. Verify the proof before burning the token so

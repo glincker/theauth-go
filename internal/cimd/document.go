@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/url"
 	"strings"
+	"time"
 )
 
 // Document is the JSON shape the AS expects when it fetches a CIMD URL.
@@ -44,10 +45,24 @@ type Document struct {
 	ResponseTypes []string `json:"response_types,omitempty"`
 
 	// TokenEndpointAuthMethod is "none" for public clients (the common
-	// MCP case) or "client_secret_basic" / "client_secret_post" for
-	// confidential clients. CIMD is most useful for public clients
-	// because there is no place in the document to put a secret.
+	// MCP case) or "private_key_jwt" for confidential clients that publish
+	// their verification keys in Jwks or JwksURI. The client_secret_*
+	// methods are rejected: a CIMD document has no place for a secret.
 	TokenEndpointAuthMethod string `json:"token_endpoint_auth_method,omitempty"`
+
+	// JwksURI is the https URL of the client's JWK Set (RFC 7591). Required
+	// (or Jwks) when TokenEndpointAuthMethod is private_key_jwt. Mutually
+	// exclusive with Jwks.
+	JwksURI string `json:"jwks_uri,omitempty"`
+
+	// Jwks is the client's inline JWK Set (RFC 7591). Required (or JwksURI)
+	// when TokenEndpointAuthMethod is private_key_jwt.
+	Jwks json.RawMessage `json:"jwks,omitempty"`
+
+	// cacheTTL is the freshness hint derived from the HTTP Cache-Control
+	// header when Config.HonorCacheControl is on. Zero means no hint. It is
+	// unexported so it never reaches the shared cache or the wire.
+	cacheTTL time.Duration
 
 	// Scope is the space-separated set of scopes the client may request.
 	// The AS still narrows against the resource catalog on every grant.
@@ -130,7 +145,43 @@ func parseAndValidate(raw []byte, fetchURL string) (Document, error) {
 	if doc.ApplicationType == "" {
 		doc.ApplicationType = "web"
 	}
+	if err := validateAuthMethod(doc); err != nil {
+		return Document{}, fmt.Errorf("%w: %v", ErrInvalidDocument, err)
+	}
 	return doc, nil
+}
+
+// validateAuthMethod enforces the token_endpoint_auth_method allowlist.
+// "none" and "private_key_jwt" are the only methods a metadata document can
+// express safely: there is nowhere to publish a client secret, so the
+// client_secret_* family (and anything unrecognised) is refused instead of
+// being copied through to a client row that could never authenticate.
+func validateAuthMethod(doc Document) error {
+	switch doc.TokenEndpointAuthMethod {
+	case "none":
+		return nil
+	case "private_key_jwt":
+		hasJWKS := len(doc.Jwks) > 0
+		hasURI := doc.JwksURI != ""
+		if hasJWKS == hasURI {
+			return errors.New("private_key_jwt requires exactly one of jwks or jwks_uri")
+		}
+		if hasURI {
+			u, err := url.Parse(doc.JwksURI)
+			if err != nil || !strings.EqualFold(u.Scheme, "https") || u.Hostname() == "" {
+				return errors.New("jwks_uri must be an absolute https URL")
+			}
+			return nil
+		}
+		var set struct {
+			Keys []json.RawMessage `json:"keys"`
+		}
+		if err := json.Unmarshal(doc.Jwks, &set); err != nil || len(set.Keys) == 0 {
+			return errors.New("jwks must be a JWK Set with at least one key")
+		}
+		return nil
+	}
+	return fmt.Errorf("token_endpoint_auth_method %q is not allowed in a client metadata document", doc.TokenEndpointAuthMethod)
 }
 
 // sameURL compares two URLs ignoring a single trailing slash. Both
