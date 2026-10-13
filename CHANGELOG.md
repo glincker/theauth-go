@@ -8,6 +8,8 @@ adheres to [Semantic Versioning](https://semver.org/) from v1.0 forward.
 
 ### Added
 
+- Constrained device identity (`AuthorizationServerConfig.DeviceTokens`): admin-minted single-use join tokens (`CreateDeviceJoinToken`), enrollment with a signed nonce challenge at `POST /oauth/devices/challenge` and `/oauth/devices/enroll`, and the RFC 7523 jwt-bearer grant for registered devices. Device tokens are short lived (default 10 minutes, `DeviceTokensConfig.AccessTokenTTL`), carry no refresh token, use the SPIFFE ID as `sub` when set, and are DPoP bound when the request has a proof. `RevokeDevice` makes assertions fail and introspection report issued tokens inactive. Admin routes under `/admin/v1/organizations/{orgID}/devices`. Needs the new `DeviceIdentityStorage` capability (memory, Postgres and MySQL; migration 0024, SQLite not supported). `storagetest.RunDeviceIdentity` is the contract suite. See `docs/device-tokens.md`.
+
 - `AuthorizationServer.ClientCompat` (`ClientCompatConfig`): opt-in switches for real-world MCP clients. `OptionalResource` defaults an absent `resource` to the sole configured resource (authorize, PAR, code and refresh token, jwt-bearer). `PathAudience` matches a requested sub-path to a configured resource and always issues the canonical `aud`. `DropUnknownScopes` drops scopes outside the catalog and client registration and returns the granted scope. `LoopbackAnyPort` (with `LoopbackAllowLocalhost`) matches loopback redirect URIs ignoring the port. All default to false. See `docs/client-compat.md`.
 - `CIMDConfig.HonorCacheControl`: opt-in `Cache-Control` max-age handling for CIMD documents, bounded by `cimd.MinCacheTTL` and `CIMDConfig.CacheTTL`.
 - CIMD documents accept `jwks` and `jwks_uri`, which are copied onto the resolved client for `private_key_jwt` authentication.
@@ -42,6 +44,7 @@ adheres to [Semantic Versioning](https://semver.org/) from v1.0 forward.
 ### Fixed
 
 - An OAuth sign-in that returns no refresh token (Google after the first consent) no longer overwrites the stored refresh token with an empty one.
+- JWT client authentication and the jwt-bearer grant now accept the fixed-length R||S ECDSA signatures that RFC 7518 requires for ES256 and ES384. They previously verified only ASN.1 DER, which standard JOSE libraries do not emit. DER is still accepted.
 
 ### Security
 
