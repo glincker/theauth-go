@@ -333,6 +333,7 @@ func TestPresets(t *testing.T) {
 		{"keycloak", oidc.Keycloak("https://sso.example.com/", "acme", "c", "s"), "keycloak", "https://sso.example.com/realms/acme", "https://sso.example.com/realms/acme/.well-known/openid-configuration"},
 		{"authentik", oidc.Authentik("https://auth.example.com", "myapp", "c", "s"), "authentik", "https://auth.example.com/application/o/myapp/", "https://auth.example.com/application/o/myapp/.well-known/openid-configuration"},
 		{"auth0", oidc.Auth0("example.us.auth0.com", "c", "s"), "auth0", "https://example.us.auth0.com/", "https://example.us.auth0.com/.well-known/openid-configuration"},
+		{"cognito", oidc.Cognito("us-east-1", "us-east-1_AbCdEfGhI", "c", "s"), "cognito", "https://cognito-idp.us-east-1.amazonaws.com/us-east-1_AbCdEfGhI", "https://cognito-idp.us-east-1.amazonaws.com/us-east-1_AbCdEfGhI/.well-known/openid-configuration"},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -362,6 +363,21 @@ func TestPresetDiscoveryAndClaimMapping(t *testing.T) {
 	if u.Email != "ada@example.com" || !u.EmailVerified || u.Name != "Ada" || u.AvatarURL != "https://img/x.png" {
 		t.Fatalf("profile: %+v", u)
 	}
+
+	t.Run("cognito reads string email_verified", func(t *testing.T) {
+		const iss = "https://cognito-idp.us-east-1.amazonaws.com/us-east-1_AbCdEfGhI"
+		idp := newTenantIdP(t, iss)
+		idp.setClaims(jwt.MapClaims{"iss": iss, "email": "cog@example.com", "email_verified": "true", "name": "Cog"})
+		cfg := oidc.Cognito("us-east-1", "us-east-1_AbCdEfGhI", clientID, "s")
+		cfg.HTTPClient = idp.client()
+		u, err := login(t, cfg)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if u.Email != "cog@example.com" || !u.EmailVerified || u.Name != "Cog" {
+			t.Fatalf("profile: %+v", u)
+		}
+	})
 
 	t.Run("entra does not trust a plain email_verified claim", func(t *testing.T) {
 		idp := newTenantIdP(t, "https://login.microsoftonline.com/{tenantid}/v2.0")

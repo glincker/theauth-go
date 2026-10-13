@@ -98,6 +98,29 @@ func Auth0(domain, clientID, clientSecret string) Config {
 	}
 }
 
+// Cognito returns a Config for an Amazon Cognito user pool. region is the
+// AWS region ("us-east-1") and userPoolID the pool id ("us-east-1_AbCdEfGhI").
+// The issuer is the original per-region form
+// https://cognito-idp.{region}.amazonaws.com/{userPoolID}, which is the one
+// Cognito puts in ID tokens by default. Pools configured with the updated
+// issuer (issuer-cognito-idp) need Issuer and DiscoveryURL overridden.
+// Docs: https://docs.aws.amazon.com/cognito/latest/developerguide/federation-endpoints.html
+// Cognito answers PKCE and accepts client credentials in the body or a Basic
+// header. email_verified is a string in the userInfo response and a boolean in
+// the ID token; both read as verified when "true".
+func Cognito(region, userPoolID, clientID, clientSecret string) Config {
+	issuer := "https://cognito-idp." + region + ".amazonaws.com/" + userPoolID
+	return Config{
+		Name:         "cognito",
+		Issuer:       issuer,
+		DiscoveryURL: issuer + "/.well-known/openid-configuration",
+		ClientID:     clientID,
+		ClientSecret: clientSecret,
+		Scopes:       []string{"openid", "profile", "email"},
+		Claims:       ClaimMapping{Subject: "sub", Email: "email", EmailVerified: "email_verified", Name: "name", Picture: "picture"},
+	}
+}
+
 // trimHostPath drops a scheme and trailing slashes from a host (and optional
 // path) so callers may paste either form.
 func trimHostPath(s string) string {

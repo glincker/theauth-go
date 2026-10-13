@@ -1,6 +1,7 @@
 package generic
 
 import (
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -34,6 +35,18 @@ func TestCatalogProviders(t *testing.T) {
 			theauth.ProviderUser{ID: "005xx", Email: "a@x.io", EmailVerified: true, Name: "Ann", AvatarURL: "https://i/8.png"}},
 		{"figma", `{"id":"f1","email":"a@x.io","handle":"Ann","img_url":"https://i/9.png"}`,
 			theauth.ProviderUser{ID: "f1", Email: "a@x.io", Name: "Ann", AvatarURL: "https://i/9.png"}},
+		{"linear", `{"data":{"viewer":{"id":"lin-1","name":"Ann","email":"a@x.io"}}}`,
+			theauth.ProviderUser{ID: "lin-1", Email: "a@x.io", Name: "Ann"}},
+		{"paypal", `{"user_id":"https://www.paypal.com/webapps/auth/identity/user/abc","name":"Ann","emails":[{"value":"a@x.io","primary":true}]}`,
+			theauth.ProviderUser{ID: "https://www.paypal.com/webapps/auth/identity/user/abc", Email: "a@x.io", Name: "Ann"}},
+		{"kick", `{"data":[{"user_id":4242,"name":"Ann","email":"a@x.io","profile_picture":"https://i/11.png"}],"message":"OK"}`,
+			theauth.ProviderUser{ID: "4242", Email: "a@x.io", Name: "Ann", AvatarURL: "https://i/11.png"}},
+		{"huggingface", `{"sub":"hf1","email":"a@x.io","email_verified":true,"name":"Ann","picture":"https://i/12.png"}`,
+			theauth.ProviderUser{ID: "hf1", Email: "a@x.io", EmailVerified: true, Name: "Ann", AvatarURL: "https://i/12.png"}},
+		{"vercel", `{"sub":"v1","email":"a@x.io","email_verified":true,"name":"Ann","preferred_username":"ann","picture":"https://i/13.png"}`,
+			theauth.ProviderUser{ID: "v1", Email: "a@x.io", EmailVerified: true, Name: "Ann", AvatarURL: "https://i/13.png"}},
+		{"yandex", `{"id":"y1","default_email":"a@x.io","real_name":"Ann","default_avatar_id":"abc/def"}`,
+			theauth.ProviderUser{ID: "y1", Email: "a@x.io", Name: "Ann", AvatarURL: "https://avatars.yandex.net/get-yapic/abc/def/islands-200"}},
 		{"codeberg", `{"id":77,"email":"a@x.io","full_name":"","login":"ann","avatar_url":"https://i/10.png"}`,
 			theauth.ProviderUser{ID: "77", Email: "a@x.io", Name: "ann", AvatarURL: "https://i/10.png"}},
 	}
@@ -49,7 +62,11 @@ func TestCatalogProviders(t *testing.T) {
 			mux := http.NewServeMux()
 			mux.HandleFunc("/token", func(w http.ResponseWriter, r *http.Request) {
 				_ = r.ParseForm()
-				if r.PostForm.Get("code_verifier") != "ver" || r.PostForm.Get("grant_type") != "authorization_code" {
+				wantVerifier := "ver"
+				if spec.NoPKCE {
+					wantVerifier = ""
+				}
+				if r.PostForm.Get("code_verifier") != wantVerifier || r.PostForm.Get("grant_type") != "authorization_code" {
 					t.Errorf("bad form %v", r.PostForm)
 				}
 				user, pass, hasBasic := r.BasicAuth()
@@ -63,8 +80,18 @@ func TestCatalogProviders(t *testing.T) {
 				_, _ = w.Write([]byte(`{"access_token":"at","token_type":"bearer","expires_in":3600}`))
 			})
 			mux.HandleFunc("/user", func(w http.ResponseWriter, r *http.Request) {
-				if r.Header.Get("Authorization") != "Bearer at" {
+				scheme := spec.UserAuthScheme
+				if scheme == "" {
+					scheme = "Bearer"
+				}
+				if r.Header.Get("Authorization") != scheme+" at" {
 					t.Errorf("auth header %q", r.Header.Get("Authorization"))
+				}
+				if spec.UserBody != "" {
+					b, _ := io.ReadAll(r.Body)
+					if string(b) != spec.UserBody || r.Header.Get("Content-Type") != "application/json" {
+						t.Errorf("userinfo body %q type %q", b, r.Header.Get("Content-Type"))
+					}
 				}
 				wantMethod := spec.UserMethod
 				if wantMethod == "" {
@@ -114,6 +141,11 @@ func TestAuthURL(t *testing.T) {
 		{"caller scopes win", "spotify", []string{"a", "b"}, "a b", ""},
 		{"comma separated", "figma", nil, "current_user:read", ""},
 		{"extra params", "dropbox", nil, "account_info.read", "token_access_type=online"},
+		{"linear comma", "linear", []string{"read", "write"}, "read,write", ""},
+		{"yandex comma", "yandex", nil, "login:email,login:info,login:avatar", ""},
+		{"paypal flow entry", "paypal", nil, "openid email profile", "flowEntry=static"},
+		{"kick default", "kick", nil, "user:read", ""},
+		{"vercel default", "vercel", nil, "openid email profile", ""},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -126,7 +158,14 @@ func TestAuthURL(t *testing.T) {
 				t.Fatal(err)
 			}
 			q := u.Query()
-			if q.Get("scope") != tc.wantScop || q.Get("state") != "st" || q.Get("code_challenge_method") != "S256" || q.Get("client_id") != "cid" {
+			wantMethod := "S256"
+			if tc.provider == "paypal" {
+				wantMethod = ""
+				if q.Has("code_challenge") {
+					t.Fatalf("paypal must not send code_challenge: %v", q)
+				}
+			}
+			if q.Get("scope") != tc.wantScop || q.Get("state") != "st" || q.Get("code_challenge_method") != wantMethod || q.Get("client_id") != "cid" {
 				t.Fatalf("query %v", q)
 			}
 			if tc.wantExtr != "" && !strings.Contains(u.RawQuery, tc.wantExtr) {
@@ -188,5 +227,140 @@ func TestErrors(t *testing.T) {
 	}
 	if _, err := NewByName("nope", Config{}); err == nil {
 		t.Fatal("want unknown provider error")
+	}
+}
+
+// tokenServer answers the token endpoint with body and records the request.
+func tokenServer(t *testing.T, body string) (*httptest.Server, *http.Request) {
+	t.Helper()
+	var got http.Request
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = r.ParseForm()
+		got = *r
+		got.PostForm = r.PostForm
+		_, _ = w.Write([]byte(body))
+	}))
+	t.Cleanup(srv.Close)
+	return srv, &got
+}
+
+func TestTokenScopeAsArray(t *testing.T) {
+	srv, _ := tokenServer(t, `{"access_token":"at","scope":["read","write"],"expires_in":86399}`)
+	p, err := NewByName("linear", Config{ClientID: "c", ClientSecret: "s", TokenURL: srv.URL})
+	if err != nil {
+		t.Fatal(err)
+	}
+	tok, err := p.ExchangeCode(t.Context(), "code", "ver", "https://app/cb")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if tok.Scope != "read write" {
+		t.Fatalf("scope %q", tok.Scope)
+	}
+}
+
+func TestTokenScopeOddTypeDoesNotFail(t *testing.T) {
+	srv, _ := tokenServer(t, `{"access_token":"at","scope":{"x":1}}`)
+	p, _ := NewByName("kick", Config{ClientID: "c", ClientSecret: "s", TokenURL: srv.URL})
+	tok, err := p.ExchangeCode(t.Context(), "code", "ver", "https://app/cb")
+	if err != nil || tok.AccessToken != "at" || tok.Scope != "" {
+		t.Fatalf("tok %+v err %v", tok, err)
+	}
+}
+
+func TestPayPalNoVerifierAndBasicAuth(t *testing.T) {
+	srv, got := tokenServer(t, `{"access_token":"at","refresh_token":"rt","expires_in":28800}`)
+	p, err := NewByName("paypal", Config{ClientID: "cid", ClientSecret: "sec", TokenURL: srv.URL})
+	if err != nil {
+		t.Fatal(err)
+	}
+	tok, err := p.ExchangeCode(t.Context(), "code", "ver", "https://app/cb")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if tok.RefreshToken != "rt" {
+		t.Fatalf("refresh token %q", tok.RefreshToken)
+	}
+	user, pass, ok := got.BasicAuth()
+	if !ok || user != "cid" || pass != "sec" {
+		t.Fatalf("basic auth %v %q %q", ok, user, pass)
+	}
+	if got.PostForm.Has("code_verifier") || got.PostForm.Has("client_secret") {
+		t.Fatalf("form %v", got.PostForm)
+	}
+}
+
+func TestCatalogRefresh(t *testing.T) {
+	tests := []struct {
+		name  string
+		basic bool
+	}{
+		{"linear", false}, {"kick", false}, {"huggingface", false}, {"vercel", false},
+		{"yandex", false}, {"paypal", true},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			srv, got := tokenServer(t, `{"access_token":"new","refresh_token":"rot","expires_in":3600,"scope":["a","b"]}`)
+			p, err := NewByName(tc.name, Config{ClientID: "cid", ClientSecret: "sec", TokenURL: srv.URL})
+			if err != nil {
+				t.Fatal(err)
+			}
+			rp, ok := p.(theauth.RefreshProvider)
+			if !ok {
+				t.Fatal("not a RefreshProvider")
+			}
+			tok, err := rp.RefreshToken(t.Context(), "old")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if tok.AccessToken != "new" || tok.RefreshToken != "rot" || tok.Scope != "a b" {
+				t.Fatalf("token %+v", tok)
+			}
+			if got.PostForm.Get("grant_type") != "refresh_token" || got.PostForm.Get("refresh_token") != "old" {
+				t.Fatalf("form %v", got.PostForm)
+			}
+			_, _, hasBasic := got.BasicAuth()
+			if hasBasic != tc.basic || (got.PostForm.Get("client_secret") == "") != tc.basic {
+				t.Fatalf("basic=%v form=%v", hasBasic, got.PostForm)
+			}
+		})
+	}
+}
+
+func TestVendorUserinfoFailures(t *testing.T) {
+	tests := []struct {
+		name, provider, body string
+		status               int
+	}{
+		{"linear graphql error", "linear", `{"errors":[{"message":"AUTHENTICATION_ERROR"}],"data":null}`, 200},
+		{"kick empty data", "kick", `{"data":[],"message":"OK"}`, 200},
+		{"vercel unauthorized", "vercel", `{"error":"invalid_token"}`, 401},
+		{"yandex unauthorized", "yandex", `{"error":"invalid_token"}`, 401},
+		{"paypal no id", "paypal", `{"name":"Ann"}`, 200},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.WriteHeader(tc.status)
+				_, _ = w.Write([]byte(tc.body))
+			}))
+			defer srv.Close()
+			p, err := NewByName(tc.provider, Config{ClientID: "c", ClientSecret: "s", UserURL: srv.URL})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := p.UserInfo(t.Context(), &theauth.ProviderToken{AccessToken: "at"}); err == nil {
+				t.Fatal("want error")
+			}
+		})
+	}
+}
+
+func TestCatalogIDsMatchNames(t *testing.T) {
+	for _, n := range Names() {
+		s, _ := Lookup(n)
+		if s.Name != n {
+			t.Errorf("catalog key %q has Spec.Name %q", n, s.Name)
+		}
 	}
 }

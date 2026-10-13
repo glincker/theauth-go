@@ -36,6 +36,9 @@ adheres to [Semantic Versioning](https://semver.org/) from v1.0 forward.
 - New nested modules `adapters/gin`, `adapters/echo` and `adapters/fiber`: native `Authn`, `RequireAuth` and `RequireAbility` middleware, `User`, `Session` and `Principal` accessors and a `Mount` helper under a prefix. Fiber goes through its net/http adaptor, so responses from `Mount` and the middleware are buffered (no SSE).
 - `provider/oidc`: `{tenantid}` template issuers and Entra `common`, `organizations` and `consumers` are validated against the token's `tid` claim (`Config.AllowedTenants` limits tenants); `Config.AdditionalAudiences` accepts extra `aud` values with the `azp` rule unchanged; `Config.Claims` (`ClaimMapping`) overrides profile claims; presets `oidc.Entra`, `Okta`, `Keycloak`, `Authentik` and `Auth0` fill in discovery URL, scopes and claim mapping; failures are `*oidc.Error` with `Provider`, `Stage` and `Status` and carry no secrets.
 
+- `provider/generic`: six more catalog providers, `linear`, `paypal`, `kick`, `huggingface`, `vercel` and `yandex` (16 in total). `Spec` gains `UserBody` (JSON request body for GraphQL profile endpoints), `UserAuthScheme` (for example `OAuth`), `NoPKCE` and `Fields.AvatarURLFormat`; all default to the old behavior. A token or refresh response whose `scope` is an array (Linear) no longer fails the exchange.
+- `provider/oidc`: `oidc.Cognito(region, userPoolID, clientID, clientSecret)` preset for Amazon Cognito user pools.
+
 ### Fixed
 
 - An OAuth sign-in that returns no refresh token (Google after the first consent) no longer overwrites the stored refresh token with an empty one.

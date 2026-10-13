@@ -82,14 +82,14 @@ func Do(ctx context.Context, r Request) (*theauth.ProviderToken, error) {
 	}
 
 	var raw struct {
-		AccessToken      string `json:"access_token"`
-		RefreshToken     string `json:"refresh_token"`
-		ExpiresIn        int64  `json:"expires_in"`
-		Scope            string `json:"scope"`
-		TokenType        string `json:"token_type"`
-		IDToken          string `json:"id_token"`
-		Error            string `json:"error"`
-		ErrorDescription string `json:"error_description"`
+		AccessToken      string    `json:"access_token"`
+		RefreshToken     string    `json:"refresh_token"`
+		ExpiresIn        int64     `json:"expires_in"`
+		Scope            flexScope `json:"scope"`
+		TokenType        string    `json:"token_type"`
+		IDToken          string    `json:"id_token"`
+		Error            string    `json:"error"`
+		ErrorDescription string    `json:"error_description"`
 	}
 	parseErr := json.Unmarshal(body, &raw)
 	if raw.Error != "" || resp.StatusCode/100 != 2 {
@@ -110,7 +110,7 @@ func Do(ctx context.Context, r Request) (*theauth.ProviderToken, error) {
 	tok := &theauth.ProviderToken{
 		AccessToken:  raw.AccessToken,
 		RefreshToken: raw.RefreshToken,
-		Scope:        raw.Scope,
+		Scope:        string(raw.Scope),
 		TokenType:    raw.TokenType,
 		IDToken:      raw.IDToken,
 	}
@@ -118,4 +118,24 @@ func Do(ctx context.Context, r Request) (*theauth.ProviderToken, error) {
 		tok.ExpiresAt = time.Now().Add(time.Duration(raw.ExpiresIn) * time.Second)
 	}
 	return tok, nil
+}
+
+// flexScope reads a token response "scope" that is a string or an array of
+// strings (Linear answers an array for older apps). Arrays are joined with a
+// space. Any other JSON type reads as empty instead of failing the refresh.
+type flexScope string
+
+func (f *flexScope) UnmarshalJSON(b []byte) error {
+	var s string
+	if err := json.Unmarshal(b, &s); err == nil {
+		*f = flexScope(s)
+		return nil
+	}
+	var list []string
+	if err := json.Unmarshal(b, &list); err == nil {
+		*f = flexScope(strings.Join(list, " "))
+		return nil
+	}
+	*f = ""
+	return nil
 }
