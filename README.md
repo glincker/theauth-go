@@ -1,20 +1,52 @@
-# theauth-go
+<p align="center">
+  <a href="https://theauth.dev">
+    <img src="https://theauth.dev/logo.svg" height="64" alt="theAuth" />
+  </a>
+</p>
 
-**Auth for AI agents and humans in Go: MCP OAuth 2.1 server, agent identity and delegation, DPoP, passkeys, device flow.** Mount it into your own `net/http` or `chi` server. Your data stays in your own database (memory, SQLite, Postgres or MySQL). MIT licensed, no hosted service.
+<h1 align="center">theauth-go</h1>
 
-[![Go Reference](https://pkg.go.dev/badge/github.com/glincker/theauth-go/v2.svg)](https://pkg.go.dev/github.com/glincker/theauth-go/v2)
-[![Release](https://img.shields.io/github/v/release/glincker/theauth-go?label=latest)](https://github.com/glincker/theauth-go/releases)
-[![CI](https://github.com/glincker/theauth-go/actions/workflows/ci.yml/badge.svg)](https://github.com/glincker/theauth-go/actions/workflows/ci.yml)
-[![codecov](https://codecov.io/gh/glincker/theauth-go/branch/main/graph/badge.svg)](https://codecov.io/gh/glincker/theauth-go)
-[![Discord](https://img.shields.io/discord/829168897080557579?style=flat-square&logo=discord&logoColor=white&label=discord&color=5865F2)](https://discord.gg/Ar5pcaZB99)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![SLSA 3](https://slsa.dev/images/gh-badge-level3.svg)](https://github.com/glincker/theauth-go/releases)
-[![CodeQL](https://github.com/glincker/theauth-go/actions/workflows/codeql.yml/badge.svg)](https://github.com/glincker/theauth-go/actions/workflows/codeql.yml)
-[![Context7](https://img.shields.io/badge/context7-indexed-000000?style=flat&colorA=000000&colorB=000000)](https://context7.com/glincker/theauth-go)
+<p align="center"><strong>Go authentication library: OAuth 2.1 authorization server, MCP authorization, passkeys, SAML, SCIM and DPoP.</strong><br>
+Mount it into your own <code>net/http</code>, chi, Gin, Echo or Fiber server. Your data stays in your own database (memory, SQLite, Postgres or MySQL). Self-hosted, MIT licensed, no hosted service.</p>
 
-**[Website](https://theauth.dev)** &middot; **[Docs](https://docs.theauth.dev/go)** &middot; **[pkg.go.dev](https://pkg.go.dev/github.com/glincker/theauth-go/v2)** &middot; **[Packages](#packages)** &middot; **[theAuth for TypeScript](https://github.com/glincker/theauth)** (**[TypeScript packages](https://github.com/glincker/theauth#packages)**)
+<p align="center">
+  <a href="https://pkg.go.dev/github.com/glincker/theauth-go/v2"><img src="https://pkg.go.dev/badge/github.com/glincker/theauth-go/v2.svg" alt="Go Reference" /></a>
+  <a href="https://github.com/glincker/theauth-go/blob/main/go.mod"><img src="https://img.shields.io/github/go-mod/go-version/glincker/theauth-go?label=go" alt="Go version" /></a>
+  <a href="https://github.com/glincker/theauth-go/releases"><img src="https://img.shields.io/github/v/release/glincker/theauth-go?label=release" alt="Latest release" /></a>
+  <a href="https://github.com/glincker/theauth-go/actions/workflows/ci.yml"><img src="https://github.com/glincker/theauth-go/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
+  <a href="https://github.com/glincker/theauth-go/actions/workflows/codeql.yml"><img src="https://github.com/glincker/theauth-go/actions/workflows/codeql.yml/badge.svg" alt="CodeQL" /></a>
+  <a href="https://goreportcard.com/report/github.com/glincker/theauth-go/v2"><img src="https://goreportcard.com/badge/github.com/glincker/theauth-go/v2" alt="Go Report Card" /></a>
+  <a href="https://codecov.io/gh/glincker/theauth-go"><img src="https://codecov.io/gh/glincker/theauth-go/branch/main/graph/badge.svg" alt="Coverage" /></a>
+  <a href="https://scorecard.dev/viewer/?uri=github.com/glincker/theauth-go"><img src="https://api.securityscorecards.dev/projects/github.com/glincker/theauth-go/badge" alt="OpenSSF Scorecard" /></a>
+  <a href="https://github.com/glincker/theauth-go/releases"><img src="https://slsa.dev/images/gh-badge-level3.svg" alt="SLSA 3" /></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-yellow.svg" alt="License: MIT" /></a>
+  <a href="https://discord.gg/Ar5pcaZB99"><img src="https://img.shields.io/discord/829168897080557579?style=flat-square&logo=discord&logoColor=white&label=discord&color=5865F2" alt="Discord" /></a>
+  <a href="https://context7.com/glincker/theauth-go"><img src="https://img.shields.io/badge/context7-indexed-000000?style=flat&colorA=000000&colorB=000000" alt="Context7" /></a>
+</p>
 
-This is the Go SDK for [theAuth](https://theauth.dev), open-source auth for AI agents and humans. The TypeScript library lives in [glincker/theauth](https://github.com/glincker/theauth) and this repo is the Go counterpart. Both share one model: agents as identities, scoped permissions, delegation chains and an audit trail.
+<p align="center">
+  <a href="https://theauth.dev"><strong>Website</strong></a> &middot;
+  <a href="https://docs.theauth.dev/go/getting-started/quick-start"><strong>Quickstart</strong></a> &middot;
+  <a href="https://docs.theauth.dev/go"><strong>Docs</strong></a> &middot;
+  <a href="https://pkg.go.dev/github.com/glincker/theauth-go/v2"><strong>pkg.go.dev</strong></a> &middot;
+  <a href="./examples"><strong>Examples</strong></a> &middot;
+  <a href="https://github.com/glincker/theauth-go/discussions"><strong>Discussions</strong></a> &middot;
+  <a href="https://discord.gg/Ar5pcaZB99"><strong>Discord</strong></a>
+</p>
+
+<p align="center">
+  <a href="https://theauth.dev">
+    <img src=".github/og.jpg" alt="theAuth for Go: authentication for Go. OAuth 2.1, OpenID Connect, MCP, passkeys, SAML. Self-hosted, MIT." width="720" />
+  </a>
+</p>
+
+---
+
+## What it is
+
+theauth-go is the Go library for [theAuth](https://theauth.dev). It handles sign-in for people (passwords, magic links, social login, passkeys, TOTP, SAML SSO, SCIM provisioning) and for software (an OAuth 2.1 authorization server with PKCE, DPoP, device login, token exchange and agent identities, plus a resource server module for MCP).
+
+It runs inside your process as an `http.Handler`. You keep your users, sessions and tokens in your own database. The root module is Go 1.25, MIT licensed, and every release is signed and ships an SBOM. The TypeScript library is [glincker/theauth](https://github.com/glincker/theauth).
 
 ## Contents
 
@@ -22,9 +54,12 @@ This is the Go SDK for [theAuth](https://theauth.dev), open-source auth for AI a
 - [Packages](#packages)
 - [Quick start: net/http and SQLite](#quick-start-nethttp-and-sqlite)
 - [Quick start: agent identity and delegation](#quick-start-agent-identity-and-delegation)
+- [What you can build](#what-you-can-build)
 - [Features](#features)
 - [Storage backends](#storage-backends)
 - [Stability](#stability)
+- [Security](#security)
+- [Migrating](#migrating)
 - [FAQ](#faq)
 - [Examples](#examples)
 
@@ -65,6 +100,17 @@ One Go module at the root plus three nested modules (`mcpresource`, `storage/sql
 | Fiber adapter | [`adapters/fiber`](./adapters/fiber) (separate module): the same set for Fiber v2 through its net/http adaptor (responses are buffered) |
 | Providers | `provider/` apple, bitbucket, discord, facebook, github, gitlab, google, linkedin, microsoft, slack, twitch, x, oidc, and [`generic`](./docs/provider-catalog.md) for 16 more (Spotify, Dropbox, Zoom, Kakao, Naver, Patreon, Box, Salesforce, Figma, Codeberg, Linear, PayPal, Kick, Hugging Face, Vercel, Yandex) |
 | Commands | [`theauth-go`](./docs/cli.md) (secrets, OpenAPI), [`theauth-doctor`](https://docs.theauth.dev/go/guides/security-doctor) (security doctor), [`theauth-migrate`](https://docs.theauth.dev/go/migrations/migration-guide) (Auth0 and Cognito import) |
+
+### Modules on pkg.go.dev
+
+| Module | Go | Reference |
+|---|---|---|
+| `github.com/glincker/theauth-go/v2` | 1.25 | [pkg.go.dev](https://pkg.go.dev/github.com/glincker/theauth-go/v2) |
+| `github.com/glincker/theauth-go/mcpresource` | 1.25 | [pkg.go.dev](https://pkg.go.dev/github.com/glincker/theauth-go/mcpresource) |
+| `github.com/glincker/theauth-go/storage/sqlite` | 1.26 | [pkg.go.dev](https://pkg.go.dev/github.com/glincker/theauth-go/storage/sqlite) |
+| `github.com/glincker/theauth-go/adapters/gin` | 1.26 | [pkg.go.dev](https://pkg.go.dev/github.com/glincker/theauth-go/adapters/gin) |
+| `github.com/glincker/theauth-go/adapters/echo` | 1.26 | [pkg.go.dev](https://pkg.go.dev/github.com/glincker/theauth-go/adapters/echo) |
+| `github.com/glincker/theauth-go/adapters/fiber` | 1.26 | [pkg.go.dev](https://pkg.go.dev/github.com/glincker/theauth-go/adapters/fiber) |
 
 The TypeScript packages are listed in the [theAuth README](https://github.com/glincker/theauth#packages).
 
@@ -205,6 +251,36 @@ func main() {
 
 `ownerID` and `userAccessToken` stand in for values from your sign-in flow (the user's ULID and an access token the authorization server issued to that user). Revoke access at any point with `RevokeDelegation`, `SuspendAgent` or `RevokeAgent`; resource servers see the change on their next introspection. Details: [Agent identity and revocation](https://docs.theauth.dev/go/concepts/agent-identity), [Agent delegation](https://docs.theauth.dev/go/guides/agent-delegation) and [Authorization server](https://docs.theauth.dev/go/concepts/authorization-server).
 
+## What you can build
+
+### Add sign-in to a Go web app
+
+Email and password, magic links, 12 OAuth login providers, generic OIDC and 16 more catalog providers, with server-side sessions. Start with the [net/http quick start](#quick-start-nethttp-and-sqlite) or the [Gin](./adapters/gin), [Echo](./adapters/echo) and [Fiber](./adapters/fiber) adapters. Guide: [Add an OAuth provider](https://docs.theauth.dev/go/guides/add-oauth-provider).
+
+### Run an OAuth 2.1 authorization server in Go
+
+Authorization code with PKCE, refresh rotation, `client_credentials`, token exchange, PAR, JAR, CIBA and DPoP, with dynamic client registration and client ID metadata documents. Guide: [Authorization server](https://docs.theauth.dev/go/concepts/authorization-server).
+
+### Secure an MCP server
+
+Use theauth-go as the authorization server for MCP clients, and the separate `mcpresource` module to validate tokens and guard tools in your MCP resource server. Example: [`examples/mcp-server`](./examples/mcp-server). Guides: [MCP authorization](https://docs.theauth.dev/go/concepts/mcp-authorization), [Protect MCP tools](https://docs.theauth.dev/go/guides/protect-mcp-tools).
+
+### Passkeys and WebAuthn
+
+Discoverable passkey login and TOTP with recovery codes, plus step-up checks with `RequireRecentAuth`. Example: [`examples/webauthn-passkey`](./examples/webauthn-passkey). Guide: [Enable passkeys](https://docs.theauth.dev/go/guides/webauthn-passkeys).
+
+### Device login for Go CLIs
+
+RFC 8628 device authorization on the server and the `clientauth` package in your CLI. Example: [`examples/cli-login`](./examples/cli-login). Guide: [CLI login](https://docs.theauth.dev/go/guides/cli-login).
+
+### SAML SSO and SCIM provisioning
+
+SAML 2.0 single sign-on, SCIM 2.0 user provisioning, organizations, RBAC and an append-only audit log with Splunk, webhook and OTLP sinks. Needs memory, Postgres or MySQL storage (not SQLite). Guide: [Splunk audit streaming](https://docs.theauth.dev/go/guides/audit-log-splunk).
+
+### Agent identity and delegation
+
+Give an AI agent its own credential and let it act for a user with a narrower scope. See the [agent quick start](#quick-start-agent-identity-and-delegation).
+
 ## Features
 
 | Area | What you get | Docs |
@@ -244,14 +320,9 @@ auth, _ := theauth.New(theauth.Config{
 
 Details and the Redis adapter are in [docs/pluggable-stores.md](./docs/pluggable-stores.md).
 
-## How it compares
+## Choosing between a library and a hosted service
 
-Short version, based on each project's public docs. Verify before you decide.
-
-- **Auth0, Clerk, Cognito**: managed services with hosted UIs and support contracts. theauth-go is a library you embed and run yourself, so you own the database and the ops work. Migration tools for Auth0 and Cognito are included.
-- **Better Auth**: a TypeScript library with a large plugin ecosystem. If your backend is TypeScript, use the [TypeScript SDK](https://github.com/glincker/theauth) or Better Auth. theauth-go is for Go services.
-- **Ory, Keycloak**: standalone servers you deploy and talk to over HTTP. theauth-go runs in your process. You give up their admin UIs and larger feature surface.
-- **Rolling your own** on `golang.org/x/oauth2` and a session table: fine for one provider. Gets expensive once you add passkeys, device login, token exchange and revocation.
+theauth-go is a library you embed and run yourself, so you own the database and the operations. It does not include a hosted login UI or a managed service. If you need either, it is not the right shape for you. The TypeScript library at [glincker/theauth](https://github.com/glincker/theauth) covers Node, Bun, Deno and Workers backends.
 
 ## Storage backends
 
@@ -273,6 +344,22 @@ Postgres and MySQL implement the newer token, device, session and throttle capab
 ## Stability
 
 Packages and APIs that were Stable before v2.6 keep their SemVer guarantees. Among the additions in v2.6, only the storage capability split, `Handler()` and `Config.PathPrefix` are Stable. Experimental: `storage/sqlite`, `clientauth`, `policy`, the agent identity and revocation APIs, `Doctor`, `Config.ProviderResolver` and the new optional storage capabilities. Experimental APIs may change in a minor release. The SemVer rules and the list of stable packages are in [STABILITY.md](https://docs.theauth.dev/go/reference/stability).
+
+## Security
+
+- Passwords are hashed with Argon2id, sessions are opaque and stored server side, and agent secrets are shown once and stored only as hashes.
+- Release assets are signed with cosign, ship an SBOM and carry SLSA 3 provenance. See [Verify releases](#verify-releases).
+- CI runs CodeQL, `govulncheck`, dependency review and OpenSSF Scorecard.
+- The [threat model](https://docs.theauth.dev/go/security/threat-model) and the `theauth-doctor` [security doctor](https://docs.theauth.dev/go/guides/security-doctor) describe what is covered and how to check a deployment.
+- Report vulnerabilities privately through [GitHub advisories](https://github.com/glincker/theauth-go/security/advisories/new) or support@glinr.com, as described in the [security policy](.github/SECURITY.md). Do not open a public issue.
+
+## Migrating
+
+- From Auth0: [Migrate from Auth0](https://docs.theauth.dev/go/guides/migrate-from-auth0)
+- From Cognito: [Migrate from Cognito](https://docs.theauth.dev/go/guides/migrate-from-cognito)
+- From Keycloak: [Migrate from Keycloak](./docs/MIGRATING-FROM-KEYCLOAK.md)
+- From hand-rolled sessions: [Migrate from hand-rolled sessions](https://docs.theauth.dev/go/guides/migrate-from-hand-rolled-sessions)
+- From the v1 module path: [Migrating to /v2](https://docs.theauth.dev/go/migrations/to-v2-module-path)
 
 ## FAQ
 
