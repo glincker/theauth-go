@@ -71,6 +71,28 @@ func SignWith(claims Claims, typ, kid, alg string, signer crypto.Signer) (string
 	return input + "." + base64.RawURLEncoding.EncodeToString(sig), nil
 }
 
+// SignPayloadWith signs an arbitrary JSON claim set with any supported
+// algorithm. ID tokens and logout tokens use it.
+func SignPayloadWith(payload map[string]any, typ, kid, alg string, signer crypto.Signer) (string, error) {
+	if signer == nil {
+		return "", errors.New("jwt: nil signer")
+	}
+	headerJSON, err := json.Marshal(Header{Alg: alg, Typ: typ, Kid: kid})
+	if err != nil {
+		return "", err
+	}
+	payloadJSON, err := json.Marshal(payload)
+	if err != nil {
+		return "", err
+	}
+	input := base64.RawURLEncoding.EncodeToString(headerJSON) + "." + base64.RawURLEncoding.EncodeToString(payloadJSON)
+	sig, err := signBytes(alg, signer, []byte(input))
+	if err != nil {
+		return "", err
+	}
+	return input + "." + base64.RawURLEncoding.EncodeToString(sig), nil
+}
+
 func signBytes(alg string, signer crypto.Signer, msg []byte) ([]byte, error) {
 	switch alg {
 	case AlgEdDSA:
@@ -159,7 +181,7 @@ func VerifyWith(token string, resolve KeyResolver, expectedTyp, expectedAud stri
 	if err := json.Unmarshal(payloadBytes, &c); err != nil {
 		return Claims{}, fmt.Errorf("jwt: payload parse: %w", err)
 	}
-	if c.Exp == 0 || time.Unix(c.Exp, 0).Add(opts.Skew).Before(now) {
+	if !opts.IgnoreExpiry && (c.Exp == 0 || time.Unix(c.Exp, 0).Add(opts.Skew).Before(now)) {
 		return Claims{}, errors.New("jwt: token expired")
 	}
 	if c.Nbf != 0 && time.Unix(c.Nbf, 0).Add(-opts.Skew).After(now) {
@@ -194,4 +216,52 @@ func verifyBytes(alg string, pub crypto.PublicKey, msg, sig []byte) bool {
 		return rsa.VerifyPKCS1v15(k, crypto.SHA256, digest[:], sig) == nil
 	}
 	return false
+}
+
+// VerifySignature authenticates a compact JWS signed with any supported
+// algorithm and returns the decoded header and raw payload without
+// interpreting registered claims. expectedTyp is the required JOSE typ.
+// Callers that need array aud or no exp (Security Event Tokens, RFC 8417)
+// use it and validate claims themselves.
+func VerifySignature(token string, resolve KeyResolver, expectedTyp string) (Header, []byte, error) {
+	parts := strings.Split(token, ".")
+	if len(parts) != 3 {
+		return Header{}, nil, errors.New("jwt: token must have three segments")
+	}
+	headerBytes, err := base64.RawURLEncoding.DecodeString(parts[0])
+	if err != nil {
+		return Header{}, nil, fmt.Errorf("jwt: header decode: %w", err)
+	}
+	var h Header
+	if err := json.Unmarshal(headerBytes, &h); err != nil {
+		return Header{}, nil, fmt.Errorf("jwt: header parse: %w", err)
+	}
+	if !SupportedAlg(h.Alg) {
+		return Header{}, nil, fmt.Errorf("jwt: unsupported alg %q", h.Alg)
+	}
+	if h.Typ != expectedTyp {
+		return Header{}, nil, fmt.Errorf("jwt: unsupported typ %q", h.Typ)
+	}
+	if h.Kid == "" {
+		return Header{}, nil, errors.New("jwt: header missing kid")
+	}
+	alg, pub, ok := resolve(h.Kid)
+	if !ok {
+		return Header{}, nil, fmt.Errorf("jwt: unknown kid %q", h.Kid)
+	}
+	if alg != h.Alg {
+		return Header{}, nil, errors.New("jwt: alg does not match key")
+	}
+	sig, err := base64.RawURLEncoding.DecodeString(parts[2])
+	if err != nil {
+		return Header{}, nil, fmt.Errorf("jwt: signature decode: %w", err)
+	}
+	if !verifyBytes(alg, pub, []byte(parts[0]+"."+parts[1]), sig) {
+		return Header{}, nil, errors.New("jwt: signature mismatch")
+	}
+	payload, err := base64.RawURLEncoding.DecodeString(parts[1])
+	if err != nil {
+		return Header{}, nil, fmt.Errorf("jwt: payload decode: %w", err)
+	}
+	return h, payload, nil
 }

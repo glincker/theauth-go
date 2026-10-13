@@ -159,3 +159,32 @@ func TestSupportedAlg(t *testing.T) {
 		}
 	}
 }
+
+func TestSignPayloadWithAndIgnoreExpiry(t *testing.T) {
+	keys := newTestKeys(t)
+	now := time.Now()
+	for kid, k := range keys {
+		payload := map[string]any{
+			"iss": "https://as.example.com", "aud": "client-1", "sub": "u1",
+			"iat": now.Add(-2 * time.Hour).Unix(), "exp": now.Add(-time.Hour).Unix(),
+			"sid": "s1",
+		}
+		tok, err := SignPayloadWith(payload, "JWT", kid, k.alg, k.signer)
+		if err != nil {
+			t.Fatalf("%s sign: %v", kid, err)
+		}
+		if _, err := VerifyWith(tok, resolverFor(keys), "JWT", "", now, VerifyOptions{}); err == nil {
+			t.Fatalf("%s: expired token must be refused by default", kid)
+		}
+		c, err := VerifyWith(tok, resolverFor(keys), "JWT", "", now, VerifyOptions{IgnoreExpiry: true})
+		if err != nil {
+			t.Fatalf("%s: IgnoreExpiry verify: %v", kid, err)
+		}
+		if c.Sub != "u1" || c.Aud != "client-1" || c.Extra["sid"] != "s1" {
+			t.Fatalf("%s: claims %+v", kid, c)
+		}
+	}
+	if _, err := SignPayloadWith(map[string]any{}, "JWT", "k", AlgEdDSA, nil); err == nil {
+		t.Fatal("nil signer must be refused")
+	}
+}

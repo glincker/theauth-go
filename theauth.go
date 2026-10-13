@@ -123,6 +123,12 @@ type Config struct {
 	// unless a fronting layer already enforces it.
 	DisableCSRFProtection bool
 
+	// Admission, when set, runs the Admission middleware ahead of every
+	// route Mount and Handler register: tiered per-client rate limits and a
+	// cross-site check, with counters in Stores.RateLimiter. Nil leaves it
+	// off. It stacks with the per-route credential limits.
+	Admission *AdmissionOptions
+
 	// ErrorResponder, when set, writes every error response the root
 	// middleware produces (Authn family, RequireAuth, RequirePermission,
 	// RequireAbility, the Origin check, rate limiters) so an app can emit its
@@ -184,6 +190,12 @@ type Config struct {
 	// authentication event (login, MFA, password, passkey, TOTP, session,
 	// token) as a PII-minimal AuthEvent. Independent of Config.Audit.
 	AuthEventSink AuthEventSink
+
+	// SharedSignals enables the OpenID Shared Signals Framework 1.0
+	// transmitter (CAEP and RISC events, push and poll delivery) and an
+	// optional receiver. Requires AuthorizationServer. See
+	// docs/shared-signals.md. Nil keeps it off.
+	SharedSignals *SharedSignalsConfig
 
 	// TOTP enables time-based second-factor enrollment + verification when non-nil.
 	// Requires Config.EncryptionKey (already required by v0.3 OAuth) so the stored
@@ -377,6 +389,7 @@ type TheAuth struct {
 	rlSeq             atomic.Uint32
 	trustedOrigins    []string
 	csrfDisabled      bool
+	admission         *AdmissionOptions
 	errorResponder    func(w http.ResponseWriter, r *http.Request, status int, code, message string)
 	apiTokens         *apitokens.Service
 	revocations       RevocationBus
@@ -439,6 +452,10 @@ type TheAuth struct {
 	// per public *TheAuth method so the v2.0 stability surface is
 	// unchanged.
 	as *internalas.Service
+
+	// signalsSvc is the Shared Signals Framework transmitter and receiver;
+	// nil unless Config.SharedSignals is set.
+	signalsSvc *sharedSignals
 
 	// v2.0 phase 3 + 4: agent identity + delegation policy. Nil when
 	// Config.AgentIdentity is not set; client_credentials and token-exchange
@@ -564,6 +581,7 @@ func New(cfg Config) (*TheAuth, error) {
 		stores:                     cfg.Stores,
 		trustedOrigins:             trustedOrigins,
 		csrfDisabled:               cfg.DisableCSRFProtection,
+		admission:                  cfg.Admission,
 		errorResponder:             cfg.ErrorResponder,
 		storageRaw:                 cfg.storageRaw,
 		emailNorm:                  newEmailNormalizer(cfg.EmailNFKC),
@@ -638,6 +656,9 @@ func (a *TheAuth) Close() {
 	}
 	if a.samlSvc != nil {
 		a.samlSvc.Stop()
+	}
+	if a.signalsSvc != nil {
+		a.signalsSvc.cancel()
 	}
 	if a.as != nil {
 		a.as.Stop()

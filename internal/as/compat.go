@@ -138,6 +138,24 @@ func (s *Service) resourceMatchesGrant(requested, granted string) bool {
 // the client's registered scope set, failing with invalid_scope only when
 // nothing is left. client may be nil.
 func (s *Service) narrowScopes(requested []string, resource models.ProtectedResource, client *models.OAuthClient) ([]string, error) {
+	if s.OIDCEnabled() {
+		// openid, profile and email are never part of a resource catalog.
+		std, rest := splitOIDCScopes(requested)
+		if len(std) > 0 {
+			if len(rest) == 0 {
+				return std, nil
+			}
+			out, err := s.narrowResourceScopes(rest, resource, client)
+			if err != nil {
+				return nil, err
+			}
+			return append(std, out...), nil
+		}
+	}
+	return s.narrowResourceScopes(requested, resource, client)
+}
+
+func (s *Service) narrowResourceScopes(requested []string, resource models.ProtectedResource, client *models.OAuthClient) ([]string, error) {
 	if !s.Cfg.ClientCompat.DropUnknownScopes || len(requested) == 0 {
 		return validateScopeAgainstResource(requested, resource)
 	}

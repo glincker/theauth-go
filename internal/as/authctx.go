@@ -41,6 +41,9 @@ type AuthContext struct {
 	// ACR, when non-empty, overrides the value derived from AMR and
 	// Config.ACRValues.
 	ACR string
+	// SessionID identifies the browser session behind the request. OIDC
+	// uses it for the sid claim and back-channel logout.
+	SessionID string
 }
 
 type authContextKey struct{}

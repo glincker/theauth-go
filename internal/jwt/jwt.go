@@ -187,6 +187,9 @@ type VerifyOptions struct {
 	// valid only while now is earlier than nbf-Skew. Zero means no
 	// tolerance.
 	Skew time.Duration
+	// IgnoreExpiry skips the exp check. Only VerifyWith honours it; used for
+	// id_token_hint, which RPs may legitimately present after expiry.
+	IgnoreExpiry bool
 }
 
 // VerifyOpts is Verify with explicit options.

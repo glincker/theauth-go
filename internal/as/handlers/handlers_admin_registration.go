@@ -35,10 +35,11 @@ func NewAdmin(svc *internalas.Service, userFromCtx func(r *http.Request) (*model
 // Mount attaches the routes to an org-scoped router. gate returns the
 // permission middleware (root passes RequirePermission).
 func (a *AdminHandler) Mount(r chi.Router, gate func(permission string) func(http.Handler) http.Handler) {
+	perm := gate(models.PermissionAgentsAdmin)
+	a.mountDevices(r, perm)
 	if !a.svc.RegistrationTokensEnabled() {
 		return
 	}
-	perm := gate(models.PermissionAgentsAdmin)
 	r.With(perm).Post("/registration-tokens", a.create)
 	r.With(perm).Get("/registration-tokens", a.list)
 	r.With(perm).Delete("/registration-tokens/{tokenID}", a.revoke)

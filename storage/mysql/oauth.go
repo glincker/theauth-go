@@ -38,8 +38,9 @@ INSERT INTO oauth_clients (
     jwks_uri, jwks, software_id, software_version, owner_kind,
     owner_user_id, owner_organization_id, owner_agent_id,
     anonymous_registered, registration_access_hash, created_at, updated_at,
-    access_token_format, access_token_signed_response_alg, authorization_details_types
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    access_token_format, access_token_signed_response_alg, authorization_details_types,
+    oidc_metadata
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		ulidToBytes(c.ID),
 		c.ClientID,
 		nullBytesToSlice(c.ClientSecretHash),
@@ -69,6 +70,7 @@ INSERT INTO oauth_clients (
 		c.AccessTokenFormat,
 		c.AccessTokenSignedResponseAlg,
 		string(detailTypes),
+		string(c.OIDCMetadataJSON()),
 	)
 	if err != nil {
 		return theauth.OAuthClient{}, err
@@ -88,7 +90,8 @@ SELECT id, client_id, client_secret_hash, client_name, redirect_uris,
        jwks_uri, jwks, software_id, software_version, owner_kind,
        owner_user_id, owner_organization_id, owner_agent_id,
        anonymous_registered, registration_access_hash, created_at, updated_at,
-       access_token_format, access_token_signed_response_alg, authorization_details_types
+       access_token_format, access_token_signed_response_alg, authorization_details_types,
+       oidc_metadata
 FROM oauth_clients WHERE client_id = ?`, clientID)
 	c, err := scanOAuthClient(row)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -114,7 +117,7 @@ UPDATE oauth_clients SET
     contacts = ?, logo_uri = ?, policy_uri = ?, tos_uri = ?,
     jwks_uri = ?, jwks = ?, software_id = ?, software_version = ?,
     access_token_format = ?, access_token_signed_response_alg = ?,
-    authorization_details_types = ?,
+    authorization_details_types = ?, oidc_metadata = ?,
     updated_at = ?
 WHERE client_id = ?`,
 		c.ClientName, redirects, grants, responses,
@@ -122,6 +125,7 @@ WHERE client_id = ?`,
 		contacts, c.LogoURI, c.PolicyURI, c.TosURI,
 		c.JwksURI, nullBytesToSlice(c.Jwks), c.SoftwareID, c.SoftwareVersion,
 		c.AccessTokenFormat, c.AccessTokenSignedResponseAlg, string(detailTypes),
+		string(c.OIDCMetadataJSON()),
 		timeUTC(time.Now()),
 		c.ClientID,
 	)
@@ -164,6 +168,7 @@ func scanOAuthClient(row interface{ Scan(...interface{}) error }) (theauth.OAuth
 		anonymous                               int8
 		createdAt, updatedAt                    time.Time
 		tokenFormat, tokenAlg, detailTypesJSON  string
+		oidcMetaJSON                            string
 	)
 	if err := row.Scan(
 		&idB, &clientID, &secretHash, &name, &redirectsJSON,
@@ -172,7 +177,7 @@ func scanOAuthClient(row interface{ Scan(...interface{}) error }) (theauth.OAuth
 		&jwksURI, &jwks, &softID, &softVer, &ownerKind,
 		&ownerUserB, &ownerOrgB, &ownerAgentB,
 		&anonymous, &regAccessHash, &createdAt, &updatedAt,
-		&tokenFormat, &tokenAlg, &detailTypesJSON,
+		&tokenFormat, &tokenAlg, &detailTypesJSON, &oidcMetaJSON,
 	); err != nil {
 		return theauth.OAuthClient{}, err
 	}
@@ -184,7 +189,7 @@ func scanOAuthClient(row interface{ Scan(...interface{}) error }) (theauth.OAuth
 	var detailTypes []string
 	_ = json.Unmarshal([]byte(detailTypesJSON), &detailTypes)
 
-	return theauth.OAuthClient{
+	out := theauth.OAuthClient{
 		ID:                      bytesToULID(idB),
 		ClientID:                clientID,
 		ClientSecretHash:        secretHash,
@@ -216,7 +221,9 @@ func scanOAuthClient(row interface{ Scan(...interface{}) error }) (theauth.OAuth
 		RegistrationAccessHash: regAccessHash,
 		CreatedAt:              createdAt.UTC(),
 		UpdatedAt:              updatedAt.UTC(),
-	}, nil
+	}
+	out.SetOIDCMetadataJSON([]byte(oidcMetaJSON))
+	return out, nil
 }
 
 // Authorization codes

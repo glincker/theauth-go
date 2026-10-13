@@ -362,6 +362,20 @@ var (
 	// ErrRegistrationTokensDisabled is returned when the storage cannot hold
 	// registration tokens.
 	ErrRegistrationTokensDisabled = models.ErrRegistrationTokensDisabled
+
+	// ErrDeviceEnrollmentInvalid covers unknown, revoked and mismatched
+	// devices and join tokens.
+	ErrDeviceEnrollmentInvalid = models.ErrDeviceEnrollmentInvalid
+
+	// ErrDeviceConflict is returned when a device SPIFFE ID is already
+	// registered.
+	ErrDeviceConflict = models.ErrDeviceConflict
+
+	// ErrDevicesDisabled is returned when device tokens are not configured.
+	ErrDevicesDisabled = models.ErrDevicesDisabled
+
+	// ErrOIDCDisabled is returned when AuthorizationServer.OIDC is not set.
+	ErrOIDCDisabled = models.ErrOIDCDisabled
 )
 
 // OAuth 2.1 standard error codes returned in JSON error bodies.

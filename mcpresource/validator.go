@@ -45,6 +45,10 @@ type Validator struct {
 	dpopMaxAge    time.Duration
 	dpopJTIWindow int
 
+	// revocation, when set, is consulted after offline validation.
+	revocation         RevocationChecker
+	revocationFailOpen bool
+
 	startOnce sync.Once
 }
 
@@ -219,6 +223,8 @@ type Diagnostic struct {
 //     URI is configured; every token will be rejected as inactive, which
 //     looks identical to a bad-token bug and is almost certainly a
 //     misconfiguration.
+//   - "warn" / "revocation-no-introspection": WithDeviceRevocationIntrospection
+//     is set without an introspection URI, so device tokens are refused.
 //   - "info" / "dual-verification": both JWKS URI and introspection URI are
 //     set; the validator uses JWKS for JWT validation and introspection for
 //     opaque tokens. This is a valid configuration but worth surfacing so
@@ -232,6 +238,13 @@ func (v *Validator) Diagnostics() []Diagnostic {
 			Severity: "warn",
 			Code:     "no-verification-source",
 			Message:  "mcpresource: neither JWKS URI nor introspection URI is configured; every token will be rejected as inactive",
+		})
+	}
+	if _, ok := v.revocation.(deviceIntrospectionChecker); ok && !hasIntrospect {
+		out = append(out, Diagnostic{
+			Severity: "warn",
+			Code:     "revocation-no-introspection",
+			Message:  "mcpresource: WithDeviceRevocationIntrospection needs WithIntrospection; device tokens will be refused",
 		})
 	}
 	if hasJWKS && hasIntrospect {

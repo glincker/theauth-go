@@ -502,6 +502,7 @@ func (a *TheAuth) FinishPasskeyLogin(ctx context.Context, challengeToken string,
 // auditSvc.Emit.
 func (a *TheAuth) EmitAudit(ctx context.Context, action string, target TargetRef, metadata map[string]any) {
 	a.dispatchAuthEvent(ctx, action, target, metadata)
+	a.sharedSignalsTap(ctx, action, target, metadata)
 	a.revocationFromAudit(ctx, action, target, metadata)
 	if a.auditSvc == nil {
 		return
@@ -1168,6 +1169,44 @@ func (a *TheAuth) RevokeRegistrationToken(ctx context.Context, id ULID) error {
 	return a.as.RevokeRegistrationToken(ctx, id, nil, nil)
 }
 
+// constrained device identity
+
+// CreateDeviceJoinToken mints a single-use join token for enrolling one
+// constrained device and returns the stored record plus the plaintext, shown
+// once. The token fixes the name, SPIFFE ID and scopes the device receives.
+// Requires AuthorizationServer.DeviceTokens.
+func (a *TheAuth) CreateDeviceJoinToken(ctx context.Context, in CreateDeviceJoinTokenInput) (DeviceJoinToken, string, error) {
+	if a.as == nil {
+		return DeviceJoinToken{}, "", ErrDevicesDisabled
+	}
+	return a.as.CreateDeviceJoinToken(ctx, in)
+}
+
+// ListDevices lists registered devices, newest first. A nil orgID lists all.
+func (a *TheAuth) ListDevices(ctx context.Context, orgID *ULID) ([]Device, error) {
+	if a.as == nil {
+		return nil, ErrDevicesDisabled
+	}
+	return a.as.ListDevices(ctx, orgID)
+}
+
+// RevokeDevice revokes a device. Its assertions are refused from then on and
+// introspection reports its tokens inactive. Revoking twice succeeds.
+func (a *TheAuth) RevokeDevice(ctx context.Context, id ULID) error {
+	if a.as == nil {
+		return ErrDevicesDisabled
+	}
+	return a.as.RevokeDevice(ctx, id, nil, nil)
+}
+
+// RevokeDeviceJoinToken revokes an unspent device join token.
+func (a *TheAuth) RevokeDeviceJoinToken(ctx context.Context, id ULID) error {
+	if a.as == nil {
+		return ErrDevicesDisabled
+	}
+	return a.as.RevokeDeviceJoinToken(ctx, id, nil)
+}
+
 // PasskeyAuthenticatorName returns the display name configured through
 // WebAuthnConfig.AuthenticatorName or AuthenticatorNames for a credential's
 // AAGUID, or "" when none is known or WebAuthn is not configured.
@@ -1176,4 +1215,17 @@ func (a *TheAuth) PasskeyAuthenticatorName(aaguid []byte) string {
 		return ""
 	}
 	return a.webauthnSvc.AuthenticatorName(aaguid)
+}
+
+// OIDCLogout sends back-channel logout tokens to every OpenID client that
+// took part in sessionID, for logouts that do not go through end_session
+// (admin revocation, account deletion). It does not revoke the session.
+// Deliveries run in the background; failures are logged. Requires
+// AuthorizationServer.OIDC.
+func (a *TheAuth) OIDCLogout(ctx context.Context, userID, sessionID ULID) error {
+	if a.as == nil || !a.as.OIDCEnabled() {
+		return ErrOIDCDisabled
+	}
+	a.as.NotifyLogout(ctx, userID, sessionID.String())
+	return nil
 }

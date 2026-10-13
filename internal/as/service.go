@@ -132,6 +132,16 @@ type Service struct {
 	// when the cap is disabled.
 	verifySem chan struct{}
 
+	// Users resolves local users for userinfo and logout tokens. Nil
+	// disables userinfo.
+	Users UserLookup
+
+	// oidcCache holds the session linkage state; see oidc.go.
+	oidcCache kv.Cache
+
+	// logoutWG tracks in-flight back-channel logout deliveries.
+	logoutWG sync.WaitGroup
+
 	// Hooks is the consumer-supplied observability bundle. Never nil:
 	// New substitutes the no-op bundle when Deps.Hooks is nil. Every
 	// instrumented path uses Hooks.StartSpan / Hooks.Counter directly so
@@ -210,6 +220,8 @@ type Deps struct {
 	// Hooks wires the consumer-supplied tracer + metrics adapters. MAY
 	// be nil; New substitutes the no-op bundle.
 	Hooks *obs.Hooks
+	// Users resolves local users for the OIDC userinfo endpoint.
+	Users UserLookup
 }
 
 // New constructs a Service. The supplied Config must already have been
@@ -252,10 +264,25 @@ func New(d Deps) *Service {
 		dpopSvc:          dpopSvc,
 		jwtBearerStorage: d.JWTBearerStorage,
 		jwks:             newJWKSFetcher(d.Cfg.JWTBearer),
+		Users:            d.Users,
 		Hooks:            hooks,
 	}
 	if s.Cfg.Clock == nil {
 		s.Cfg.Clock = realClock{}
+	}
+	if s.Cfg.DeviceTokens != nil {
+		dc := *s.Cfg.DeviceTokens
+		applyDeviceTokenDefaults(&dc)
+		s.Cfg.DeviceTokens = &dc
+	}
+	if s.Cfg.OIDC != nil {
+		oc := *s.Cfg.OIDC
+		applyOIDCDefaults(&oc, s.Cfg.AccessTokenTTL)
+		s.Cfg.OIDC = &oc
+		s.oidcCache = d.Cfg.Stores.Cache
+		if s.oidcCache == nil {
+			s.oidcCache = kv.NewMemory()
+		}
 	}
 	applyRateLimitDefaults(&s.Cfg)
 	if n := s.Cfg.RateLimits.MaxConcurrentSecretVerifications; n > 0 {

@@ -309,6 +309,11 @@ func wireServices(a *TheAuth, cfg Config, providers map[string]Provider, sp saml
 		if jbs, ok := cfg.storageRaw.(JWTBearerStorage); ok {
 			jwtBearerStore = jwtBearerStorageAdapter{jbs}
 		}
+		if cfg.AuthorizationServer.DeviceTokens != nil {
+			if _, ok := cfg.storageRaw.(DeviceIdentityStorage); !ok {
+				return missingCapability("DeviceIdentityStorage (required by AuthorizationServer.DeviceTokens)")
+			}
+		}
 		asCfg := asConfigFromRoot(cfg.AuthorizationServer)
 		asCfg.Stores = cfg.Stores
 		if asCfg.LoginURL == "" {
@@ -325,6 +330,7 @@ func wireServices(a *TheAuth, cfg Config, providers map[string]Provider, sp saml
 			Audit:            a,
 			Hooks:            a.hooks,
 			JWTBearerStorage: jwtBearerStore,
+			Users:            cfg.Storage,
 		})
 		var agentPolicy *agent.Config
 		if cfg.AgentIdentity != nil {
@@ -385,6 +391,9 @@ func wireServices(a *TheAuth, cfg Config, providers map[string]Provider, sp saml
 		a.totpSvc.SetRecoveryStore(rc)
 	}
 	if err := a.setupLifecycle(&cfg); err != nil {
+		return err
+	}
+	if err := a.setupSharedSignals(&cfg); err != nil {
 		return err
 	}
 	if a.sessionSvc != nil {
@@ -631,6 +640,8 @@ func asConfigFromRoot(c *AuthorizationServerConfig) internalas.Config {
 		IDJAG:                          c.IDJAG,
 		RateLimits:                     c.RateLimits,
 		RegistrationTokenTTL:           c.RegistrationTokenTTL,
+		DeviceTokens:                   c.DeviceTokens,
+		OIDC:                           c.OIDC,
 	}
 }
 

@@ -45,6 +45,9 @@ import (
 // Default rate limits: 5/min per source IP on every credential endpoint, plus 3/min per email on signin + forgot. All limits are in-memory unless Config.Stores.RateLimiter supplies a shared one.
 func (a *TheAuth) Mount(r chi.Router) {
 	r.Group(func(r chi.Router) {
+		if a.admission != nil {
+			r.Use(a.Admission(*a.admission))
+		}
 		r.Use(a.securityMiddleware, a.auditContextMiddleware)
 		a.mountRoutes(r)
 		a.mountAccountDelete(r)
@@ -533,6 +536,7 @@ func (a *TheAuth) mountAS(r chi.Router) {
 	h := ashandlers.New(a.as, userFromRequest, a.dcrRegistrationTokenHashes)
 	h.SetClientIP(func(r *http.Request) string { return extractClientIPTrusting(r, a.trustedProxies) })
 	h.SetAuthContext(a.asAuthContext)
+	h.SetSessionEnder(a.asEndSession)
 	var registerLimit func(http.Handler) http.Handler
 	if cap := a.as.Cfg.RegistrationRateLimitPerMinute; cap > 0 {
 		registerLimit = a.RateLimitByIP(cap)
@@ -553,5 +557,16 @@ func (a *TheAuth) asAuthContext(r *http.Request) (internalas.AuthContext, bool) 
 	if fn := a.as.Cfg.SessionAMR; fn != nil {
 		amr = fn(r.Context(), sess)
 	}
-	return internalas.AuthContext{AuthTime: a.lastAuthAt(sess), AMR: amr}, true
+	return internalas.AuthContext{AuthTime: a.lastAuthAt(sess), AMR: amr, SessionID: sess.ID.String()}, true
+}
+
+// asEndSession revokes the request's session and clears its cookie. It is
+// the logout half of OIDC end_session.
+func (a *TheAuth) asEndSession(w http.ResponseWriter, r *http.Request) {
+	if sess, ok := SessionFromContext(r.Context()); ok && sess != nil {
+		if err := a.storage.RevokeSession(r.Context(), sess.ID); err == nil {
+			a.EmitAudit(r.Context(), "session.revoked", TargetRef{Type: "session", ID: sess.ID.String()}, map[string]any{"via": "oidc_end_session"})
+		}
+	}
+	a.clearSessionCookie(w)
 }

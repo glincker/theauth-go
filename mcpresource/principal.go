@@ -66,6 +66,10 @@ type Principal struct {
 	// JWTID is the JWT jti claim.
 	JWTID string
 
+	// DeviceID is the device_id claim: set on tokens issued to a registered
+	// device, empty otherwise.
+	DeviceID string
+
 	// DelegationGrantID, when set, names the delegation_grants row that
 	// authorised the innermost actor. Audit pipelines correlate every
 	// failure or sensitive call back to this row.

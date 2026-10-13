@@ -239,6 +239,13 @@ const (
 	AccessTokenFormatOpaque = models.AccessTokenFormatOpaque
 )
 
+// Subject identifier types a client can be registered with
+// (OAuthClient.SubjectType).
+const (
+	SubjectTypePublic   = models.SubjectTypePublic
+	SubjectTypePairwise = models.SubjectTypePairwise
+)
+
 // TokenTypeIDJAG is the token type URN of an Identity Assertion JWT
 // Authorization Grant, used as requested_token_type and issued_token_type.
 const TokenTypeIDJAG = models.TokenTypeIDJAG
@@ -260,6 +267,22 @@ const (
 
 // GrantTypeDeviceCode is the RFC 8628 grant type URN.
 const GrantTypeDeviceCode = models.GrantTypeDeviceCode
+
+// Device is a registered constrained device (see DeviceTokensConfig).
+type Device = models.Device
+
+// DeviceAttestationJoinToken is the attestation kind of a device enrolled with
+// a join token.
+const DeviceAttestationJoinToken = models.DeviceAttestationJoinToken
+
+// DeviceJoinToken is a single-use device enrollment token.
+type DeviceJoinToken = models.DeviceJoinToken
+
+// Device status values.
+const (
+	DeviceStatusActive  = models.DeviceStatusActive
+	DeviceStatusRevoked = models.DeviceStatusRevoked
+)
 
 // RegistrationToken is an initial access token for POST /oauth/register.
 type RegistrationToken = models.RegistrationToken

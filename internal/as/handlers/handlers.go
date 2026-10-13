@@ -31,6 +31,8 @@ type Handler struct {
 	// authContext reports how and when the request's session authenticated;
 	// nil leaves tokens without auth_time, acr and amr.
 	authContext func(r *http.Request) (internalas.AuthContext, bool)
+	// sessionEnder revokes the request's session for end_session.
+	sessionEnder func(w http.ResponseWriter, r *http.Request)
 }
 
 // New constructs a Handler. The userFromCtx shim pulls the
@@ -81,6 +83,14 @@ func (h *Handler) Mount(r chi.Router, authn func(http.Handler) http.Handler, reg
 	// RFC 8628 device grant: start endpoint plus the user-code page.
 	if h.svc.IsDeviceEnabled() {
 		h.mountDevice(r, authn)
+	}
+	// OpenID Provider: userinfo and end_session.
+	if h.svc.OIDCEnabled() {
+		h.mountOIDC(r, authn)
+	}
+	// Constrained device enrollment.
+	if h.svc.DeviceTokensEnabled() {
+		h.mountDeviceIdentity(r)
 	}
 }
 
@@ -527,10 +537,15 @@ func (h *Handler) handleToken(w http.ResponseWriter, r *http.Request) {
 			Assertion:           assertion,
 			ClientAssertionType: clientAssertionType,
 			ClientAssertion:     clientAssertion,
+			// Used by the device assertion grant to bind the token to the
+			// proof key.
+			DPoPProof:  dpopHeader,
+			HTTPMethod: r.Method,
+			HTTPURL:    httpURL,
 		}
 		resp, err := h.svc.JWTBearerGrant(r.Context(), req, assertion)
 		if err != nil {
-			writeTokenError(w, err)
+			h.writeTokenErrorDPoP(w, err)
 			return
 		}
 		writeTokenJSON(w, resp)
@@ -601,6 +616,11 @@ func writeTokenJSON(w http.ResponseWriter, resp internalas.TokenResponse) {
 }
 
 func writeTokenError(w http.ResponseWriter, err error) {
+	var limited *internalas.RateLimitedError
+	if errors.As(err, &limited) {
+		writeRateLimited(w, limited.RetryAfter)
+		return
+	}
 	if isBusy(err) {
 		writeBusy(w)
 		return

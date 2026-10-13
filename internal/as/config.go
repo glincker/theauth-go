@@ -203,6 +203,16 @@ type Config struct {
 	// token created through the admin API. Default 24h.
 	RegistrationTokenTTL time.Duration
 
+	// DeviceTokens enables constrained device enrollment and the RFC 7523
+	// device assertion grant when non-nil. Requires the Storage to also
+	// implement DeviceIdentityStorage.
+	DeviceTokens *DeviceTokensConfig
+
+	// OIDC turns the server into an OpenID Provider when non-nil: ID tokens,
+	// the userinfo and end_session endpoints, pairwise subjects and
+	// back-channel logout. Nil keeps the plain OAuth 2.1 behaviour.
+	OIDC *OIDCConfig
+
 	// ClientCompat relaxes individual strictness checks for real-world
 	// clients. The zero value is fully strict. See ClientCompat.
 	ClientCompat ClientCompat
@@ -365,6 +375,15 @@ func Validate(cfg *Config, encryptionKey []byte) error {
 	}
 	if cfg.DeviceAuthorization != nil {
 		applyDeviceDefaults(cfg.DeviceAuthorization)
+	}
+	if cfg.DeviceTokens != nil {
+		applyDeviceTokenDefaults(cfg.DeviceTokens)
+	}
+	if cfg.OIDC != nil {
+		if err := validateOIDC(cfg.OIDC); err != nil {
+			return err
+		}
+		applyOIDCDefaults(cfg.OIDC, cfg.AccessTokenTTL)
 	}
 	// CIBA defaults.
 	if cfg.CIBA != nil {
