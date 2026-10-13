@@ -1,12 +1,12 @@
 -- 0022: account lifecycle flags (forced password change, disable) and
 -- remember-this-device records.
-CREATE TABLE account_states (
+CREATE TABLE IF NOT EXISTS account_states (
     user_id              uuid PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
     must_change_password boolean NOT NULL DEFAULT false,
     disabled_at          timestamptz
 );
 
-CREATE TABLE trusted_devices (
+CREATE TABLE IF NOT EXISTS trusted_devices (
     id           uuid PRIMARY KEY,
     user_id      uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     token_hash   bytea NOT NULL,
@@ -19,5 +19,5 @@ CREATE TABLE trusted_devices (
     revoked_at   timestamptz
 );
 
-CREATE UNIQUE INDEX trusted_devices_hash_uq ON trusted_devices (token_hash);
-CREATE INDEX idx_trusted_devices_user ON trusted_devices (user_id);
+CREATE UNIQUE INDEX IF NOT EXISTS trusted_devices_hash_uq ON trusted_devices (token_hash);
+CREATE INDEX IF NOT EXISTS idx_trusted_devices_user ON trusted_devices (user_id);

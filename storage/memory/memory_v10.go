@@ -39,6 +39,16 @@ type v10State struct {
 	mu sync.Mutex // protects audit ring writes only (Store.mu protects everything else)
 }
 
+// auditState returns the sidecar state for the audit ring. Audit writes do not
+// hold Store.mu, so the lazy creation of the state is done under it here.
+// The ring itself is still guarded by v10State.mu.
+func (s *Store) auditState() *v10State {
+	s.mu.Lock()
+	v := s.ensureV10()
+	s.mu.Unlock()
+	return v
+}
+
 func (s *Store) ensureV10() *v10State {
 	if s.v10 == nil {
 		s.v10 = &v10State{
@@ -350,7 +360,7 @@ func (s *Store) InsertAuditEvents(_ context.Context, events []theauth.AuditEvent
 	if len(events) == 0 {
 		return nil
 	}
-	v := s.ensureV10()
+	v := s.auditState()
 	v.mu.Lock()
 	defer v.mu.Unlock()
 	for _, e := range events {
@@ -370,7 +380,7 @@ func (s *Store) InsertAuditEvents(_ context.Context, events []theauth.AuditEvent
 }
 
 func (s *Store) QueryAuditEvents(_ context.Context, q theauth.AuditQuery) ([]theauth.AuditEvent, string, error) {
-	v := s.ensureV10()
+	v := s.auditState()
 	v.mu.Lock()
 	snap := make([]theauth.AuditEvent, len(v.auditRing))
 	copy(snap, v.auditRing)
