@@ -6,7 +6,7 @@ This is separate from the RFC 8628 device authorization grant ([device-authoriza
 
 ```go
 auth, err := theauth.New(theauth.Config{
-    Storage: store, // memory, Postgres or MySQL (migration 0024)
+    Storage: store, // memory, Postgres, MySQL (migration 0024) or a SQLite based composite
     AuthorizationServer: &theauth.AuthorizationServerConfig{
         Issuer:    "https://auth.example.com",
         Resources: []theauth.ProtectedResource{{Identifier: "https://iot.example.com/api", Scopes: []string{"telemetry:write", "config:read"}}},
@@ -26,8 +26,17 @@ auth, err := theauth.New(theauth.Config{
 | `JoinTokenTTL` | 1h | Default join token lifetime |
 | `ChallengeTTL` | 2m | How long an enrollment challenge is valid |
 | `AssertionMaxLifetime` | 5m | Cap on `exp - iat` of an assertion |
+| `EnrollPerMinute` | 10 | Challenge plus enroll requests per join token per minute, negative disables |
+| `TokenPerMinute` | 60 | Assertion grants per device per minute, negative disables |
 
-The storage must implement `theauth.DeviceIdentityStorage`; `New` fails with `ErrStorageMissingCapability` otherwise. SQLite does not implement it.
+The storage must implement `theauth.DeviceIdentityStorage`; `New` fails with `ErrStorageMissingCapability` otherwise. Memory, Postgres (migration 0024), MySQL and SQLite (migration 0011 of `storage/sqlite`) implement it. The SQLite store does not implement the rest of the authorization server storage (clients, codes, keys), so on its own it cannot run an AS; use it from a composite store.
+
+## Rate limits
+
+Both budgets are per identity, on top of the per IP and per client limits of `ASRateLimits`. Over budget the endpoint answers `429 rate_limited` with `Retry-After`. The shared limiter (`Config.Stores.RateLimiter`) holds the counters, so replicas share them.
+
+- `TokenPerMinute` is charged only after the assertion signature verified. Someone who only knows a device ID cannot use up its budget, and a limited assertion is not spent, so the device can retry the same one.
+- `EnrollPerMinute` is charged per join token, and only for join tokens that exist and are usable, so unknown or spent tokens fall through to `invalid_grant` without touching a bucket. A device that has not enrolled yet has no device ID, which is why the join token is the identity here.
 
 ## 1. Mint a join token
 
