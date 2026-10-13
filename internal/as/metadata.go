@@ -192,7 +192,7 @@ func (s *Service) grantTypesAdvertised() []string {
 	} else if s.Cfg.IDJAG != nil && len(s.Cfg.IDJAG.Audiences) > 0 {
 		out = append(out, models.GrantTypeTokenExchange)
 	}
-	if s.Cfg.JWTBearer != nil {
+	if s.Cfg.JWTBearer != nil || s.DeviceTokensEnabled() {
 		out = append(out, models.GrantTypeJWTBearer)
 	}
 	if s.Cfg.CIBA != nil {

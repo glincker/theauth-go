@@ -309,6 +309,11 @@ func wireServices(a *TheAuth, cfg Config, providers map[string]Provider, sp saml
 		if jbs, ok := cfg.storageRaw.(JWTBearerStorage); ok {
 			jwtBearerStore = jwtBearerStorageAdapter{jbs}
 		}
+		if cfg.AuthorizationServer.DeviceTokens != nil {
+			if _, ok := cfg.storageRaw.(DeviceIdentityStorage); !ok {
+				return missingCapability("DeviceIdentityStorage (required by AuthorizationServer.DeviceTokens)")
+			}
+		}
 		asCfg := asConfigFromRoot(cfg.AuthorizationServer)
 		asCfg.Stores = cfg.Stores
 		if asCfg.LoginURL == "" {
@@ -631,6 +636,7 @@ func asConfigFromRoot(c *AuthorizationServerConfig) internalas.Config {
 		IDJAG:                          c.IDJAG,
 		RateLimits:                     c.RateLimits,
 		RegistrationTokenTTL:           c.RegistrationTokenTTL,
+		DeviceTokens:                   c.DeviceTokens,
 	}
 }
 

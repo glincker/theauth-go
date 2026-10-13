@@ -257,6 +257,11 @@ func New(d Deps) *Service {
 	if s.Cfg.Clock == nil {
 		s.Cfg.Clock = realClock{}
 	}
+	if s.Cfg.DeviceTokens != nil {
+		dc := *s.Cfg.DeviceTokens
+		applyDeviceTokenDefaults(&dc)
+		s.Cfg.DeviceTokens = &dc
+	}
 	applyRateLimitDefaults(&s.Cfg)
 	if n := s.Cfg.RateLimits.MaxConcurrentSecretVerifications; n > 0 {
 		s.verifySem = make(chan struct{}, n)

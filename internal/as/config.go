@@ -203,6 +203,11 @@ type Config struct {
 	// token created through the admin API. Default 24h.
 	RegistrationTokenTTL time.Duration
 
+	// DeviceTokens enables constrained device enrollment and the RFC 7523
+	// device assertion grant when non-nil. Requires the Storage to also
+	// implement DeviceIdentityStorage.
+	DeviceTokens *DeviceTokensConfig
+
 	// ClientCompat relaxes individual strictness checks for real-world
 	// clients. The zero value is fully strict. See ClientCompat.
 	ClientCompat ClientCompat
@@ -365,6 +370,9 @@ func Validate(cfg *Config, encryptionKey []byte) error {
 	}
 	if cfg.DeviceAuthorization != nil {
 		applyDeviceDefaults(cfg.DeviceAuthorization)
+	}
+	if cfg.DeviceTokens != nil {
+		applyDeviceTokenDefaults(cfg.DeviceTokens)
 	}
 	// CIBA defaults.
 	if cfg.CIBA != nil {

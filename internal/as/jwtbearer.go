@@ -184,6 +184,10 @@ func (s *Service) JWTBearerGrant(ctx context.Context, req TokenRequest, assertio
 	if s == nil {
 		return TokenResponse{}, errors.New("theauth: authorization server not configured")
 	}
+	// Registered devices assert with their own key; see iotdevice_grant.go.
+	if r, handled, derr := s.tryDeviceAssertion(ctx, req, assertion); handled {
+		return r, derr
+	}
 	if s.Cfg.JWTBearer == nil {
 		return TokenResponse{}, models.ErrOAuthUnsupportedGrantType
 	}

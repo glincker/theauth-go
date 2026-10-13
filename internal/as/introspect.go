@@ -60,6 +60,9 @@ type IntrospectionResponse struct {
 	AuthTime int64    `json:"auth_time,omitempty"`
 	ACR      string   `json:"acr,omitempty"`
 	AMR      []string `json:"amr,omitempty"`
+	// DeviceID is set on tokens issued to a registered device. Introspection
+	// reports the token inactive once the device is revoked.
+	DeviceID string `json:"device_id,omitempty"`
 }
 
 // ConfirmationClaim is the JSON shape of the RFC 7800 cnf claim. Only
@@ -102,6 +105,11 @@ func (s *Service) IntrospectToken(ctx context.Context, token, clientID, clientSe
 		// was populated. Inactive chain entries flip active=false and
 		// bypass the cache body entirely.
 		if resp.Active && resp.Jti != "" && s.accessJTIRevoked(ctx, resp.Jti) {
+			resp = IntrospectionResponse{Active: false}
+			body, _ := json.Marshal(resp)
+			return resp, body, nil
+		}
+		if resp.Active && resp.DeviceID != "" && !s.deviceActive(ctx, resp.DeviceID) {
 			resp = IntrospectionResponse{Active: false}
 			body, _ := json.Marshal(resp)
 			return resp, body, nil
@@ -199,6 +207,12 @@ func (s *Service) introspectClaims(ctx context.Context, claims jwt.Claims) Intro
 				resp.Cnf = &ConfirmationClaim{JKT: jkt}
 				resp.TokenType = "DPoP"
 			}
+		}
+	}
+	if id, ok := claims.Extra["device_id"].(string); ok && id != "" {
+		resp.DeviceID = id
+		if !s.deviceActive(ctx, id) {
+			return IntrospectionResponse{Active: false}
 		}
 	}
 	// Walk the chain on every fresh introspection: any actor in the
