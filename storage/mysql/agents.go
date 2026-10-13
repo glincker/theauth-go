@@ -11,7 +11,7 @@ import (
 	"github.com/glincker/theauth-go/v2/storage"
 )
 
-// ---------- Agents ----------
+// Agents
 
 func (s *Store) InsertAgent(ctx context.Context, a theauth.Agent) (theauth.Agent, error) {
 	created := a.CreatedAt
@@ -170,7 +170,7 @@ func scanAgent(row interface{ Scan(...interface{}) error }) (theauth.Agent, erro
 	}, nil
 }
 
-// ---------- Agent credentials ----------
+// Agent credentials
 
 func (s *Store) InsertAgentCredential(ctx context.Context, c theauth.AgentCredential) error {
 	created := c.CreatedAt
@@ -267,7 +267,7 @@ func scanAgentCredential(row interface{ Scan(...interface{}) error }) (theauth.A
 	}, nil
 }
 
-// ---------- Delegation grants ----------
+// Delegation grants
 
 func (s *Store) InsertDelegationGrant(ctx context.Context, g theauth.DelegationGrant) (theauth.DelegationGrant, error) {
 	created := g.CreatedAt

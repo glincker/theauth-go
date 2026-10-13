@@ -13,7 +13,7 @@ import (
 	"github.com/oklog/ulid/v2"
 )
 
-// ---------- Audit events ----------
+// Audit events
 
 func (s *Store) InsertAuditEvents(ctx context.Context, events []theauth.AuditEvent) error {
 	if len(events) == 0 {

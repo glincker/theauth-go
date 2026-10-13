@@ -510,7 +510,7 @@ func (a oauthSessionAdapter) Issue(ctx context.Context, user models.User, userAg
 	return a.svc.Issue(ctx, user, userAgent, ip)
 }
 
-// ---------- xxxConfigFromRoot translators ----------
+// xxxConfigFromRoot translators
 
 // totpConfigFromRoot translates the root TOTPConfig pointer into the
 // internal/totp Config the extracted service consumes. Returns nil when

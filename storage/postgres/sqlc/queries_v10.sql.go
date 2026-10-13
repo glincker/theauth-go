@@ -20,7 +20,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-// ---------- permissions ----------
+// permissions
 
 const insertPermission = `-- name: InsertPermission :one
 INSERT INTO permissions (id, name, description, created_at)
@@ -75,7 +75,7 @@ func (q *Queries) ListPermissions(ctx context.Context) ([]Permission, error) {
 	return items, rows.Err()
 }
 
-// ---------- roles ----------
+// roles
 
 const insertRole = `-- name: InsertRole :one
 INSERT INTO roles (id, organization_id, name, description, created_at, updated_at)
@@ -352,7 +352,7 @@ func (q *Queries) CountUsersWithPermissionInOrg(ctx context.Context, arg CountUs
 	return n, err
 }
 
-// ---------- audit_events ----------
+// audit_events
 
 const insertAuditEvent = `-- name: InsertAuditEvent :exec
 INSERT INTO audit_events (

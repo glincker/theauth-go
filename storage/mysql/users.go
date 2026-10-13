@@ -11,7 +11,7 @@ import (
 	"github.com/glincker/theauth-go/v2/storage"
 )
 
-// ---------- row scanner ----------
+// row scanner
 
 func scanUser(row interface {
 	Scan(dest ...interface{}) error
@@ -57,7 +57,7 @@ SELECT id, email, email_verified_at, name, avatar_url, created_at, updated_at,
        external_id, given_name, family_name, display_name
 FROM users`
 
-// ---------- Users ----------
+// Users
 
 func (s *Store) CreateUser(ctx context.Context, u theauth.User) (theauth.User, error) {
 	if u.CreatedAt.IsZero() {

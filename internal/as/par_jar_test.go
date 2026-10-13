@@ -20,7 +20,7 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
-// ---------- shared harness ----------
+// shared harness
 
 // newPARASHarness returns an AS+server wired with PAR enabled. The caller
 // may pass mutators to adjust the AuthorizationServerConfig.
@@ -192,7 +192,7 @@ func clientBodyWithJWKS(pubJWKS []byte) string {
 	return fmt.Sprintf(`{"redirect_uris":["https://app.example.com/cb"],"jwks":%s}`, string(pubJWKS))
 }
 
-// ---------- TestPARHappyPath ----------
+// TestPARHappyPath
 
 func TestPARHappyPath(t *testing.T) {
 	_, srv, _, rawToken := newPARASHarness(t)
@@ -230,7 +230,7 @@ func TestPARHappyPath(t *testing.T) {
 	}
 }
 
-// ---------- TestPARRequestURIOneShot ----------
+// TestPARRequestURIOneShot
 
 func TestPARRequestURIOneShot(t *testing.T) {
 	_, srv, _, rawToken := newPARASHarness(t)
@@ -259,7 +259,7 @@ func TestPARRequestURIOneShot(t *testing.T) {
 	}
 }
 
-// ---------- TestPARRequestURIExpired ----------
+// TestPARRequestURIExpired
 
 func TestPARRequestURIExpired(t *testing.T) {
 	_, srv, _, rawToken := newPARASHarness(t, func(c *theauth.AuthorizationServerConfig) {
@@ -289,7 +289,7 @@ func TestPARRequestURIExpired(t *testing.T) {
 	}
 }
 
-// ---------- TestPARRejectsInlineParamsWhenBothPresent ----------
+// TestPARRejectsInlineParamsWhenBothPresent
 
 func TestPARRejectsInlineParamsWhenBothPresent(t *testing.T) {
 	_, srv, _, rawToken := newPARASHarness(t)
@@ -318,7 +318,7 @@ func TestPARRejectsInlineParamsWhenBothPresent(t *testing.T) {
 	}
 }
 
-// ---------- TestPARRequirePAR ----------
+// TestPARRequirePAR
 
 func TestPARRequirePAR(t *testing.T) {
 	_, srv, _, rawToken := newPARASHarness(t, func(c *theauth.AuthorizationServerConfig) {
@@ -345,7 +345,7 @@ func TestPARRequirePAR(t *testing.T) {
 	}
 }
 
-// ---------- TestJARHappyPath ----------
+// TestJARHappyPath
 
 func TestJARHappyPath(t *testing.T) {
 	_, srv, _, rawToken := newJARASHarness(t)
@@ -380,7 +380,7 @@ func TestJARHappyPath(t *testing.T) {
 	}
 }
 
-// ---------- TestJARSignatureFailure ----------
+// TestJARSignatureFailure
 
 func TestJARSignatureFailure(t *testing.T) {
 	_, srv, _, rawToken := newJARASHarness(t)
@@ -411,7 +411,7 @@ func TestJARSignatureFailure(t *testing.T) {
 	}
 }
 
-// ---------- TestJAROuterParamsIgnored ----------
+// TestJAROuterParamsIgnored
 
 func TestJAROuterParamsIgnored(t *testing.T) {
 	_, srv, _, rawToken := newJARASHarness(t)
@@ -448,7 +448,7 @@ func TestJAROuterParamsIgnored(t *testing.T) {
 	}
 }
 
-// ---------- TestJARRejectedAlgorithm ----------
+// TestJARRejectedAlgorithm
 
 func TestJARRejectedAlgorithm(t *testing.T) {
 	_, srv, _, rawToken := newJARASHarness(t)
@@ -478,7 +478,7 @@ func TestJARRejectedAlgorithm(t *testing.T) {
 	}
 }
 
-// ---------- TestJARExpiredJWT ----------
+// TestJARExpiredJWT
 
 func TestJARExpiredJWT(t *testing.T) {
 	_, srv, _, rawToken := newJARASHarness(t)
@@ -504,7 +504,7 @@ func TestJARExpiredJWT(t *testing.T) {
 	}
 }
 
-// ---------- TestPARAndJARTogether (FAPI 2.0 happy path) ----------
+// TestPARAndJARTogether (FAPI 2.0 happy path)
 
 func TestPARAndJARTogether(t *testing.T) {
 	_, srv, _, rawToken := newPARJARASHarness(t)
@@ -548,7 +548,7 @@ func TestPARAndJARTogether(t *testing.T) {
 	}
 }
 
-// ---------- AS Metadata advertises PAR/JAR fields ----------
+// AS Metadata advertises PAR/JAR fields
 
 func TestASMetadataAdvertisesPAR(t *testing.T) {
 	_, srv, _, _ := newPARASHarness(t)

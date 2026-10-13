@@ -21,12 +21,12 @@ func runCognito(args []string) error {
 		return err
 	}
 
-	// ----- export mode -----
+	// export mode
 	if *exportPath != "" {
 		return cognitoExport(*exportPath, *exportFormat, *outputPath)
 	}
 
-	// ----- apply mode -----
+	// apply mode
 	if !*apply {
 		fs.Usage()
 		return fmt.Errorf("specify --export to convert a file, or --input + --apply to write to storage")

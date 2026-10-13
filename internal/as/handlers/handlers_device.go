@@ -93,7 +93,7 @@ func (h *Handler) writeDeviceTokenError(w http.ResponseWriter, err error) {
 	}
 }
 
-// ---------- verification page ----------
+// verification page
 
 func wantsJSON(r *http.Request) bool {
 	if strings.HasPrefix(r.Header.Get("Content-Type"), "application/json") {

@@ -176,7 +176,7 @@ func (h *Handler) MountTokenCRUD(r chi.Router) {
 	r.Delete("/{id}", h.handleTokenDelete)
 }
 
-// ---------- Discovery ----------
+// Discovery
 
 func (h *Handler) handleSPConfig(w http.ResponseWriter, _ *http.Request) {
 	maxResults := 200
@@ -226,7 +226,7 @@ func (h *Handler) handleSchemaByID(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// ---------- Users ----------
+// Users
 
 func (h *Handler) handleUsersList(w http.ResponseWriter, r *http.Request) {
 	orgID, ok := h.orgFromCtx(r.Context())
@@ -419,7 +419,7 @@ func (h *Handler) handleUserDelete(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// ---------- Groups ----------
+// Groups
 
 func (h *Handler) handleGroupsList(w http.ResponseWriter, r *http.Request) {
 	orgID, _ := h.orgFromCtx(r.Context())
@@ -609,7 +609,7 @@ func (h *Handler) handleGroupDelete(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// ---------- SCIM token CRUD ----------
+// SCIM token CRUD
 
 func (h *Handler) handleTokenCreate(w http.ResponseWriter, r *http.Request) {
 	user, _ := h.userFromCtx(r)
@@ -679,7 +679,7 @@ func (h *Handler) handleTokenDelete(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// ---------- helpers ----------
+// helpers
 
 func (h *Handler) lookupUserInOrg(w http.ResponseWriter, r *http.Request, orgID, userID models.ULID) (*models.User, bool) {
 	user, err := h.storage.UserByID(r.Context(), userID)

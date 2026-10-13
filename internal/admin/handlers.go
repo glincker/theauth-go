@@ -216,7 +216,7 @@ func (h *Handler) requireOrgMatch() func(http.Handler) http.Handler {
 	}
 }
 
-// ---------- users ----------
+// users
 
 func (h *Handler) listUsers(w http.ResponseWriter, r *http.Request) {
 	orgID, _ := httpx.ParseULIDPath(r, "orgID")
@@ -534,7 +534,7 @@ func (h *Handler) removeUser(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// ---------- sessions ----------
+// sessions
 
 func (h *Handler) listSessions(w http.ResponseWriter, r *http.Request) {
 	userIDStr := r.URL.Query().Get("user_id")
@@ -583,7 +583,7 @@ func (h *Handler) revokeSession(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// ---------- roles ----------
+// roles
 
 func (h *Handler) listRoles(w http.ResponseWriter, r *http.Request) {
 	orgID, _ := httpx.ParseULIDPath(r, "orgID")
@@ -679,7 +679,7 @@ func (h *Handler) deleteRole(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// ---------- audit ----------
+// audit
 
 func (h *Handler) queryAudit(w http.ResponseWriter, r *http.Request) {
 	orgID, _ := httpx.ParseULIDPath(r, "orgID")
@@ -740,7 +740,7 @@ func (h *Handler) queryAudit(w http.ResponseWriter, r *http.Request) {
 	httpx.WriteJSON(w, http.StatusOK, response{Events: events, Next: next})
 }
 
-// ---------- oauth accounts ----------
+// oauth accounts
 
 func (h *Handler) listOAuthAccounts(w http.ResponseWriter, _ *http.Request) {
 	// The Storage interface does not expose
@@ -753,7 +753,7 @@ func (h *Handler) listOAuthAccounts(w http.ResponseWriter, _ *http.Request) {
 	httpx.WriteJSON(w, http.StatusOK, response{Accounts: []models.OAuthAccount{}})
 }
 
-// ---------- helpers ----------
+// helpers
 
 func parseLimit(r *http.Request) int {
 	v := r.URL.Query().Get("limit")

@@ -12,7 +12,7 @@ import (
 	"github.com/glincker/theauth-go/v2/storage"
 )
 
-// ---------- OAuth clients ----------
+// OAuth clients
 
 func (s *Store) InsertOAuthClient(ctx context.Context, c theauth.OAuthClient) (theauth.OAuthClient, error) {
 	ownerKind := clientOwnerKind(c)
@@ -219,7 +219,7 @@ func scanOAuthClient(row interface{ Scan(...interface{}) error }) (theauth.OAuth
 	}, nil
 }
 
-// ---------- Authorization codes ----------
+// Authorization codes
 
 func (s *Store) InsertAuthorizationCode(ctx context.Context, c theauth.AuthorizationCode) error {
 	created := c.CreatedAt
@@ -325,7 +325,7 @@ FOR UPDATE`,
 	return out, nil
 }
 
-// ---------- Refresh tokens ----------
+// Refresh tokens
 
 func (s *Store) InsertRefreshToken(ctx context.Context, t theauth.RefreshToken) error {
 	scopeJSON, _ := json.Marshal(nilToEmptySlice(t.Scope))
@@ -506,7 +506,7 @@ func (s *Store) RevokeRefreshTokenFamily(ctx context.Context, familyID theauth.U
 	return err
 }
 
-// ---------- JWKS keys ----------
+// JWKS keys
 
 func (s *Store) InsertJWKSKey(ctx context.Context, k theauth.JWKSKey) error {
 	created := k.CreatedAt
@@ -603,7 +603,7 @@ func scanJWKSKey(row interface{ Scan(...interface{}) error }) (theauth.JWKSKey, 
 	}, nil
 }
 
-// ---------- helpers ----------
+// helpers
 
 func clientOwnerKind(c theauth.OAuthClient) string {
 	if c.AnonymousRegistered {

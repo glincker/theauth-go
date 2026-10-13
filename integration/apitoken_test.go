@@ -391,7 +391,7 @@ func TestAPITokensRequireCapability(t *testing.T) {
 	}
 }
 
-// --- device authorization grant ---
+// device authorization grant
 
 func (e *tokenEnv) deviceStart(scope string) map[string]any {
 	e.t.Helper()

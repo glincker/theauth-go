@@ -22,7 +22,7 @@ import (
 // v1.0 storage extension: permissions, roles, role_permissions, user_roles,
 // audit_events. All methods are additive; v0.7 callers never invoke them.
 
-// ---------- helpers ----------
+// helpers
 
 func ulidPtrToPgUUID(p *theauth.ULID) pgtype.UUID {
 	if p == nil {
@@ -46,7 +46,7 @@ func nullableText(s string) pgtype.Text {
 	return pgtype.Text{String: s, Valid: true}
 }
 
-// ---------- permissions ----------
+// permissions
 
 func rowToPermission(r sqlcgen.Permission) theauth.Permission {
 	return theauth.Permission{
@@ -98,7 +98,7 @@ func (s *Store) ListPermissions(ctx context.Context) ([]theauth.Permission, erro
 	return out, nil
 }
 
-// ---------- roles ----------
+// roles
 
 func rowToRole(r sqlcgen.Role) theauth.Role {
 	return theauth.Role{
@@ -240,7 +240,7 @@ func (s *Store) PermissionsByRole(ctx context.Context, roleID theauth.ULID) ([]s
 	return s.q.PermissionsByRoleID(ctx, ulidToPgUUID(roleID))
 }
 
-// ---------- user_roles ----------
+// user_roles
 
 func (s *Store) GrantUserRole(ctx context.Context, ur theauth.UserRole) error {
 	granted := ur.GrantedAt
@@ -302,7 +302,7 @@ func (s *Store) CountUsersWithPermissionInOrg(ctx context.Context, orgID theauth
 	return int(n), nil
 }
 
-// ---------- audit_events ----------
+// audit_events
 
 func (s *Store) InsertAuditEvents(ctx context.Context, events []theauth.AuditEvent) error {
 	if len(events) == 0 {

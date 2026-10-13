@@ -25,9 +25,7 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
-// -----------------------------------------------------------------------------
 // Stub implementations
-// -----------------------------------------------------------------------------
 
 // stubOrgService satisfies handlers.Service.
 type stubOrgService struct {
@@ -169,9 +167,7 @@ func doJSON(t *testing.T, method, url string, body []byte) *http.Response {
 	return resp
 }
 
-// -----------------------------------------------------------------------------
 // POST /orgs -- create
-// -----------------------------------------------------------------------------
 
 // TestCreate_OK verifies that a valid create request returns 201 JSON.
 func TestCreate_OK(t *testing.T) {
@@ -254,9 +250,7 @@ func TestCreate_ServiceError(t *testing.T) {
 	}
 }
 
-// -----------------------------------------------------------------------------
 // GET /orgs -- list
-// -----------------------------------------------------------------------------
 
 // TestList_OK verifies that list returns 200 JSON with the orgs slice.
 func TestList_OK(t *testing.T) {
@@ -319,9 +313,7 @@ func TestList_ServiceError(t *testing.T) {
 	}
 }
 
-// -----------------------------------------------------------------------------
 // GET /orgs/{id} -- get
-// -----------------------------------------------------------------------------
 
 // TestGet_OK verifies that get returns 200 JSON for a member.
 func TestGet_OK(t *testing.T) {
@@ -399,9 +391,7 @@ func TestGet_InvalidID(t *testing.T) {
 	}
 }
 
-// -----------------------------------------------------------------------------
 // POST /orgs/{id}/activate -- activate
-// -----------------------------------------------------------------------------
 
 // TestActivate_OK verifies that activate returns 204 for a member.
 func TestActivate_OK(t *testing.T) {
@@ -466,9 +456,7 @@ func TestActivate_InvalidID(t *testing.T) {
 	}
 }
 
-// -----------------------------------------------------------------------------
 // POST /orgs/clear-active -- clear active org
-// -----------------------------------------------------------------------------
 
 // TestClearActive_OK verifies that clear-active returns 204 when the session
 // is present.
@@ -519,9 +507,7 @@ func TestClearActive_ServiceError(t *testing.T) {
 	}
 }
 
-// -----------------------------------------------------------------------------
 // POST /orgs/{id}/members -- add member
-// -----------------------------------------------------------------------------
 
 // TestAddMember_OK verifies that adding a member returns 204.
 func TestAddMember_OK(t *testing.T) {
@@ -591,9 +577,7 @@ func TestAddMember_ServiceError(t *testing.T) {
 	}
 }
 
-// -----------------------------------------------------------------------------
 // DELETE /orgs/{id}/members/{userId} -- remove member
-// -----------------------------------------------------------------------------
 
 // TestRemoveMember_OK verifies that removing a member returns 204.
 func TestRemoveMember_OK(t *testing.T) {

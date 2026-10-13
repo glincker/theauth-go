@@ -17,7 +17,7 @@ import (
 // rolled against pgx/v5 to keep this PR self contained; sqlc regeneration
 // for these tables is deferred (the existing sqlc directory stays untouched).
 
-// ---------- OAuth clients ----------
+// OAuth clients
 
 func (s *Store) InsertOAuthClient(ctx context.Context, c theauth.OAuthClient) (theauth.OAuthClient, error) {
 	const q = `
@@ -166,7 +166,7 @@ func (s *Store) DeleteOAuthClient(ctx context.Context, clientID string) error {
 	return nil
 }
 
-// ---------- authorization codes ----------
+// authorization codes
 
 func (s *Store) InsertAuthorizationCode(ctx context.Context, c theauth.AuthorizationCode) error {
 	const q = `
@@ -260,7 +260,7 @@ RETURNING code, client_id, user_id, organization_id, redirect_uri, scope, resour
 	return &out, nil
 }
 
-// ---------- refresh tokens ----------
+// refresh tokens
 
 func (s *Store) InsertRefreshToken(ctx context.Context, t theauth.RefreshToken) error {
 	const q = `
@@ -413,7 +413,7 @@ func (s *Store) RevokeRefreshTokenFamily(ctx context.Context, familyID theauth.U
 	return err
 }
 
-// ---------- JWKS ----------
+// JWKS
 
 func (s *Store) InsertJWKSKey(ctx context.Context, k theauth.JWKSKey) error {
 	const q = `

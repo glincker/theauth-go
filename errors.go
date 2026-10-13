@@ -180,7 +180,7 @@ func NewError(code, message string, inner error) *TheAuthError {
 	return models.NewError(code, message, inner)
 }
 
-// ---------- v2.0 sentinel errors (OAuth 2.1 AS + DCR + JWKS) ----------
+// v2.0 sentinel errors (OAuth 2.1 AS + DCR + JWKS)
 //
 // PR B architecture reorg (2026-06-20): the actual error values now live in
 // internal/models so the extracted internal/as package can reference them

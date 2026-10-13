@@ -20,12 +20,12 @@ func runAuth0(args []string) error {
 		return err
 	}
 
-	// ----- export mode -----
+	// export mode
 	if *exportPath != "" {
 		return auth0Export(*exportPath, *outputPath, *forceReset)
 	}
 
-	// ----- apply mode -----
+	// apply mode
 	if !*apply {
 		fs.Usage()
 		return fmt.Errorf("specify --export to convert a file, or --input + --apply to write to storage")

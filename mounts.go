@@ -228,7 +228,7 @@ func (s adminSessionStorage) ListUserSessions(ctx context.Context, userID models
 	return s.mgmt.ListUserSessions(ctx, userID)
 }
 
-// ---------- /account end-user self-service ----------
+// /account end-user self-service
 
 // handlers_account.go: thin forwarder around the extracted
 // internal/account/handlers package. PR F architecture reorg
@@ -360,7 +360,7 @@ func (a *TheAuth) mountAccount(r chi.Router) {
 	h.Mount(r, a.RequireAuth())
 }
 
-// ---------- /auth/orgs multi-tenancy ----------
+// /auth/orgs multi-tenancy
 
 // handlers_organizations.go: thin forwarder around the extracted
 // internal/organizations/handlers package. PR F architecture reorg
@@ -467,7 +467,7 @@ func (a *TheAuth) requireOrgRole(w http.ResponseWriter, r *http.Request, orgID, 
 	return false
 }
 
-// ---------- SAML SP-flow + connection CRUD ----------
+// SAML SP-flow + connection CRUD
 
 // handlers_saml.go: thin forwarders around the extracted
 // internal/saml/handlers package. PR E moved the SP-flow endpoints
@@ -567,7 +567,7 @@ func (a *TheAuth) mountSAMLConnectionCRUD(r chi.Router) {
 	a.newSAMLHandler().MountCRUD(r)
 }
 
-// ---------- SCIM 2.0 resource + token CRUD ----------
+// SCIM 2.0 resource + token CRUD
 
 // handlers_scim.go: thin forwarder around the extracted
 // internal/scim/handlers package. PR F architecture reorg

@@ -38,9 +38,7 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
-// -----------------------------------------------------------------------------
 // Test infrastructure
-// -----------------------------------------------------------------------------
 
 const (
 	testRPID      = "localhost"
@@ -275,9 +273,7 @@ func injectUser(u models.User) func(*http.Request) (*models.User, bool) {
 	return func(_ *http.Request) (*models.User, bool) { return &u, true }
 }
 
-// -----------------------------------------------------------------------------
 // Register Begin tests
-// -----------------------------------------------------------------------------
 
 // TestRegisterBegin_OK verifies that a successful BeginRegistration call
 // returns 200 JSON with a challenge and sets the challenge cookie.
@@ -332,9 +328,7 @@ func TestRegisterBegin_UserNotInStorage(t *testing.T) {
 	}
 }
 
-// -----------------------------------------------------------------------------
 // Register Finish tests
-// -----------------------------------------------------------------------------
 
 // TestRegisterFinish_MissingCookie verifies that a POST to /register/finish
 // without the challenge cookie returns 400.
@@ -443,9 +437,7 @@ func TestRegisterFinish_SingleUse(t *testing.T) {
 	}
 }
 
-// -----------------------------------------------------------------------------
 // Login Begin tests
-// -----------------------------------------------------------------------------
 
 // TestLoginBegin_OK verifies that /login/begin returns 200 JSON with a
 // challenge and sets the challenge cookie.
@@ -500,9 +492,7 @@ func TestLoginBegin_ChallengeIsUnique(t *testing.T) {
 	}
 }
 
-// -----------------------------------------------------------------------------
 // Login Finish tests
-// -----------------------------------------------------------------------------
 
 // TestLoginFinish_MissingCookie verifies that /login/finish without the
 // challenge cookie returns 400.
@@ -603,9 +593,7 @@ func TestLoginFinish_SingleUse(t *testing.T) {
 	}
 }
 
-// -----------------------------------------------------------------------------
 // Credentials list and delete tests
-// -----------------------------------------------------------------------------
 
 // TestCredentialsList_OK verifies that /credentials returns the credential
 // list for the authenticated user.
@@ -853,9 +841,7 @@ func TestChallengeCookieRoundtrip_Login(t *testing.T) {
 	}
 }
 
-// -----------------------------------------------------------------------------
 // minimalCookieJar satisfies http.CookieJar for the roundtrip tests.
-// -----------------------------------------------------------------------------
 
 type minimalCookieJar struct {
 	cookies []*http.Cookie

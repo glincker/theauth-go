@@ -24,7 +24,7 @@ import (
 	"github.com/glincker/theauth-go/v2/storage/memory"
 )
 
-// ---------- helpers ----------
+// helpers
 
 // newJWTBearerASInstance wires an AS with JWTBearer enabled.
 func newJWTBearerASInstance(t *testing.T, issuers []theauth.TrustedJWTIssuer, mut ...func(*theauth.AuthorizationServerConfig)) (*theauth.TheAuth, *memory.Store) {
@@ -157,7 +157,7 @@ func startAuthorizeAndGetCode(t *testing.T, a *theauth.TheAuth, clientID string,
 	return codeFromRedirect(t, res.RedirectURL), v
 }
 
-// ---------- TestPrivateKeyJWTHappyPath ----------
+// TestPrivateKeyJWTHappyPath
 
 // TestPrivateKeyJWTHappyPath: client authenticates with a signed ES256
 // assertion instead of a client_secret; expects a valid access token.
@@ -198,7 +198,7 @@ func TestPrivateKeyJWTHappyPath(t *testing.T) {
 	}
 }
 
-// ---------- TestPrivateKeyJWTReplayRejected ----------
+// TestPrivateKeyJWTReplayRejected
 
 // TestPrivateKeyJWTReplayRejected: same jti used twice must fail on second attempt.
 func TestPrivateKeyJWTReplayRejected(t *testing.T) {
@@ -251,7 +251,7 @@ func TestPrivateKeyJWTReplayRejected(t *testing.T) {
 	}
 }
 
-// ---------- TestPrivateKeyJWTExpiredAssertion ----------
+// TestPrivateKeyJWTExpiredAssertion
 
 func TestPrivateKeyJWTExpiredAssertion(t *testing.T) {
 	priv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
@@ -286,7 +286,7 @@ func TestPrivateKeyJWTExpiredAssertion(t *testing.T) {
 	}
 }
 
-// ---------- TestPrivateKeyJWTWrongAudience ----------
+// TestPrivateKeyJWTWrongAudience
 
 func TestPrivateKeyJWTWrongAudience(t *testing.T) {
 	priv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
@@ -322,7 +322,7 @@ func TestPrivateKeyJWTWrongAudience(t *testing.T) {
 	}
 }
 
-// ---------- TestPrivateKeyJWTAlgorithmDowngradeRejected ----------
+// TestPrivateKeyJWTAlgorithmDowngradeRejected
 
 // TestPrivateKeyJWTAlgorithmDowngradeRejected: HS256 not in the allowed
 // set for private_key_jwt; must be rejected.
@@ -364,7 +364,7 @@ func TestPrivateKeyJWTAlgorithmDowngradeRejected(t *testing.T) {
 	}
 }
 
-// ---------- TestJWTBearerGrantHappyPath ----------
+// TestJWTBearerGrantHappyPath
 
 func TestJWTBearerGrantHappyPath(t *testing.T) {
 	priv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
@@ -400,7 +400,7 @@ func TestJWTBearerGrantHappyPath(t *testing.T) {
 	}
 }
 
-// ---------- TestJWTBearerGrantUntrustedIssuer ----------
+// TestJWTBearerGrantUntrustedIssuer
 
 func TestJWTBearerGrantUntrustedIssuer(t *testing.T) {
 	priv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
@@ -430,7 +430,7 @@ func TestJWTBearerGrantUntrustedIssuer(t *testing.T) {
 	}
 }
 
-// ---------- TestJWTBearerGrantSubjectMapperMiss ----------
+// TestJWTBearerGrantSubjectMapperMiss
 
 func TestJWTBearerGrantSubjectMapperMiss(t *testing.T) {
 	priv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
@@ -470,7 +470,7 @@ func TestJWTBearerGrantSubjectMapperMiss(t *testing.T) {
 	}
 }
 
-// ---------- TestTokenExchangeMaxChainDepth ----------
+// TestTokenExchangeMaxChainDepth
 
 // TestTokenExchangeMaxChainDepth: MaxActorChainDepth=1 means only one actor
 // may be prepended. A second exchange on the resulting token must fail.
@@ -550,7 +550,7 @@ func TestTokenExchangeMaxChainDepth(t *testing.T) {
 	}
 }
 
-// ---------- TestTokenExchangeAudienceWhitelist ----------
+// TestTokenExchangeAudienceWhitelist
 
 // TestTokenExchangeAudienceWhitelist: audience parameter must name a
 // configured resource; unknown audience returns invalid_target.
@@ -588,7 +588,7 @@ func TestTokenExchangeAudienceWhitelist(t *testing.T) {
 	}
 }
 
-// ---------- TestJWTBearerGrantClientCompat ----------
+// TestJWTBearerGrantClientCompat
 
 func TestJWTBearerGrantClientCompat(t *testing.T) {
 	const canonical = "https://api.example.com/mcp"

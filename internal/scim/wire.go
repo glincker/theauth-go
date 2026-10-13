@@ -221,7 +221,7 @@ func ParsePrimaryEmail(emails []UserEmail) string {
 	return ""
 }
 
-// ---------- ServiceProviderConfig, ResourceTypes, Schemas (RFC 7644 §5/§6) ----------
+// ServiceProviderConfig, ResourceTypes, Schemas (RFC 7644 §5/§6)
 
 // ServiceProviderConfig returns the SCIM 2.0 ServiceProviderConfig
 // document body.

@@ -10,7 +10,7 @@ import (
 	"github.com/glincker/theauth-go/v2/storage"
 )
 
-// ---------- Permissions ----------
+// Permissions
 
 func (s *Store) InsertPermission(ctx context.Context, p theauth.Permission) (theauth.Permission, error) {
 	created := p.CreatedAt
@@ -84,7 +84,7 @@ func (s *Store) ListPermissions(ctx context.Context) ([]theauth.Permission, erro
 	return out, rows.Err()
 }
 
-// ---------- Roles ----------
+// Roles
 
 func (s *Store) InsertRole(ctx context.Context, r theauth.Role) (theauth.Role, error) {
 	created := r.CreatedAt
@@ -263,7 +263,7 @@ WHERE rp.role_id = ? ORDER BY p.name ASC`, ulidToBytes(roleID))
 	return out, rows.Err()
 }
 
-// ---------- User roles ----------
+// User roles
 
 func (s *Store) GrantUserRole(ctx context.Context, ur theauth.UserRole) error {
 	granted := ur.GrantedAt

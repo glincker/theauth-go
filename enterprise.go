@@ -12,7 +12,7 @@ import (
 	internalscim "github.com/glincker/theauth-go/v2/internal/scim"
 )
 
-// ---------- Enterprise forwarders (SCIM tokens, orgs, RBAC, delegations) ----------
+// Enterprise forwarders (SCIM tokens, orgs, RBAC, delegations)
 
 // PR G (2026-06-21) merged the previous
 // service_scim.go, service_organizations.go, service_rbac.go, and
@@ -21,7 +21,7 @@ import (
 // implementations live in those packages. No behaviour change;
 // signatures are byte-stable with the v2.0 release.
 
-// ---------- SCIM tokens ----------
+// SCIM tokens
 
 // CreateSCIMToken mints a fresh 256-bit token, stores its sha256 hash,
 // and returns the plaintext to the caller. The plaintext is the only
@@ -70,7 +70,7 @@ func (a *TheAuth) AuthenticateSCIMToken(ctx context.Context, presented string) (
 	return SCIMAuthResult{OrgID: res.OrganizationID, TokenID: res.TokenID}, nil
 }
 
-// ---------- Organizations + membership ----------
+// Organizations + membership
 
 // CreateOrganization writes a new org row and adds the supplied user as
 // its owner. Slug is lowercased and validated against the slug rules in
@@ -190,7 +190,7 @@ func (a *TheAuth) autoProvisionPersonalOrg(ctx context.Context, user *User, sess
 	}
 }
 
-// ---------- RBAC ----------
+// RBAC
 
 // SeedPermissions ensures every seeded + consumer-extended permission
 // row exists in storage. Idempotent on the permissions.name unique
@@ -267,7 +267,7 @@ func (a *TheAuth) DeleteRole(ctx context.Context, roleID ULID) error {
 	return a.rbacSvc.DeleteRole(ctx, roleID)
 }
 
-// ---------- Delegation ----------
+// Delegation
 
 // GrantDelegation persists a delegation_grants row. Scope MUST be a
 // subset of the configured ProtectedResource scopes; resource MUST
@@ -299,7 +299,7 @@ func (a *TheAuth) RevokeDelegation(ctx context.Context, grantID ULID, reason str
 	return a.delegationSvc.RevokeDelegation(ctx, grantID, reason)
 }
 
-// ---------- RBAC permission catalog, validation, and per-request cache ----------
+// RBAC permission catalog, validation, and per-request cache
 
 // Seeded permission catalog. Every consumer's permission set extends (never
 // shrinks) this list; New returns an error if a custom Permission name

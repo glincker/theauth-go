@@ -325,7 +325,7 @@ func (a *TheAuth) mountAccountDelete(r chi.Router) {
 	r.With(a.RequireRecentAuth(a.deletion.RecentAuthMaxAge)).Delete("/account", a.handleAccountDelete)
 }
 
-// ---------- trusted devices ----------
+// trusted devices
 
 // ListTrustedDevices returns the user's live trusted devices, newest first.
 func (a *TheAuth) ListTrustedDevices(ctx context.Context, userID ULID) ([]TrustedDeviceInfo, error) {

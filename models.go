@@ -31,7 +31,7 @@ import (
 	internaloauth "github.com/glincker/theauth-go/v2/internal/oauth"
 )
 
-// ---------- v0.x core entity types ----------
+// v0.x core entity types
 
 // ULID is the canonical ID type, generated in app, stored as uuid in Postgres.
 type ULID = models.ULID
@@ -53,14 +53,14 @@ type TOTPSecret = models.TOTPSecret
 
 type RecoveryCode = models.RecoveryCode
 
-// ---------- v0.5 session auth-level constants ----------
+// v0.5 session auth-level constants
 
 const (
 	AuthLevelFull       = models.AuthLevelFull
 	AuthLevelPending2FA = models.AuthLevelPending2FA
 )
 
-// ---------- v0.7 multi-tenancy + SAML + SCIM ----------
+// v0.7 multi-tenancy + SAML + SCIM
 
 const (
 	OrgRoleOwner  = models.OrgRoleOwner
@@ -90,7 +90,7 @@ type SCIMUserFilter = models.SCIMUserFilter
 
 type SCIMGroupFilter = models.SCIMGroupFilter
 
-// ---------- v1.0 RBAC + audit ----------
+// v1.0 RBAC + audit
 
 type Permission = models.Permission
 
@@ -110,7 +110,7 @@ type AuditQuery = models.AuditQuery
 
 type Stats = models.Stats
 
-// ---------- v2.0 OAuth 2.1 AS primitives (merged from models_v20.go in PR G) ----------
+// v2.0 OAuth 2.1 AS primitives (merged from models_v20.go in PR G)
 
 type ClientOwner = models.ClientOwner
 
@@ -163,7 +163,7 @@ const (
 	ResponseTypeCode = models.ResponseTypeCode
 )
 
-// ---------- v2.0 phase 3 agent identity ----------
+// v2.0 phase 3 agent identity
 
 type AgentOwner = models.AgentOwner
 
@@ -194,7 +194,7 @@ type AgentCredential = models.AgentCredential
 
 type AgentSecret = models.AgentSecret
 
-// ---------- v2.0 phase 4 delegation ----------
+// v2.0 phase 4 delegation
 
 type DelegationGrant = models.DelegationGrant
 
@@ -202,7 +202,7 @@ type GrantDelegationInput = models.GrantDelegationInput
 
 type ActorClaim = models.ActorClaim
 
-// ---------- v2.0 resource + DCR types ----------
+// v2.0 resource + DCR types
 
 // ProtectedResource describes one resource server protected by this AS.
 type ProtectedResource = models.ProtectedResource
@@ -211,7 +211,7 @@ type ProtectedResource = models.ProtectedResource
 // (RFC 7591 section 3.2.1).
 type RegisteredClient = models.RegisteredClient
 
-// ---------- CIBA (RFC 9509) types ----------
+// CIBA (RFC 9509) types
 
 // BackchannelRequest is the persistent record for one CIBA flow.
 type BackchannelRequest = models.BackchannelRequest
@@ -226,7 +226,7 @@ const (
 // GrantTypeCIBA is the CIBA grant type URN per RFC 9509.
 const GrantTypeCIBA = models.GrantTypeCIBA
 
-// ---------- Token policy, RAR and ID-JAG (AS) ----------
+// Token policy, RAR and ID-JAG (AS)
 
 // OpaqueAccessToken is the server-side record behind a reference access
 // token. Only the SHA-256 hash of the token is stored.
@@ -243,7 +243,7 @@ const (
 // Authorization Grant, used as requested_token_type and issued_token_type.
 const TokenTypeIDJAG = models.TokenTypeIDJAG
 
-// ---------- RFC 8628 device authorization grant (AS) ----------
+// RFC 8628 device authorization grant (AS)
 
 // DeviceAuthorization is the persistent record of one OAuth device flow served
 // at /oauth/device_authorization. It is unrelated to DeviceCode, which belongs
@@ -264,7 +264,7 @@ const GrantTypeDeviceCode = models.GrantTypeDeviceCode
 // RegistrationToken is an initial access token for POST /oauth/register.
 type RegistrationToken = models.RegistrationToken
 
-// ---------- Lifecycle hook enums (v2.5) ----------
+// Lifecycle hook enums (v2.5)
 
 // SignupMethod identifies which credential path created a user. Passed to
 // LifecycleHooks.OnSignup so consumers can branch tenant-provisioning,
@@ -289,7 +289,7 @@ const (
 	MFAKindRecoveryCodes MFAKind = "recovery_codes"
 )
 
-// ---------- Request context keys ----------
+// Request context keys
 
 type ctxKey int
 
@@ -312,7 +312,7 @@ func SessionFromContext(ctx context.Context) (*Session, bool) {
 	return s, ok
 }
 
-// ---------- OAuth provider type aliases ----------
+// OAuth provider type aliases
 
 // Provider is the contract every OAuth 2.0 / OIDC provider implements. Each
 // concrete provider lives in its own sub-package under provider/<name>/ so
@@ -355,7 +355,7 @@ type ProviderToken = internaloauth.ProviderToken
 // the v0.3+ public surface byte-stable.
 type ProviderUser = internaloauth.ProviderUser
 
-// ---------- JWKS rotation surface ----------
+// JWKS rotation surface
 
 // jwks.go: thin forwarders for the JWKS rotation surface. PR B
 // architecture reorg (2026-06-20) moved the JWKS state machine and the
@@ -375,7 +375,7 @@ func (a *TheAuth) RotateSigningKey(ctx context.Context) error {
 	return a.as.RotateSigningKey(ctx)
 }
 
-// ---------- CIMD (Client ID Metadata Documents) ----------
+// CIMD (Client ID Metadata Documents)
 
 // cimd.go: public CIMD (Client ID Metadata Documents) surface, per the
 // MCP authorization specification 2025-11-25.
@@ -433,7 +433,7 @@ func AllowHTTPSHost(host string) CIMDTrustPolicy { return cimd.AllowHTTPSHost(ho
 // every host.
 func AllowHTTPSHosts(hosts ...string) CIMDTrustPolicy { return cimd.AllowHTTPSHosts(hosts...) }
 
-// ---------- CIBA (RFC 9509 backchannel authentication) ----------
+// CIBA (RFC 9509 backchannel authentication)
 
 // ciba.go: root-package CIBA surface.
 // CIBAConfig, AuthenticationDevice, CIBANotification are thin wrappers

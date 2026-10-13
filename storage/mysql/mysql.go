@@ -27,7 +27,7 @@ func New(db *sql.DB) *Store {
 	return &Store{db: db}
 }
 
-// ---------- type-mapping helpers ----------
+// type-mapping helpers
 
 // ulidToBytes converts a theauth.ULID to a 16-byte slice for BINARY(16).
 func ulidToBytes(id theauth.ULID) []byte {

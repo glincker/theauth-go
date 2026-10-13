@@ -68,7 +68,7 @@ func TestMeRequiresSession(t *testing.T) {
 	}
 }
 
-// --- v0.2 email + password end-to-end coverage ---
+// v0.2 email + password end-to-end coverage
 
 // postJSON sends a request to the test server with the given body, optionally
 // attaching cookies, and returns the response + decoded body.
@@ -410,7 +410,7 @@ func TestMagicLinkRateLimited(t *testing.T) {
 	}
 }
 
-// ---------- fuzz tests (originally handlers_fuzz_test.go) ----------
+// fuzz tests (originally handlers_fuzz_test.go)
 
 // newFuzzAuth constructs a TheAuth instance with the in-memory adapter
 // and returns it along with the cookie name used for session lookup.

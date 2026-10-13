@@ -98,7 +98,7 @@ func (h *Handler) Mount(r chi.Router, authn func(http.Handler) http.Handler, reg
 	}
 }
 
-// ---------- discovery ----------
+// discovery
 
 func (h *Handler) handleASMetadata(w http.ResponseWriter, _ *http.Request) {
 	doc, err := h.svc.ASMetadataDoc()
@@ -187,7 +187,7 @@ func (h *Handler) handleJWKS(w http.ResponseWriter, _ *http.Request) {
 	_, _ = w.Write(body)
 }
 
-// ---------- authorize ----------
+// authorize
 
 func (h *Handler) handleAuthorize(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
@@ -322,7 +322,7 @@ func hasInlineAuthorizeParams(q url.Values, clientID string) bool {
 	return false
 }
 
-// ---------- PAR ----------
+// PAR
 
 func (h *Handler) handlePAR(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
@@ -412,7 +412,7 @@ func (h *Handler) writeAuthorizeError(w http.ResponseWriter, r *http.Request, re
 	writeOAuthError(w, http.StatusBadRequest, code, err.Error())
 }
 
-// ---------- token ----------
+// token
 
 func (h *Handler) handleToken(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
@@ -627,7 +627,7 @@ func writeTokenError(w http.ResponseWriter, err error) {
 	writeOAuthError(w, status, code, err.Error())
 }
 
-// ---------- revoke ----------
+// revoke
 
 func (h *Handler) handleRevoke(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
@@ -652,7 +652,7 @@ func (h *Handler) handleRevoke(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
-// ---------- introspect ----------
+// introspect
 
 func (h *Handler) handleIntrospect(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
@@ -681,7 +681,7 @@ func (h *Handler) handleIntrospect(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write(body)
 }
 
-// ---------- register ----------
+// register
 
 func (h *Handler) handleRegister(w http.ResponseWriter, r *http.Request) {
 	r.Body = http.MaxBytesReader(w, r.Body, 1<<16)
@@ -744,7 +744,7 @@ func (h *Handler) handleRegister(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(resp)
 }
 
-// ---------- helpers ----------
+// helpers
 
 // parseClientCredentials extracts client_id / client_secret from the
 // request. HTTP Basic auth takes precedence per RFC 6749 section 2.3.1;
