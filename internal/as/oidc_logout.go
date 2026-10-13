@@ -19,7 +19,7 @@ import (
 // oidc_logout.go: RP-Initiated Logout 1.0 and Back-Channel Logout 1.0.
 
 // backchannelLogoutEvent is the key of the events claim in a logout token.
-const backchannelLogoutEvent = "http://schemas.openid.net/event/backchannel-logout"
+const backchannelLogoutEvent = "http://schemas.openid.net/event/backchannel-logout" // NOSONAR go:S5332 event identifier fixed by the spec, not a URL fetched
 
 // logoutTokenTTL is how long a delivered logout token stays valid.
 const logoutTokenTTL = 2 * time.Minute
@@ -80,17 +80,26 @@ func (s *Service) EndSession(ctx context.Context, req EndSessionRequest) (EndSes
 	}
 	redirect := ""
 	if req.PostLogoutRedirectURI != "" {
-		if client == nil || !containsString(client.PostLogoutRedirectURIs, req.PostLogoutRedirectURI) {
+		reg := ""
+		if client != nil {
+			// Use the registered string, never the request's copy.
+			for _, u := range client.PostLogoutRedirectURIs {
+				if u == req.PostLogoutRedirectURI {
+					reg = u
+					break
+				}
+			}
+		}
+		if reg == "" {
 			return EndSessionResult{}, fmt.Errorf("%w: post_logout_redirect_uri is not registered", ErrEndSessionInvalid)
 		}
-		redirect = req.PostLogoutRedirectURI
+		redirect = reg
 		if req.State != "" {
-			if u, err := url.Parse(redirect); err == nil {
-				q := u.Query()
-				q.Set("state", req.State)
-				u.RawQuery = q.Encode()
-				redirect = u.String()
+			sep := "?"
+			if strings.Contains(reg, "?") {
+				sep = "&"
 			}
+			redirect = reg + sep + "state=" + url.QueryEscape(req.State)
 		}
 	}
 	if req.SessionID != "" && req.UserID != nil {
