@@ -12,12 +12,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/glincker/theauth-go/v2/crypto"
 	"github.com/glincker/theauth-go/v2/internal/dpop"
 	"github.com/glincker/theauth-go/v2/internal/jwt"
 	"github.com/glincker/theauth-go/v2/internal/models"
+	obs "github.com/glincker/theauth-go/v2/internal/observability"
 	"github.com/glincker/theauth-go/v2/internal/ulid"
 )
 
@@ -49,6 +51,15 @@ type DeviceTokensConfig struct {
 	ChallengeTTL time.Duration
 	// AssertionMaxLifetime caps exp minus iat on assertions. Default 5m.
 	AssertionMaxLifetime time.Duration
+	// EnrollPerMinute caps challenge and enroll requests per join token per
+	// minute. Counted only for join tokens that exist and are usable, so a
+	// stranger cannot exhaust someone else's token. Default 10, negative
+	// turns it off.
+	EnrollPerMinute int
+	// TokenPerMinute caps assertion grants per device per minute. Counted
+	// only after the assertion signature verified. Default 60, negative
+	// turns it off.
+	TokenPerMinute int
 }
 
 func applyDeviceTokenDefaults(c *DeviceTokensConfig) {
@@ -64,6 +75,43 @@ func applyDeviceTokenDefaults(c *DeviceTokensConfig) {
 	if c.AssertionMaxLifetime <= 0 {
 		c.AssertionMaxLifetime = DefaultDeviceAssertionLifetime
 	}
+	if c.EnrollPerMinute == 0 {
+		c.EnrollPerMinute = DefaultDeviceEnrollPerMinute
+	}
+	if c.TokenPerMinute == 0 {
+		c.TokenPerMinute = DefaultDeviceTokenPerMinute
+	}
+}
+
+// Default per device request budgets.
+const (
+	DefaultDeviceEnrollPerMinute = 10
+	DefaultDeviceTokenPerMinute  = 60
+)
+
+// RateLimitedError reports a per device budget that is used up.
+type RateLimitedError struct {
+	RetryAfter time.Duration
+}
+
+func (e *RateLimitedError) Error() string { return "theauth: device rate limit exceeded" }
+
+// deviceLimit spends one unit of the per minute budget for id under rule. It
+// fails open when the limiter backend errors, like the HTTP limits.
+func (s *Service) deviceLimit(ctx context.Context, rule, id string, limit int) error {
+	if limit <= 0 || s.Limiter == nil {
+		return nil
+	}
+	d, err := s.Limiter.Allow(ctx, "as:device:"+rule+":"+id, limit, time.Minute)
+	if err != nil {
+		slog.Warn("theauth: device rate limiter unavailable, failing open", "rule", rule, "err", err.Error())
+		return nil
+	}
+	if d.Allowed {
+		return nil
+	}
+	s.Hooks.Counter(obs.MetricRateLimitBlockedTotal, obs.Labels{obs.AttrRule: "device_" + rule}).Inc()
+	return &RateLimitedError{RetryAfter: d.RetryAfter}
 }
 
 // DeviceEvidence is what an enrolling device presents to an Attestor.
@@ -302,6 +350,9 @@ func (s *Service) DeviceEnrollChallenge(ctx context.Context, req DeviceEnrollReq
 	if err != nil {
 		return DeviceChallenge{}, err
 	}
+	if err := s.deviceLimit(ctx, "enroll", att.Subject, s.Cfg.DeviceTokens.EnrollPerMinute); err != nil {
+		return DeviceChallenge{}, err
+	}
 	alg := s.defaultSigningAlg()
 	jk, signer, err := s.SigningKeyFor(ctx, alg)
 	if err != nil {
@@ -342,6 +393,9 @@ func (s *Service) EnrollDevice(ctx context.Context, req DeviceEnrollRequest) (mo
 	}
 	att, err := s.attestDevice(ctx, store, req, key)
 	if err != nil {
+		return models.Device{}, err
+	}
+	if err := s.deviceLimit(ctx, "enroll", att.Subject, s.Cfg.DeviceTokens.EnrollPerMinute); err != nil {
 		return models.Device{}, err
 	}
 	now := s.now().UTC()

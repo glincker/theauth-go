@@ -560,7 +560,7 @@ type AuthorizationServerConfig struct {
 	// minted single-use join tokens, enrollment at /oauth/devices/enroll, and
 	// the RFC 7523 jwt-bearer grant for registered devices, which issues
 	// short-lived access tokens with no refresh token. The storage must also
-	// implement DeviceIdentityStorage (memory, Postgres and MySQL do).
+	// implement DeviceIdentityStorage (memory, Postgres, MySQL and SQLite do).
 	DeviceTokens *DeviceTokensConfig
 
 	// OIDC turns the server into an OpenID Provider when non-nil: ID tokens

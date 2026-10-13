@@ -70,6 +70,11 @@ func (s *Service) deviceAssertionGrant(ctx context.Context, store DeviceIdentity
 	if !verifyWithJWKS([]jwksEntry{key.entry}, header, []byte(signingInput), sig) {
 		return TokenResponse{}, models.ErrOAuthInvalidGrant
 	}
+	// The device is authenticated from here on, so its budget is charged
+	// before anything single use is spent and a limited device can retry.
+	if err := s.deviceLimit(ctx, "token", dev.ID.String(), cfg.TokenPerMinute); err != nil {
+		return TokenResponse{}, err
+	}
 	// Resource and scope are checked before the proof and jti are spent, so a
 	// bad request does not burn an assertion the device could still use.
 	audience, scope, err := s.deviceResourceScope(req, dev)

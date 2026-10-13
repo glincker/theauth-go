@@ -616,6 +616,11 @@ func writeTokenJSON(w http.ResponseWriter, resp internalas.TokenResponse) {
 }
 
 func writeTokenError(w http.ResponseWriter, err error) {
+	var limited *internalas.RateLimitedError
+	if errors.As(err, &limited) {
+		writeRateLimited(w, limited.RetryAfter)
+		return
+	}
 	if isBusy(err) {
 		writeBusy(w)
 		return
