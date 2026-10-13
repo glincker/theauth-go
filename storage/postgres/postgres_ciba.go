@@ -143,7 +143,7 @@ RETURNING
 	return r, nil
 }
 
-// ---------- scan helper ----------
+// scan helper
 
 func scanBackchannelRequest(row pgRowScanner) (theauth.BackchannelRequest, error) {
 	var (

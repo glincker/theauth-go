@@ -11,7 +11,7 @@ import (
 	"github.com/glincker/theauth-go/v2/storage"
 )
 
-// ---------- Magic links ----------
+// Magic links
 
 func (s *Store) CreateMagicLink(ctx context.Context, ml theauth.MagicLink) error {
 	_, err := s.db.ExecContext(ctx, `
@@ -76,7 +76,7 @@ func (s *Store) ConsumeMagicLink(ctx context.Context, tokenHash []byte) (*theaut
 	return &ml, nil
 }
 
-// ---------- Password credentials ----------
+// Password credentials
 
 func (s *Store) SetUserPassword(ctx context.Context, userID theauth.ULID, passwordHash string) error {
 	_, err := s.db.ExecContext(ctx, `
@@ -149,7 +149,7 @@ ON DUPLICATE KEY UPDATE password_hash = VALUES(password_hash)`,
 	return tx.Commit()
 }
 
-// ---------- Password reset tokens ----------
+// Password reset tokens
 
 func (s *Store) CreatePasswordResetToken(ctx context.Context, t theauth.PasswordResetToken) error {
 	_, err := s.db.ExecContext(ctx, `

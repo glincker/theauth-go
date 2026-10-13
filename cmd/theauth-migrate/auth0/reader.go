@@ -213,7 +213,7 @@ func ReadJSON(r io.Reader, forcePasswordReset bool) (*internal.Bundle, error) {
 	return bundle, nil
 }
 
-// ---- helpers ----
+// helpers
 
 // parseAuth0Time handles the ISO-8601 timestamps Auth0 uses.
 func parseAuth0Time(s string) time.Time {

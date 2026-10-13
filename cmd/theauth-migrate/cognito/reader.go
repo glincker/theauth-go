@@ -296,7 +296,7 @@ func ReadJSON(r io.Reader) (*internal.Bundle, error) {
 	return bundle, nil
 }
 
-// ---- helpers ----
+// helpers
 
 func headerIndex(headers []string) map[string]int {
 	m := make(map[string]int, len(headers))

@@ -16,7 +16,7 @@ import (
 // matching the alpha.1 precedent in postgres_v20.go. sqlc regeneration for
 // these tables is deferred; the existing sqlc directory stays untouched.
 
-// ---------- agents ----------
+// agents
 
 func (s *Store) InsertAgent(ctx context.Context, a theauth.Agent) (theauth.Agent, error) {
 	const q = `
@@ -137,7 +137,7 @@ func (s *Store) UpdateAgentLastActive(ctx context.Context, id theauth.ULID, at t
 	return nil
 }
 
-// ---------- agent credentials ----------
+// agent credentials
 
 func (s *Store) InsertAgentCredential(ctx context.Context, c theauth.AgentCredential) error {
 	const q = `
@@ -197,7 +197,7 @@ func (s *Store) UpdateAgentCredentialLastUsed(ctx context.Context, id theauth.UL
 	return err
 }
 
-// ---------- delegation grants ----------
+// delegation grants
 
 func (s *Store) InsertDelegationGrant(ctx context.Context, g theauth.DelegationGrant) (theauth.DelegationGrant, error) {
 	const q = `
@@ -284,7 +284,7 @@ func (s *Store) RevokeDelegationGrant(ctx context.Context, id theauth.ULID, at t
 	return nil
 }
 
-// ---------- internal helpers ----------
+// internal helpers
 
 func (s *Store) queryDelegationGrants(ctx context.Context, q string, args ...any) ([]theauth.DelegationGrant, error) {
 	rows, err := s.pool.Query(ctx, q, args...)

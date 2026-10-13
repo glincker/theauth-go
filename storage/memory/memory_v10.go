@@ -53,7 +53,7 @@ func (s *Store) ensureV10() *v10State {
 	return s.v10
 }
 
-// ---------- Permissions ----------
+// Permissions
 
 func (s *Store) InsertPermission(_ context.Context, p theauth.Permission) (theauth.Permission, error) {
 	s.mu.Lock()
@@ -94,7 +94,7 @@ func (s *Store) ListPermissions(_ context.Context) ([]theauth.Permission, error)
 	return out, nil
 }
 
-// ---------- Roles ----------
+// Roles
 
 func (s *Store) InsertRole(_ context.Context, r theauth.Role) (theauth.Role, error) {
 	s.mu.Lock()
@@ -238,7 +238,7 @@ func (s *Store) permsForRoleLocked(roleID theauth.ULID) []string {
 	return out
 }
 
-// ---------- User-role grants ----------
+// User-role grants
 
 func (s *Store) GrantUserRole(_ context.Context, ur theauth.UserRole) error {
 	s.mu.Lock()
@@ -344,7 +344,7 @@ func (s *Store) CountUsersWithPermissionInOrg(_ context.Context, orgID theauth.U
 	return len(users), nil
 }
 
-// ---------- Audit ----------
+// Audit
 
 func (s *Store) InsertAuditEvents(_ context.Context, events []theauth.AuditEvent) error {
 	if len(events) == 0 {
@@ -441,7 +441,7 @@ func (s *Store) QueryAuditEvents(_ context.Context, q theauth.AuditQuery) ([]the
 	return out, next, nil
 }
 
-// ---------- cursor codec (mirrors admin.Cursor) ----------
+// cursor codec (mirrors admin.Cursor)
 
 func encodeCursor(ts time.Time, id theauth.ULID) string {
 	raw := strconv.FormatInt(ts.UnixMicro(), 10) + ":" + id.String()
@@ -468,7 +468,7 @@ func decodeCursor(s string) (time.Time, theauth.ULID, error) {
 	return time.UnixMicro(micros), id, nil
 }
 
-// ---------- helpers ----------
+// helpers
 
 func sameOrgPtr(a, b *theauth.ULID) bool {
 	if a == nil && b == nil {

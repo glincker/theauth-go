@@ -11,7 +11,7 @@ import (
 	"github.com/glincker/theauth-go/v2/storage"
 )
 
-// ---------- Organizations ----------
+// Organizations
 
 func (s *Store) InsertOrganization(ctx context.Context, o theauth.Organization) (theauth.Organization, error) {
 	_, err := s.db.ExecContext(ctx, `
@@ -115,7 +115,7 @@ func scanOrg(row interface{ Scan(...interface{}) error }) (theauth.Organization,
 	}, nil
 }
 
-// ---------- Organization members ----------
+// Organization members
 
 func (s *Store) UpsertOrganizationMember(ctx context.Context, m theauth.OrganizationMember) error {
 	_, err := s.db.ExecContext(ctx, `

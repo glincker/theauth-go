@@ -11,7 +11,7 @@ import (
 	"github.com/glincker/theauth-go/v2/storage"
 )
 
-// ---------- TOTP secrets ----------
+// TOTP secrets
 
 func (s *Store) UpsertPendingTOTPSecret(ctx context.Context, sec theauth.TOTPSecret) error {
 	created := sec.CreatedAt
@@ -129,7 +129,7 @@ func (s *Store) MoveTOTPSecret(ctx context.Context, primaryID, secondaryID theau
 	return tx.Commit()
 }
 
-// ---------- Recovery codes ----------
+// Recovery codes
 
 func (s *Store) InsertRecoveryCodes(ctx context.Context, codes []theauth.RecoveryCode) error {
 	for _, c := range codes {

@@ -31,7 +31,7 @@ func New(pool *pgxpool.Pool) *Store {
 	return &Store{pool: pool, q: sqlcgen.New(pool)}
 }
 
-// ---------- type mapping helpers ----------
+// type mapping helpers
 
 func ulidToPgUUID(id theauth.ULID) pgtype.UUID {
 	return pgtype.UUID{Bytes: [16]byte(id), Valid: true}
@@ -78,7 +78,7 @@ func pgIPToStr(p *netip.Addr) string {
 	return p.String()
 }
 
-// ---------- row -> domain mappers ----------
+// row -> domain mappers
 
 func rowToUser(r sqlcgen.User) theauth.User {
 	return theauth.User{
@@ -137,7 +137,7 @@ func timePtrToTs(t *time.Time) pgtype.Timestamptz {
 	return pgtype.Timestamptz{Time: *t, Valid: true}
 }
 
-// ---------- Users ----------
+// Users
 
 func (s *Store) CreateUser(ctx context.Context, u theauth.User) (theauth.User, error) {
 	row, err := s.q.CreateUser(ctx, sqlcgen.CreateUserParams{
@@ -188,7 +188,7 @@ func (s *Store) MarkEmailVerified(ctx context.Context, userID theauth.ULID) erro
 	return nil
 }
 
-// ---------- Sessions ----------
+// Sessions
 
 func (s *Store) RevokeSession(ctx context.Context, id theauth.ULID) error {
 	if err := s.q.RevokeSession(ctx, ulidToPgUUID(id)); err != nil {
@@ -210,7 +210,7 @@ func (s *Store) RevokeUserSessions(ctx context.Context, userID theauth.ULID) err
 	return nil
 }
 
-// ---------- Magic links ----------
+// Magic links
 
 func (s *Store) CreateMagicLink(ctx context.Context, ml theauth.MagicLink) error {
 	return s.q.CreateMagicLink(ctx, sqlcgen.CreateMagicLinkParams{
@@ -234,7 +234,7 @@ func (s *Store) ConsumeMagicLink(ctx context.Context, tokenHash []byte) (*theaut
 	return &ml, nil
 }
 
-// ---------- Password credentials (v0.2) ----------
+// Password credentials (v0.2)
 
 func (s *Store) SetUserPassword(ctx context.Context, userID theauth.ULID, passwordHash string) error {
 	ph := passwordHash
@@ -292,7 +292,7 @@ func (s *Store) ConsumePasswordResetToken(ctx context.Context, tokenHash []byte)
 	return &rt, nil
 }
 
-// ---------- OAuth accounts (v0.3) ----------
+// OAuth accounts (v0.3)
 
 func (s *Store) UpsertOAuthAccount(ctx context.Context, a theauth.OAuthAccount) (theauth.OAuthAccount, error) {
 	row, err := s.q.UpsertOAuthAccount(ctx, sqlcgen.UpsertOAuthAccountParams{
@@ -328,7 +328,7 @@ func (s *Store) OAuthAccountByProviderUserID(ctx context.Context, provider, prov
 	return &acct, nil
 }
 
-// ---------- Sessions (v0.5 step-up) ----------
+// Sessions (v0.5 step-up)
 
 func (s *Store) UpdateSessionAuthLevel(ctx context.Context, id theauth.ULID, level string) error {
 	if err := s.q.UpdateSessionAuthLevel(ctx, sqlcgen.UpdateSessionAuthLevelParams{
@@ -340,7 +340,7 @@ func (s *Store) UpdateSessionAuthLevel(ctx context.Context, id theauth.ULID, lev
 	return nil
 }
 
-// ---------- WebAuthn credentials (v0.5) ----------
+// WebAuthn credentials (v0.5)
 
 // signCountInt64ToUint32 narrows a Postgres bigint column to the uint32 that
 // the WebAuthn spec requires. Values outside the uint32 range (which the
@@ -512,7 +512,7 @@ func (s *Store) DeleteWebAuthnCredential(ctx context.Context, id theauth.ULID, u
 	return nil
 }
 
-// ---------- TOTP secrets (v0.5) ----------
+// TOTP secrets (v0.5)
 
 func rowToTOTPSecret(r sqlcgen.TotpSecret) theauth.TOTPSecret {
 	return theauth.TOTPSecret{
@@ -573,7 +573,7 @@ func (s *Store) DeleteTOTPSecret(ctx context.Context, userID theauth.ULID) error
 	return s.q.DeleteTOTPSecret(ctx, ulidToPgUUID(userID))
 }
 
-// ---------- Recovery codes (v0.5) ----------
+// Recovery codes (v0.5)
 
 func (s *Store) InsertRecoveryCodes(ctx context.Context, codes []theauth.RecoveryCode) error {
 	for _, c := range codes {

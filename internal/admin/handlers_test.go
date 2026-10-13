@@ -33,9 +33,7 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
-// -----------------------------------------------------------------------------
 // Stub implementations
-// -----------------------------------------------------------------------------
 
 // stubAdminStorage satisfies admin.Storage.
 type stubAdminStorage struct {
@@ -230,9 +228,7 @@ func (a *stubAudit) EmitAudit(_ context.Context, _ string, _ models.TargetRef, _
 
 func (a *stubAudit) HashEmailForAudit(email string) string { return "hashed:" + email }
 
-// -----------------------------------------------------------------------------
 // Test server construction
-// -----------------------------------------------------------------------------
 
 // buildAdminServer constructs a chi.Router with the admin Handler mounted and
 // returns an httptest.Server. orgID is the active organization that the session
@@ -336,9 +332,7 @@ func doAdminJSON(t *testing.T, method, url string, body []byte) *http.Response {
 	return resp
 }
 
-// -----------------------------------------------------------------------------
 // requireOrgMatch middleware tests
-// -----------------------------------------------------------------------------
 
 // TestOrgMatch_Mismatch verifies that a session whose ActiveOrganizationID
 // does not match the path orgID is rejected with 403.
@@ -396,9 +390,7 @@ func TestOrgMatch_SuperAdminBypass(t *testing.T) {
 	}
 }
 
-// -----------------------------------------------------------------------------
 // GET /admin/v1/organizations/{orgID}/users/{userID} -- getUser
-// -----------------------------------------------------------------------------
 
 // TestGetUser_OK verifies that getUser returns 200 JSON with user + roles.
 func TestGetUser_OK(t *testing.T) {
@@ -480,9 +472,7 @@ func TestGetUser_MissingPermission(t *testing.T) {
 	}
 }
 
-// -----------------------------------------------------------------------------
 // PATCH /admin/v1/organizations/{orgID}/users/{userID} -- patchUser
-// -----------------------------------------------------------------------------
 
 // TestPatchUser_OK verifies that patchUser returns 200 JSON.
 func TestPatchUser_OK(t *testing.T) {
@@ -564,9 +554,7 @@ func TestPatchUser_MissingPermission(t *testing.T) {
 	}
 }
 
-// -----------------------------------------------------------------------------
 // GET /admin/v1/organizations/{orgID}/sessions -- listSessions
-// -----------------------------------------------------------------------------
 
 // TestListSessions_OK verifies that listSessions returns 200 JSON.
 func TestListSessions_OK(t *testing.T) {
@@ -640,9 +628,7 @@ func TestListSessions_MissingPermission(t *testing.T) {
 	}
 }
 
-// -----------------------------------------------------------------------------
 // DELETE /admin/v1/organizations/{orgID}/sessions/{sessionID} -- revokeSession
-// -----------------------------------------------------------------------------
 
 // TestRevokeSession_OK verifies that revoking an existing session returns 204.
 func TestRevokeSession_OK(t *testing.T) {
@@ -698,9 +684,7 @@ func TestRevokeSession_InvalidSessionID(t *testing.T) {
 	}
 }
 
-// -----------------------------------------------------------------------------
 // GET /admin/v1/organizations/{orgID}/roles -- listRoles
-// -----------------------------------------------------------------------------
 
 // TestListRoles_OK verifies that listRoles returns 200 JSON with the roles
 // slice.
@@ -745,9 +729,7 @@ func TestListRoles_MissingPermission(t *testing.T) {
 	}
 }
 
-// -----------------------------------------------------------------------------
 // PATCH /admin/v1/organizations/{orgID}/roles/{roleID} -- updateRole
-// -----------------------------------------------------------------------------
 
 // TestUpdateRole_OK verifies that updateRole returns 200 JSON.
 func TestUpdateRole_OK(t *testing.T) {
@@ -861,9 +843,7 @@ func TestUpdateRole_MissingPermission(t *testing.T) {
 	}
 }
 
-// -----------------------------------------------------------------------------
 // GET /admin/v1/organizations/{orgID}/oauth_accounts -- listOAuthAccounts
-// -----------------------------------------------------------------------------
 
 // TestListOAuthAccounts_OK verifies that listOAuthAccounts returns 200 JSON
 // with an empty accounts slice (stub implementation).
@@ -906,9 +886,7 @@ func TestListOAuthAccounts_MissingPermission(t *testing.T) {
 	}
 }
 
-// -----------------------------------------------------------------------------
 // POST /admin/v1/organizations/{orgID}/users -- inviteUser
-// -----------------------------------------------------------------------------
 
 // TestInviteUser_OK verifies that inviting a new user returns 201 JSON.
 func TestInviteUser_OK(t *testing.T) {
@@ -1036,9 +1014,7 @@ func TestInviteUser_InvalidRoleID(t *testing.T) {
 	}
 }
 
-// -----------------------------------------------------------------------------
 // DELETE /admin/v1/organizations/{orgID}/users/{userID} -- removeUser
-// -----------------------------------------------------------------------------
 
 // TestRemoveUser_OK verifies that removing a member returns 204.
 func TestRemoveUser_OK(t *testing.T) {
@@ -1113,9 +1089,7 @@ func TestRemoveUser_MissingPermission(t *testing.T) {
 	}
 }
 
-// -----------------------------------------------------------------------------
 // POST /admin/v1/organizations/{orgID}/roles -- createRole
-// -----------------------------------------------------------------------------
 
 // TestCreateRole_OK verifies that createRole returns 201 JSON.
 func TestCreateRole_OK(t *testing.T) {
@@ -1203,9 +1177,7 @@ func TestCreateRole_MissingPermission(t *testing.T) {
 	}
 }
 
-// -----------------------------------------------------------------------------
 // DELETE /admin/v1/organizations/{orgID}/roles/{roleID} -- deleteRole
-// -----------------------------------------------------------------------------
 
 // TestDeleteRole_OK verifies that deleteRole returns 204.
 func TestDeleteRole_OK(t *testing.T) {
@@ -1296,9 +1268,7 @@ func TestDeleteRole_MissingPermission(t *testing.T) {
 	}
 }
 
-// -----------------------------------------------------------------------------
 // GET /admin/v1/organizations/{orgID}/audit -- queryAudit
-// -----------------------------------------------------------------------------
 
 // TestQueryAudit_OK verifies that queryAudit returns 200 JSON.
 func TestQueryAudit_OK(t *testing.T) {
@@ -1444,9 +1414,7 @@ func TestQueryAudit_MissingPermission(t *testing.T) {
 	}
 }
 
-// -----------------------------------------------------------------------------
 // patchUser with roleIds -- additional coverage for role-diff paths
-// -----------------------------------------------------------------------------
 
 // TestPatchUser_WithRoleIDs verifies that patchUser with a valid roleIds list
 // calls GrantRole for new roles and returns 200.

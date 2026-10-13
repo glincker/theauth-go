@@ -19,7 +19,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-// ---------- organizations ----------
+// organizations
 
 const insertOrganization = `-- name: InsertOrganization :one
 INSERT INTO organizations (id, name, slug, created_at, updated_at)
@@ -209,7 +209,7 @@ func (q *Queries) SetSessionActiveOrganization(ctx context.Context, arg SetSessi
 	return r.RowsAffected(), nil
 }
 
-// ---------- saml ----------
+// saml
 
 const insertSAMLConnection = `-- name: InsertSAMLConnection :one
 INSERT INTO saml_connections (
@@ -385,7 +385,7 @@ func (q *Queries) TouchSAMLIdentityLastLogin(ctx context.Context, arg TouchSAMLI
 	return err
 }
 
-// ---------- scim tokens ----------
+// scim tokens
 
 const insertSCIMToken = `-- name: InsertSCIMToken :one
 INSERT INTO scim_tokens (id, organization_id, token_hash, name, created_at)
@@ -471,7 +471,7 @@ func (q *Queries) TouchSCIMTokenLastUsed(ctx context.Context, arg TouchSCIMToken
 	return err
 }
 
-// ---------- users scoped queries ----------
+// users scoped queries
 //
 // SELECT * on users returns the v0.7 columns we added at the tail
 // (external_id, given_name, family_name, display_name). Postgres returns
@@ -606,7 +606,7 @@ func (q *Queries) UpdateUserSCIM(ctx context.Context, arg UpdateUserSCIMParams) 
 	return r.RowsAffected(), nil
 }
 
-// ---------- groups ----------
+// groups
 
 const insertGroup = `-- name: InsertGroup :one
 INSERT INTO groups (id, organization_id, display_name, external_id, created_at)

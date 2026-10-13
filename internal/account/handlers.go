@@ -104,7 +104,7 @@ func (h *Handler) Mount(r chi.Router, requireAuth func(http.Handler) http.Handle
 	h.mountIdentityLink(r, requireAuth)
 }
 
-// ---------- agents ----------
+// agents
 
 func (h *Handler) listAgents(w http.ResponseWriter, r *http.Request) {
 	user, ok := h.userFromCtx(r)
@@ -195,7 +195,7 @@ func (h *Handler) revokeAgent(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// ---------- delegations ----------
+// delegations
 
 func (h *Handler) listDelegations(w http.ResponseWriter, r *http.Request) {
 	user, ok := h.userFromCtx(r)

@@ -66,7 +66,7 @@ func (s *Store) ensureV20() *v20State {
 	return s.v20
 }
 
-// ---------- OAuth clients ----------
+// OAuth clients
 
 func (s *Store) InsertOAuthClient(_ context.Context, c theauth.OAuthClient) (theauth.OAuthClient, error) {
 	v := s.ensureV20()
@@ -125,7 +125,7 @@ func (s *Store) DeleteOAuthClient(_ context.Context, clientID string) error {
 	return nil
 }
 
-// ---------- authorization codes ----------
+// authorization codes
 
 func (s *Store) InsertAuthorizationCode(_ context.Context, c theauth.AuthorizationCode) error {
 	v := s.ensureV20()
@@ -156,7 +156,7 @@ func (s *Store) ConsumeAuthorizationCode(_ context.Context, code string) (*theau
 	return &cp, nil
 }
 
-// ---------- refresh tokens ----------
+// refresh tokens
 
 func (s *Store) InsertRefreshToken(_ context.Context, t theauth.RefreshToken) error {
 	v := s.ensureV20()
@@ -259,7 +259,7 @@ func (s *Store) RevokeRefreshTokenFamily(_ context.Context, familyID theauth.ULI
 	return nil
 }
 
-// ---------- JWKS keys ----------
+// JWKS keys
 
 func (s *Store) InsertJWKSKey(_ context.Context, k theauth.JWKSKey) error {
 	v := s.ensureV20()
@@ -322,7 +322,7 @@ func (s *Store) UpdateJWKSKeyState(_ context.Context, kid, state string, at time
 	return nil
 }
 
-// ---------- agents (v2.0 phase 3) ----------
+// agents (v2.0 phase 3)
 
 func (s *Store) InsertAgent(_ context.Context, a theauth.Agent) (theauth.Agent, error) {
 	v := s.ensureV20()
@@ -413,7 +413,7 @@ func (s *Store) UpdateAgentLastActive(_ context.Context, id theauth.ULID, at tim
 	return nil
 }
 
-// ---------- agent credentials ----------
+// agent credentials
 
 func (s *Store) InsertAgentCredential(_ context.Context, c theauth.AgentCredential) error {
 	v := s.ensureV20()
@@ -471,7 +471,7 @@ func (s *Store) UpdateAgentCredentialLastUsed(_ context.Context, id theauth.ULID
 	return nil
 }
 
-// ---------- delegations (v2.0 phase 4) ----------
+// delegations (v2.0 phase 4)
 
 func (s *Store) InsertDelegationGrant(_ context.Context, g theauth.DelegationGrant) (theauth.DelegationGrant, error) {
 	v := s.ensureV20()
@@ -562,7 +562,7 @@ func (s *Store) RevokeDelegationGrant(_ context.Context, id theauth.ULID, at tim
 	return nil
 }
 
-// ---------- helpers ----------
+// helpers
 
 const hexAlphabet = "0123456789abcdef"
 
@@ -579,7 +579,7 @@ func delegationTupleKey(userID, agentID theauth.ULID, resource string) string {
 	return userID.String() + "|" + agentID.String() + "|" + resource
 }
 
-// ---------- access-token denylist ----------
+// access-token denylist
 
 // DenyAccessToken records jti as revoked until expiresAt. Expired entries
 // are purged opportunistically on each call so the map stays bounded by the

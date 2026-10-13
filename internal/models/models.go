@@ -175,7 +175,7 @@ type RecoveryCode struct {
 	CreatedAt time.Time  `json:"createdAt"`
 }
 
-// ---------- v0.7 multi-tenancy + SAML + SCIM ----------
+// v0.7 multi-tenancy + SAML + SCIM
 
 // Organization role constants. Scoped to one organization each.
 const (
@@ -296,7 +296,7 @@ type SCIMGroupFilter struct {
 	ExternalID  string
 }
 
-// ---------- v1.0 RBAC ----------
+// v1.0 RBAC
 
 // Permission is one entry in the closed permission catalog. Names are program
 // identifiers (ASCII, no whitespace) of the shape "domain:verb" or
@@ -339,7 +339,7 @@ type UserRole struct {
 // API never exposes a path to grant it.
 const SystemRoleSuperAdmin = "super_admin"
 
-// ---------- v1.0 audit log ----------
+// v1.0 audit log
 
 // TargetRef points at the resource an audit event acts on. ID is a string
 // (not ULID) because some targets are external identifiers (e.g. SCIM

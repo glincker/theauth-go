@@ -55,7 +55,7 @@ type JWTBearerStorage interface {
 	SweepExpiredJTIs(ctx context.Context, before time.Time) error
 }
 
-// ---------- v2.0 OAuth Server storage extension ----------
+// v2.0 OAuth Server storage extension
 
 // v2.0 (phase 1 + 2) storage extension interface.
 //
@@ -138,7 +138,7 @@ type OAuthServerStorage interface {
 // without importing root.
 var ErrStorageMissingOAuthMethods = models.ErrStorageMissingOAuthMethods
 
-// ---------- CIBA (RFC 9509) storage extension ----------
+// CIBA (RFC 9509) storage extension
 
 // CIBAStorage is the optional persistence extension that storage backends must
 // implement for CIBA to be active. When the storage passed to New does not
@@ -169,7 +169,7 @@ type CIBAStorage interface {
 	TouchBackchannelPoll(ctx context.Context, authReqID string, now time.Time, newInterval int) (BackchannelRequest, error)
 }
 
-// ---------- RFC 8628 device grant and registration tokens ----------
+// RFC 8628 device grant and registration tokens
 
 // DeviceAuthorizationStorage is the optional persistence extension for the
 // OAuth device grant (Config.AuthorizationServer.DeviceAuthorization). Lookups

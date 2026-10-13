@@ -50,7 +50,7 @@ func (s *Store) ensureV07() *v07State {
 	return s.v07
 }
 
-// ---------- Organizations ----------
+// Organizations
 
 func (s *Store) InsertOrganization(_ context.Context, o theauth.Organization) (theauth.Organization, error) {
 	s.mu.Lock()
@@ -261,7 +261,7 @@ func (s *Store) SetSessionActiveOrganization(_ context.Context, sessionID theaut
 	return nil
 }
 
-// ---------- SAML ----------
+// SAML
 
 func (s *Store) InsertSAMLConnection(_ context.Context, c theauth.SAMLConnection) (theauth.SAMLConnection, error) {
 	s.mu.Lock()
@@ -380,7 +380,7 @@ func (s *Store) TouchSAMLIdentityLastLogin(_ context.Context, id theauth.ULID, a
 	return nil
 }
 
-// ---------- SCIM tokens ----------
+// SCIM tokens
 
 func (s *Store) InsertSCIMToken(_ context.Context, t theauth.SCIMToken) (theauth.SCIMToken, error) {
 	s.mu.Lock()
@@ -456,7 +456,7 @@ func (s *Store) TouchSCIMTokenLastUsed(_ context.Context, id theauth.ULID, at ti
 	return nil
 }
 
-// ---------- SCIM scoped reads + user update ----------
+// SCIM scoped reads + user update
 
 func (s *Store) ListUsersByOrganization(_ context.Context, orgID theauth.ULID, offset, limit int, filter theauth.SCIMUserFilter) ([]theauth.User, int, error) {
 	s.mu.RLock()
@@ -565,7 +565,7 @@ func (s *Store) UpdateUserSCIM(_ context.Context, u theauth.User) error {
 	return nil
 }
 
-// ---------- Groups ----------
+// Groups
 
 func (s *Store) InsertGroup(_ context.Context, g theauth.Group) (theauth.Group, error) {
 	s.mu.Lock()

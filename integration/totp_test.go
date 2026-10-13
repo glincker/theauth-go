@@ -236,7 +236,7 @@ func TestRecoveryCodeConsumeHappy(t *testing.T) {
 	}
 }
 
-// ---------- HTTP handler tests (originally handlers_totp_test.go) ----------
+// HTTP handler tests (originally handlers_totp_test.go)
 
 // newTOTPServer wires a TheAuth with TOTPConfig set and returns an httptest
 // server. The integration test treats the server like any consumer would:

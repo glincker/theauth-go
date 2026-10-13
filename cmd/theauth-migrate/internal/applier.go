@@ -99,7 +99,7 @@ func ApplyBundle(ctx context.Context, st Storage, b *Bundle, opts ApplyOptions) 
 
 	var result ApplyResult
 
-	// ----- Insert users in batches -----
+	// Insert users in batches
 	for i := 0; i < len(b.Users); i += batchSize {
 		end := i + batchSize
 		if end > len(b.Users) {
@@ -158,7 +158,7 @@ func ApplyBundle(ctx context.Context, st Storage, b *Bundle, opts ApplyOptions) 
 		}
 	}
 
-	// ----- Insert OAuth accounts -----
+	// Insert OAuth accounts
 	for i, oa := range b.OAuthAccounts {
 		uid, ok := sourceToULID[oa.SourceUserID]
 		if !ok {
@@ -179,7 +179,7 @@ func ApplyBundle(ctx context.Context, st Storage, b *Bundle, opts ApplyOptions) 
 		result.OAuthAccountsInserted++
 	}
 
-	// ----- Set passwords -----
+	// Set passwords
 	for i, pr := range b.Passwords {
 		if pr.Hash == "" {
 			continue
@@ -200,7 +200,7 @@ func ApplyBundle(ctx context.Context, st Storage, b *Bundle, opts ApplyOptions) 
 		result.PasswordsSet++
 	}
 
-	// ----- Emit password reset instructions -----
+	// Emit password reset instructions
 	if len(result.PasswordResets) > 0 {
 		log("\n--- PASSWORD RESET REQUIRED ---")
 		log("The following %d users need a password-reset email.", len(result.PasswordResets))

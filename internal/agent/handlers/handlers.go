@@ -83,7 +83,7 @@ func (h *Handler) Mount(r chi.Router, requirePermission PermissionGate) {
 	r.With(requirePermission(models.PermissionDelegationsAdmin)).Delete("/delegations/{grantID}", h.revokeDelegation)
 }
 
-// ---------- agents ----------
+// agents
 
 func (h *Handler) listAgents(w http.ResponseWriter, r *http.Request) {
 	orgID, _ := httpx.ParseULIDPath(r, "orgID")
@@ -202,7 +202,7 @@ func (h *Handler) deleteAgent(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// ---------- delegations ----------
+// delegations
 
 func (h *Handler) listDelegations(w http.ResponseWriter, r *http.Request) {
 	orgID, _ := httpx.ParseULIDPath(r, "orgID")

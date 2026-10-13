@@ -174,7 +174,7 @@ func (a *TheAuth) RequirePermission(perms ...string) func(http.Handler) http.Han
 	}
 }
 
-// ---------- SCIM bearer-auth middleware ----------
+// SCIM bearer-auth middleware
 
 type scimCtxKey int
 

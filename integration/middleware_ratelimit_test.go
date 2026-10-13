@@ -273,7 +273,7 @@ func TestKeyedLimiterGC(t *testing.T) {
 	}
 }
 
-// ---------- race tests (originally middleware_ratelimit_race_test.go) ----------
+// race tests (originally middleware_ratelimit_race_test.go)
 
 // TestRateLimiterConcurrentSameIP spawns N goroutines that all hit the
 // same key against a limiter configured for 5 per minute. The 5 token
@@ -347,7 +347,7 @@ func TestRateLimiterConcurrentDifferentIPs(t *testing.T) {
 	}
 }
 
-// ---------- benchmarks (originally middleware_ratelimit_perf_test.go) ----------
+// benchmarks (originally middleware_ratelimit_perf_test.go)
 
 // BenchmarkRateLimitReadHeavy measures the Allow hot path under read-heavy
 // conditions: all keys already exist so every call takes the shared RLock

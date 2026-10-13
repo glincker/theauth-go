@@ -297,7 +297,7 @@ type Config struct {
 	// email addresses. Trimming and lowercasing always apply.
 	EmailNFKC bool
 
-	// ---- Account lifecycle and session policy ----
+	// Account lifecycle and session policy
 
 	// AccountState enforces per-user lifecycle flags at every sign-in: the
 	// forced password change flag (SetMustChangePassword, ResetPasswordAdmin

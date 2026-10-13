@@ -277,7 +277,7 @@ func TestNewRejectsProvidersWithoutEncryptionKey(t *testing.T) {
 	}
 }
 
-// ---------- multi-provider tests (originally handlers_oauth_multi_test.go) ----------
+// multi-provider tests (originally handlers_oauth_multi_test.go)
 
 // TestOAuthMultiProviderMountAndStart wires GitHub, Google, Microsoft,
 // and Discord into a single theauth.New call and asserts each /start
@@ -375,7 +375,7 @@ func TestOAuthMultiProviderMountAndStart(t *testing.T) {
 	}
 }
 
-// ---------- fuzz tests (originally handlers_oauth_fuzz_test.go) ----------
+// fuzz tests (originally handlers_oauth_fuzz_test.go)
 // FuzzCallbackQueryParams feeds arbitrary raw query strings to the OAuth
 // callback handler. The invariant is "never panic" and "never return a
 // 5xx server error for malformed input" (4xx is fine).

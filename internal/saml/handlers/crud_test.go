@@ -18,9 +18,7 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
-// -----------------------------------------------------------------------------
 // CRUD stub implementations
-// -----------------------------------------------------------------------------
 
 // stubConnectionService satisfies handlers.ConnectionService.
 type stubConnectionService struct {
@@ -211,9 +209,7 @@ func deleteCRUD(t *testing.T, srv *httptest.Server, orgID, path string) *http.Re
 	return resp
 }
 
-// -----------------------------------------------------------------------------
 // Create tests
-// -----------------------------------------------------------------------------
 
 // TestCRUDCreate_OK verifies that a valid POST returns 201 JSON.
 func TestCRUDCreate_OK(t *testing.T) {
@@ -282,9 +278,7 @@ type errStubValue string
 
 func (e errStubValue) Error() string { return string(e) }
 
-// -----------------------------------------------------------------------------
 // List tests
-// -----------------------------------------------------------------------------
 
 // TestCRUDList_OK verifies that GET / returns the connection list.
 func TestCRUDList_OK(t *testing.T) {
@@ -324,9 +318,7 @@ func TestCRUDList_ServiceError(t *testing.T) {
 	}
 }
 
-// -----------------------------------------------------------------------------
 // Get tests
-// -----------------------------------------------------------------------------
 
 // TestCRUDGet_OK verifies that GET /{id} returns 200 JSON when the connection
 // belongs to the requested org.
@@ -378,9 +370,7 @@ func TestCRUDGet_ServiceError(t *testing.T) {
 	}
 }
 
-// -----------------------------------------------------------------------------
 // Update tests
-// -----------------------------------------------------------------------------
 
 // TestCRUDUpdate_OK verifies that PUT /{id} returns 200 JSON.
 func TestCRUDUpdate_OK(t *testing.T) {
@@ -428,9 +418,7 @@ func TestCRUDUpdate_ServiceError(t *testing.T) {
 	}
 }
 
-// -----------------------------------------------------------------------------
 // Delete tests
-// -----------------------------------------------------------------------------
 
 // TestCRUDDelete_OK verifies that DELETE /{id} returns 204.
 func TestCRUDDelete_OK(t *testing.T) {

@@ -11,7 +11,7 @@ import (
 	"github.com/glincker/theauth-go/v2/storage"
 )
 
-// ---------- SCIM tokens ----------
+// SCIM tokens
 
 func (s *Store) InsertSCIMToken(ctx context.Context, t theauth.SCIMToken) (theauth.SCIMToken, error) {
 	_, err := s.db.ExecContext(ctx, `
@@ -113,7 +113,7 @@ func scanSCIMToken(row interface{ Scan(...interface{}) error }) (theauth.SCIMTok
 	}, nil
 }
 
-// ---------- Groups ----------
+// Groups
 
 func (s *Store) InsertGroup(ctx context.Context, g theauth.Group) (theauth.Group, error) {
 	_, err := s.db.ExecContext(ctx, `

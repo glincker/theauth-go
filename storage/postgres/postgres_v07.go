@@ -21,7 +21,7 @@ import (
 // UpdateUserSCIM, ListUsersByOrganization, ListGroupsByOrganization).
 // All methods are additive; v0.6 callers never invoke them.
 
-// ---------- Organizations ----------
+// Organizations
 
 func rowToOrganization(r sqlcgen.Organization) theauth.Organization {
 	return theauth.Organization{
@@ -103,7 +103,7 @@ func (s *Store) DeleteOrganization(ctx context.Context, id theauth.ULID) error {
 	return nil
 }
 
-// ---------- Organization members ----------
+// Organization members
 
 func rowToOrgMember(r sqlcgen.OrganizationMember) theauth.OrganizationMember {
 	return theauth.OrganizationMember{
@@ -197,7 +197,7 @@ func (s *Store) SetSessionActiveOrganization(ctx context.Context, sessionID thea
 	return nil
 }
 
-// ---------- SAML connections ----------
+// SAML connections
 
 func rowToSAMLConnection(r sqlcgen.SamlConnection) theauth.SAMLConnection {
 	var amap theauth.SAMLAttributeMap
@@ -297,7 +297,7 @@ func (s *Store) SAMLConnectionsByOrg(ctx context.Context, orgID theauth.ULID) ([
 	return out, nil
 }
 
-// ---------- SAML identities ----------
+// SAML identities
 
 func rowToSAMLIdentity(r sqlcgen.SamlIdentity) theauth.SAMLIdentity {
 	return theauth.SAMLIdentity{
@@ -352,7 +352,7 @@ func (s *Store) TouchSAMLIdentityLastLogin(ctx context.Context, id theauth.ULID,
 	})
 }
 
-// ---------- SCIM tokens ----------
+// SCIM tokens
 
 func rowToSCIMToken(r sqlcgen.ScimToken) theauth.SCIMToken {
 	return theauth.SCIMToken{
@@ -429,7 +429,7 @@ func (s *Store) TouchSCIMTokenLastUsed(ctx context.Context, id theauth.ULID, at 
 	})
 }
 
-// ---------- SCIM scoped user/group reads + user update ----------
+// SCIM scoped user/group reads + user update
 
 func rowToUserV07(r sqlcgen.User) theauth.User {
 	u := rowToUser(r)
@@ -538,7 +538,7 @@ func (s *Store) UpdateUserSCIM(ctx context.Context, u theauth.User) error {
 	return nil
 }
 
-// ---------- Groups ----------
+// Groups
 
 func rowToGroup(r sqlcgen.Group) theauth.Group {
 	ext := ""

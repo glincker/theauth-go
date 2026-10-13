@@ -87,7 +87,7 @@ func TestValidateSessionRevoked(t *testing.T) {
 	}
 }
 
-// ---------- race tests (originally service_session_race_test.go) ----------
+// race tests (originally service_session_race_test.go)
 
 func newRaceAuth(t *testing.T) (*theauth.TheAuth, theauth.Storage) {
 	t.Helper()
@@ -229,7 +229,7 @@ func TestSessionLookupUnderWrites(t *testing.T) {
 	wg.Wait()
 }
 
-// ---------- magic-link tests (originally service_magiclink_test.go) ----------
+// magic-link tests (originally service_magiclink_test.go)
 
 func TestRequestMagicLinkCreatesAndEmails(t *testing.T) {
 	a, _ := newTestAuth(t)
@@ -644,7 +644,7 @@ func TestLifecycleHooksFireThroughRealHTTPMount(t *testing.T) {
 	}
 	client := &http.Client{Jar: jar}
 
-	// --- Signup via the real /auth/email-password/signup HTTP route ---
+	// Signup via the real /auth/email-password/signup HTTP route
 	signupBody, _ := json.Marshal(map[string]string{"email": "mount-hooks@y.com", "password": "correct-horse-battery-staple"})
 	resp, err := client.Post(srv.URL+"/auth/email-password/signup", "application/json", bytes.NewReader(signupBody))
 	if err != nil {
@@ -661,7 +661,7 @@ func TestLifecycleHooksFireThroughRealHTTPMount(t *testing.T) {
 	}
 	mu.Unlock()
 
-	// --- Password reset via the real /auth/email-password/reset HTTP route ---
+	// Password reset via the real /auth/email-password/reset HTTP route
 	// The reset token is minted directly (bypassing email delivery, a
 	// separately-tested concern) so this test isolates the HTTP reset
 	// handler's hook wiring specifically.
@@ -698,7 +698,7 @@ func TestLifecycleHooksFireThroughRealHTTPMount(t *testing.T) {
 	}
 	_ = signinResp.Body.Close()
 
-	// --- TOTP enrollment via the real /auth/totp/enroll/* HTTP routes ---
+	// TOTP enrollment via the real /auth/totp/enroll/* HTTP routes
 	// The fresh session cookie rides along automatically via the client's
 	// cookie jar, satisfying RequireAuth.
 	beginResp, err := client.Post(srv.URL+"/auth/totp/enroll/begin", "application/json", nil)

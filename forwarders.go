@@ -23,7 +23,7 @@ import (
 	"github.com/go-webauthn/webauthn/protocol"
 )
 
-// ---------- v2.5 Lifecycle hook plumbing ----------
+// v2.5 Lifecycle hook plumbing
 
 // coalesceLifecycleHooks returns the consumer-supplied LifecycleHooks or
 // the zero-value pointer when nil so dispatch sites can call the fireOn*
@@ -142,7 +142,7 @@ func (a *TheAuth) fireOnOrgSwitch(ctx context.Context, user *User, orgID string)
 	})
 }
 
-// ---------- v2.5 Public lookup helpers ----------
+// v2.5 Public lookup helpers
 
 // UserByID looks up a user by ID. Returns (nil, ErrNotFound) when the row
 // does not exist. Added in v2.5 to unblock consumer code that previously
@@ -158,7 +158,7 @@ func (a *TheAuth) UserByID(ctx context.Context, id ULID) (*User, error) {
 // to distinguish this condition from other errors.
 var ErrAuthorizationServerNotConfigured = errors.New("theauth: authorization server not configured")
 
-// ---------- Identity flows (v0.1 to v0.5: session, magic-link, password, TOTP, WebAuthn, audit) ----------
+// Identity flows (v0.1 to v0.5: session, magic-link, password, TOTP, WebAuthn, audit)
 
 // PR G (2026-06-21) merged the previous service_session.go,
 // service_magiclink.go, service_password.go, service_totp.go,
@@ -167,7 +167,7 @@ var ErrAuthorizationServerNotConfigured = errors.New("theauth: authorization ser
 // *TheAuth surface and the extracted flow services. No behaviour change;
 // signatures are byte-stable with the v2.0 release.
 
-// ---------- Password (v0.2) re-exports ----------
+// Password (v0.2) re-exports
 
 // MinPasswordLength is enforced at the library level (NIST 2024 baseline).
 const MinPasswordLength = password.MinPasswordLength
@@ -184,14 +184,14 @@ const (
 	SigninStepTOTPRequired = password.SigninStepTOTPRequired
 )
 
-// ---------- TOTP (v0.5) re-exports ----------
+// TOTP (v0.5) re-exports
 
 // EnrollTOTPResult is returned by BeginTOTPEnrollment for the caller to
 // render. Re-exported as an alias so the v0.5 public surface is
 // unchanged.
 type EnrollTOTPResult = totp.EnrollResult
 
-// ---------- Audit (v1.0) re-exports ----------
+// Audit (v1.0) re-exports
 
 // AuditMetadata is the optional bundle a caller may attach to a context to
 // override the auto-derived actor / org / IP / UA. Re-exported from
@@ -203,7 +203,7 @@ func WithAuditMetadata(ctx context.Context, md AuditMetadata) context.Context {
 	return audit.WithAuditMetadata(ctx, md)
 }
 
-// ---------- Session forwarders ----------
+// Session forwarders
 
 // issueSession mints a fresh opaque token, stores its sha256 hash with a
 // new Session row, and returns the raw token. The raw token is what the
@@ -258,7 +258,7 @@ func (a *TheAuth) UnlinkOAuthProvider(ctx context.Context, sessionToken, provide
 	return a.identityLinkSvc.UnlinkOAuthProvider(ctx, sessionToken, provider)
 }
 
-// ---------- Magic-link forwarders ----------
+// Magic-link forwarders
 
 // requestMagicLink mints a magic-link token, persists its hash, and emails
 // the raw token to the user as a click-through verification link.
@@ -297,7 +297,7 @@ func (a *TheAuth) consumeMagicLink(ctx context.Context, token string) (sessionTo
 	return sessionToken, user, nil
 }
 
-// ---------- Password forwarders ----------
+// Password forwarders
 
 // validateEmail forwards to password.ValidateEmail for the fuzz seam.
 // Used by the internal/testhooks ValidateEmail hook.
@@ -373,7 +373,7 @@ func (a *TheAuth) resetPassword(ctx context.Context, token, newPassword string) 
 	return nil
 }
 
-// ---------- TOTP forwarders ----------
+// TOTP forwarders
 
 // BeginTOTPEnrollment generates a fresh shared secret and otpauth URL,
 // returns them to the caller (the secret is displayed exactly once), and
@@ -430,7 +430,7 @@ func (a *TheAuth) ConsumeRecoveryCode(ctx context.Context, pendingSessionToken, 
 	return token, sess, nil
 }
 
-// ---------- WebAuthn forwarders ----------
+// WebAuthn forwarders
 
 // BeginPasskeyRegistration starts a WebAuthn credential creation
 // ceremony: returns a serialised PublicKeyCredentialCreationOptions plus
@@ -487,7 +487,7 @@ func (a *TheAuth) FinishPasskeyLogin(ctx context.Context, challengeToken string,
 // removed them because every in-tree handler now performs the
 // MaxBytesReader wrap itself (see internal/webauthn/handlers).
 
-// ---------- Audit forwarders ----------
+// Audit forwarders
 
 // EmitAudit enqueues an audit event for asynchronous batched write. Non-
 // blocking: when the writer channel is full the event is dropped and
@@ -561,8 +561,8 @@ func (a *TheAuth) SessionByID(ctx context.Context, id ULID) (*Session, error) {
 	return a.storage.SessionByID(ctx, id)
 }
 
-// ---------- OAuth 2.1 authorization server (v2.0: DCR, introspect, revoke, token, metadata, authorize) ----------
-// ---------- DCR (RFC 7591) ----------
+// OAuth 2.1 authorization server (v2.0: DCR, introspect, revoke, token, metadata, authorize)
+// DCR (RFC 7591)
 
 // ClientRegistrationRequest is the parsed JSON body of POST
 // /oauth/register. Field names match RFC 7591 client metadata exactly so
@@ -581,7 +581,7 @@ func (a *TheAuth) RegisterClient(ctx context.Context, req ClientRegistrationRequ
 	return a.as.RegisterClient(ctx, req, anonymous)
 }
 
-// ---------- Introspection (RFC 7662) ----------
+// Introspection (RFC 7662)
 
 // IntrospectionResponse mirrors the JSON shape mandated by RFC 7662
 // section 2.2 plus the v2.0 act chain and delegation_grant_id
@@ -603,7 +603,7 @@ func (a *TheAuth) IntrospectToken(ctx context.Context, token, clientID, clientSe
 	return a.as.IntrospectToken(ctx, token, clientID, clientSecret, expectedAud)
 }
 
-// ---------- Revocation (RFC 7009) ----------
+// Revocation (RFC 7009)
 
 // RevokeToken invalidates a refresh token. Authorization codes and
 // access tokens are out of scope for this entry: codes are single-use
@@ -616,7 +616,7 @@ func (a *TheAuth) RevokeToken(ctx context.Context, token, tokenTypeHint, clientI
 	return a.as.RevokeToken(ctx, token, tokenTypeHint, clientID, clientSecret)
 }
 
-// ---------- Token grants ----------
+// Token grants
 
 // TokenRequest is the parsed form-encoded body of a POST /oauth/token
 // call, plus the authenticated client extracted from the request line /
@@ -691,7 +691,7 @@ func (a *TheAuth) DCRRegister(ctx context.Context, req ClientRegistrationRequest
 // a.as.AuthenticateClient directly (the introspect / revoke / token
 // endpoints all live in internal/as/handlers).
 
-// ---------- Metadata (RFC 8414, RFC 9728) ----------
+// Metadata (RFC 8414, RFC 9728)
 
 // ASMetadata is the JSON document served at
 // /.well-known/oauth-authorization-server. Field names and shape follow
@@ -722,7 +722,7 @@ func (a *TheAuth) ProtectedResourceMetadataDoc(resourceID string) (ProtectedReso
 	return a.as.ProtectedResourceMetadataDoc(resourceID)
 }
 
-// ---------- Authorize ----------
+// Authorize
 
 // AuthorizeRequest is the parsed GET /oauth/authorize query string.
 // PKCE fields are required; OAuth 2.1 forbids the legacy implicit and
@@ -851,7 +851,7 @@ func (a *TheAuth) handleBootstrapStatus(w http.ResponseWriter, r *http.Request) 
 	}{NeedsSetup: n == 0})
 }
 
-// ---------- Agent identity (validation + forwarders) ----------
+// Agent identity (validation + forwarders)
 
 // validateAgentConfig applies defaults and screens fields. Mutates cfg in
 // place. Mirrors the legacy root validateAgentConfig (removed when
@@ -948,7 +948,7 @@ func (a *TheAuth) RevokeAgent(ctx context.Context, agentID ULID, reason string) 
 	return a.agentSvc.RevokeAgent(ctx, agentID, reason)
 }
 
-// ---------- OAuth provider (start/callback forwarders) ----------
+// OAuth provider (start/callback forwarders)
 
 // service_oauth.go: thin forwarder shim around the extracted
 // internal/oauth.Service. PR H (2026-06-22) moved the implementation of
@@ -986,7 +986,7 @@ func (a *TheAuth) callbackOAuth(ctx context.Context, providerName, code, state, 
 	return res, user, nil
 }
 
-// ---------- SAML connections + SP-flow forwarders ----------
+// SAML connections + SP-flow forwarders
 
 // SAML forwarders. PR D architecture reorg (2026-06-20) moved the
 // implementations to internal/saml; the public CreateSAMLConnection /
@@ -1136,7 +1136,7 @@ func (a *TheAuth) OAuthCallback(r *http.Request, provider, code, state, binding 
 	return a.callbackOAuth(r.Context(), provider, code, state, binding, r.UserAgent(), httpx.ClientIP(r))
 }
 
-// ---------- initial access (registration) tokens ----------
+// initial access (registration) tokens
 
 // CreateRegistrationToken mints a one-time (or limited-use), scoped, expiring
 // initial access token for POST /oauth/register and returns the stored record

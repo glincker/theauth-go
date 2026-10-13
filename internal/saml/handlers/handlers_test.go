@@ -645,9 +645,7 @@ func TestHandleACS_WrongAudienceIntegration(t *testing.T) {
 	}
 }
 
-// -----------------------------------------------------------------------------
 // Integration-test support types
-// -----------------------------------------------------------------------------
 
 // inMemSAMLStorage satisfies internalsaml.Storage with the minimum set of
 // methods needed for handler integration tests (only SAMLConnectionByID is

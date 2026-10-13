@@ -269,7 +269,7 @@ func newObsTestAuth(t *testing.T, hooks *theauth.Hooks) (*theauth.TheAuth, error
 	})
 }
 
-// ---------- error code tests (originally errors_test.go) ----------
+// error code tests (originally errors_test.go)
 
 func TestTheAuthErrorErrorString(t *testing.T) {
 	e := theauth.NewError(theauth.CodeWeakPassword, "min 12 chars", nil)

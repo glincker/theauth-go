@@ -11,7 +11,7 @@ import (
 	"github.com/glincker/theauth-go/v2/storage"
 )
 
-// ---------- SAML connections ----------
+// SAML connections
 
 func (s *Store) InsertSAMLConnection(ctx context.Context, c theauth.SAMLConnection) (theauth.SAMLConnection, error) {
 	attrMap, err := json.Marshal(c.AttributeMap)
@@ -156,7 +156,7 @@ func scanSAMLConnection(row interface{ Scan(...interface{}) error }) (theauth.SA
 	}, nil
 }
 
-// ---------- SAML identities ----------
+// SAML identities
 
 func (s *Store) UpsertSAMLIdentity(ctx context.Context, i theauth.SAMLIdentity) (theauth.SAMLIdentity, error) {
 	_, err := s.db.ExecContext(ctx, `

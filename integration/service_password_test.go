@@ -238,7 +238,7 @@ func TestSignupEmailMustParseAsAddress(t *testing.T) {
 	}
 }
 
-// ---------- fuzz tests (originally service_password_fuzz_test.go) ----------
+// fuzz tests (originally service_password_fuzz_test.go)
 
 // FuzzEmailValidation drives arbitrary input strings through the email
 // validator. The invariant is "never panic" across RFC 5322 edge cases
@@ -264,7 +264,7 @@ func FuzzEmailValidation(f *testing.F) {
 	})
 }
 
-// ---------- OAuth race tests (originally service_oauth_race_test.go) ----------
+// OAuth race tests (originally service_oauth_race_test.go)
 
 // TestOAuthStateConcurrentReadWrite spawns interleaving writers (driving
 // /auth/providers/stub/start which stores state) and readers (driving the
@@ -339,7 +339,7 @@ func TestOAuthStateConcurrentReadWrite(t *testing.T) {
 	}
 }
 
-// ---------- shared fuzz helpers (originally fuzz_helpers_test.go) ----------
+// shared fuzz helpers (originally fuzz_helpers_test.go)
 
 // stubProvider is a no-network OAuth provider used by fuzz targets that
 // need a registered {name} route without actually exchanging codes.

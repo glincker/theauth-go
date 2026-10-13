@@ -191,7 +191,7 @@ func (s *Store) ConsumeMagicLink(_ context.Context, hash []byte) (*theauth.Magic
 	return nil, storage.ErrNotFound
 }
 
-// ---------- Password credentials (v0.2) ----------
+// Password credentials (v0.2)
 
 func (s *Store) SetUserPassword(_ context.Context, userID theauth.ULID, passwordHash string) error {
 	s.mu.Lock()
@@ -240,7 +240,7 @@ func (s *Store) ConsumePasswordResetToken(_ context.Context, hash []byte) (*thea
 	return nil, storage.ErrNotFound
 }
 
-// ---------- OAuth accounts (v0.3) ----------
+// OAuth accounts (v0.3)
 
 // UpsertOAuthAccount mirrors the Postgres ON CONFLICT (provider, provider_user_id)
 // DO UPDATE behavior: if a row with the same (provider, provider_user_id)
@@ -378,7 +378,7 @@ func (s *Store) MoveTOTPSecret(_ context.Context, primaryID, secondaryID theauth
 	return nil
 }
 
-// ---------- Sessions (v0.5 step-up) ----------
+// Sessions (v0.5 step-up)
 
 // CreateSessionWithAuthLevel is identical to CreateSession but honors the
 // AuthLevel field explicitly (defaulting to AuthLevelFull when blank for
@@ -407,7 +407,7 @@ func (s *Store) UpdateSessionAuthLevel(_ context.Context, id theauth.ULID, level
 	return nil
 }
 
-// ---------- WebAuthn credentials (v0.5) ----------
+// WebAuthn credentials (v0.5)
 
 func (s *Store) InsertWebAuthnCredential(_ context.Context, c theauth.WebAuthnCredential) (theauth.WebAuthnCredential, error) {
 	s.mu.Lock()
@@ -515,7 +515,7 @@ func (s *Store) RenameWebAuthnCredential(_ context.Context, id, userID theauth.U
 	return nil
 }
 
-// ---------- TOTP secrets (v0.5) ----------
+// TOTP secrets (v0.5)
 
 func (s *Store) UpsertPendingTOTPSecret(_ context.Context, sec theauth.TOTPSecret) error {
 	s.mu.Lock()
@@ -571,7 +571,7 @@ func (s *Store) DeleteTOTPSecret(_ context.Context, userID theauth.ULID) error {
 	return nil
 }
 
-// ---------- Recovery codes (v0.5) ----------
+// Recovery codes (v0.5)
 
 func (s *Store) InsertRecoveryCodes(_ context.Context, codes []theauth.RecoveryCode) error {
 	s.mu.Lock()

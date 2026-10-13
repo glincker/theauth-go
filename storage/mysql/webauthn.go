@@ -11,7 +11,7 @@ import (
 	"github.com/glincker/theauth-go/v2/storage"
 )
 
-// ---------- OAuth accounts ----------
+// OAuth accounts
 
 func (s *Store) UpsertOAuthAccount(ctx context.Context, a theauth.OAuthAccount) (theauth.OAuthAccount, error) {
 	// Upsert keyed on (provider, provider_user_id). On conflict update tokens.
@@ -149,7 +149,7 @@ func scanOAuthAccount(row interface{ Scan(...interface{}) error }) (theauth.OAut
 	}, nil
 }
 
-// ---------- WebAuthn credentials ----------
+// WebAuthn credentials
 
 func (s *Store) InsertWebAuthnCredential(ctx context.Context, c theauth.WebAuthnCredential) (theauth.WebAuthnCredential, error) {
 	transports := c.Transports
