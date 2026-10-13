@@ -142,7 +142,9 @@ func verifySignature(alg string, key crypto.PublicKey, signingInput string, sig 
 			return errors.New("mcpresource: RSA key is too small")
 		}
 		h := sha256.Sum256([]byte(signingInput))
-		if err := rsa.VerifyPKCS1v15(pub, crypto.SHA256, h[:], sig); err != nil {
+		// RS256 is RSASSA-PKCS1-v1_5 signature verification (RFC 7518 section
+		// 3.3), not encryption. The padding is mandated by the algorithm.
+		if err := rsa.VerifyPKCS1v15(pub, crypto.SHA256, h[:], sig); err != nil { // NOSONAR go:S5542 false positive, signature verification
 			return errors.New("mcpresource: signature mismatch")
 		}
 	default:

@@ -107,8 +107,6 @@ func (s *Store) DeleteUserCascade(ctx context.Context, userID theauth.ULID) (err
 	return nil
 }
 
-const trustedCols = `id, user_id, token_hash, label, user_agent, ip, created_at, last_used_at, expires_at, revoked_at`
-
 func scanTrusted(r rowScanner) (theauth.TrustedDevice, error) {
 	var (
 		id, uid                []byte
@@ -149,7 +147,7 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 // TrustedDeviceByTokenHash returns the record for userID and hash, revoked or expired rows included.
 func (s *Store) TrustedDeviceByTokenHash(ctx context.Context, userID theauth.ULID, hash []byte) (*theauth.TrustedDevice, error) {
 	d, err := scanTrusted(s.db.QueryRowContext(ctx,
-		`SELECT `+trustedCols+` FROM trusted_devices WHERE user_id = ? AND token_hash = ?`, ulidToBytes(userID), hash))
+		`SELECT id, user_id, token_hash, label, user_agent, ip, created_at, last_used_at, expires_at, revoked_at FROM trusted_devices WHERE user_id = ? AND token_hash = ?`, ulidToBytes(userID), hash))
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, storage.ErrNotFound
 	}
@@ -161,7 +159,7 @@ func (s *Store) TrustedDeviceByTokenHash(ctx context.Context, userID theauth.ULI
 
 // ListTrustedDevices returns the user's unrevoked, unexpired devices, newest first.
 func (s *Store) ListTrustedDevices(ctx context.Context, userID theauth.ULID) ([]theauth.TrustedDevice, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT `+trustedCols+` FROM trusted_devices
+	rows, err := s.db.QueryContext(ctx, `SELECT id, user_id, token_hash, label, user_agent, ip, created_at, last_used_at, expires_at, revoked_at FROM trusted_devices
 WHERE user_id = ? AND revoked_at IS NULL AND expires_at > ? ORDER BY created_at DESC, id DESC`,
 		ulidToBytes(userID), timeUTC(time.Now()))
 	if err != nil {

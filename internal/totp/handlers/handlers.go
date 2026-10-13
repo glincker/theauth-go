@@ -219,7 +219,9 @@ func (h *Handler) rememberDevice(w http.ResponseWriter, r *http.Request, want bo
 		Value:    val,
 		Path:     "/",
 		HttpOnly: true,
-		Secure:   h.cookie.SecureFlag,
+		// SecureFlag is the same setting the session cookie uses. It is true
+		// whenever BaseURL is https, and false only for plain http development.
+		Secure:   h.cookie.SecureFlag, // NOSONAR go:S2092 follows the configured session cookie policy
 		SameSite: http.SameSiteLaxMode,
 		Expires:  exp,
 	})
