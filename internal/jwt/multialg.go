@@ -217,3 +217,51 @@ func verifyBytes(alg string, pub crypto.PublicKey, msg, sig []byte) bool {
 	}
 	return false
 }
+
+// VerifySignature authenticates a compact JWS signed with any supported
+// algorithm and returns the decoded header and raw payload without
+// interpreting registered claims. expectedTyp is the required JOSE typ.
+// Callers that need array aud or no exp (Security Event Tokens, RFC 8417)
+// use it and validate claims themselves.
+func VerifySignature(token string, resolve KeyResolver, expectedTyp string) (Header, []byte, error) {
+	parts := strings.Split(token, ".")
+	if len(parts) != 3 {
+		return Header{}, nil, errors.New("jwt: token must have three segments")
+	}
+	headerBytes, err := base64.RawURLEncoding.DecodeString(parts[0])
+	if err != nil {
+		return Header{}, nil, fmt.Errorf("jwt: header decode: %w", err)
+	}
+	var h Header
+	if err := json.Unmarshal(headerBytes, &h); err != nil {
+		return Header{}, nil, fmt.Errorf("jwt: header parse: %w", err)
+	}
+	if !SupportedAlg(h.Alg) {
+		return Header{}, nil, fmt.Errorf("jwt: unsupported alg %q", h.Alg)
+	}
+	if h.Typ != expectedTyp {
+		return Header{}, nil, fmt.Errorf("jwt: unsupported typ %q", h.Typ)
+	}
+	if h.Kid == "" {
+		return Header{}, nil, errors.New("jwt: header missing kid")
+	}
+	alg, pub, ok := resolve(h.Kid)
+	if !ok {
+		return Header{}, nil, fmt.Errorf("jwt: unknown kid %q", h.Kid)
+	}
+	if alg != h.Alg {
+		return Header{}, nil, errors.New("jwt: alg does not match key")
+	}
+	sig, err := base64.RawURLEncoding.DecodeString(parts[2])
+	if err != nil {
+		return Header{}, nil, fmt.Errorf("jwt: signature decode: %w", err)
+	}
+	if !verifyBytes(alg, pub, []byte(parts[0]+"."+parts[1]), sig) {
+		return Header{}, nil, errors.New("jwt: signature mismatch")
+	}
+	payload, err := base64.RawURLEncoding.DecodeString(parts[1])
+	if err != nil {
+		return Header{}, nil, fmt.Errorf("jwt: payload decode: %w", err)
+	}
+	return h, payload, nil
+}
