@@ -1,0 +1,46 @@
+#!/bin/sh
+# Mirrors what CI enforces so a failure shows up before the push:
+#   1. golangci-lint on issues new since origin/main (CI: --new-from-rev)
+#   2. every touched module builds and vets with the workspace OFF, the way
+#      the govulncheck jobs load them (catches nested modules that depend on
+#      root symbols a release does not have yet)
+#   3. govulncheck: third-party module findings fail, stdlib findings warn
+#      because they depend on the local Go toolchain version
+# Set THEAUTH_SKIP_HOOKS=1 to bypass in an emergency.
+. "$(dirname "$0")/lib.sh"
+[ "$THEAUTH_SKIP_HOOKS" = "1" ] && exit 0
+
+base=origin/main
+git rev-parse --verify -q "$base" >/dev/null || { warn "no $base, skipping"; exit 0; }
+changed=$(git diff --name-only "$base"...HEAD)
+[ -z "$changed" ] && exit 0
+root=$(git rev-parse --show-toplevel)
+cd "$root" || exit 1
+
+if command -v golangci-lint >/dev/null 2>&1; then
+	golangci-lint run --timeout=3m --new-from-rev="$base" ./... || fail "golangci-lint found new issues"
+else
+	warn "golangci-lint not installed, skipping lint (CI will run it)"
+fi
+
+modules=$(printf '%s\n' "$changed" | modules_for_files)
+for m in $modules; do
+	( cd "$m" && GOWORK=off go build ./... && GOWORK=off go vet ./... ) \
+		|| fail "module $m does not build or vet with GOWORK=off"
+done
+
+if [ "$THEAUTH_SKIP_VULNCHECK" = "1" ]; then
+	exit 0
+fi
+for m in $modules; do
+	out=$( cd "$m" && GOWORK=off go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 ./... 2>&1 ) \
+		|| true
+	if printf '%s\n' "$out" | grep -q '^  Module:'; then
+		printf '%s\n' "$out" | grep -B4 -A4 '^  Module:' >&2
+		fail "govulncheck found third-party module vulnerabilities in $m"
+	fi
+	if printf '%s\n' "$out" | grep -q 'Standard library'; then
+		warn "$m: stdlib findings with $(go version | cut -d' ' -f3); update the local toolchain"
+	fi
+done
+exit 0

@@ -1,0 +1,23 @@
+#!/bin/sh
+# Fast checks on what is staged: gofmt, and the repo rule against em and en
+# dashes. Heavier checks (lint, build per module, vulnerabilities) run in
+# pre-push so commits stay quick.
+. "$(dirname "$0")/lib.sh"
+
+staged=$(git diff --cached --name-only --diff-filter=ACM)
+[ -z "$staged" ] && exit 0
+
+gofiles=$(printf '%s\n' "$staged" | grep '\.go$' || true)
+if [ -n "$gofiles" ]; then
+	unformatted=$(printf '%s\n' "$gofiles" | xargs gofmt -l 2>/dev/null || true)
+	[ -n "$unformatted" ] && fail "gofmt needed on:
+$unformatted
+Run: gofmt -w <files>"
+fi
+
+# Added lines only, so existing files that still contain a dash do not block.
+added=$(git diff --cached -U0 --diff-filter=ACM -- . ':!*.sum' | grep -E '^\+[^+]' || true)
+if printf '%s\n' "$added" | has_dash; then
+	fail "em or en dash in added lines (project rule: use a comma, colon or period)"
+fi
+exit 0
