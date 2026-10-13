@@ -76,6 +76,16 @@ It is a convenience on top of the flow below, not a replacement for it:
 - Do not use `!` or a `BREAKING CHANGE` footer. A major bump needs the module path to move to `/v3`, which is a
   deliberate migration. The nested modules (`mcpresource`, `storage/sqlite`, `audit/sinks/otlp`) are tagged by hand.
 
+### Nested modules that carry a `replace`
+
+`storage/sqlite` and the `adapters/*` modules require the root module. While a root release that contains the symbols they use is not tagged yet, each carries `replace github.com/glincker/theauth-go/v2 => ../..` so the module builds and `govulncheck` runs without `go.work`, the way the examples do. Before tagging one of these modules:
+
+1. Tag and publish the root module first, and wait for the proxy to serve it.
+2. In the nested module, remove the `replace` line and set the `require` to the new root version.
+3. Run `GOWORK=off go build ./... && GOWORK=off go test ./...` inside the module, then tag it.
+
+If you skip step 2, consumers on an older root version cannot compile the module.
+
 ## Release checklist
 
 Order matters because sub-modules can only pin the root after the proxy serves it.
