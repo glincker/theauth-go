@@ -3,17 +3,6 @@
 // chi.Router backed by stub implementations, then fires requests through
 // httptest so the full handler chain is exercised without any root TheAuth
 // state.
-//
-// Coverage targets:
-//   - getUser: happy path 200, missing-permission 403, not-found 404
-//   - patchUser: happy path 200, 404 (user not in org), malformed 400
-//   - listSessions: happy path 200, missing user_id 400, invalid user_id 400
-//   - revokeSession: happy path 204, not-found 404, invalid sessionID 400
-//   - listRoles: happy path 200
-//   - updateRole: happy path 200, not-found 404, unknown-permission 400,
-//     malformed body 400
-//   - listOAuthAccounts: happy path 200
-//   - requireOrgMatch middleware: orgID mismatch 403, super_admin bypass
 package admin_test
 
 import (

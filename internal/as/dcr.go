@@ -14,23 +14,11 @@ import (
 	"github.com/glincker/theauth-go/v2/internal/ulid"
 )
 
-// dcr.go: RFC 7591 dynamic client registration.
+// dcr.go: RFC 7591 dynamic client registration. Two modes:
 //
-// Two modes:
+// bearer-gated (default): the caller MUST present a Bearer token on POST /oauth/register whose sha256 digest matches one of the operator-configured AuthorizationServerConfig.RegistrationTokens entries (constant-time compare). When RegistrationTokens is empty and AllowAnonymousRegistration is false, every request is denied. Tightened in security audit H1 (2026-06-20); the legacy behavior of accepting any non-empty bearer is no longer present.
 //
-//	bearer-gated (default): the caller MUST present a Bearer token on
-//	  POST /oauth/register whose sha256 digest matches one of the
-//	  operator-configured AuthorizationServerConfig.RegistrationTokens
-//	  entries (constant-time compare). When RegistrationTokens is empty
-//	  and AllowAnonymousRegistration is false, every request is denied.
-//	  Tightened in security audit H1 (2026-06-20); the legacy phase 1+2
-//	  behavior of accepting any non-empty bearer is no longer present.
-//	anonymous: enabled via Config.AuthorizationServer.AllowAnonymousRegistration.
-//	  Public MCP servers need this; the handler is rate limited to
-//	  RegistrationRateLimitPerMinute requests per source IP per minute
-//	  (default 1/min, configurable via AS config) and stamps
-//	  anonymous_registered = true on the resulting OAuthClient row for
-//	  operator auditing (security audit H2, 2026-06-20).
+// anonymous: enabled via Config.AuthorizationServer.AllowAnonymousRegistration. Public MCP servers need this; the handler is rate limited to RegistrationRateLimitPerMinute requests per source IP per minute (default 1/min) and stamps anonymous_registered=true on the resulting OAuthClient row for operator auditing (security audit H2, 2026-06-20).
 
 // ClientRegistrationRequest is the parsed JSON body of POST
 // /oauth/register. Field names match RFC 7591 client metadata exactly so

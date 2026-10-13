@@ -1,20 +1,8 @@
-// Package totp owns the v0.5 second-factor TOTP surface: enrollment
-// (BeginEnrollment + FinishEnrollment), verification (Verify), and the
-// recovery-code path (ConsumeRecoveryCode). Also owns the pending_2fa
-// session minted by Signin when the user has a confirmed second factor
-// (IssuePending2FA) and the in-memory failure counter that revokes a
-// pending session after five wrong codes.
+// Package totp owns the v0.5 second-factor TOTP surface: enrollment (BeginEnrollment + FinishEnrollment), verification (Verify), and the recovery-code path (ConsumeRecoveryCode). Also owns the pending_2fa session minted by Signin when the user has a confirmed second factor (IssuePending2FA) and the in-memory failure counter that revokes a pending session after five wrong codes.
 //
-// Extracted from root service_totp.go in PR D of the 2026-06 architecture
-// reorg. The root *theauth.TheAuth holds a *Service and exposes
-// BeginTOTPEnrollment / FinishTOTPEnrollment / VerifyTOTP /
-// ConsumeRecoveryCode / IssuePending2FA as thin forwarders so the v0.5
-// public surface is unchanged.
+// Extracted from root service_totp.go in PR D of the 2026-06 architecture reorg. The root *theauth.TheAuth holds a *Service and exposes BeginTOTPEnrollment / FinishTOTPEnrollment / VerifyTOTP / ConsumeRecoveryCode / IssuePending2FA as thin forwarders.
 //
-// The pending-enrollment map (totpEnrollments) and the pending-failure
-// counter map (pendingFailures) live on the Service. The GC goroutine for
-// expired enrollments starts in Start and stops in Stop; every "go ..."
-// in this package has a matching stop path so there is no goroutine leak.
+// The pending-enrollment map (totpEnrollments) and the pending-failure counter map (pendingFailures) live on the Service. The GC goroutine for expired enrollments starts in Start and stops in Stop; every 'go ...' in this package has a matching stop path so there is no goroutine leak.
 package totp
 
 import (

@@ -26,26 +26,23 @@ import (
 )
 
 // Mount wires TheAuth's HTTP routes onto the supplied chi router under /auth.
-// Routes:
 //
-//	POST   /auth/magic-link                       request a magic link
-//	GET    /auth/magic-link/verify                consume a magic link, set session cookie
-//	POST   /auth/email-password/signup            create user with email + password (rate-limited)
-//	POST   /auth/email-password/signin            sign in with email + password (rate-limited)
-//	POST   /auth/email-password/forgot            request a password reset link (rate-limited)
-//	POST   /auth/email-password/reset             consume a reset token + set new password (rate-limited)
-//	GET    /auth/me                               return the authenticated user (RequireAuth)
-//	DELETE /auth/sessions/current                 revoke the current session (RequireAuth)
-//	GET    /auth/sessions                         list the caller's sessions (SessionManagementStorage)
-//	DELETE /auth/sessions/{id}                    revoke one of the caller's sessions
-//	POST   /auth/sessions/revoke-others           revoke every session but the current one
-//	POST   /auth/step-up                          elevate the session (password, totp or passkey)
-//	POST   /auth/password/change                  change password, rotate the session
-//	POST   /auth/session-link/consume             exchange a session link (Config.SessionLinks)
+// POST /auth/magic-link - request a magic link
+// GET /auth/magic-link/verify - consume a magic link, set session cookie
+// POST /auth/email-password/signup - create user with email + password (rate-limited)
+// POST /auth/email-password/signin - sign in with email + password (rate-limited)
+// POST /auth/email-password/forgot - request a password reset link (rate-limited)
+// POST /auth/email-password/reset - consume a reset token + set new password (rate-limited)
+// GET /auth/me - return the authenticated user (RequireAuth)
+// DELETE /auth/sessions/current - revoke the current session (RequireAuth)
+// GET /auth/sessions - list the caller's sessions (SessionManagementStorage)
+// DELETE /auth/sessions/{id} - revoke one of the caller's sessions
+// POST /auth/sessions/revoke-others - revoke every session but the current one
+// POST /auth/step-up - elevate the session (password, totp or passkey)
+// POST /auth/password/change - change password, rotate the session
+// POST /auth/session-link/consume - exchange a session link (Config.SessionLinks)
 //
-// Default rate limits: 5/min per source IP on every credential endpoint, plus
-// 3/min per email on signin + forgot (most attack-surface). All limits are
-// in-memory + per-process unless Config.Stores.RateLimiter supplies a shared one.
+// Default rate limits: 5/min per source IP on every credential endpoint, plus 3/min per email on signin + forgot. All limits are in-memory unless Config.Stores.RateLimiter supplies a shared one.
 func (a *TheAuth) Mount(r chi.Router) {
 	r.Group(func(r chi.Router) {
 		r.Use(a.securityMiddleware, a.auditContextMiddleware)

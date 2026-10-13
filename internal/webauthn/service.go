@@ -1,22 +1,8 @@
-// Package webauthn owns the v0.5 passkey (FIDO2 / WebAuthn L3) surface:
-// registration ceremonies (BeginRegistration + FinishRegistration), login
-// ceremonies (BeginLogin + FinishLogin), the in-memory sync.Map for
-// in-flight challenges, and the GC goroutine that sweeps expired
-// challenges.
+// Package webauthn owns the v0.5 passkey (FIDO2/WebAuthn L3) surface: registration ceremonies (BeginRegistration + FinishRegistration), login ceremonies (BeginLogin + FinishLogin), the in-memory sync.Map for in-flight challenges, and the GC goroutine that sweeps expired challenges.
 //
-// Extracted from root service_webauthn.go in PR D of the 2026-06
-// architecture reorg. The root *theauth.TheAuth holds a *Service and
-// exposes BeginPasskeyRegistration / FinishPasskeyRegistration /
-// BeginPasskeyLogin / FinishPasskeyLogin as thin forwarders so the v0.5
-// public surface is unchanged.
+// Extracted from root service_webauthn.go in PR D of the 2026-06 architecture reorg. The root *theauth.TheAuth holds a *Service and exposes BeginPasskeyRegistration / FinishPasskeyRegistration / BeginPasskeyLogin / FinishPasskeyLogin as thin forwarders.
 //
-// The challenge map (challenges) lives on the Service. The GC goroutine
-// for expired challenges starts in Start and stops in Stop; every "go ..."
-// in this package has a matching stop path so there is no goroutine leak.
-//
-// FinishPasskeyLogin mints a session via the injected SessionIssuer; the
-// concrete *session.Service satisfies this interface naturally so this
-// package does not import internal/session.
+// The challenge map lives on the Service. The GC goroutine starts in Start and stops in Stop; every 'go ...' in this package has a matching stop path so there is no goroutine leak. FinishPasskeyLogin mints a session via the injected SessionIssuer; the concrete *session.Service satisfies this interface so this package does not import internal/session.
 package webauthn
 
 import (
