@@ -93,4 +93,6 @@ var (
 	// ErrDevicesDisabled is returned when device tokens are not configured or
 	// the storage cannot hold devices.
 	ErrDevicesDisabled = errors.New("theauth: device tokens not enabled")
+	// ErrOIDCDisabled is returned when the OpenID Provider is not configured.
+	ErrOIDCDisabled = errors.New("theauth: OpenID Provider not enabled")
 )

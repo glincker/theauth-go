@@ -49,6 +49,13 @@ type ClientRegistrationRequest struct {
 	// AuthorizationDetailsTypes lists the RFC 9396 types the client may
 	// request (RFC 9396 section 10).
 	AuthorizationDetailsTypes []string `json:"authorization_details_types,omitempty"`
+
+	// OIDC client metadata; see OIDCConfig. Needs an authenticated
+	// registration and Config.OIDC.
+	SubjectType                      string   `json:"subject_type,omitempty"`
+	PostLogoutRedirectURIs           []string `json:"post_logout_redirect_uris,omitempty"`
+	BackchannelLogoutURI             string   `json:"backchannel_logout_uri,omitempty"`
+	BackchannelLogoutSessionRequired bool     `json:"backchannel_logout_session_required,omitempty"`
 }
 
 // RegisterClient validates the request, mints a client_id (and a secret
@@ -80,6 +87,9 @@ func (s *Service) RegisterClient(ctx context.Context, req ClientRegistrationRequ
 	if err := s.validateTokenMetadata(req, anonymous); err != nil {
 		return models.RegisteredClient{}, err
 	}
+	if err := s.validateOIDCMetadata(req, anonymous); err != nil {
+		return models.RegisteredClient{}, err
+	}
 	clientID := "client-" + ulid.New().String()
 	now := time.Now().UTC()
 	client := models.OAuthClient{
@@ -103,9 +113,15 @@ func (s *Service) RegisterClient(ctx context.Context, req ClientRegistrationRequ
 		AccessTokenFormat:            req.AccessTokenFormat,
 		AccessTokenSignedResponseAlg: req.AccessTokenSignedResponseAlg,
 		AuthorizationDetailsTypes:    req.AuthorizationDetailsTypes,
-		AnonymousRegistered:          anonymous,
-		CreatedAt:                    now,
-		UpdatedAt:                    now,
+
+		SubjectType:                      req.SubjectType,
+		PostLogoutRedirectURIs:           req.PostLogoutRedirectURIs,
+		BackchannelLogoutURI:             req.BackchannelLogoutURI,
+		BackchannelLogoutSessionRequired: req.BackchannelLogoutSessionRequired,
+
+		AnonymousRegistered: anonymous,
+		CreatedAt:           now,
+		UpdatedAt:           now,
 	}
 	resp := models.RegisteredClient{
 		ClientID:                     clientID,
@@ -127,6 +143,11 @@ func (s *Service) RegisterClient(ctx context.Context, req ClientRegistrationRequ
 		AccessTokenFormat:            req.AccessTokenFormat,
 		AccessTokenSignedResponseAlg: req.AccessTokenSignedResponseAlg,
 		AuthorizationDetailsTypes:    req.AuthorizationDetailsTypes,
+
+		SubjectType:                      req.SubjectType,
+		PostLogoutRedirectURIs:           req.PostLogoutRedirectURIs,
+		BackchannelLogoutURI:             req.BackchannelLogoutURI,
+		BackchannelLogoutSessionRequired: req.BackchannelLogoutSessionRequired,
 	}
 	if req.TokenEndpointAuthMethod != models.ClientAuthNone {
 		secret, err := crypto.NewToken()

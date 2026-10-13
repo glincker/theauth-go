@@ -208,6 +208,11 @@ type Config struct {
 	// implement DeviceIdentityStorage.
 	DeviceTokens *DeviceTokensConfig
 
+	// OIDC turns the server into an OpenID Provider when non-nil: ID tokens,
+	// the userinfo and end_session endpoints, pairwise subjects and
+	// back-channel logout. Nil keeps the plain OAuth 2.1 behaviour.
+	OIDC *OIDCConfig
+
 	// ClientCompat relaxes individual strictness checks for real-world
 	// clients. The zero value is fully strict. See ClientCompat.
 	ClientCompat ClientCompat
@@ -373,6 +378,12 @@ func Validate(cfg *Config, encryptionKey []byte) error {
 	}
 	if cfg.DeviceTokens != nil {
 		applyDeviceTokenDefaults(cfg.DeviceTokens)
+	}
+	if cfg.OIDC != nil {
+		if err := validateOIDC(cfg.OIDC); err != nil {
+			return err
+		}
+		applyOIDCDefaults(cfg.OIDC, cfg.AccessTokenTTL)
 	}
 	// CIBA defaults.
 	if cfg.CIBA != nil {

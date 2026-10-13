@@ -71,6 +71,28 @@ func SignWith(claims Claims, typ, kid, alg string, signer crypto.Signer) (string
 	return input + "." + base64.RawURLEncoding.EncodeToString(sig), nil
 }
 
+// SignPayloadWith signs an arbitrary JSON claim set with any supported
+// algorithm. ID tokens and logout tokens use it.
+func SignPayloadWith(payload map[string]any, typ, kid, alg string, signer crypto.Signer) (string, error) {
+	if signer == nil {
+		return "", errors.New("jwt: nil signer")
+	}
+	headerJSON, err := json.Marshal(Header{Alg: alg, Typ: typ, Kid: kid})
+	if err != nil {
+		return "", err
+	}
+	payloadJSON, err := json.Marshal(payload)
+	if err != nil {
+		return "", err
+	}
+	input := base64.RawURLEncoding.EncodeToString(headerJSON) + "." + base64.RawURLEncoding.EncodeToString(payloadJSON)
+	sig, err := signBytes(alg, signer, []byte(input))
+	if err != nil {
+		return "", err
+	}
+	return input + "." + base64.RawURLEncoding.EncodeToString(sig), nil
+}
+
 func signBytes(alg string, signer crypto.Signer, msg []byte) ([]byte, error) {
 	switch alg {
 	case AlgEdDSA:
@@ -159,7 +181,7 @@ func VerifyWith(token string, resolve KeyResolver, expectedTyp, expectedAud stri
 	if err := json.Unmarshal(payloadBytes, &c); err != nil {
 		return Claims{}, fmt.Errorf("jwt: payload parse: %w", err)
 	}
-	if c.Exp == 0 || time.Unix(c.Exp, 0).Add(opts.Skew).Before(now) {
+	if !opts.IgnoreExpiry && (c.Exp == 0 || time.Unix(c.Exp, 0).Add(opts.Skew).Before(now)) {
 		return Claims{}, errors.New("jwt: token expired")
 	}
 	if c.Nbf != 0 && time.Unix(c.Nbf, 0).Add(-opts.Skew).After(now) {

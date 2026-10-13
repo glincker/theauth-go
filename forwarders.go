@@ -1215,3 +1215,16 @@ func (a *TheAuth) PasskeyAuthenticatorName(aaguid []byte) string {
 	}
 	return a.webauthnSvc.AuthenticatorName(aaguid)
 }
+
+// OIDCLogout sends back-channel logout tokens to every OpenID client that
+// took part in sessionID, for logouts that do not go through end_session
+// (admin revocation, account deletion). It does not revoke the session.
+// Deliveries run in the background; failures are logged. Requires
+// AuthorizationServer.OIDC.
+func (a *TheAuth) OIDCLogout(ctx context.Context, userID, sessionID ULID) error {
+	if a.as == nil || !a.as.OIDCEnabled() {
+		return ErrOIDCDisabled
+	}
+	a.as.NotifyLogout(ctx, userID, sessionID.String())
+	return nil
+}

@@ -373,6 +373,9 @@ var (
 
 	// ErrDevicesDisabled is returned when device tokens are not configured.
 	ErrDevicesDisabled = models.ErrDevicesDisabled
+
+	// ErrOIDCDisabled is returned when AuthorizationServer.OIDC is not set.
+	ErrOIDCDisabled = models.ErrOIDCDisabled
 )
 
 // OAuth 2.1 standard error codes returned in JSON error bodies.
