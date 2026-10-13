@@ -1,11 +1,11 @@
 module github.com/glincker/theauth-go/v2
 
-go 1.25.0
+go 1.26.0
 
 require (
 	github.com/beevik/etree v1.8.1
 	github.com/crewjam/saml v0.5.1
-	github.com/fxamacker/cbor/v2 v2.9.3
+	github.com/fxamacker/cbor/v2 v2.9.6
 	github.com/glincker/theauth-go/mcpresource v0.0.0-20260622181835-520da3c8360d
 	github.com/go-chi/chi/v5 v5.3.2
 	github.com/go-sql-driver/mysql v1.10.1
@@ -15,8 +15,8 @@ require (
 	github.com/oklog/ulid/v2 v2.1.2
 	github.com/pquerna/otp v1.5.0
 	github.com/russellhaering/goxmldsig v1.6.1
-	golang.org/x/crypto v0.54.0
-	golang.org/x/text v0.41.0
+	golang.org/x/crypto v0.57.0
+	golang.org/x/text v0.42.0
 	golang.org/x/time v0.15.0
 )
 
@@ -35,6 +35,6 @@ require (
 	github.com/mitchellh/mapstructure v1.5.0 // indirect
 	github.com/stretchr/testify v1.12.1 // indirect
 	github.com/x448/float16 v0.8.4 // indirect
-	golang.org/x/sync v0.22.0 // indirect
-	golang.org/x/sys v0.47.0 // indirect
+	golang.org/x/sync v0.23.0 // indirect
+	golang.org/x/sys v0.48.0 // indirect
 )
