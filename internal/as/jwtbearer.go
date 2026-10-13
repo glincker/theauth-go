@@ -506,7 +506,7 @@ func verifySig(alg string, pub crypto.PublicKey, signingInput, sig []byte) bool 
 		h := sha256.New()
 		h.Write(signingInput)
 		digest := h.Sum(nil)
-		return ecdsa.VerifyASN1(ecKey, digest, sig)
+		return verifyECDSASig(ecKey, digest, sig, 32)
 	case "ES384":
 		ecKey, ok := pub.(*ecdsa.PublicKey)
 		if !ok {
@@ -515,7 +515,7 @@ func verifySig(alg string, pub crypto.PublicKey, signingInput, sig []byte) bool 
 		h := sha512.New384()
 		h.Write(signingInput)
 		digest := h.Sum(nil)
-		return ecdsa.VerifyASN1(ecKey, digest, sig)
+		return verifyECDSASig(ecKey, digest, sig, 48)
 	case "RS256":
 		rsaKey, ok := pub.(*rsa.PublicKey)
 		if !ok {
@@ -551,6 +551,18 @@ func verifySig(alg string, pub crypto.PublicKey, signingInput, sig []byte) bool 
 		return hmac.Equal(expected, sig)
 	}
 	return false
+}
+
+// verifyECDSASig checks an ECDSA signature over digest. JOSE (RFC 7518
+// section 3.4) encodes it as fixed-length R||S, which is what every compliant
+// signer emits; ASN.1 DER is still accepted for signers that emitted it.
+func verifyECDSASig(pub *ecdsa.PublicKey, digest, sig []byte, size int) bool {
+	if len(sig) == 2*size {
+		r := new(big.Int).SetBytes(sig[:size])
+		s := new(big.Int).SetBytes(sig[size:])
+		return ecdsa.Verify(pub, digest, r, s)
+	}
+	return ecdsa.VerifyASN1(pub, digest, sig)
 }
 
 // verifyEd25519Raw verifies an Ed25519 signature without importing
