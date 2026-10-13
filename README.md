@@ -63,7 +63,7 @@ One Go module at the root plus three nested modules (`mcpresource`, `storage/sql
 | Gin adapter | [`adapters/gin`](./adapters/gin) (separate module): native `Authn`, `RequireAuth`, `RequireAbility`, accessors and `Mount` |
 | Echo adapter | [`adapters/echo`](./adapters/echo) (separate module): the same set for Echo v4 |
 | Fiber adapter | [`adapters/fiber`](./adapters/fiber) (separate module): the same set for Fiber v2 through its net/http adaptor (responses are buffered) |
-| Providers | `provider/` apple, bitbucket, discord, facebook, github, gitlab, google, linkedin, microsoft, slack, twitch, x, oidc, and [`generic`](./docs/provider-catalog.md) for 10 more (Spotify, Dropbox, Zoom, Kakao, Naver, Patreon, Box, Salesforce, Figma, Codeberg) |
+| Providers | `provider/` apple, bitbucket, discord, facebook, github, gitlab, google, linkedin, microsoft, slack, twitch, x, oidc, and [`generic`](./docs/provider-catalog.md) for 16 more (Spotify, Dropbox, Zoom, Kakao, Naver, Patreon, Box, Salesforce, Figma, Codeberg, Linear, PayPal, Kick, Hugging Face, Vercel, Yandex) |
 | Commands | [`theauth-go`](./docs/cli.md) (secrets, OpenAPI), [`theauth-doctor`](https://docs.theauth.dev/go/guides/security-doctor) (security doctor), [`theauth-migrate`](https://docs.theauth.dev/go/migrations/migration-guide) (Auth0 and Cognito import) |
 
 The TypeScript packages are listed in the [theAuth README](https://github.com/glincker/theauth#packages).
@@ -218,7 +218,7 @@ func main() {
 | Multi-replica and abuse controls | Pluggable rate limiter, DPoP replay cache and CIMD cache (memory, SQL, Redis or your own), per-IP and per-client limits and an Argon2id concurrency cap on the OAuth endpoints | [Pluggable stores](./docs/pluggable-stores.md), [Endpoint limits](./docs/oauth-endpoint-limits.md) |
 | Browserless OAuth | RFC 8628 device authorization grant on the authorization server with a themable verification page, plus scoped one-time registration tokens for agents | [Device grant](./docs/device-authorization.md), [Registration tokens](./docs/registration-tokens.md) |
 | One-time codes | Email and SMS OTP with pluggable senders (Twilio built in), resend cooldown, attempt limit, lockout, constant-time compare | [OTP](./docs/otp.md) |
-| More sign-in providers | Table-driven catalog of 10 more OAuth providers, custom specs, and OIDC discovery overrides | [Provider catalog](./docs/provider-catalog.md) |
+| More sign-in providers | Table-driven catalog of 16 more OAuth providers, custom specs, and OIDC discovery overrides | [Provider catalog](./docs/provider-catalog.md) |
 | Developer CLI and OpenAPI | `theauth-go secret` and `theauth-go openapi`, plus `openapi.Generate` for your own router | [CLI](./docs/cli.md) |
 | MCP and agents | MCP authorization (protected resource metadata, CIMD), agent identities with delegation, `mcpresource` SDK module (scope and step-up guards, tool security metadata) | [MCP authorization](https://docs.theauth.dev/go/concepts/mcp-authorization), [Resource server](https://docs.theauth.dev/go/concepts/resource-server), [Protect MCP tools](https://docs.theauth.dev/go/guides/protect-mcp-tools) |
 | Enterprise | SAML 2.0 SSO, SCIM 2.0, organizations, RBAC, append-only audit log with SIEM sinks | [Splunk audit streaming](https://docs.theauth.dev/go/guides/audit-log-splunk), [Threat model](https://docs.theauth.dev/go/security/threat-model) |

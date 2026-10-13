@@ -38,6 +38,10 @@ type Fields struct {
 	EmailVerified []string
 	Name          []string
 	AvatarURL     []string
+	// AvatarURLFormat, when set, turns the value found at AvatarURL into a
+	// URL with fmt.Sprintf, for providers that return an image id instead of
+	// a URL. An empty value stays empty.
+	AvatarURLFormat string
 }
 
 // Spec describes one provider.
@@ -60,7 +64,16 @@ type Spec struct {
 	UserMethod string
 	// UserQuery is appended to UserURL verbatim (already encoded).
 	UserQuery string
-	Fields    Fields
+	// UserBody is sent as the userinfo request body with a JSON content
+	// type, for GraphQL style profile endpoints. Use with UserMethod POST.
+	UserBody string
+	// UserAuthScheme is the Authorization scheme on the userinfo request.
+	// Default is Bearer.
+	UserAuthScheme string
+	// NoPKCE leaves code_challenge and code_verifier out. Set it for
+	// providers whose documentation does not describe PKCE.
+	NoPKCE bool
+	Fields Fields
 }
 
 // Config carries per-deployment settings.
@@ -138,8 +151,10 @@ func (p *provider) AuthURL(state, codeChallenge, redirectURI string, scopes []st
 		q.Set("scope", strings.Join(scopes, p.spec.ScopeSeparator))
 	}
 	q.Set("state", state)
-	q.Set("code_challenge", codeChallenge)
-	q.Set("code_challenge_method", "S256")
+	if !p.spec.NoPKCE {
+		q.Set("code_challenge", codeChallenge)
+		q.Set("code_challenge_method", "S256")
+	}
 	for k, v := range p.spec.AuthParams {
 		q.Set(k, v)
 	}
@@ -154,7 +169,9 @@ func (p *provider) ExchangeCode(ctx context.Context, code, codeVerifier, redirec
 	form := url.Values{}
 	form.Set("grant_type", "authorization_code")
 	form.Set("code", code)
-	form.Set("code_verifier", codeVerifier)
+	if !p.spec.NoPKCE {
+		form.Set("code_verifier", codeVerifier)
+	}
 	form.Set("redirect_uri", redirectURI)
 	if !p.spec.TokenBasicAuth {
 		form.Set("client_id", p.cfg.ClientID)
@@ -180,7 +197,7 @@ func (p *provider) ExchangeCode(ctx context.Context, code, codeVerifier, redirec
 		AccessToken      string      `json:"access_token"`
 		RefreshToken     string      `json:"refresh_token"`
 		ExpiresIn        json.Number `json:"expires_in"`
-		Scope            string      `json:"scope"`
+		Scope            flexScope   `json:"scope"`
 		TokenType        string      `json:"token_type"`
 		Error            string      `json:"error"`
 		ErrorDescription string      `json:"error_description"`
@@ -197,7 +214,7 @@ func (p *provider) ExchangeCode(ctx context.Context, code, codeVerifier, redirec
 	tok := &theauth.ProviderToken{
 		AccessToken:  raw.AccessToken,
 		RefreshToken: raw.RefreshToken,
-		Scope:        raw.Scope,
+		Scope:        string(raw.Scope),
 		TokenType:    raw.TokenType,
 	}
 	if secs, err := raw.ExpiresIn.Int64(); err == nil && secs > 0 {
@@ -216,13 +233,20 @@ func (p *provider) UserInfo(ctx context.Context, token *theauth.ProviderToken) (
 	}
 	var reqBody io.Reader
 	if p.spec.UserMethod == http.MethodPost {
-		reqBody = bytes.NewReader(nil)
+		reqBody = bytes.NewReader([]byte(p.spec.UserBody))
 	}
 	req, err := http.NewRequestWithContext(ctx, p.spec.UserMethod, target, reqBody)
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("Authorization", "Bearer "+token.AccessToken)
+	scheme := p.spec.UserAuthScheme
+	if scheme == "" {
+		scheme = "Bearer"
+	}
+	req.Header.Set("Authorization", scheme+" "+token.AccessToken)
+	if p.spec.UserBody != "" {
+		req.Header.Set("Content-Type", "application/json")
+	}
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("User-Agent", "theauth-go")
 	body, status, err := p.do(req, 1<<20)
@@ -247,6 +271,9 @@ func (p *provider) UserInfo(ctx context.Context, token *theauth.ProviderToken) (
 	}
 	if u.ID == "" {
 		return nil, fmt.Errorf("%s userinfo: no user id in response", p.spec.Name)
+	}
+	if u.AvatarURL != "" && f.AvatarURLFormat != "" {
+		u.AvatarURL = fmt.Sprintf(f.AvatarURLFormat, u.AvatarURL)
 	}
 	if u.Email != "" {
 		u.EmailVerified = truthy(first(doc, f.EmailVerified))
@@ -302,6 +329,26 @@ func lookup(doc any, path string) string {
 }
 
 func truthy(s string) bool { return s == "true" || s == "1" }
+
+// flexScope reads a token response "scope" that is a string or an array of
+// strings (Linear answers an array for older apps). Arrays are joined with a
+// space. Any other JSON type reads as empty instead of failing the exchange.
+type flexScope string
+
+func (f *flexScope) UnmarshalJSON(b []byte) error {
+	var s string
+	if err := json.Unmarshal(b, &s); err == nil {
+		*f = flexScope(s)
+		return nil
+	}
+	var list []string
+	if err := json.Unmarshal(b, &list); err == nil {
+		*f = flexScope(strings.Join(list, " "))
+		return nil
+	}
+	*f = ""
+	return nil
+}
 
 // RefreshToken implements theauth.RefreshProvider with the standard
 // refresh_token grant (RFC 6749 section 6).
