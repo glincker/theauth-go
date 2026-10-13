@@ -123,6 +123,12 @@ type Config struct {
 	// unless a fronting layer already enforces it.
 	DisableCSRFProtection bool
 
+	// Admission, when set, runs the Admission middleware ahead of every
+	// route Mount and Handler register: tiered per-client rate limits and a
+	// cross-site check, with counters in Stores.RateLimiter. Nil leaves it
+	// off. It stacks with the per-route credential limits.
+	Admission *AdmissionOptions
+
 	// ErrorResponder, when set, writes every error response the root
 	// middleware produces (Authn family, RequireAuth, RequirePermission,
 	// RequireAbility, the Origin check, rate limiters) so an app can emit its
@@ -377,6 +383,7 @@ type TheAuth struct {
 	rlSeq             atomic.Uint32
 	trustedOrigins    []string
 	csrfDisabled      bool
+	admission         *AdmissionOptions
 	errorResponder    func(w http.ResponseWriter, r *http.Request, status int, code, message string)
 	apiTokens         *apitokens.Service
 	revocations       RevocationBus
@@ -564,6 +571,7 @@ func New(cfg Config) (*TheAuth, error) {
 		stores:                     cfg.Stores,
 		trustedOrigins:             trustedOrigins,
 		csrfDisabled:               cfg.DisableCSRFProtection,
+		admission:                  cfg.Admission,
 		errorResponder:             cfg.ErrorResponder,
 		storageRaw:                 cfg.storageRaw,
 		emailNorm:                  newEmailNormalizer(cfg.EmailNFKC),
