@@ -275,7 +275,7 @@ RFC 8628 device authorization on the server and the `clientauth` package in your
 
 ### SAML SSO and SCIM provisioning
 
-SAML 2.0 single sign-on, SCIM 2.0 user provisioning, organizations, RBAC and an append-only audit log with Splunk, webhook and OTLP sinks. Needs memory, Postgres or MySQL storage (not SQLite). Guide: [Splunk audit streaming](https://docs.theauth.dev/go/guides/audit-log-splunk).
+SAML 2.0 single sign-on, SCIM 2.0 user provisioning, organizations, RBAC and an append-only audit log with Splunk, webhook and OTLP sinks. Needs memory, SQLite, Postgres or MySQL storage. Guide: [Splunk audit streaming](https://docs.theauth.dev/go/guides/audit-log-splunk).
 
 ### Agent identity and delegation
 
@@ -333,7 +333,7 @@ Persistence is split into small capability interfaces, and `New` fails at startu
 | Users, sessions, magic links, passwords | Yes | Yes | Yes | Yes |
 | OAuth accounts, passkeys, TOTP, audit log | Yes | Yes | Yes | Yes |
 | Scoped API tokens, device grant, session management | Yes | Yes | Yes | Yes |
-| Organizations, SAML, SCIM, RBAC | Yes | No | Yes | Yes |
+| Organizations, SAML, SCIM, RBAC | Yes | Yes | Yes | Yes |
 | OAuth 2.1 authorization server, agent identity | Yes | No | Yes | Yes |
 | CIBA backchannel auth | Yes | No | Yes | No |
 | OAuth device grant (RFC 8628) and registration tokens | Yes | No | Yes | Yes |
@@ -364,7 +364,7 @@ Packages and APIs that were Stable before v2.6 keep their SemVer guarantees. Amo
 ## FAQ
 
 **Does theauth-go work without Postgres?**
-Yes. Use `storage/sqlite` for a single static binary with one database file, `storage/memory` for tests, or MySQL. SQLite has no organizations, SAML, SCIM, RBAC or OAuth authorization server.
+Yes. Use `storage/sqlite` for a single static binary with one database file, `storage/memory` for tests, or MySQL. SQLite supports organizations, SAML, SCIM and RBAC but has no OAuth authorization server.
 
 **How do I add passkeys to a Go app?**
 Set `Config.WebAuthn` and use a storage backend that implements `WebAuthnStorage` (all four built in backends do). Register and login routes are then mounted under your auth handler. See the [passkeys guide](https://docs.theauth.dev/go/guides/webauthn-passkeys) and [`examples/webauthn-passkey`](./examples/webauthn-passkey).

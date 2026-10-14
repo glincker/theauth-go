@@ -1,6 +1,6 @@
 // Package sqlite implements theauth storage capabilities on top of a caller-owned *sql.DB using the pure Go modernc.org/sqlite driver.
 //
-// It covers CoreStorage (users, sessions, magic links, passwords) plus OAuthAccount, WebAuthn, TOTP, Audit, session management, links, API tokens, device codes, TOTP replay, user count, passkey rename, and recovery codes. Organizations, SAML, SCIM and RBAC are not implemented.
+// It covers CoreStorage (users, sessions, magic links, passwords) plus OAuthAccount, WebAuthn, TOTP, Audit, session management, links, API tokens, device codes, TOTP replay, user count, passkey rename, and recovery codes. It also implements Organization, SAML, SCIM and RBAC storage (migrations 0013 to 0016), account state, account delete and trusted devices (migration 0010).
 //
 // The caller opens the database and owns its pragmas. Foreign keys must be on for every connection, and busy_timeout plus WAL mode are strongly advised for shared databases. A complete DSN: file:app.db?_pragma=foreign_keys(1)&_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)&_txlock=immediate
 //
