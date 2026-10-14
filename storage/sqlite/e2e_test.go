@@ -330,7 +330,7 @@ func TestEnterpriseEndToEnd(t *testing.T) {
 				t.Fatal(err)
 			}
 			if sess.RevokedAt == nil {
-				t.Skip("core SCIM deactivation removes membership but does not revoke sessions; host must call RevokeUserSessions")
+				t.Fatal("deactivated user's session is still live")
 			}
 		})
 

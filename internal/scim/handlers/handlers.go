@@ -40,6 +40,8 @@ type Storage interface {
 	UpsertOrganizationMember(ctx context.Context, m models.OrganizationMember) error
 	DeleteOrganizationMember(ctx context.Context, orgID, userID models.ULID) error
 	OrganizationMemberRole(ctx context.Context, orgID, userID models.ULID) (string, error)
+	// RevokeUserSessions ends every session of a user removed from the organization.
+	RevokeUserSessions(ctx context.Context, userID models.ULID) error
 
 	ListGroupsByOrganization(ctx context.Context, orgID models.ULID, offset, limit int, f models.SCIMGroupFilter) ([]models.Group, int, error)
 	InsertGroup(ctx context.Context, g models.Group) (models.Group, error)
@@ -391,6 +393,11 @@ func (h *Handler) handleUserPatch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !active {
+		// Revoke first so a failure leaves the membership in place and the deprovision can be retried.
+		if err := h.storage.RevokeUserSessions(r.Context(), user.ID); err != nil {
+			writeSCIMError(w, http.StatusInternalServerError, "", "session revocation failed")
+			return
+		}
 		_ = h.storage.DeleteOrganizationMember(r.Context(), orgID, user.ID)
 	}
 	h.emitAudit(r.Context(), "scim.user.patch", orgID, user.ID, "")
@@ -409,6 +416,10 @@ func (h *Handler) handleUserDelete(w http.ResponseWriter, r *http.Request) {
 	}
 	user, ok := h.lookupUserInOrg(w, r, orgID, id)
 	if !ok {
+		return
+	}
+	if err := h.storage.RevokeUserSessions(r.Context(), user.ID); err != nil {
+		writeSCIMError(w, http.StatusInternalServerError, "", "session revocation failed")
 		return
 	}
 	if err := h.storage.DeleteOrganizationMember(r.Context(), orgID, user.ID); err != nil {

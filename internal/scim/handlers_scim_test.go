@@ -9,9 +9,11 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	theauth "github.com/glincker/theauth-go/v2"
 	"github.com/glincker/theauth-go/v2/internal/theauthtest"
+	"github.com/glincker/theauth-go/v2/internal/ulid"
 	"github.com/glincker/theauth-go/v2/storage/memory"
 	"github.com/go-chi/chi/v5"
 )
@@ -543,4 +545,68 @@ func TestSCIM_ProvisioningCycle(t *testing.T) {
 	if get.StatusCode != http.StatusNotFound {
 		t.Fatalf("get after delete want 404, got %d", get.StatusCode)
 	}
+}
+
+func scimUserWithSession(t *testing.T, store *memory.Store, srv *httptest.Server, token, name string) (string, []byte) {
+	t.Helper()
+	c := scimReq(t, srv, "POST", "/scim/v2/Users", token, map[string]interface{}{
+		"schemas":  []string{"urn:ietf:params:scim:schemas:core:2.0:User"},
+		"userName": name,
+		"emails":   []map[string]interface{}{{"value": name, "primary": true}},
+	})
+	var created map[string]interface{}
+	decodeBody(t, c, &created)
+	uid := created["id"].(string)
+	u, err := store.UserByEmail(context.Background(), name)
+	if err != nil {
+		t.Fatal(err)
+	}
+	hash := []byte("scim-sess-" + name)
+	if _, err := store.CreateSession(context.Background(), theauth.Session{
+		ID: ulid.New(), UserID: u.ID, TokenHash: hash, ExpiresAt: time.Now().Add(time.Hour),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	return uid, hash
+}
+
+func requireRevoked(t *testing.T, store *memory.Store, hash []byte, want bool) {
+	t.Helper()
+	sess, err := store.SessionByTokenHash(context.Background(), hash)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := sess.RevokedAt != nil; got != want {
+		t.Fatalf("session revoked = %v, want %v", got, want)
+	}
+}
+
+func TestSCIM_DeactivateRevokesSessions(t *testing.T) {
+	_, store, _, token, srv := newSCIMTestStack(t)
+	uid, hash := scimUserWithSession(t, store, srv, token, "revoke-patch@acme.test")
+	_, otherHash := scimUserWithSession(t, store, srv, token, "bystander@acme.test")
+	op := func(active bool) map[string]interface{} {
+		return map[string]interface{}{
+			"schemas":    []string{"urn:ietf:params:scim:api:messages:2.0:PatchOp"},
+			"Operations": []map[string]interface{}{{"op": "replace", "path": "active", "value": active}},
+		}
+	}
+	r := scimReq(t, srv, "PATCH", "/scim/v2/Users/"+uid, token, op(true))
+	_ = r.Body.Close()
+	requireRevoked(t, store, hash, false)
+	r = scimReq(t, srv, "PATCH", "/scim/v2/Users/"+uid, token, op(false))
+	_ = r.Body.Close()
+	requireRevoked(t, store, hash, true)
+	requireRevoked(t, store, otherHash, false)
+}
+
+func TestSCIM_DeleteRevokesSessions(t *testing.T) {
+	_, store, _, token, srv := newSCIMTestStack(t)
+	uid, hash := scimUserWithSession(t, store, srv, token, "revoke-del@acme.test")
+	d := scimReq(t, srv, "DELETE", "/scim/v2/Users/"+uid, token, nil)
+	_ = d.Body.Close()
+	if d.StatusCode != http.StatusNoContent {
+		t.Fatalf("want 204, got %d", d.StatusCode)
+	}
+	requireRevoked(t, store, hash, true)
 }
