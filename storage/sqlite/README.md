@@ -45,4 +45,4 @@ auth, err := theauth.New(theauth.Config{
 - Organization slugs are lowercased and unique. Deleting an organization cascades to members, SAML connections and identities, SCIM tokens, groups and roles, and clears the active organization of sessions that pointed at it.
 - SCIM tokens are stored as sha256 hashes. SAML connections hold the IdP certificate and URLs only.
 - `SweepExpired` removes expired sessions, magic links, reset tokens, trusted devices, session links, device codes and join tokens. Call it from a ticker.
-- Deactivating a user through SCIM revokes their sessions and removes the organization membership.
+- Deactivating a user through SCIM revokes their sessions (all of them when it was their last organization, otherwise those active in that organization) and removes the membership.

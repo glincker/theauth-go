@@ -610,3 +610,42 @@ func TestSCIM_DeleteRevokesSessions(t *testing.T) {
 	}
 	requireRevoked(t, store, hash, true)
 }
+
+func TestSCIM_DeactivateScopesRevocationToOrg(t *testing.T) {
+	a, store, orgA, token, srv := newSCIMTestStack(t)
+	ctx := context.Background()
+	uid, _ := scimUserWithSession(t, store, srv, token, "multi@acme.test")
+	user, err := store.UserByEmail(ctx, "multi@acme.test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	owner := theauthtest.NewUser(t, store, "other-owner@x.test")
+	orgB, err := a.CreateOrganization(ctx, "Beta", "beta", owner.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.UpsertOrganizationMember(ctx, theauth.OrganizationMember{
+		OrganizationID: orgB.ID, UserID: user.ID, Role: "member", JoinedAt: time.Now(),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	mk := func(label string, org theauth.ULID) []byte {
+		hash := []byte("scope-" + label)
+		sess, err := store.CreateSession(ctx, theauth.Session{
+			ID: ulid.New(), UserID: user.ID, TokenHash: hash, ExpiresAt: time.Now().Add(time.Hour),
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := store.SetSessionActiveOrganization(ctx, sess.ID, &org); err != nil {
+			t.Fatal(err)
+		}
+		return hash
+	}
+	inA, inB := mk("a", orgA.ID), mk("b", orgB.ID)
+
+	r := scimReq(t, srv, "DELETE", "/scim/v2/Users/"+uid, token, nil)
+	_ = r.Body.Close()
+	requireRevoked(t, store, inA, true)
+	requireRevoked(t, store, inB, false)
+}

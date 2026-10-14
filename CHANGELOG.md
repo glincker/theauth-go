@@ -46,7 +46,7 @@ adheres to [Semantic Versioning](https://semver.org/) from v1.0 forward.
 
 ### Fixed
 
-- SCIM user deactivation (`PATCH active=false`) and `DELETE /scim/v2/Users/{id}` now revoke all of the user's sessions before removing the organization membership. They previously removed the membership only, so an existing session stayed live. A revocation failure answers 500 and leaves the membership so the IdP retries.
+- SCIM user deactivation (`PATCH active=false`) and `DELETE /scim/v2/Users/{id}` now revoke the user's sessions before removing the organization membership: every session when it was their last organization (or sessions cannot be listed), otherwise only the sessions active in that organization. They previously removed the membership only, so an existing session stayed live. A revocation failure answers 500 and leaves the membership so the IdP retries.
 - An OAuth sign-in that returns no refresh token (Google after the first consent) no longer overwrites the stored refresh token with an empty one.
 - JWT client authentication and the jwt-bearer grant now accept the fixed-length R||S ECDSA signatures that RFC 7518 requires for ES256 and ES384. They previously verified only ASN.1 DER, which standard JOSE libraries do not emit. DER is still accepted.
 

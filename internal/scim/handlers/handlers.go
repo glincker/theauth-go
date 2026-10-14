@@ -40,7 +40,8 @@ type Storage interface {
 	UpsertOrganizationMember(ctx context.Context, m models.OrganizationMember) error
 	DeleteOrganizationMember(ctx context.Context, orgID, userID models.ULID) error
 	OrganizationMemberRole(ctx context.Context, orgID, userID models.ULID) (string, error)
-	// RevokeUserSessions ends every session of a user removed from the organization.
+	OrganizationsByUser(ctx context.Context, userID models.ULID) ([]models.Organization, error)
+	RevokeSession(ctx context.Context, id models.ULID) error
 	RevokeUserSessions(ctx context.Context, userID models.ULID) error
 
 	ListGroupsByOrganization(ctx context.Context, orgID models.ULID, offset, limit int, f models.SCIMGroupFilter) ([]models.Group, int, error)
@@ -394,7 +395,7 @@ func (h *Handler) handleUserPatch(w http.ResponseWriter, r *http.Request) {
 	}
 	if !active {
 		// Revoke first so a failure leaves the membership in place and the deprovision can be retried.
-		if err := h.storage.RevokeUserSessions(r.Context(), user.ID); err != nil {
+		if err := h.revokeSessionsForOrg(r.Context(), orgID, user.ID); err != nil {
 			writeSCIMError(w, http.StatusInternalServerError, "", "session revocation failed")
 			return
 		}
@@ -418,7 +419,7 @@ func (h *Handler) handleUserDelete(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if err := h.storage.RevokeUserSessions(r.Context(), user.ID); err != nil {
+	if err := h.revokeSessionsForOrg(r.Context(), orgID, user.ID); err != nil {
 		writeSCIMError(w, http.StatusInternalServerError, "", "session revocation failed")
 		return
 	}
@@ -770,4 +771,41 @@ func writeSCIMError(w http.ResponseWriter, status int, scimType, detail string) 
 	w.Header().Set("Content-Type", internalscim.ContentType)
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(internalscim.NewError(status, scimType, detail))
+}
+
+// sessionLister is the optional session-management capability.
+type sessionLister interface {
+	ListUserSessions(ctx context.Context, userID models.ULID) ([]models.Session, error)
+}
+
+// revokeSessionsForOrg ends the sessions a user loses with this organization:
+// all of them when it was their last organization or sessions cannot be
+// listed (fail closed), otherwise only those active in this organization.
+func (h *Handler) revokeSessionsForOrg(ctx context.Context, orgID, userID models.ULID) error {
+	orgs, err := h.storage.OrganizationsByUser(ctx, userID)
+	if err != nil {
+		return err
+	}
+	others := 0
+	for _, o := range orgs {
+		if o.ID != orgID {
+			others++
+		}
+	}
+	lister, ok := h.storage.(sessionLister)
+	if others == 0 || !ok {
+		return h.storage.RevokeUserSessions(ctx, userID)
+	}
+	sessions, err := lister.ListUserSessions(ctx, userID)
+	if err != nil {
+		return err
+	}
+	for _, s := range sessions {
+		if s.ActiveOrganizationID != nil && *s.ActiveOrganizationID == orgID {
+			if err := h.storage.RevokeSession(ctx, s.ID); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
