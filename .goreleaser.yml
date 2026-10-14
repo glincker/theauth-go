@@ -98,6 +98,9 @@ release:
   draft: false
   # prerelease: auto detects -alpha, -beta, -rc suffixes.
   prerelease: auto
+  # Opens a linked Announcements discussion for every release, built from the notes. The shared monthly
+  # release thread is still synced by release-discussion.yml.
+  discussion_category_name: Announcements
   name_template: "{{ .Tag }}"
   footer: |
     **Verify this release**
