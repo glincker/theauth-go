@@ -104,6 +104,7 @@ func Run(t *testing.T, store theauth.Storage) {
 	RunTOTP(t, store)
 	RunAudit(t, store)
 	RunRBAC(t, store)
+	RunEnterprise(t, store)
 
 	if sm, ok := store.(SessionManagementSuiteStorage); ok {
 		RunSessionManagement(t, sm)

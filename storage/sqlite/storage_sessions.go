@@ -32,7 +32,16 @@ func (s *Store) ListUserSessions(ctx context.Context, userID theauth.ULID) ([]th
 		}
 		out = append(out, sess)
 	}
-	return out, wrap("list user sessions", rows.Err())
+	if err := rows.Err(); err != nil {
+		return nil, wrap("list user sessions", err)
+	}
+	_ = rows.Close()
+	for i := range out {
+		if err := s.attachActiveOrg(ctx, &out[i]); err != nil {
+			return nil, wrap("list user sessions", err)
+		}
+	}
+	return out, nil
 }
 
 // TouchSession advances last-seen time and never moves it backwards.
