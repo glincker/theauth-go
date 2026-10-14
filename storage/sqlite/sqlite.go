@@ -21,6 +21,7 @@ const DefaultTablePrefix = "theauth_"
 var prefixPattern = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
 
 var (
+	_ theauth.Storage             = (*Store)(nil)
 	_ theauth.CoreStorage         = (*Store)(nil)
 	_ theauth.OAuthAccountStorage = (*Store)(nil)
 	_ theauth.WebAuthnStorage     = (*Store)(nil)

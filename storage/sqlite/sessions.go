@@ -80,6 +80,9 @@ func (s *Store) SessionByTokenHash(ctx context.Context, hash []byte) (*theauth.S
 	if err != nil {
 		return nil, notFoundOr("session by token hash", err)
 	}
+	if err := s.attachActiveOrg(ctx, &sess); err != nil {
+		return nil, wrap("session by token hash", err)
+	}
 	return &sess, nil
 }
 
@@ -89,6 +92,9 @@ func (s *Store) SessionByID(ctx context.Context, id theauth.ULID) (*theauth.Sess
 		s.q(`SELECT `+sessionCols+` FROM theauth_sessions WHERE id = ?`), idStr(id)))
 	if err != nil {
 		return nil, notFoundOr("session by id", err)
+	}
+	if err := s.attachActiveOrg(ctx, &sess); err != nil {
+		return nil, wrap("session by id", err)
 	}
 	return &sess, nil
 }
