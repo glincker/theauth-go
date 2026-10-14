@@ -102,6 +102,28 @@ release:
   # release thread is still synced by release-discussion.yml.
   discussion_category_name: Announcements
   name_template: "{{ .Tag }}"
+  header: |
+    <p align="center">
+      <a href="https://theauth.dev">
+        <picture>
+          <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/glincker/theauth/main/docs/logo/wordmark-dark.svg" />
+          <source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/glincker/theauth/main/docs/logo/wordmark-light.svg" />
+          <img src="https://raw.githubusercontent.com/glincker/theauth/main/docs/logo/wordmark-light.svg" alt="theAuth" height="44" />
+        </picture>
+      </a>
+    </p>
+
+    <p align="center">
+      <a href="https://docs.theauth.dev/go/getting-started/overview">Docs</a> &middot;
+      <a href="https://pkg.go.dev/github.com/glincker/theauth-go/v2">pkg.go.dev</a> &middot;
+      <a href="https://github.com/glincker/theauth-go/blob/main/CHANGELOG.md">Changelog</a> &middot;
+      <a href="https://github.com/glincker/theauth/discussions">Discussions</a>
+    </p>
+
+    ---
+
+    theauth-go {{ .Tag }}: the Go library for authentication and authorization with OAuth 2.1, MCP, passkeys, SAML, SCIM and DPoP. Self-hosted, MIT licensed.
+
   footer: |
     **Verify this release**
 
