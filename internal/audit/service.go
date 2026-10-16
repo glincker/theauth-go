@@ -26,7 +26,9 @@ package audit
 
 import (
 	"context"
+	"errors"
 	"log/slog"
+	"strings"
 	"sync/atomic"
 	"time"
 
@@ -95,7 +97,33 @@ type Config struct {
 	// separate goroutine. Failures are logged and counted in sinkFailed;
 	// they never block the canonical storage write or the next batch.
 	Sinks []Sink
+
+	// FailClosed makes EmitDecision return ErrAuditUnavailable instead of
+	// silently dropping when a decision-class event cannot be queued. Off by
+	// default: request paths are never blocked or failed by audit pressure
+	// unless a deployment opts in. Emit and EmitAudit are unaffected.
+	FailClosed bool
+
+	// DecisionActionPrefixes lists the action prefixes treated as
+	// decision-class for FailClosed. Defaults to DefaultDecisionPrefixes.
+	DecisionActionPrefixes []string
 }
+
+// DefaultDecisionPrefixes are the action prefixes treated as decision-class
+// events (authorization, policy, approval, delegation) when
+// Config.DecisionActionPrefixes is empty.
+var DefaultDecisionPrefixes = []string{"policy.", "authz.", "approval.", "delegation.", "agent.authorize"}
+
+// ErrAuditUnavailable is returned by EmitDecision, in fail-closed mode, when a
+// decision-class event could not be queued.
+var ErrAuditUnavailable = errors.New("theauth: audit event could not be recorded")
+
+// GapMarkerAction is the action of the synthetic event written after events
+// were dropped. Its metadata carries the dropped count and time window.
+const GapMarkerAction = "audit.events_dropped"
+
+// MetricAuditGapMarkersTotal counts gap markers written to storage.
+const MetricAuditGapMarkersTotal = "theauth_audit_gap_markers_total"
 
 // AuditMetadata is the optional bundle a caller may attach to a context to
 // override the auto-derived actor / org / IP / UA. Useful in tests and in
@@ -106,6 +134,14 @@ type AuditMetadata struct {
 	ActorUserID    *models.ULID
 	IP             string
 	UserAgent      string
+
+	// Accountability fields copied onto the event when non-empty.
+	SubjectID       string
+	ActorID         string
+	PolicyVersion   string
+	ApproverID      string
+	DelegationChain []string
+	InputProvenance map[string]any
 }
 
 type ctxKeyAuditMetadataT struct{}
@@ -158,12 +194,20 @@ type Service struct {
 	failed     atomic.Uint64
 	sinkFailed atomic.Uint64
 
+	// gapCount is the number of events dropped since the last gap marker was
+	// written; gapFirst and gapLast bound them (unix nanoseconds). The writer
+	// goroutine turns a non-zero gapCount into a marker event at flush time.
+	gapCount atomic.Uint64
+	gapFirst atomic.Int64
+	gapLast  atomic.Int64
+
 	// hooks routes audit drops + queue depth into the consumer-supplied
 	// metrics adapter. Installed via SetHooks; defaults to a no-op bundle
 	// so the service is usable without observability wiring.
 	hooks         *obs.Hooks
 	mDroppedTotal obs.Counter
 	mQueueDepth   obs.Gauge
+	mGapMarkers   obs.Counter
 }
 
 // NewService constructs a Service. cfg may be the zero value; Start applies
@@ -172,6 +216,7 @@ func NewService(storage Storage, cfg Config) *Service {
 	s := &Service{storage: storage, cfg: cfg, hooks: &obs.Hooks{}}
 	s.mDroppedTotal = s.hooks.Counter(obs.MetricAuditDroppedTotal, nil)
 	s.mQueueDepth = s.hooks.Gauge(obs.MetricAuditQueueDepth, nil)
+	s.mGapMarkers = s.hooks.Counter(MetricAuditGapMarkersTotal, nil)
 	return s
 }
 
@@ -191,6 +236,7 @@ func (s *Service) SetHooks(h *obs.Hooks) {
 	s.hooks = h
 	s.mDroppedTotal = s.hooks.Counter(obs.MetricAuditDroppedTotal, nil)
 	s.mQueueDepth = s.hooks.Gauge(obs.MetricAuditQueueDepth, nil)
+	s.mGapMarkers = s.hooks.Counter(MetricAuditGapMarkersTotal, nil)
 }
 
 // Start spawns the writer goroutine. Idempotent: a second call is a no-op
@@ -263,11 +309,56 @@ func (s *Service) EmitAudit(ctx context.Context, action string, target models.Ta
 // no-op (the writer goroutine has drained and the channel is closed;
 // pushing would panic).
 func (s *Service) Emit(ctx context.Context, action string, target models.TargetRef, metadata map[string]any, actorUser *models.ULID, actorSession *models.Session) {
+	_ = s.emit(ctx, action, target, metadata, actorUser, actorSession)
+}
+
+// EmitDecision is Emit for decision-class events (authorization, policy,
+// approval, delegation). With Config.FailClosed set, it returns
+// ErrAuditUnavailable when such an event could not be queued, so the caller
+// can deny the action instead of proceeding unrecorded. Otherwise it behaves
+// exactly like Emit and returns nil. It never blocks.
+func (s *Service) EmitDecision(ctx context.Context, action string, target models.TargetRef, metadata map[string]any, actorUser *models.ULID, actorSession *models.Session) error {
+	err := s.emit(ctx, action, target, metadata, actorUser, actorSession)
+	if err != nil && s.cfg.FailClosed && s.isDecision(action) {
+		return ErrAuditUnavailable
+	}
+	return nil
+}
+
+func (s *Service) isDecision(action string) bool {
+	prefixes := s.cfg.DecisionActionPrefixes
+	if len(prefixes) == 0 {
+		prefixes = DefaultDecisionPrefixes
+	}
+	for _, p := range prefixes {
+		if strings.HasPrefix(action, p) {
+			return true
+		}
+	}
+	return false
+}
+
+// recordDrop counts one dropped event and widens the gap window.
+func (s *Service) recordDrop() {
+	now := time.Now().UnixNano()
+	s.dropped.Add(1)
+	if s.gapCount.Add(1) == 1 {
+		s.gapFirst.Store(now)
+	}
+	s.gapLast.Store(now)
+	if s.mDroppedTotal != nil {
+		s.mDroppedTotal.Inc()
+	}
+}
+
+// emit queues the event. It returns ErrAuditUnavailable when the event was
+// not queued (service not running, or buffer full and the event dropped).
+func (s *Service) emit(ctx context.Context, action string, target models.TargetRef, metadata map[string]any, actorUser *models.ULID, actorSession *models.Session) error {
 	if !s.started.Load() || s.closed.Load() {
-		return
+		return ErrAuditUnavailable
 	}
 	if action == "" {
-		return
+		return nil
 	}
 	s.emitted.Add(1)
 	evt := models.AuditEvent{
@@ -320,6 +411,23 @@ func (s *Service) Emit(ctx context.Context, action string, target models.TargetR
 			id := *md.ActorUserID
 			evt.ActorUserID = &id
 		}
+		evt.SubjectID = md.SubjectID
+		evt.ActorID = md.ActorID
+		evt.PolicyVersion = md.PolicyVersion
+		evt.ApproverID = md.ApproverID
+		if len(md.DelegationChain) > 0 {
+			evt.DelegationChain = append([]string(nil), md.DelegationChain...)
+		}
+		if len(md.InputProvenance) > 0 {
+			prov := md.InputProvenance
+			if s.cfg.CustomRedactor != nil {
+				prov = s.cfg.CustomRedactor(prov)
+			}
+			if s.cfg.DefaultRedactor != nil {
+				prov = s.cfg.DefaultRedactor(prov)
+			}
+			evt.InputProvenance = prov
+		}
 	}
 
 	select {
@@ -327,11 +435,10 @@ func (s *Service) Emit(ctx context.Context, action string, target models.TargetR
 		if s.mQueueDepth != nil {
 			s.mQueueDepth.Set(float64(len(s.ch)))
 		}
+		return nil
 	default:
-		s.dropped.Add(1)
-		if s.mDroppedTotal != nil {
-			s.mDroppedTotal.Inc()
-		}
+		s.recordDrop()
+		return ErrAuditUnavailable
 	}
 }
 
@@ -387,6 +494,12 @@ func (s *Service) writerLoop() {
 	defer ticker.Stop()
 
 	flush := func() {
+		// A burst of drops becomes one counted marker in the same batch, so
+		// the stored chain shows where events are missing and how many.
+		marked := s.gapCount.Swap(0)
+		if marked > 0 {
+			buf = append(buf, s.gapMarker(marked))
+		}
 		if len(buf) == 0 {
 			return
 		}
@@ -398,8 +511,21 @@ func (s *Service) writerLoop() {
 		if err != nil {
 			s.failed.Add(uint64(len(buf)))
 			slog.Error("theauth: audit insert failed", "count", len(buf), "err", err.Error())
+			if marked > 0 {
+				// The marker was not stored; keep the count for the next flush.
+				s.gapCount.Add(marked)
+			}
 		} else {
-			s.written.Add(uint64(len(buf)))
+			// The synthetic marker is not an emitted event, so it stays out of
+			// the written counter and the emitted >= written + dropped invariant.
+			if marked > 0 {
+				s.written.Add(uint64(len(buf) - 1))
+				if s.mGapMarkers != nil {
+					s.mGapMarkers.Inc()
+				}
+			} else {
+				s.written.Add(uint64(len(buf)))
+			}
 			// Fan out to each registered sink. Each sink runs in its own
 			// goroutine so a slow or failing sink never delays the writer
 			// loop. Failures are best-effort: logged, counted, discarded.
@@ -451,5 +577,24 @@ func (s *Service) writerLoop() {
 		case <-ticker.C:
 			flush()
 		}
+	}
+}
+
+// gapMarker builds the synthetic event that records n dropped events.
+func (s *Service) gapMarker(n uint64) models.AuditEvent {
+	first := time.Unix(0, s.gapFirst.Load()).UTC()
+	last := time.Unix(0, s.gapLast.Load()).UTC()
+	return models.AuditEvent{
+		ID:         ulid.New(),
+		Action:     GapMarkerAction,
+		TargetType: "audit",
+		Metadata: map[string]any{
+			"dropped":         n,
+			"firstDropped":    first.Format(time.RFC3339Nano),
+			"lastDropped":     last.Format(time.RFC3339Nano),
+			"droppedTotal":    s.dropped.Load(),
+			"markerSynthetic": true,
+		},
+		CreatedAt: time.Now(),
 	}
 }

@@ -353,6 +353,10 @@ const (
 	// RevocationOwner means a user was disabled or deleted: every credential
 	// that user owns or delegated is void.
 	RevocationOwner = revocation.Owner
+	// RevocationOrgMember means a user lost access to one organization (for
+	// example an org-scoped SCIM deactivation). Credentials scoped to that
+	// organization are void; the user's other organizations are unaffected.
+	RevocationOrgMember = revocation.OrgMember
 )
 
 // RevocationEvent reports one revocation. An empty ID means "every credential

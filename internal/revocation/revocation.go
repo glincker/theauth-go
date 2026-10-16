@@ -26,6 +26,10 @@ const (
 	// Owner means a user was disabled or deleted: every credential
 	// that user owns or delegated is void.
 	Owner Kind = "owner"
+	// OrgMember means a user lost one organization (a SCIM deactivation of
+	// a multi-org user) but stays active elsewhere: ID is the organization
+	// and UserID the user. Only streams scoped to both are cut.
+	OrgMember Kind = "org_member"
 )
 
 // Event reports one revocation. An empty ID means "every credential
@@ -132,10 +136,29 @@ func FromAudit(action string, target models.TargetRef, md map[string]any) (Event
 		} else {
 			ev.ID = target.ID
 		}
+	case "api_token.revoked":
+		if target.Type != "api_token" || target.ID == "" {
+			return Event{}, false
+		}
+		ev.Kind, ev.ID = APIToken, target.ID
 	case "delegation.revoked":
 		ev.Kind, ev.ID = Delegation, target.ID
-	case "agent.revoked", "agent.suspended":
+	case "agent.revoked", "agent.suspended", "agent.cascade.revoked":
 		ev.Kind, ev.ID = Agent, target.ID
+	case "account.disabled", "scim.user.deactivated":
+		// The user can no longer act: every credential they own or
+		// delegated is void.
+		if target.Type != "user" || target.ID == "" {
+			return Event{}, false
+		}
+		ev.Kind, ev.UserID = Owner, target.ID
+	case "scim.user.org_deactivated":
+		// The organization ID rides in the SCIM audit "detail" field.
+		org, _ := md["detail"].(string)
+		if target.Type != "user" || target.ID == "" || org == "" {
+			return Event{}, false
+		}
+		ev.Kind, ev.ID, ev.UserID = OrgMember, org, target.ID
 	case "agent_credential.revoked":
 		id, _ := md["credential_id"].(string)
 		if id == "" {
@@ -157,6 +180,9 @@ type Target struct {
 	AgentID      string
 	CredentialID string
 	DelegationID string
+	// OrganizationID scopes a stream to one organization; with UserID it is
+	// cut when that user is deprovisioned from the organization.
+	OrganizationID string
 }
 
 // Matches reports whether ev voids the target.
@@ -180,6 +206,8 @@ func (t Target) Matches(ev Event) bool {
 		return ev.ID != "" && ev.ID == t.CredentialID
 	case Delegation:
 		return ev.ID != "" && ev.ID == t.DelegationID
+	case OrgMember:
+		return ev.ID != "" && ev.ID == t.OrganizationID && ev.UserID != "" && ev.UserID == t.UserID
 	}
 	return false
 }

@@ -458,3 +458,71 @@ func TestRegisterAgentWithDelegation(t *testing.T) {
 		t.Fatalf("err = %v", err)
 	}
 }
+
+func TestAgentRevokeCascadesGrants(t *testing.T) {
+	ctx := context.Background()
+	store := memory.New()
+	a, err := theauth.New(theauth.Config{
+		Storage: store, BaseURL: "http://localhost", SessionTTL: time.Hour, MagicLinkTTL: time.Minute,
+		EncryptionKey: bytes.Repeat([]byte{7}, 32),
+		AuthorizationServer: &theauth.AuthorizationServerConfig{
+			Issuer:          "https://auth.example.com",
+			Resources:       []theauth.ProtectedResource{{Identifier: "https://mcp.example.com", Scopes: []string{"read"}}},
+			DisableRotation: true,
+		},
+		AgentIdentity: &theauth.AgentConfig{},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(a.Close)
+	u, _ := store.CreateUser(ctx, theauth.User{ID: ulid.New(), Email: "cascade@x.test", CreatedAt: time.Now(), UpdatedAt: time.Now()})
+	reg, err := a.RegisterAgent(ctx, theauth.RegisterAgentInput{OwnerID: u.ID, Name: "mcp", Scope: []string{"read"}, Resource: "https://mcp.example.com"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var mu sync.Mutex
+	var reasons []string
+	unsub, err := a.SubscribeRevocations(func(ev theauth.RevocationEvent) {
+		mu.Lock()
+		defer mu.Unlock()
+		if ev.Kind == theauth.RevocationAgent && ev.ID == reg.Agent.ID.String() {
+			reasons = append(reasons, ev.Reason)
+		}
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer unsub()
+
+	if err := a.SuspendAgent(ctx, reg.Agent.ID, "incident"); err != nil {
+		t.Fatal(err)
+	}
+	grants, err := a.ListDelegationsForAgent(ctx, reg.Agent.ID)
+	if err != nil || len(grants) == 0 {
+		t.Fatalf("grants = %v, err = %v", grants, err)
+	}
+	for _, g := range grants {
+		if g.RevokedAt == nil {
+			t.Fatalf("grant %s survived agent suspension", g.ID)
+		}
+	}
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		mu.Lock()
+		got := append([]string(nil), reasons...)
+		mu.Unlock()
+		var cascade bool
+		for _, r := range got {
+			cascade = cascade || r == "agent.cascade.revoked"
+		}
+		if cascade {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("no cascade revocation event, saw %v", got)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+}

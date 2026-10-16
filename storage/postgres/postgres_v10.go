@@ -318,7 +318,7 @@ func (s *Store) InsertAuditEvents(ctx context.Context, events []theauth.AuditEve
 	defer func() { _ = tx.Rollback(ctx) }()
 	qtx := s.q.WithTx(tx)
 	for _, e := range events {
-		metaBytes, err := json.Marshal(e.Metadata)
+		metaBytes, err := json.Marshal(e.MetadataWithAccountability())
 		if err != nil {
 			return fmt.Errorf("audit metadata marshal: %w", err)
 		}

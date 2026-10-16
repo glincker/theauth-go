@@ -1,6 +1,7 @@
 package models
 
 import (
+	"errors"
 	"time"
 
 	"github.com/oklog/ulid/v2"
@@ -364,6 +365,100 @@ type AuditEvent struct {
 	IP             string         `json:"ip,omitempty"`
 	UserAgent      string         `json:"userAgent,omitempty"`
 	CreatedAt      time.Time      `json:"createdAt"`
+
+	// Accountability fields. SubjectID is the principal the action was taken
+	// on behalf of; ActorID is the agent or service that performed it. Token
+	// `sub` semantics are unchanged: these are recorded explicitly instead.
+	SubjectID       string         `json:"subjectId,omitempty"`
+	ActorID         string         `json:"actorId,omitempty"`
+	PolicyVersion   string         `json:"policyVersion,omitempty"`
+	ApproverID      string         `json:"approverId,omitempty"`
+	DelegationChain []string       `json:"delegationChain,omitempty"`
+	InputProvenance map[string]any `json:"inputProvenance,omitempty"`
+
+	// Hash chain output, set by stores that chain (sqlite). ChainSeq counts
+	// up from 1 per chain key (the organization id, or empty). Zero Hash
+	// means the row is not chained.
+	ChainSeq uint64 `json:"chainSeq,omitempty"`
+	PrevHash string `json:"prevHash,omitempty"`
+	Hash     string `json:"hash,omitempty"`
+}
+
+// AuditChainBreak describes the first row at which an audit chain fails to verify.
+type AuditChainBreak struct {
+	ChainKey string `json:"chainKey"`
+	RowID    string `json:"rowId"`
+	Seq      int64  `json:"seq"`
+	// Reason is one of hash_mismatch, prev_hash_mismatch, seq_gap,
+	// pseudonym_mismatch (a raw id column was edited after the row was written).
+	Reason string `json:"reason"`
+}
+
+// AuditChainResult is the outcome of verifying an audit store's hash chain.
+//
+// Supported is false for backends that keep no chain (memory, postgres,
+// mysql). In that case OK is also false and nothing was checked: callers must
+// treat the result as "not tamper-evident", never as a pass.
+type AuditChainResult struct {
+	Supported bool `json:"supported"`
+	OK        bool `json:"ok"`
+	// Checked is the number of chained rows examined.
+	Checked int `json:"checked"`
+	// Unchained is the number of rows written before the chain existed.
+	Unchained int `json:"unchained"`
+	// Erased is the number of checked rows whose raw actor ids were erased
+	// (GDPR). They still verify through their stored pseudonym.
+	Erased int `json:"erased"`
+	// FirstBreak is set when a supported chain fails to verify.
+	FirstBreak *AuditChainBreak `json:"firstBreak,omitempty"`
+}
+
+// ErrAuditChainUnsupported is returned alongside an unsupported
+// AuditChainResult when verification is requested on a backend without a chain.
+var ErrAuditChainUnsupported = errors.New("audit chain verification is not supported by this storage backend")
+
+// AccountabilityMetadataKey is the reserved metadata key under which stores
+// without native accountability columns keep these fields.
+const AccountabilityMetadataKey = "_accountability"
+
+// HasAccountability reports whether any accountability field is set.
+func (e AuditEvent) HasAccountability() bool {
+	return e.SubjectID != "" || e.ActorID != "" || e.PolicyVersion != "" || e.ApproverID != "" ||
+		len(e.DelegationChain) > 0 || len(e.InputProvenance) > 0
+}
+
+// MetadataWithAccountability returns Metadata with the accountability fields
+// folded in under AccountabilityMetadataKey. The input map is not modified.
+// Stores without native columns persist this value so the fields are not lost.
+func (e AuditEvent) MetadataWithAccountability() map[string]any {
+	if !e.HasAccountability() {
+		return e.Metadata
+	}
+	out := make(map[string]any, len(e.Metadata)+1)
+	for k, v := range e.Metadata {
+		out[k] = v
+	}
+	acc := map[string]any{}
+	if e.SubjectID != "" {
+		acc["subjectId"] = e.SubjectID
+	}
+	if e.ActorID != "" {
+		acc["actorId"] = e.ActorID
+	}
+	if e.PolicyVersion != "" {
+		acc["policyVersion"] = e.PolicyVersion
+	}
+	if e.ApproverID != "" {
+		acc["approverId"] = e.ApproverID
+	}
+	if len(e.DelegationChain) > 0 {
+		acc["delegationChain"] = e.DelegationChain
+	}
+	if len(e.InputProvenance) > 0 {
+		acc["inputProvenance"] = e.InputProvenance
+	}
+	out[AccountabilityMetadataKey] = acc
+	return out
 }
 
 // AuditQuery filters and paginates audit_events reads. Zero-valued fields

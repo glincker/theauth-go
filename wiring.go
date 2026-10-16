@@ -291,6 +291,9 @@ func wireServices(a *TheAuth, cfg Config, providers map[string]Provider, sp saml
 			DefaultRedactor: internalaudit.Redactor(DefaultRedactor),
 			DrainTimeout:    cfg.Audit.DrainTimeout,
 			Sinks:           internalSinks,
+
+			FailClosed:             cfg.Audit.FailClosed,
+			DecisionActionPrefixes: cfg.Audit.DecisionActionPrefixes,
 		})
 		a.auditSvc.SetHooks(a.hooks)
 	}
@@ -353,6 +356,9 @@ func wireServices(a *TheAuth, cfg Config, providers map[string]Provider, sp saml
 		a.delegationSvc = delegation.New(oss, delegationPolicy, a.as, a)
 		a.delegationSvc.SetHooks(a.hooks)
 		a.as.AgentLookup = internalas.AgentLookupFunc(a.agentSvc.AgentBySubjectClaim)
+		if _, err := a.as.SubscribeRevocations(a.revocations); err != nil {
+			return errors.New("theauth: subscribe authorization server to revocations: " + err.Error())
+		}
 	}
 
 	// Core services (session, magic link, SCIM, organizations, RBAC).
@@ -620,6 +626,7 @@ func asConfigFromRoot(c *AuthorizationServerConfig) internalas.Config {
 		RegistrationTokens:             append([]string(nil), c.RegistrationTokens...),
 		RegistrationRateLimitPerMinute: c.RegistrationRateLimitPerMinute,
 		IntrospectionCacheTTL:          c.IntrospectionCacheTTL,
+		SubjectActiveCacheTTL:          c.SubjectActiveCacheTTL,
 		Clock:                          c.Clock,
 		LoginURL:                       c.LoginURL,
 		DisableRotation:                c.DisableRotation,

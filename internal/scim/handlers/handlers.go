@@ -395,11 +395,9 @@ func (h *Handler) handleUserPatch(w http.ResponseWriter, r *http.Request) {
 	}
 	if !active {
 		// Revoke first so a failure leaves the membership in place and the deprovision can be retried.
-		if err := h.revokeSessionsForOrg(r.Context(), orgID, user.ID); err != nil {
-			writeSCIMError(w, http.StatusInternalServerError, "", "session revocation failed")
+		if !h.deprovision(w, r, orgID, user.ID) {
 			return
 		}
-		_ = h.storage.DeleteOrganizationMember(r.Context(), orgID, user.ID)
 	}
 	h.emitAudit(r.Context(), "scim.user.patch", orgID, user.ID, "")
 	writeSCIMJSON(w, http.StatusOK, internalscim.UserToSCIM(*user, h.cfg.BaseURL))
@@ -419,12 +417,7 @@ func (h *Handler) handleUserDelete(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if err := h.revokeSessionsForOrg(r.Context(), orgID, user.ID); err != nil {
-		writeSCIMError(w, http.StatusInternalServerError, "", "session revocation failed")
-		return
-	}
-	if err := h.storage.DeleteOrganizationMember(r.Context(), orgID, user.ID); err != nil {
-		writeSCIMError(w, http.StatusNotFound, "", "not found")
+	if !h.deprovision(w, r, orgID, user.ID) {
 		return
 	}
 	h.emitAudit(r.Context(), "scim.user.delete", orgID, user.ID, "")
@@ -776,6 +769,84 @@ func writeSCIMError(w http.ResponseWriter, status int, scimType, detail string) 
 // sessionLister is the optional session-management capability.
 type sessionLister interface {
 	ListUserSessions(ctx context.Context, userID models.ULID) ([]models.Session, error)
+}
+
+// accountDisabler is the optional storage capability that blocks sign-in for
+// a user, the same flag Config.AccountState's DisableUser sets.
+type accountDisabler interface {
+	SetUserDisabledAt(ctx context.Context, userID models.ULID, at *time.Time) error
+}
+
+// ownerTokenRevoker is the optional storage capability that revokes every
+// live API token an owner holds.
+type ownerTokenRevoker interface {
+	RevokeAPITokensByOwner(ctx context.Context, ownerID models.ULID, at time.Time) (int, error)
+}
+
+// deprovision removes userID from the organization and cuts their access. A
+// user whose last organization this was is disabled the way DisableUser does
+// it (sign-in blocked, sessions and API tokens revoked) and a
+// scim.user.deactivated audit event fires so the revocation bus cuts live
+// streams. Otherwise only the sessions active in this organization end and a
+// scim.user.org_deactivated event cuts the streams scoped to this organization. It
+// writes the SCIM error response and reports false on failure; every step is
+// idempotent so the IdP can retry.
+func (h *Handler) deprovision(w http.ResponseWriter, r *http.Request, orgID, userID models.ULID) bool {
+	ctx := r.Context()
+	orgs, err := h.storage.OrganizationsByUser(ctx, userID)
+	if err != nil {
+		writeSCIMError(w, http.StatusInternalServerError, "", "session revocation failed")
+		return false
+	}
+	last := true
+	for _, o := range orgs {
+		if o.ID != orgID {
+			last = false
+			break
+		}
+	}
+	if last {
+		if err := h.disableUser(ctx, userID); err != nil {
+			writeSCIMError(w, http.StatusInternalServerError, "", "user disable failed")
+			return false
+		}
+	} else if err := h.revokeSessionsForOrg(ctx, orgID, userID); err != nil {
+		writeSCIMError(w, http.StatusInternalServerError, "", "session revocation failed")
+		return false
+	}
+	if err := h.storage.DeleteOrganizationMember(ctx, orgID, userID); err != nil && !errors.Is(err, models.ErrStorageNotFound) {
+		writeSCIMError(w, http.StatusInternalServerError, "", "membership removal failed")
+		return false
+	}
+	if last {
+		h.emitAudit(ctx, "scim.user.deactivated", orgID, userID, "")
+	} else {
+		// The user stays active elsewhere: cut only this organization's
+		// streams. The organization ID rides in the detail field, which the
+		// revocation bus mapping reads.
+		h.emitAudit(ctx, "scim.user.org_deactivated", orgID, userID, orgID.String())
+	}
+	return true
+}
+
+// disableUser blocks sign-in (when storage supports it), then revokes the
+// user's sessions and API tokens.
+func (h *Handler) disableUser(ctx context.Context, userID models.ULID) error {
+	now := time.Now().UTC()
+	if d, ok := h.storage.(accountDisabler); ok {
+		if err := d.SetUserDisabledAt(ctx, userID, &now); err != nil && !errors.Is(err, models.ErrStorageNotFound) {
+			return err
+		}
+	}
+	if err := h.storage.RevokeUserSessions(ctx, userID); err != nil {
+		return err
+	}
+	if t, ok := h.storage.(ownerTokenRevoker); ok {
+		if _, err := t.RevokeAPITokensByOwner(ctx, userID, now); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // revokeSessionsForOrg ends the sessions a user loses with this organization:
