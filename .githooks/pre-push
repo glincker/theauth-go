@@ -6,6 +6,9 @@
 #      root symbols a release does not have yet)
 #   3. govulncheck: third-party module findings fail, stdlib findings warn
 #      because they depend on the local Go toolchain version
+# Tests are not run here: CI runs the full suite, including the slow internal/as
+# shard under -race. Full local run: GOWORK=off go test -race ./...
+# Pushes with no Go, go.mod, go.sum or go.work change skip all of the above.
 # Set THEAUTH_SKIP_HOOKS=1 to bypass in an emergency.
 . "$(dirname "$0")/lib.sh"
 [ "$THEAUTH_SKIP_HOOKS" = "1" ] && exit 0
@@ -13,7 +16,8 @@
 base=origin/main
 git rev-parse --verify -q "$base" >/dev/null || { warn "no $base, skipping"; exit 0; }
 changed=$(git diff --name-only "$base"...HEAD)
-[ -z "$changed" ] && exit 0
+gochanged=$(printf '%s\n' "$changed" | grep -E '(\.go|go\.mod|go\.sum|go\.work)$' || true)
+[ -z "$gochanged" ] && exit 0
 root=$(git rev-parse --show-toplevel)
 cd "$root" || exit 1
 
@@ -23,7 +27,7 @@ else
 	warn "golangci-lint not installed, skipping lint (CI will run it)"
 fi
 
-modules=$(printf '%s\n' "$changed" | modules_for_files)
+modules=$(printf '%s\n' "$gochanged" | modules_for_files)
 for m in $modules; do
 	( cd "$m" && GOWORK=off go build ./... && GOWORK=off go vet ./... ) \
 		|| fail "module $m does not build or vet with GOWORK=off"

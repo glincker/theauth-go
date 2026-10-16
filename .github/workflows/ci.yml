@@ -8,10 +8,27 @@ on:
     - cron: "0 6 * * 1"
   workflow_dispatch:
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
 jobs:
-  test:
+  # Branch protection requires the check named "test". The `test` job below aggregates
+  # the shards so that name keeps reporting and fails when either shard fails.
+  unit:
     if: github.event_name != 'schedule'
+    name: unit (${{ matrix.shard }})
     runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        # internal/as alone takes about 200s under -race. Running it as its own shard
+        # lets the rest of the module finish in parallel instead of queuing behind it.
+        shard: [rest, as]
     permissions:
       contents: read
       # Lets codecov-action authenticate with a GitHub OIDC token when no CODECOV_TOKEN secret is set.
@@ -51,23 +68,48 @@ jobs:
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
         with:
           go-version: "1.25"
-      - run: go vet ./...
-      - run: go test -race -timeout=300s -coverprofile=coverage.out ./...
+      # go vet ./... covers the whole module, so it runs once in the rest shard.
+      - name: Vet
+        if: matrix.shard == 'rest'
+        run: go vet ./...
+      - name: Test
         env:
           POSTGRES_TEST_URL: postgres://theauth:pg-${{ github.run_id }}@localhost:5432/theauth_test?sslmode=disable
+        run: |
+          if [ "${{ matrix.shard }}" = "as" ]; then
+            pkgs=(./internal/as/...)
+          else
+            mapfile -t pkgs < <(go list ./... | grep -Ev '/internal/as(/|$)')
+          fi
+          go test -race -timeout=300s -coverprofile="coverage-${{ matrix.shard }}.out" "${pkgs[@]}"
       - uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7
         with:
-          files: coverage.out
+          files: coverage-${{ matrix.shard }}.out
           token: ${{ secrets.CODECOV_TOKEN }}
           # Token wins when the secret exists, otherwise fall back to tokenless OIDC.
           use_oidc: ${{ secrets.CODECOV_TOKEN == '' }}
           # Surface upload failures on pushes to main instead of hiding them (a missing token was rejected silently).
           fail_ci_if_error: ${{ github.event_name == 'push' }}
-      - run: go test -bench=. -benchmem -run=^$ -benchtime=1x ./internal/bench/...
+      - name: Bench smoke
+        if: matrix.shard == 'rest'
+        run: go test -bench=. -benchmem -run=^$ -benchtime=1x ./internal/bench/...
+
+  test:
+    # always(): if `unit` fails, this job must still run and fail. A skipped job would report success.
+    if: ${{ always() && github.event_name != 'schedule' }}
+    needs: unit
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: All shards passed
+        env:
+          RESULT: ${{ needs.unit.result }}
+        run: test "$RESULT" = "success"
 
   fuzz:
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     env:
       GOWORK: off
     strategy:
@@ -96,6 +138,7 @@ jobs:
   lint:
     if: github.event_name != 'schedule'
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     env:
       GOWORK: off
     steps:
@@ -106,6 +149,7 @@ jobs:
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
         with:
           go-version: "1.25"
+      # golangci-lint-action caches ~/.cache/golangci-lint itself. Only new issues vs origin/main fail the job.
       - uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9
         with:
           version: v2.12.2
@@ -114,6 +158,7 @@ jobs:
   sqlite:
     if: github.event_name != 'schedule'
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
