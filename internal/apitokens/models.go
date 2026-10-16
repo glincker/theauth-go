@@ -57,11 +57,14 @@ type APIToken struct {
 	// AgentName names the agent or MCP client holding an agent token.
 	AgentName string `json:"agentName,omitempty"`
 	// DelegatedBy is the human whose abilities bound an agent token.
-	DelegatedBy *ULID      `json:"delegatedBy,omitempty"`
-	CreatedAt   time.Time  `json:"createdAt"`
-	ExpiresAt   *time.Time `json:"expiresAt,omitempty"`
-	LastUsedAt  *time.Time `json:"lastUsedAt,omitempty"`
-	RevokedAt   *time.Time `json:"revokedAt,omitempty"`
+	DelegatedBy *ULID `json:"delegatedBy,omitempty"`
+	// AgentID is the registered agent an agent token was minted for. It is nil
+	// for personal tokens and for agent tokens minted before the id was stored.
+	AgentID    *ULID      `json:"agentId,omitempty"`
+	CreatedAt  time.Time  `json:"createdAt"`
+	ExpiresAt  *time.Time `json:"expiresAt,omitempty"`
+	LastUsedAt *time.Time `json:"lastUsedAt,omitempty"`
+	RevokedAt  *time.Time `json:"revokedAt,omitempty"`
 }
 
 // Usable reports whether the token is neither revoked nor expired at now.
@@ -118,6 +121,14 @@ type APITokenStorage interface {
 	// returns how many it changed.
 	RevokeAPITokensByOwner(ctx context.Context, ownerID ULID, at time.Time) (int, error)
 	TouchAPITokenLastUsed(ctx context.Context, id ULID, at time.Time) error
+}
+
+// APITokenAgentStorage is the optional capability to list the API tokens
+// minted for one agent. The agent revoke cascade uses it for an exact match.
+type APITokenAgentStorage interface {
+	// APITokensByAgentID returns every token whose AgentID equals agentID,
+	// newest first.
+	APITokensByAgentID(ctx context.Context, agentID ULID) ([]APIToken, error)
 }
 
 // DeviceCodeStorage is the capability behind the RFC 8628 device grant.

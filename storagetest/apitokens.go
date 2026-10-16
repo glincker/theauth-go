@@ -56,6 +56,50 @@ func testAPITokens(t *testing.T, store theauth.APITokenStorage) {
 		}
 	})
 
+	t.Run("agent id round trips and lists by agent", func(t *testing.T) {
+		lister, ok := store.(theauth.APITokenAgentStorage)
+		if !ok {
+			t.Skip("store does not implement APITokenAgentStorage")
+		}
+		by, agentA, agentB := newID(), newID(), newID()
+		mk := func(secret string, agent *theauth.ULID, created time.Time) theauth.APIToken {
+			tok := newTestToken(by, theauth.OwnerKindUser, secret+"-"+by.String(), created)
+			tok.Kind, tok.AgentName, tok.DelegatedBy, tok.AgentID = theauth.APITokenKindAgent, "same-name", &by, agent
+			if _, err := store.InsertAPIToken(ctx, tok); err != nil {
+				t.Fatalf("InsertAPIToken: %v", err)
+			}
+			return tok
+		}
+		a1 := mk("a1", &agentA, now.Add(-time.Minute))
+		a2 := mk("a2", &agentA, now)
+		b1 := mk("b1", &agentB, now)
+		legacy := mk("legacy", nil, now)
+
+		got, err := store.APITokenByID(ctx, a1.ID)
+		if err != nil || got.AgentID == nil || *got.AgentID != agentA {
+			t.Fatalf("agent id lost: %+v err=%v", got, err)
+		}
+		got, err = store.APITokenByID(ctx, legacy.ID)
+		if err != nil || got.AgentID != nil {
+			t.Fatalf("legacy token must keep a nil agent id: %+v err=%v", got, err)
+		}
+		list, err := lister.APITokensByAgentID(ctx, agentA)
+		if err != nil {
+			t.Fatalf("APITokensByAgentID: %v", err)
+		}
+		if len(list) != 2 || list[0].ID != a2.ID || list[1].ID != a1.ID {
+			t.Fatalf("want [a2 a1] for agent A, got %+v", list)
+		}
+		list, err = lister.APITokensByAgentID(ctx, agentB)
+		if err != nil || len(list) != 1 || list[0].ID != b1.ID {
+			t.Fatalf("want [b1] for agent B, got %+v err=%v", list, err)
+		}
+		list, err = lister.APITokensByAgentID(ctx, newID())
+		if err != nil || len(list) != 0 {
+			t.Fatalf("unknown agent must list nothing, got %+v err=%v", list, err)
+		}
+	})
+
 	t.Run("ByHash round trips", func(t *testing.T) {
 		got, err := store.APITokenByHash(ctx, newer.TokenHash)
 		if err != nil {

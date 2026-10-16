@@ -100,16 +100,55 @@ func (s *Service) revokeAgentGrants(ctx context.Context, ag models.Agent, status
 	return n, errs
 }
 
-// revokeMintedTokens revokes the live agent-kind API tokens minted for ag.
-// A minted token records the agent only by name and the delegating user, so
-// the match is kind=agent, AgentName == ag.Name and, for a user-owned agent,
-// DelegatedBy == the owner. An organization-owned agent has no single
-// delegating user, so every user's agent token of that name is revoked
-// (fail closed). It returns the number revoked.
+// agentTokenLister is the optional storage surface that lists the API tokens
+// minted for one agent id.
+type agentTokenLister interface {
+	APITokensByAgentID(ctx context.Context, agentID models.ULID) ([]apitokens.APIToken, error)
+}
+
+// revokeMintedTokens revokes the live agent-kind API tokens minted for ag and
+// returns the number revoked.
+//
+// Tokens that carry ag.ID in AgentID are matched exactly and revoked first.
+// The name-and-owner match below is a fallback for legacy rows minted before
+// the agent id was stored (AgentID is NULL): kind=agent, AgentName == ag.Name
+// and, for a user-owned agent, DelegatedBy == the owner. An organization-owned
+// agent has no single delegating user, so every user's legacy token of that
+// name is revoked (fail closed). The fallback never touches a token whose
+// AgentID is set, so a same-named agent keeps its own tokens.
 func (s *Service) revokeMintedTokens(ctx context.Context, ag models.Agent, status string, at time.Time) (int, error) {
 	ts, ok := s.storage.(mintedTokenStore)
 	if !ok {
 		return 0, nil
+	}
+	var (
+		errs []error
+		n    int
+	)
+	revoke := func(t apitokens.APIToken) {
+		if t.Kind != apitokens.APITokenKindAgent || t.RevokedAt != nil {
+			return
+		}
+		if err := ts.RevokeAPIToken(ctx, t.ID, at); err != nil {
+			errs = append(errs, fmt.Errorf("revoke minted token %s: %w", t.ID, err))
+			return
+		}
+		n++
+		s.auditEm.EmitAudit(ctx, "api_token.revoked", models.TargetRef{Type: "api_token", ID: t.ID.String()}, map[string]any{
+			"token_id": t.ID.String(),
+			"owner_id": t.OwnerID.String(),
+			"agent_id": ag.ID.String(),
+			"reason":   "agent_" + status,
+		})
+	}
+	if al, ok := s.storage.(agentTokenLister); ok {
+		exact, err := al.APITokensByAgentID(ctx, ag.ID)
+		if err != nil {
+			errs = append(errs, fmt.Errorf("list agent minted tokens by id: %w", err))
+		}
+		for _, t := range exact {
+			revoke(t)
+		}
 	}
 	var (
 		list []apitokens.APIToken
@@ -121,28 +160,17 @@ func (s *Service) revokeMintedTokens(ctx context.Context, ag models.Agent, statu
 		list, err = ts.ListAPITokens(ctx)
 	}
 	if err != nil {
-		return 0, fmt.Errorf("list agent minted tokens: %w", err)
+		errs = append(errs, fmt.Errorf("list agent minted tokens: %w", err))
+		return n, errors.Join(errs...)
 	}
-	var errs []error
-	n := 0
 	for _, t := range list {
-		if t.Kind != apitokens.APITokenKindAgent || t.RevokedAt != nil || t.AgentName != ag.Name {
+		if t.AgentID != nil || t.AgentName != ag.Name {
 			continue
 		}
 		if ag.OwnerUserID != nil && (t.DelegatedBy == nil || *t.DelegatedBy != *ag.OwnerUserID) {
 			continue
 		}
-		if err := ts.RevokeAPIToken(ctx, t.ID, at); err != nil {
-			errs = append(errs, fmt.Errorf("revoke minted token %s: %w", t.ID, err))
-			continue
-		}
-		n++
-		s.auditEm.EmitAudit(ctx, "api_token.revoked", models.TargetRef{Type: "api_token", ID: t.ID.String()}, map[string]any{
-			"token_id": t.ID.String(),
-			"owner_id": t.OwnerID.String(),
-			"agent_id": ag.ID.String(),
-			"reason":   "agent_" + status,
-		})
+		revoke(t)
 	}
 	return n, errors.Join(errs...)
 }

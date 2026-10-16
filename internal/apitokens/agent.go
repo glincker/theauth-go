@@ -31,6 +31,10 @@ type MintAgentTokenInput struct {
 	// UserID is the human the agent acts for.
 	UserID    ULID
 	AgentName string
+	// AgentID is the registered agent the token is minted for. Set it whenever
+	// the agent is known: the agent suspend and revoke cascade then cuts the
+	// token by exact id instead of by name. Nil keeps the name-only record.
+	AgentID *ULID
 	// Abilities are the agent's allowed abilities. Each must be one the user
 	// holds now; at request time the token is further cut to what the user
 	// holds then.
@@ -60,7 +64,7 @@ func (s *Service) MintAgentToken(ctx context.Context, in MintAgentTokenInput) (s
 	by := in.UserID
 	raw, tok, err := s.Mint(ctx, MintAPITokenInput{
 		OwnerID: in.UserID, OwnerKind: OwnerKindUser, Name: in.AgentName, Abilities: in.Abilities, TTL: in.TTL,
-		Kind: APITokenKindAgent, AgentName: in.AgentName, DelegatedBy: &by,
+		Kind: APITokenKindAgent, AgentName: in.AgentName, DelegatedBy: &by, AgentID: in.AgentID,
 	})
 	if err != nil {
 		return "", APIToken{}, err

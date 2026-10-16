@@ -15,12 +15,13 @@ import (
 )
 
 var (
-	_ theauth.APITokenStorage   = (*Store)(nil)
-	_ theauth.DeviceCodeStorage = (*Store)(nil)
-	_ theauth.DeviceCodeLister  = (*Store)(nil)
+	_ theauth.APITokenStorage      = (*Store)(nil)
+	_ theauth.DeviceCodeStorage    = (*Store)(nil)
+	_ theauth.DeviceCodeLister     = (*Store)(nil)
+	_ theauth.APITokenAgentStorage = (*Store)(nil)
 )
 
-const apiTokenCols = `id, owner_id, owner_kind, name, abilities, token_hash, hint, created_at, expires_at, last_used_at, revoked_at, kind, agent_name, delegated_by`
+const apiTokenCols = `id, owner_id, owner_kind, name, abilities, token_hash, hint, created_at, expires_at, last_used_at, revoked_at, kind, agent_name, delegated_by, agent_id`
 
 const deviceCols = `id, device_code_hash, user_code, status, client_name, requested_abilities, approved_abilities,
 approver_id, requester_ip, requester_ua, interval_seconds, last_polled_at, created_at, expires_at`
@@ -72,14 +73,14 @@ func utcPtr(ts pgtype.Timestamptz) *time.Time {
 
 func scanAPIToken(r pgx.Row) (theauth.APIToken, error) {
 	var (
-		id, owner, delegated             pgtype.UUID
+		id, owner, delegated, agentID    pgtype.UUID
 		ownerKind, name, abilities, hint string
 		kind, agentName                  string
 		hash                             []byte
 		created, expires, used, revoked  pgtype.Timestamptz
 	)
 	if err := r.Scan(&id, &owner, &ownerKind, &name, &abilities, &hash, &hint, &created, &expires, &used, &revoked,
-		&kind, &agentName, &delegated); err != nil {
+		&kind, &agentName, &delegated, &agentID); err != nil {
 		return theauth.APIToken{}, err
 	}
 	ab, err := decodeList(abilities)
@@ -88,7 +89,7 @@ func scanAPIToken(r pgx.Row) (theauth.APIToken, error) {
 	}
 	return theauth.APIToken{
 		ID: pgUUIDToULID(id), OwnerID: pgUUIDToULID(owner), OwnerKind: ownerKind, Name: name, Abilities: ab,
-		TokenHash: hash, Hint: hint, Kind: kind, AgentName: agentName, DelegatedBy: uuidToPtr(delegated),
+		TokenHash: hash, Hint: hint, Kind: kind, AgentName: agentName, DelegatedBy: uuidToPtr(delegated), AgentID: uuidToPtr(agentID),
 		CreatedAt: tsToTime(created).UTC(), ExpiresAt: utcPtr(expires), LastUsedAt: utcPtr(used), RevokedAt: utcPtr(revoked),
 	}, nil
 }
@@ -111,12 +112,12 @@ func (s *Store) InsertAPIToken(ctx context.Context, t theauth.APIToken) (theauth
 		created = time.Now()
 	}
 	out, err := scanAPIToken(s.pool.QueryRow(ctx, `
-INSERT INTO api_tokens (id, owner_id, owner_kind, name, abilities, token_hash, hint, created_at, expires_at, last_used_at, revoked_at, kind, agent_name, delegated_by)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+INSERT INTO api_tokens (id, owner_id, owner_kind, name, abilities, token_hash, hint, created_at, expires_at, last_used_at, revoked_at, kind, agent_name, delegated_by, agent_id)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
 RETURNING `+apiTokenCols,
 		ulidToPgUUID(t.ID), ulidToPgUUID(t.OwnerID), t.OwnerKind, t.Name, abilities, t.TokenHash, t.Hint,
 		created, timePtrToTs(t.ExpiresAt), timePtrToTs(t.LastUsedAt), timePtrToTs(t.RevokedAt),
-		t.Kind, t.AgentName, uuidPtr(t.DelegatedBy)))
+		t.Kind, t.AgentName, uuidPtr(t.DelegatedBy), uuidPtr(t.AgentID)))
 	if err != nil {
 		return theauth.APIToken{}, fmt.Errorf("postgres: insert api token: %w", err)
 	}
@@ -164,6 +165,11 @@ func (s *Store) queryAPITokens(ctx context.Context, op, where string, args ...an
 // APITokensByOwner returns every token of the owner, newest first.
 func (s *Store) APITokensByOwner(ctx context.Context, ownerID theauth.ULID) ([]theauth.APIToken, error) {
 	return s.queryAPITokens(ctx, "api tokens by owner", `WHERE owner_id = $1`, ulidToPgUUID(ownerID))
+}
+
+// APITokensByAgentID returns every token minted for the agent, newest first.
+func (s *Store) APITokensByAgentID(ctx context.Context, agentID theauth.ULID) ([]theauth.APIToken, error) {
+	return s.queryAPITokens(ctx, "api tokens by agent", `WHERE agent_id = $1`, ulidToPgUUID(agentID))
 }
 
 // ListAPITokens returns every token, newest first.

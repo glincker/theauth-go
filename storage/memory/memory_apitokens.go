@@ -87,6 +87,20 @@ func (s *Store) APITokensByOwner(_ context.Context, ownerID theauth.ULID) ([]the
 	return out, nil
 }
 
+// APITokensByAgentID returns every token minted for the agent, newest first.
+func (s *Store) APITokensByAgentID(_ context.Context, agentID theauth.ULID) ([]theauth.APIToken, error) {
+	s.tokens.mu.Lock()
+	defer s.tokens.mu.Unlock()
+	out := []theauth.APIToken{}
+	for _, t := range s.tokens.tokens {
+		if t.AgentID != nil && *t.AgentID == agentID {
+			out = append(out, cloneToken(t))
+		}
+	}
+	sortNewestFirst(out)
+	return out, nil
+}
+
 func (s *Store) ListAPITokens(_ context.Context) ([]theauth.APIToken, error) {
 	s.tokens.mu.Lock()
 	defer s.tokens.mu.Unlock()
