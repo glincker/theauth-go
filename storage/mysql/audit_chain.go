@@ -45,10 +45,36 @@ func (s *Store) InsertAuditEvents(ctx context.Context, events []theauth.AuditEve
 	if len(events) == 0 {
 		return nil
 	}
+	return retryDeadlock(ctx, func() error { return s.insertChained(ctx, events) })
+}
+
+// deadlockBackoffBase is the first retry delay; it doubles per attempt.
+var deadlockBackoffBase = 10 * time.Millisecond
+
+// retryDeadlock runs fn, replaying it with a small bounded exponential
+// backoff when InnoDB picks it as a deadlock victim. It stops early when ctx
+// is cancelled.
+func retryDeadlock(ctx context.Context, fn func() error) error {
 	var err error
 	for attempt := 0; attempt <= maxDeadlockRetries; attempt++ {
-		if err = s.insertChained(ctx, events); !isDeadlock(err) {
+		if cerr := ctx.Err(); cerr != nil {
+			if err != nil {
+				return fmt.Errorf("mysql: audit insert retry aborted: %w (last error: %v)", cerr, err)
+			}
+			return cerr
+		}
+		if err = fn(); !isDeadlock(err) {
 			return err
+		}
+		if attempt == maxDeadlockRetries {
+			break
+		}
+		t := time.NewTimer(deadlockBackoffBase << attempt)
+		select {
+		case <-ctx.Done():
+			t.Stop()
+			return fmt.Errorf("mysql: audit insert retry aborted: %w (last error: %v)", ctx.Err(), err)
+		case <-t.C:
 		}
 	}
 	return err

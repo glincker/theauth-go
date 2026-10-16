@@ -20,7 +20,12 @@
 //   - Failures are logged at slog.Error and counted as Failed without
 //     retry per the v1.0 design tradeoff.
 //   - Stop() closes the stop channel and waits up to DrainTimeout for the
-//     writer to drain remaining events. Idempotent.
+//     writer to drain remaining events. If a storage write is still in
+//     flight at that point it keeps waiting, bounded by the flush timeout
+//     (30s), so shutdown does not return mid-write. Events still unwritten
+//     when Stop gives up are added to Dropped and logged. Idempotent.
+//   - Each sink has one worker goroutine fed by a bounded queue; a full
+//     queue drops that batch for that sink (counted in SinkFailed).
 //   - Race tests must pass -race -count=3.
 package audit
 
@@ -29,12 +34,21 @@ import (
 	"errors"
 	"log/slog"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/glincker/theauth-go/v2/internal/models"
 	obs "github.com/glincker/theauth-go/v2/internal/observability"
 	"github.com/glincker/theauth-go/v2/internal/ulid"
+)
+
+// flushTimeout bounds one InsertAuditEvents call and therefore how long Stop
+// will wait on an in-flight flush after DrainTimeout. sinkQueueSize bounds the
+// batches queued per sink. Variables so tests can shrink them.
+var (
+	flushTimeout  = 30 * time.Second
+	sinkQueueSize = 16
 )
 
 // Storage is the minimal persistence subset the audit writer needs.
@@ -194,6 +208,15 @@ type Service struct {
 	failed     atomic.Uint64
 	sinkFailed atomic.Uint64
 
+	// inflight is the number of events in the batch currently being written
+	// (0 when no flush is running); sinkWG joins the per-sink workers.
+	inflight atomic.Int64
+	// flushLimit and sinkQueue are the package defaults captured at
+	// construction so a running Service never re-reads the globals.
+	flushLimit time.Duration
+	sinkQueue  int
+	sinkWG     sync.WaitGroup
+
 	// gapCount is the number of events dropped since the last gap marker was
 	// written; gapFirst and gapLast bound them (unix nanoseconds). The writer
 	// goroutine turns a non-zero gapCount into a marker event at flush time.
@@ -226,6 +249,9 @@ func NewService(storage Storage, cfg Config) *Service {
 		ch:      make(chan models.AuditEvent, bufSize),
 		stop:    make(chan struct{}),
 		done:    make(chan struct{}),
+
+		flushLimit: flushTimeout,
+		sinkQueue:  sinkQueueSize,
 	}
 	s.mDroppedTotal = s.hooks.Counter(obs.MetricAuditDroppedTotal, nil)
 	s.mQueueDepth = s.hooks.Gauge(obs.MetricAuditQueueDepth, nil)
@@ -284,12 +310,36 @@ func (s *Service) Stop() {
 	if timeout <= 0 {
 		timeout = 5 * time.Second
 	}
-	if s.done != nil {
+	if s.done == nil {
+		return
+	}
+	timer := time.NewTimer(timeout)
+	defer timer.Stop()
+	select {
+	case <-s.done:
+		return
+	case <-timer.C:
+	}
+	// DrainTimeout elapsed. A storage write may still be in flight (up to
+	// flushTimeout); returning now would let the process exit mid-write and
+	// lose the batch, so keep waiting for it, bounded.
+	if s.inflight.Load() > 0 {
+		grace := time.NewTimer(s.flushLimit + time.Second)
+		defer grace.Stop()
 		select {
 		case <-s.done:
-		case <-time.After(timeout):
+			return
+		case <-grace.C:
 		}
 	}
+	lost := uint64(len(s.ch)) + uint64(max(s.inflight.Load(), 0))
+	if lost > 0 {
+		s.dropped.Add(lost)
+	}
+	slog.Warn("theauth: audit shutdown gave up before the writer drained",
+		"dropped_at_shutdown", lost,
+		"dropped_total", s.dropped.Load(),
+	)
 }
 
 // EmitAudit satisfies the Emitter interface. Equivalent to Emit with a
@@ -496,6 +546,15 @@ func (s *Service) writerLoop() {
 		interval = 1 * time.Second
 	}
 	buf := make([]models.AuditEvent, 0, batchSize)
+	queues := s.startSinkWorkers()
+	defer func() {
+		// Runs before close(s.done) (LIFO): let sink workers finish queued
+		// batches so Stop's wait covers them.
+		for _, q := range queues {
+			close(q)
+		}
+		s.sinkWG.Wait()
+	}()
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
@@ -511,8 +570,10 @@ func (s *Service) writerLoop() {
 		}
 		// Detach from the request context; the writer owns a background
 		// ctx so callers' cancellations cannot abort a batch in flight.
-		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), s.flushLimit)
+		s.inflight.Store(int64(len(buf)))
 		err := s.storage.InsertAuditEvents(ctx, buf)
+		s.inflight.Store(0)
 		cancel()
 		if err != nil {
 			s.failed.Add(uint64(len(buf)))
@@ -532,26 +593,21 @@ func (s *Service) writerLoop() {
 			} else {
 				s.written.Add(uint64(len(buf)))
 			}
-			// Fan out to each registered sink. Each sink runs in its own
-			// goroutine so a slow or failing sink never delays the writer
-			// loop. Failures are best-effort: logged, counted, discarded.
-			if len(s.cfg.Sinks) > 0 {
+			// Fan out to each sink's bounded queue. The send never blocks the
+			// writer: a sink that cannot keep up drops the batch (counted).
+			if len(queues) > 0 {
 				snapshot := make([]models.AuditEvent, len(buf))
 				copy(snapshot, buf)
-				for _, sink := range s.cfg.Sinks {
-					sink := sink // capture per-iteration
-					go func() {
-						sinkCtx, sinkCancel := context.WithTimeout(context.Background(), 10*time.Second)
-						defer sinkCancel()
-						if serr := sink.Stream(sinkCtx, snapshot); serr != nil {
-							s.sinkFailed.Add(1)
-							slog.Warn("theauth: audit sink failed",
-								"sink", sink.Name(),
-								"count", len(snapshot),
-								"err", serr.Error(),
-							)
-						}
-					}()
+				for i, q := range queues {
+					select {
+					case q <- snapshot:
+					default:
+						s.sinkFailed.Add(1)
+						slog.Warn("theauth: audit sink queue full, batch dropped",
+							"sink", s.cfg.Sinks[i].Name(),
+							"count", len(snapshot),
+						)
+					}
 				}
 			}
 		}
@@ -603,4 +659,32 @@ func (s *Service) gapMarker(n uint64) models.AuditEvent {
 		},
 		CreatedAt: time.Now(),
 	}
+}
+
+// startSinkWorkers starts one worker per sink, each draining a bounded queue,
+// so sink goroutines are capped at len(Sinks) instead of one per batch.
+// Failures are best-effort: logged, counted, discarded.
+func (s *Service) startSinkWorkers() []chan []models.AuditEvent {
+	queues := make([]chan []models.AuditEvent, len(s.cfg.Sinks))
+	for i, sink := range s.cfg.Sinks {
+		q := make(chan []models.AuditEvent, max(s.sinkQueue, 1))
+		queues[i] = q
+		s.sinkWG.Add(1)
+		go func() {
+			defer s.sinkWG.Done()
+			for batch := range q {
+				sinkCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+				if serr := sink.Stream(sinkCtx, batch); serr != nil {
+					s.sinkFailed.Add(1)
+					slog.Warn("theauth: audit sink failed",
+						"sink", sink.Name(),
+						"count", len(batch),
+						"err", serr.Error(),
+					)
+				}
+				cancel()
+			}
+		}()
+	}
+	return queues
 }

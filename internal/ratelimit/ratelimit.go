@@ -47,8 +47,29 @@ func New(perMinute int) *Keyed {
 	return NewWith(perMinute, 10*time.Minute, time.Minute)
 }
 
-// NewWith is the testable variant, caller specifies GC timing.
+// Defaults applied by NewWith when an argument is not positive. A zero or
+// negative perMinute would divide by zero and a non-positive tickerEvery
+// would panic in time.NewTicker, so invalid values are clamped, not rejected,
+// to keep the constructor signature stable.
+const (
+	defaultPerMinute   = 60
+	defaultEvictAfter  = 10 * time.Minute
+	defaultTickerEvery = time.Minute
+)
+
+// NewWith is the testable variant, caller specifies GC timing. Non-positive
+// arguments fall back to documented defaults (60 per minute, 10 minute
+// eviction, 1 minute GC tick).
 func NewWith(perMinute int, evictAfter, tickerEvery time.Duration) *Keyed {
+	if perMinute <= 0 {
+		perMinute = defaultPerMinute
+	}
+	if evictAfter <= 0 {
+		evictAfter = defaultEvictAfter
+	}
+	if tickerEvery <= 0 {
+		tickerEvery = defaultTickerEvery
+	}
 	k := &Keyed{
 		limits:      make(map[string]*limiterEntry),
 		perMinute:   perMinute,
@@ -101,15 +122,32 @@ func (k *Keyed) gcLoop() {
 			return
 		case <-t.C:
 			cutoffNanos := time.Now().Add(-k.evictAfter).UnixNano()
-			k.mu.Lock()
-			for key, e := range k.limits {
-				if e.lastUsed.Load() < cutoffNanos {
-					delete(k.limits, key)
-				}
-			}
-			k.mu.Unlock()
+			k.evictStale(cutoffNanos)
 		}
 	}
+}
+
+// evictStale scans under a shared lock and deletes under a short write lock,
+// re-checking lastUsed so a key touched between the two phases survives.
+func (k *Keyed) evictStale(cutoffNanos int64) {
+	k.mu.RLock()
+	var stale []string
+	for key, e := range k.limits {
+		if e.lastUsed.Load() < cutoffNanos {
+			stale = append(stale, key)
+		}
+	}
+	k.mu.RUnlock()
+	if len(stale) == 0 {
+		return
+	}
+	k.mu.Lock()
+	for _, key := range stale {
+		if e, ok := k.limits[key]; ok && e.lastUsed.Load() < cutoffNanos {
+			delete(k.limits, key)
+		}
+	}
+	k.mu.Unlock()
 }
 
 // Stop terminates the GC goroutine. Safe to call multiple times.
