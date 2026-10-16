@@ -133,18 +133,43 @@ type CIBARedeemStore interface {
 // RunCIBARedeem runs the BackchannelRedeemer contract: an approved, unexpired
 // request is redeemed by exactly one of many concurrent callers, and pending,
 // denied, expired, consumed and unknown requests are refused without error.
-func RunCIBARedeem(t *testing.T, store CIBARedeemStore) {
+//
+// Stores that enforce a foreign key from backchannel requests to OAuth clients
+// (Postgres) pass WithClientSeed so the suite can create the client row first.
+func RunCIBARedeem(t *testing.T, store CIBARedeemStore, opts ...CIBARedeemOption) {
 	t.Helper()
-	t.Run("CIBARedeem", func(t *testing.T) { testCIBARedeem(t, store) })
+	var cfg cibaRedeemConfig
+	for _, opt := range opts {
+		opt(&cfg)
+	}
+	t.Run("CIBARedeem", func(t *testing.T) { testCIBARedeem(t, store, cfg) })
 }
 
-func testCIBARedeem(t *testing.T, store CIBARedeemStore) {
+// CIBARedeemOption tunes RunCIBARedeem.
+type CIBARedeemOption func(*cibaRedeemConfig)
+
+type cibaRedeemConfig struct {
+	seedClient func(t *testing.T, clientID string)
+}
+
+// WithClientSeed registers a function that creates the OAuth client the suite
+// attaches its requests to. It is called once per run, before any insert.
+func WithClientSeed(seed func(t *testing.T, clientID string)) CIBARedeemOption {
+	return func(c *cibaRedeemConfig) { c.seedClient = seed }
+}
+
+const cibaRedeemClientID = "client-redeem"
+
+func testCIBARedeem(t *testing.T, store CIBARedeemStore, cfg cibaRedeemConfig) {
 	ctx := context.Background()
+	if cfg.seedClient != nil {
+		cfg.seedClient(t, cibaRedeemClientID)
+	}
 	now := time.Now().UTC().Truncate(time.Second)
 	insert := func(t *testing.T, id, status string) theauth.BackchannelRequest {
 		t.Helper()
 		req := theauth.BackchannelRequest{
-			AuthReqID: id, ClientID: "client-redeem", Scope: []string{"openid"},
+			AuthReqID: id, ClientID: cibaRedeemClientID, Scope: []string{"openid"},
 			Status: theauth.BackchannelStatusPending, PollInterval: 5,
 			ExpiresAt: now.Add(time.Hour), CreatedAt: now,
 		}
