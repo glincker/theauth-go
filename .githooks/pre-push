@@ -5,7 +5,9 @@
 #      the govulncheck jobs load them (catches nested modules that depend on
 #      root symbols a release does not have yet)
 #   3. govulncheck: third-party module findings fail, stdlib findings warn
-#      because they depend on the local Go toolchain version
+#      because they depend on the local Go toolchain version. A govulncheck
+#      run that errors (exit other than 0 or 3) fails the push unless
+#      THEAUTH_ALLOW_OFFLINE_VULN=1 is set.
 # Tests are not run here: CI runs the full suite, including the slow internal/as
 # shard under -race. Full local run: GOWORK=off go test -race ./...
 # Pushes with no Go, go.mod, go.sum or go.work change skip all of the above.
@@ -37,8 +39,22 @@ if [ "$THEAUTH_SKIP_VULNCHECK" = "1" ]; then
 	exit 0
 fi
 for m in $modules; do
-	out=$( cd "$m" && GOWORK=off go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 ./... 2>&1 ) \
-		|| true
+	rc=0
+	out=$( cd "$m" && GOWORK=off go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 ./... 2>&1 ) || rc=$?
+	# `go run` turns any program failure into exit 1 and prints "exit status N". govulncheck exits
+	# 3 when it found vulnerabilities, so recover that code from the last output line.
+	if [ "$rc" -eq 1 ] && printf '%s\n' "$out" | tail -n 1 | grep -q '^exit status 3$'; then
+		rc=3
+	fi
+	if [ "$rc" -ne 0 ] && [ "$rc" -ne 3 ]; then
+		printf '%s\n' "$out" | tail -n 15 >&2
+		warn "$m: govulncheck did not run to completion (exit $rc), the vulnerability scan did NOT happen"
+		if [ "$THEAUTH_ALLOW_OFFLINE_VULN" = "1" ]; then
+			warn "$m: continuing because THEAUTH_ALLOW_OFFLINE_VULN=1"
+			continue
+		fi
+		fail "govulncheck failed in $m; fix the network or toolchain and retry, set THEAUTH_ALLOW_OFFLINE_VULN=1 to push without the scan, or THEAUTH_SKIP_VULNCHECK=1 to skip it"
+	fi
 	if printf '%s\n' "$out" | grep -q '^  Module:'; then
 		printf '%s\n' "$out" | grep -B4 -A4 '^  Module:' >&2
 		fail "govulncheck found third-party module vulnerabilities in $m"
