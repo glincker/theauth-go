@@ -81,6 +81,28 @@ func New(storage Storage, cfg *Config, resource ResourceLookup, em audit.Emitter
 	return &Service{storage: storage, cfg: cfg, resource: resource, auditEm: em, hooks: &obs.Hooks{}}
 }
 
+// ready reports whether the service has the pieces every public method needs.
+func (s *Service) ready() bool {
+	return s != nil && s.cfg != nil && s.storage != nil
+}
+
+// tracer returns the hooks bundle, or an empty one when unset, so a Service
+// built as a literal never dereferences nil.
+func (s *Service) tracer() *obs.Hooks {
+	if s.hooks == nil {
+		return &obs.Hooks{}
+	}
+	return s.hooks
+}
+
+// emit forwards to the audit emitter, tolerating an unset one.
+func (s *Service) emit(ctx context.Context, action string, target models.TargetRef, md map[string]any) {
+	if s.auditEm == nil {
+		return
+	}
+	s.auditEm.EmitAudit(ctx, action, target, md)
+}
+
 // SetHooks installs the consumer-supplied observability bundle. Idempotent.
 // Root *theauth.TheAuth wires this in New so every internal service shares
 // the same Tracer + Metrics adapters.
@@ -108,10 +130,13 @@ var errNotConfigured = errors.New("theauth: agent identity not configured")
 //
 // Audit emission: delegation.granted with redacted metadata.
 func (s *Service) GrantDelegation(ctx context.Context, in models.GrantDelegationInput) (grant models.DelegationGrant, err error) {
-	if s == nil || s.cfg == nil {
+	if !s.ready() {
 		return models.DelegationGrant{}, errNotConfigured
 	}
-	ctx, span := s.hooks.StartSpan(ctx, obs.SpanDelegationGrant)
+	if s.resource == nil {
+		return models.DelegationGrant{}, errNotConfigured
+	}
+	ctx, span := s.tracer().StartSpan(ctx, obs.SpanDelegationGrant)
 	defer func() {
 		status := obs.StatusSuccess
 		if err != nil {
@@ -165,7 +190,7 @@ func (s *Service) GrantDelegation(ctx context.Context, in models.GrantDelegation
 	if err != nil {
 		return models.DelegationGrant{}, fmt.Errorf("persist delegation grant: %w", err)
 	}
-	s.auditEm.EmitAudit(ctx, "delegation.granted", models.TargetRef{Type: "delegation_grant", ID: stored.ID.String()}, map[string]any{
+	s.emit(ctx, "delegation.granted", models.TargetRef{Type: "delegation_grant", ID: stored.ID.String()}, map[string]any{
 		"grant_id":             stored.ID.String(),
 		"user_id":              stored.UserID.String(),
 		"agent_id":             stored.AgentID.String(),
@@ -179,7 +204,7 @@ func (s *Service) GrantDelegation(ctx context.Context, in models.GrantDelegation
 // ListDelegationsForUser returns every grant the user has issued, including
 // revoked ones (for audit / display). Callers can filter on RevokedAt.
 func (s *Service) ListDelegationsForUser(ctx context.Context, userID models.ULID) ([]models.DelegationGrant, error) {
-	if s == nil || s.cfg == nil {
+	if !s.ready() {
 		return nil, errNotConfigured
 	}
 	return s.storage.DelegationGrantsByUserID(ctx, userID)
@@ -187,7 +212,7 @@ func (s *Service) ListDelegationsForUser(ctx context.Context, userID models.ULID
 
 // ListDelegationsForAgent returns every grant naming the supplied agent.
 func (s *Service) ListDelegationsForAgent(ctx context.Context, agentID models.ULID) ([]models.DelegationGrant, error) {
-	if s == nil || s.cfg == nil {
+	if !s.ready() {
 		return nil, errNotConfigured
 	}
 	return s.storage.DelegationGrantsByAgentID(ctx, agentID)
@@ -199,10 +224,10 @@ func (s *Service) ListDelegationsForAgent(ctx context.Context, agentID models.UL
 //
 // Audit emission: delegation.revoked.
 func (s *Service) RevokeDelegation(ctx context.Context, grantID models.ULID, reason string) (err error) {
-	if s == nil || s.cfg == nil {
+	if !s.ready() {
 		return errNotConfigured
 	}
-	ctx, span := s.hooks.StartSpan(ctx, obs.SpanDelegationRevoke)
+	ctx, span := s.tracer().StartSpan(ctx, obs.SpanDelegationRevoke)
 	defer func() {
 		status := obs.StatusSuccess
 		if err != nil {
@@ -222,10 +247,19 @@ func (s *Service) RevokeDelegation(ctx context.Context, grantID models.ULID, rea
 		return nil
 	}
 	now := time.Now().UTC()
+	// The storage update is conditional on revoked_at IS NULL. If another
+	// caller revoked between our read and this write it reports not-found;
+	// re-read and treat an already-revoked grant as success so exactly one
+	// delegation.revoked event is emitted.
 	if err := s.storage.RevokeDelegationGrant(ctx, grantID, now, reason); err != nil {
+		if errors.Is(err, models.ErrStorageNotFound) {
+			if again, gerr := s.storage.DelegationGrantByID(ctx, grantID); gerr == nil && again.RevokedAt != nil {
+				return nil
+			}
+		}
 		return fmt.Errorf("revoke delegation: %w", err)
 	}
-	s.auditEm.EmitAudit(ctx, "delegation.revoked", models.TargetRef{Type: "delegation_grant", ID: grantID.String()}, map[string]any{
+	s.emit(ctx, "delegation.revoked", models.TargetRef{Type: "delegation_grant", ID: grantID.String()}, map[string]any{
 		"grant_id": grantID.String(),
 		"user_id":  cur.UserID.String(),
 		"agent_id": cur.AgentID.String(),
@@ -241,6 +275,9 @@ func (s *Service) RevokeDelegation(ctx context.Context, grantID models.ULID, rea
 // back-door in favour of this lookup). The storage error is returned
 // unwrapped so callers can compare with models.ErrStorageNotFound.
 func (s *Service) GrantByID(ctx context.Context, grantID models.ULID) (*models.DelegationGrant, error) {
+	if s == nil || s.storage == nil {
+		return nil, errNotConfigured
+	}
 	return s.storage.DelegationGrantByID(ctx, grantID)
 }
 

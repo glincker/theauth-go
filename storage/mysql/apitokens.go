@@ -14,12 +14,13 @@ import (
 )
 
 var (
-	_ theauth.APITokenStorage   = (*Store)(nil)
-	_ theauth.DeviceCodeStorage = (*Store)(nil)
-	_ theauth.DeviceCodeLister  = (*Store)(nil)
+	_ theauth.APITokenStorage      = (*Store)(nil)
+	_ theauth.DeviceCodeStorage    = (*Store)(nil)
+	_ theauth.DeviceCodeLister     = (*Store)(nil)
+	_ theauth.APITokenAgentStorage = (*Store)(nil)
 )
 
-const apiTokenCols = `id, owner_id, owner_kind, name, abilities, token_hash, hint, created_at, expires_at, last_used_at, revoked_at, kind, agent_name, delegated_by`
+const apiTokenCols = `id, owner_id, owner_kind, name, abilities, token_hash, hint, created_at, expires_at, last_used_at, revoked_at, kind, agent_name, delegated_by, agent_id`
 
 const deviceCols = `id, device_code_hash, user_code, status, client_name, requested_abilities, approved_abilities,
 approver_id, requester_ip, requester_ua, interval_seconds, last_polled_at, created_at, expires_at`
@@ -54,7 +55,7 @@ type rowScanner interface{ Scan(dest ...any) error }
 
 func scanAPIToken(r rowScanner) (theauth.APIToken, error) {
 	var (
-		idB, ownerB, delegatedB          []byte
+		idB, ownerB, delegatedB, agentB  []byte
 		ownerKind, name, abilities, hint string
 		kind, agentName                  string
 		hash                             []byte
@@ -62,7 +63,7 @@ func scanAPIToken(r rowScanner) (theauth.APIToken, error) {
 		expires, used, revoked           sql.NullTime
 	)
 	if err := r.Scan(&idB, &ownerB, &ownerKind, &name, &abilities, &hash, &hint, &created, &expires, &used, &revoked,
-		&kind, &agentName, &delegatedB); err != nil {
+		&kind, &agentName, &delegatedB, &agentB); err != nil {
 		return theauth.APIToken{}, err
 	}
 	ab, err := decodeList(abilities)
@@ -71,7 +72,7 @@ func scanAPIToken(r rowScanner) (theauth.APIToken, error) {
 	}
 	return theauth.APIToken{
 		ID: bytesToULID(idB), OwnerID: bytesToULID(ownerB), OwnerKind: ownerKind, Name: name, Abilities: ab,
-		TokenHash: hash, Hint: hint, Kind: kind, AgentName: agentName, DelegatedBy: bytesToULIDPtr(delegatedB),
+		TokenHash: hash, Hint: hint, Kind: kind, AgentName: agentName, DelegatedBy: bytesToULIDPtr(delegatedB), AgentID: bytesToULIDPtr(agentB),
 		CreatedAt: created.UTC(), ExpiresAt: nullTimeToPtr(expires), LastUsedAt: nullTimeToPtr(used), RevokedAt: nullTimeToPtr(revoked),
 	}, nil
 }
@@ -87,10 +88,10 @@ func (s *Store) InsertAPIToken(ctx context.Context, t theauth.APIToken) (theauth
 		created = time.Now()
 	}
 	_, err = s.db.ExecContext(ctx, `
-INSERT INTO api_tokens (`+apiTokenCols+`) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+INSERT INTO api_tokens (`+apiTokenCols+`) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		ulidToBytes(t.ID), ulidToBytes(t.OwnerID), t.OwnerKind, t.Name, abilities, t.TokenHash, t.Hint,
 		timeUTC(created), timePtrToNull(t.ExpiresAt), timePtrToNull(t.LastUsedAt), timePtrToNull(t.RevokedAt),
-		t.Kind, t.AgentName, ulidPtrToBytes(t.DelegatedBy))
+		t.Kind, t.AgentName, ulidPtrToBytes(t.DelegatedBy), ulidPtrToBytes(t.AgentID))
 	if err != nil {
 		return theauth.APIToken{}, fmt.Errorf("mysql: insert api token: %w", err)
 	}
@@ -142,6 +143,11 @@ func (s *Store) queryAPITokens(ctx context.Context, op, where string, args ...an
 // APITokensByOwner returns every token of the owner, newest first.
 func (s *Store) APITokensByOwner(ctx context.Context, ownerID theauth.ULID) ([]theauth.APIToken, error) {
 	return s.queryAPITokens(ctx, "api tokens by owner", `WHERE owner_id = ?`, ulidToBytes(ownerID))
+}
+
+// APITokensByAgentID returns every token minted for the agent, newest first.
+func (s *Store) APITokensByAgentID(ctx context.Context, agentID theauth.ULID) ([]theauth.APIToken, error) {
+	return s.queryAPITokens(ctx, "api tokens by agent", `WHERE agent_id = ?`, ulidToBytes(agentID))
 }
 
 // ListAPITokens returns every token, newest first.

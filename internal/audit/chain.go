@@ -7,7 +7,7 @@ import (
 )
 
 // ChainVerifier is implemented by storage backends that keep a tamper-evident
-// audit hash chain (today: storage/sqlite). Backends without a chain either do
+// audit hash chain (sqlite, postgres, mysql). Backends without a chain either do
 // not implement it or report ChainSupported() == false.
 type ChainVerifier interface {
 	ChainSupported() bool

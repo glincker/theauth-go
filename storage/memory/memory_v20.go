@@ -552,7 +552,8 @@ func (s *Store) RevokeDelegationGrant(_ context.Context, id theauth.ULID, at tim
 	v.mu.Lock()
 	defer v.mu.Unlock()
 	g, ok := v.delegations[id]
-	if !ok {
+	if !ok || g.RevokedAt != nil {
+		// Conditional on revoked_at IS NULL, like the SQL stores.
 		return storage.ErrNotFound
 	}
 	t := at

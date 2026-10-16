@@ -21,7 +21,8 @@ import (
 const auditHashVersion = 1
 
 // ChainSupported reports that this backend keeps a tamper-evident audit hash
-// chain. The memory, postgres and mysql backends return false.
+// chain. The memory backend returns false. postgres and mysql chain with the
+// same hash input (internal/audit.ChainPayload); the golden vector test pins both.
 func (s *Store) ChainSupported() bool { return true }
 
 // auditChainPayload is the exact structure hashed for one row. Struct field

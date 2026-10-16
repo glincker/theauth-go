@@ -20,6 +20,10 @@ type Request struct {
 	Currency     string
 	DataClass    string
 	Irreversible bool
+	// Provenance holds the labels of the call's arguments, keyed by argument
+	// name. The key CallLabelsKey labels the whole call. It feeds
+	// Evaluator.Taint. Nil means no provenance was supplied.
+	Provenance map[string][]string
 }
 
 // Decision is the audited outcome of an evaluation.
@@ -34,6 +38,9 @@ type Decision struct {
 	Boundary    bool   `json:"boundary,omitempty"`
 	// Escalation is set when Effect is Escalate.
 	Escalation *Escalation `json:"escalation,omitempty"`
+	// Taint is the taint verdict, set when provenance was supplied or a rule
+	// with Unlabeled "violate" applied. Nil otherwise.
+	Taint *TaintVerdict `json:"taint,omitempty"`
 }
 
 // Evaluator evaluates requests against policies. The zero value is ready.
@@ -43,11 +50,18 @@ type Evaluator struct {
 	// Risk maps request risk attributes to tiers that can escalate an
 	// otherwise allowed request. Empty means no risk tiers.
 	Risk []RiskTier
+	// Taint restricts which provenance labels may flow into which tools. It is
+	// applied after risk tiers. Empty means no taint rules.
+	Taint []TaintRule
 }
 
 // Evaluate applies explicit-deny-wins then default-deny across policies.
 func (e Evaluator) Evaluate(req Request, policies ...*Policy) Decision {
 	req = e.prepare(req)
+	return e.applyTaint(req, e.evaluate(req, policies...))
+}
+
+func (e Evaluator) evaluate(req Request, policies ...*Policy) Decision {
 	var allow, escalate *Decision
 	for _, p := range policies {
 		if p == nil {
@@ -58,15 +72,18 @@ func (e Evaluator) Evaluate(req Request, policies ...*Policy) Decision {
 				continue
 			}
 			d := Decision{Effect: s.Effect, PolicyID: p.ID, StatementID: s.ID}
-			if d.StatementID == "" {
-				d.StatementID = fmt.Sprintf("stmt-%d", i)
-			}
 			if s.Effect == Deny {
+				if d.StatementID == "" {
+					d.StatementID = statementIndexID(i)
+				}
 				d.Reason = "explicit deny"
 				return d
 			}
 			if s.Effect == Escalate {
 				if escalate == nil {
+					if d.StatementID == "" {
+						d.StatementID = statementIndexID(i)
+					}
 					d.Reason = "escalation required by statement"
 					d.Escalation = &Escalation{Tier: s.Tier, Requirement: s.Require, Reason: d.Reason}
 					if d.Escalation.Requirement == "" {
@@ -77,6 +94,9 @@ func (e Evaluator) Evaluate(req Request, policies ...*Policy) Decision {
 				continue
 			}
 			if allow == nil {
+				if d.StatementID == "" {
+					d.StatementID = statementIndexID(i)
+				}
 				d.Allowed = true
 				d.Reason = "allowed by statement"
 				allow = &d
@@ -92,6 +112,13 @@ func (e Evaluator) Evaluate(req Request, policies ...*Policy) Decision {
 	return Decision{Reason: "no matching allow statement (default deny)"}
 }
 
+// statementIndexID is the StatementID given to an unnamed statement: its
+// position within the policy document. Built only for the statement that is
+// actually returned, so non-selected matches do not allocate.
+func statementIndexID(i int) string {
+	return fmt.Sprintf("stmt-%d", i)
+}
+
 // EvaluateWithBoundary requires identity policies to allow and the boundary
 // policies, when any exist, to allow as well, so a boundary only narrows.
 func (e Evaluator) EvaluateWithBoundary(req Request, identity, boundary []*Policy) Decision {
@@ -99,7 +126,7 @@ func (e Evaluator) EvaluateWithBoundary(req Request, identity, boundary []*Polic
 	if !d.Allowed || len(boundary) == 0 {
 		return d
 	}
-	b := e.Evaluate(req, boundary...)
+	b := e.evaluate(e.prepare(req), boundary...)
 	if !b.Allowed {
 		b.Boundary = true
 		b.Reason = "permission boundary: " + b.Reason

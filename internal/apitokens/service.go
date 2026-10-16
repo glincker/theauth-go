@@ -272,6 +272,9 @@ type MintAPITokenInput struct {
 	// DelegatedBy is the human an agent token acts for. It must equal
 	// OwnerID, which defaults it when nil.
 	DelegatedBy *ULID
+	// AgentID is the registered agent an agent token is minted for. Optional,
+	// and valid only for agent tokens.
+	AgentID *ULID
 }
 
 func (s *Service) Mint(ctx context.Context, in MintAPITokenInput) (string, APIToken, error) {
@@ -286,12 +289,12 @@ func (s *Service) Mint(ctx context.Context, in MintAPITokenInput) (string, APITo
 		kind = APITokenKindPersonal
 	}
 	maxTTL, defTTL := s.cfg.MaxTTL, s.cfg.DefaultTTL
-	var delegatedBy *ULID
+	var delegatedBy, agentID *ULID
 	agentName := ""
 	switch kind {
 	case APITokenKindPersonal:
-		if in.AgentName != "" || in.DelegatedBy != nil {
-			return "", APIToken{}, errors.New("theauth: agent_name and delegated_by apply only to agent tokens")
+		if in.AgentName != "" || in.DelegatedBy != nil || in.AgentID != nil {
+			return "", APIToken{}, errors.New("theauth: agent_name, delegated_by and agent_id apply only to agent tokens")
 		}
 	case APITokenKindAgent:
 		if in.OwnerKind != OwnerKindUser {
@@ -306,6 +309,10 @@ func (s *Service) Mint(ctx context.Context, in MintAPITokenInput) (string, APITo
 		}
 		owner := in.OwnerID
 		delegatedBy = &owner
+		if in.AgentID != nil {
+			id := *in.AgentID
+			agentID = &id
+		}
 		maxTTL, defTTL = s.cfg.AgentMaxTTL, s.cfg.AgentTTL
 	default:
 		return "", APIToken{}, fmt.Errorf("theauth: unknown token kind %q", kind)
@@ -333,7 +340,7 @@ func (s *Service) Mint(ctx context.Context, in MintAPITokenInput) (string, APITo
 		ID: ulid.New(), OwnerID: in.OwnerID, OwnerKind: in.OwnerKind, Name: name,
 		Abilities: slices.Clone(in.Abilities), TokenHash: hashToken(raw),
 		Hint: s.cfg.Prefix + "_..." + secret[len(secret)-4:], CreatedAt: now, ExpiresAt: &exp,
-		Kind: kind, AgentName: agentName, DelegatedBy: delegatedBy,
+		Kind: kind, AgentName: agentName, DelegatedBy: delegatedBy, AgentID: agentID,
 	}
 	saved, err := s.store.InsertAPIToken(ctx, t)
 	if err != nil {

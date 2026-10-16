@@ -13,52 +13,7 @@ import (
 	"github.com/oklog/ulid/v2"
 )
 
-// Audit events
-
-func (s *Store) InsertAuditEvents(ctx context.Context, events []theauth.AuditEvent) error {
-	if len(events) == 0 {
-		return nil
-	}
-	tx, err := s.db.BeginTx(ctx, nil)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = tx.Rollback() }()
-
-	for _, e := range events {
-		metaBytes, err := json.Marshal(e.MetadataWithAccountability())
-		if err != nil {
-			return fmt.Errorf("audit metadata marshal: %w", err)
-		}
-		if string(metaBytes) == "null" {
-			metaBytes = []byte("{}")
-		}
-		var ipVal interface{}
-		if e.IP != "" {
-			ipVal = e.IP
-		}
-		if _, err := tx.ExecContext(ctx, `
-INSERT INTO audit_events
-    (id, organization_id, actor_user_id, actor_session_id,
-     action, target_type, target_id, metadata, ip, user_agent, created_at)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-			ulidToBytes(e.ID),
-			ulidPtrToBytes(e.OrganizationID),
-			ulidPtrToBytes(e.ActorUserID),
-			ulidPtrToBytes(e.ActorSessionID),
-			e.Action,
-			nullStringVal(e.TargetType),
-			nullStringVal(e.TargetID),
-			metaBytes,
-			ipVal,
-			nullStringVal(e.UserAgent),
-			timeUTC(e.CreatedAt),
-		); err != nil {
-			return err
-		}
-	}
-	return tx.Commit()
-}
+// Audit events. InsertAuditEvents lives in audit_chain.go with the hash chain.
 
 func (s *Store) QueryAuditEvents(ctx context.Context, q theauth.AuditQuery) ([]theauth.AuditEvent, string, error) {
 	limit := q.Limit
@@ -112,7 +67,10 @@ func (s *Store) QueryAuditEvents(ctx context.Context, q theauth.AuditQuery) ([]t
 	}
 
 	sqlStr := `SELECT id, organization_id, actor_user_id, actor_session_id,
-                      action, target_type, target_id, metadata, ip, user_agent, created_at
+                      action, target_type, target_id, metadata, ip, user_agent, created_at,
+                      subject_id, actor_id, policy_version, approver_id,
+                      COALESCE(delegation_chain, '[]'), COALESCE(input_provenance, '{}'),
+                      COALESCE(chain_seq, 0), prev_hash, hash
                FROM audit_events`
 	if len(wheres) > 0 {
 		sqlStr += " WHERE " + strings.Join(wheres, " AND ")
@@ -134,10 +92,15 @@ func (s *Store) QueryAuditEvents(ctx context.Context, q theauth.AuditQuery) ([]t
 			metaBytes                           []byte
 			ip, ua                              nullableStr
 			createdAt                           time.Time
+			subject, actorID, policy, approver  string
+			chain, prov                         string
+			seq                                 int64
+			prev, hash                          string
 		)
 		if err := rows.Scan(
 			&idB, &orgIDB, &actorUserB, &actorSessB,
 			&action, &targetType, &targetID, &metaBytes, &ip, &ua, &createdAt,
+			&subject, &actorID, &policy, &approver, &chain, &prov, &seq, &prev, &hash,
 		); err != nil {
 			return nil, "", err
 		}
@@ -152,6 +115,18 @@ func (s *Store) QueryAuditEvents(ctx context.Context, q theauth.AuditQuery) ([]t
 			IP:             ip.value(),
 			UserAgent:      ua.value(),
 			CreatedAt:      createdAt.UTC(),
+			SubjectID:      subject, ActorID: actorID, PolicyVersion: policy, ApproverID: approver,
+			ChainSeq: uint64(seq), PrevHash: prev, Hash: hash,
+		}
+		if chain != "" && chain != "[]" {
+			if err := json.Unmarshal([]byte(chain), &e.DelegationChain); err != nil {
+				return nil, "", fmt.Errorf("decode delegation chain: %w", err)
+			}
+		}
+		if prov != "" && prov != "{}" {
+			if err := json.Unmarshal([]byte(prov), &e.InputProvenance); err != nil {
+				return nil, "", fmt.Errorf("decode input provenance: %w", err)
+			}
 		}
 		if len(metaBytes) > 0 {
 			var meta map[string]interface{}

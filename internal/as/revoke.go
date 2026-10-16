@@ -3,10 +3,12 @@ package as
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"strings"
 	"time"
 
 	"github.com/glincker/theauth-go/v2/crypto"
+	"github.com/glincker/theauth-go/v2/internal/models"
 	obs "github.com/glincker/theauth-go/v2/internal/observability"
 )
 
@@ -67,20 +69,31 @@ func (s *Service) RevokeToken(ctx context.Context, token, tokenTypeHint, clientI
 	// compromised token before calling revoke does not leave the fresh
 	// child alive. Mirror the reuse-detection family walk in
 	// RefreshAccessToken.
+	s.revokeRefreshFamily(ctx, hash, client.ClientID)
+	return nil
+}
+
+// revokeRefreshFamily revokes the rotation family of the refresh token with
+// the given hash when it belongs to clientID. RFC 7009 requires a 200 answer
+// whatever happens, so failures are logged, never returned.
+func (s *Service) revokeRefreshFamily(ctx context.Context, hash []byte, clientID string) {
 	rt, err := s.Storage.RefreshTokenByHash(ctx, hash)
 	if err != nil {
 		// Unknown, expired or never issued: RFC 7009 still answers 200.
-		err = nil
-		return nil
+		if !errors.Is(err, models.ErrStorageNotFound) {
+			slog.Warn("theauth: refresh token lookup failed during revoke", "err", err.Error())
+		}
+		return
 	}
 	// RFC 7009 section 2.1: the AS validates that the token was issued to
 	// the authenticated client. A mismatch is answered 200 without effect
 	// so a client cannot probe or kill another client's tokens.
-	if rt.ClientID != client.ClientID {
-		return nil
+	if rt == nil || rt.ClientID != clientID {
+		return
 	}
-	_ = s.Storage.RevokeRefreshTokenFamily(ctx, rt.FamilyID, "explicit revoke")
-	return nil
+	if err := s.Storage.RevokeRefreshTokenFamily(ctx, rt.FamilyID, "explicit revoke"); err != nil {
+		slog.Warn("theauth: revoke refresh token family failed", "client_id", clientID, "err", err.Error())
+	}
 }
 
 // revokeAccessToken adds the token's jti to the denylist when the feature
@@ -94,7 +107,9 @@ func (s *Service) revokeAccessToken(ctx context.Context, token, clientID string)
 	if verr != nil || claims.Iss != s.Cfg.Issuer || claims.ClientID != clientID || claims.Jti == "" {
 		return
 	}
-	_ = s.denyAccessJTI(ctx, claims.Jti, time.Unix(claims.Exp, 0))
+	if err := s.denyAccessJTI(ctx, claims.Jti, time.Unix(claims.Exp, 0)); err != nil {
+		slog.Warn("theauth: access token denylist write failed during revoke", "client_id", clientID, "err", err.Error())
+	}
 }
 
 // revokeOpaqueAccessToken revokes a reference access token issued to
@@ -110,8 +125,18 @@ func (s *Service) revokeOpaqueAccessToken(ctx context.Context, hash []byte, clie
 		return false
 	}
 	if rec.ClientID == clientID {
-		_ = store.RevokeOpaqueAccessToken(ctx, hash)
+		if err := store.RevokeOpaqueAccessToken(ctx, hash); err != nil {
+			slog.Warn("theauth: opaque access token revoke failed", "client_id", clientID, "err", err.Error())
+		}
 		s.purgeIntrospectCache()
 	}
 	return true
+}
+
+// touchAgentLastActive records agent activity; a failure only affects the
+// last-active display, so it is logged and otherwise ignored.
+func (s *Service) touchAgentLastActive(ctx context.Context, id models.ULID, at time.Time) {
+	if err := s.Storage.UpdateAgentLastActive(ctx, id, at); err != nil {
+		slog.Warn("theauth: agent last active update failed", "agent_id", id.String(), "err", err.Error())
+	}
 }

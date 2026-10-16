@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/glincker/theauth-go/v2"
@@ -63,6 +64,7 @@ SELECT id, user_id, token_hash, user_agent, ip, created_at, expires_at,
        revoked_at, auth_level, active_organization_id, last_seen_at, elevated_until, credential_id
 FROM sessions`
 
+// CreateSession inserts sess (defaulting AuthLevel to full) and returns the stored row.
 func (s *Store) CreateSession(ctx context.Context, sess theauth.Session) (theauth.Session, error) {
 	level := sess.AuthLevel
 	if level == "" {
@@ -96,6 +98,7 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 	return *got, nil
 }
 
+// CreateSessionWithAuthLevel is CreateSession; the auth level is taken from sess.AuthLevel.
 func (s *Store) CreateSessionWithAuthLevel(ctx context.Context, sess theauth.Session) (theauth.Session, error) {
 	return s.CreateSession(ctx, sess)
 }
@@ -115,6 +118,7 @@ func (s *Store) sessionByID(ctx context.Context, id theauth.ULID) (*theauth.Sess
 	return &sess, nil
 }
 
+// SessionByTokenHash returns the session whose token hash matches, or storage.ErrNotFound.
 func (s *Store) SessionByTokenHash(ctx context.Context, hash []byte) (*theauth.Session, error) {
 	row := s.db.QueryRowContext(ctx,
 		selectSessionColumns+` WHERE token_hash = ?`,
@@ -137,6 +141,7 @@ func (s *Store) SessionByID(ctx context.Context, id theauth.ULID) (*theauth.Sess
 	return s.sessionByID(ctx, id)
 }
 
+// RevokeSession sets revoked_at to now. It returns storage.ErrNotFound when no row matched.
 func (s *Store) RevokeSession(ctx context.Context, id theauth.ULID) error {
 	res, err := s.db.ExecContext(ctx,
 		`UPDATE sessions SET revoked_at = ? WHERE id = ?`,
@@ -146,13 +151,10 @@ func (s *Store) RevokeSession(ctx context.Context, id theauth.ULID) error {
 	if err != nil {
 		return err
 	}
-	n, _ := res.RowsAffected()
-	if n == 0 {
-		return storage.ErrNotFound
-	}
-	return nil
+	return s.requireSessionRow(ctx, res, id)
 }
 
+// RevokeUserSessions revokes every still-live session of userID.
 func (s *Store) RevokeUserSessions(ctx context.Context, userID theauth.ULID) error {
 	_, err := s.db.ExecContext(ctx,
 		`UPDATE sessions SET revoked_at = ? WHERE user_id = ? AND revoked_at IS NULL`,
@@ -162,6 +164,7 @@ func (s *Store) RevokeUserSessions(ctx context.Context, userID theauth.ULID) err
 	return err
 }
 
+// UpdateSessionAuthLevel rewrites the auth_level column of one session.
 func (s *Store) UpdateSessionAuthLevel(ctx context.Context, id theauth.ULID, level string) error {
 	res, err := s.db.ExecContext(ctx,
 		`UPDATE sessions SET auth_level = ? WHERE id = ?`,
@@ -171,13 +174,10 @@ func (s *Store) UpdateSessionAuthLevel(ctx context.Context, id theauth.ULID, lev
 	if err != nil {
 		return err
 	}
-	n, _ := res.RowsAffected()
-	if n == 0 {
-		return storage.ErrNotFound
-	}
-	return nil
+	return s.requireSessionRow(ctx, res, id)
 }
 
+// SetSessionActiveOrganization sets (or clears, when orgID is nil) the session active organization.
 func (s *Store) SetSessionActiveOrganization(ctx context.Context, sessionID theauth.ULID, orgID *theauth.ULID) error {
 	res, err := s.db.ExecContext(ctx,
 		`UPDATE sessions SET active_organization_id = ? WHERE id = ?`,
@@ -187,9 +187,26 @@ func (s *Store) SetSessionActiveOrganization(ctx context.Context, sessionID thea
 	if err != nil {
 		return err
 	}
-	n, _ := res.RowsAffected()
-	if n == 0 {
+	return s.requireSessionRow(ctx, res, sessionID)
+}
+
+// requireSessionRow maps a zero RowsAffected to ErrNotFound only when the
+// session truly does not exist. MySQL counts changed rows, not matched rows
+// (unless the DSN sets clientFoundRows=true, which this store does not
+// control), so re-applying an identical value reports 0 and must be a no-op
+// success, as it is on the Postgres and SQLite stores.
+func (s *Store) requireSessionRow(ctx context.Context, res sql.Result, id theauth.ULID) error {
+	n, err := res.RowsAffected()
+	if err == nil && n > 0 {
+		return nil
+	}
+	var one int
+	err = s.db.QueryRowContext(ctx, `SELECT 1 FROM sessions WHERE id = ?`, ulidToBytes(id)).Scan(&one)
+	if errors.Is(err, sql.ErrNoRows) {
 		return storage.ErrNotFound
+	}
+	if err != nil {
+		return fmt.Errorf("mysql: check session existence: %w", err)
 	}
 	return nil
 }

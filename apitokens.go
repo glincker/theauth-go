@@ -42,6 +42,7 @@ type (
 	DeviceCodeStorage    = apitokens.DeviceCodeStorage
 	DevicePendingFilter  = apitokens.DevicePendingFilter
 	DeviceCodeLister     = apitokens.DeviceCodeLister
+	APITokenAgentStorage = apitokens.APITokenAgentStorage
 	APITokensConfig      = apitokens.Config
 	DeviceConfig         = apitokens.DeviceConfig
 	MintAPITokenInput    = apitokens.MintAPITokenInput

@@ -13,12 +13,13 @@ import (
 )
 
 var (
-	_ theauth.APITokenStorage   = (*Store)(nil)
-	_ theauth.DeviceCodeStorage = (*Store)(nil)
-	_ theauth.DeviceCodeLister  = (*Store)(nil)
+	_ theauth.APITokenStorage      = (*Store)(nil)
+	_ theauth.DeviceCodeStorage    = (*Store)(nil)
+	_ theauth.DeviceCodeLister     = (*Store)(nil)
+	_ theauth.APITokenAgentStorage = (*Store)(nil)
 )
 
-const apiTokenCols = `id, owner_id, owner_kind, name, abilities, token_hash, hint, created_at, expires_at, last_used_at, revoked_at, kind, agent_name, delegated_by`
+const apiTokenCols = `id, owner_id, owner_kind, name, abilities, token_hash, hint, created_at, expires_at, last_used_at, revoked_at, kind, agent_name, delegated_by, agent_id`
 
 const deviceCols = `id, device_code_hash, user_code, status, client_name, requested_abilities, approved_abilities,
 approver_id, requester_ip, requester_ua, interval_seconds, last_polled_at, created_at, expires_at`
@@ -49,9 +50,9 @@ func scanAPIToken(r scanner) (theauth.APIToken, error) {
 		hash                                   []byte
 		created                                int64
 		expires, used, revoked                 sql.NullInt64
-		delegated                              sql.NullString
+		delegated, agentID                     sql.NullString
 	)
-	if err := r.Scan(&id, &owner, &kind, &name, &abilities, &hash, &hint, &created, &expires, &used, &revoked, &tokKind, &agentName, &delegated); err != nil {
+	if err := r.Scan(&id, &owner, &kind, &name, &abilities, &hash, &hint, &created, &expires, &used, &revoked, &tokKind, &agentName, &delegated, &agentID); err != nil {
 		return theauth.APIToken{}, err
 	}
 	tid, err := parseID(id)
@@ -70,9 +71,13 @@ func scanAPIToken(r scanner) (theauth.APIToken, error) {
 	if err != nil {
 		return theauth.APIToken{}, err
 	}
+	agent, err := parseIDPtr(agentID)
+	if err != nil {
+		return theauth.APIToken{}, err
+	}
 	return theauth.APIToken{
 		ID: tid, OwnerID: oid, OwnerKind: kind, Name: name, Abilities: ab, TokenHash: hash, Hint: hint,
-		Kind: tokKind, AgentName: agentName, DelegatedBy: delegatedBy,
+		Kind: tokKind, AgentName: agentName, DelegatedBy: delegatedBy, AgentID: agent,
 		CreatedAt: fromMicro(created), ExpiresAt: fromNullMicro(expires),
 		LastUsedAt: fromNullMicro(used), RevokedAt: fromNullMicro(revoked),
 	}, nil
@@ -85,12 +90,12 @@ func (s *Store) InsertAPIToken(ctx context.Context, t theauth.APIToken) (theauth
 		return theauth.APIToken{}, wrap("insert api token", err)
 	}
 	out, err := scanAPIToken(s.db.QueryRowContext(ctx, s.q(`
-INSERT INTO theauth_api_tokens (id, owner_id, owner_kind, name, abilities, token_hash, hint, created_at, expires_at, last_used_at, revoked_at, kind, agent_name, delegated_by)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+INSERT INTO theauth_api_tokens (id, owner_id, owner_kind, name, abilities, token_hash, hint, created_at, expires_at, last_used_at, revoked_at, kind, agent_name, delegated_by, agent_id)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 RETURNING `+apiTokenCols),
 		idStr(t.ID), idStr(t.OwnerID), t.OwnerKind, t.Name, abilities, t.TokenHash, t.Hint,
 		toMicro(orNow(t.CreatedAt)), toNullMicro(t.ExpiresAt), toNullMicro(t.LastUsedAt), toNullMicro(t.RevokedAt),
-		t.Kind, t.AgentName, idPtrStr(t.DelegatedBy)))
+		t.Kind, t.AgentName, idPtrStr(t.DelegatedBy), idPtrStr(t.AgentID)))
 	if err != nil {
 		return theauth.APIToken{}, wrap("insert api token", err)
 	}
@@ -138,6 +143,11 @@ func (s *Store) queryAPITokens(ctx context.Context, op, where string, args ...an
 // APITokensByOwner returns every token of the owner, newest first.
 func (s *Store) APITokensByOwner(ctx context.Context, ownerID theauth.ULID) ([]theauth.APIToken, error) {
 	return s.queryAPITokens(ctx, "api tokens by owner", `WHERE owner_id = ?`, idStr(ownerID))
+}
+
+// APITokensByAgentID returns every token minted for the agent, newest first.
+func (s *Store) APITokensByAgentID(ctx context.Context, agentID theauth.ULID) ([]theauth.APIToken, error) {
+	return s.queryAPITokens(ctx, "api tokens by agent", `WHERE agent_id = ?`, idStr(agentID))
 }
 
 // ListAPITokens returns every token, newest first.

@@ -35,6 +35,7 @@ func TestPostgresCapabilityContracts(t *testing.T) {
 		run  func(t *testing.T, s *Store)
 	}{
 		{"APITokens", func(t *testing.T, s *Store) { storagetest.RunAPITokens(t, s) }},
+		{"ToolApprovals", func(t *testing.T, s *Store) { storagetest.RunToolApprovals(t, s) }},
 		{"DeviceCodes", func(t *testing.T, s *Store) { storagetest.RunDeviceCodes(t, s) }},
 		{"DeviceAuthorizations", func(t *testing.T, s *Store) { storagetest.RunDeviceAuthorizations(t, s) }},
 		{"RegistrationTokens", func(t *testing.T, s *Store) { storagetest.RunRegistrationTokens(t, s) }},
@@ -42,6 +43,7 @@ func TestPostgresCapabilityContracts(t *testing.T) {
 		{"OpaqueTokens", func(t *testing.T, s *Store) { storagetest.RunOpaqueTokens(t, s) }},
 		{"SessionManagement", func(t *testing.T, s *Store) { storagetest.RunSessionManagement(t, s) }},
 		{"AccountLifecycle", func(t *testing.T, s *Store) { storagetest.RunAccountLifecycle(t, s) }},
+		{"AuditChain", func(t *testing.T, s *Store) { storagetest.RunAuditChain(t, s) }},
 	}
 	for _, tc := range suites {
 		t.Run(tc.name, func(t *testing.T) { tc.run(t, capsStore(t)) })

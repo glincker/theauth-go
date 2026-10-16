@@ -98,6 +98,13 @@ func (s *Store) DeleteUserCascade(ctx context.Context, userID theauth.ULID) erro
 	}{
 		{`DELETE FROM api_tokens WHERE owner_id = $1 OR delegated_by = $1`, []any{uid}},
 		{`DELETE FROM magic_links WHERE email = $1`, []any{email}},
+		// Erasure keeps the audit chain valid: the hash covers keyed pseudonyms,
+		// not the raw ids. actor_user_id is nulled by its foreign key when the
+		// user row goes; the free-text id columns are blanked here. Pre-chain
+		// rows (chain_seq NULL) are left alone.
+		{`UPDATE audit_events SET subject_id = '' WHERE subject_id = $1 AND chain_seq IS NOT NULL`, []any{userID.String()}},
+		{`UPDATE audit_events SET actor_id = '' WHERE actor_id = $1 AND chain_seq IS NOT NULL`, []any{userID.String()}},
+		{`UPDATE audit_events SET approver_id = '' WHERE approver_id = $1 AND chain_seq IS NOT NULL`, []any{userID.String()}},
 		{`DELETE FROM users WHERE id = $1`, []any{uid}},
 	}
 	for _, st := range stmts {

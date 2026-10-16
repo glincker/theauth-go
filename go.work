@@ -6,6 +6,7 @@ use (
 	./adapters/fiber
 	./adapters/gin
 	./audit/sinks/otlp
+	./examples/audit-receipts-go
 	./examples/chi-app
 	./examples/echo-app
 	./examples/gin-app

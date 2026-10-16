@@ -120,7 +120,7 @@ func (s *Service) ClientCredentialsToken(ctx context.Context, req TokenRequest) 
 	if err != nil {
 		return TokenResponse{}, fmt.Errorf("sign agent token: %w", err)
 	}
-	_ = s.Storage.UpdateAgentLastActive(ctx, agent.ID, now)
+	s.touchAgentLastActive(ctx, agent.ID, now)
 	s.Audit.EmitAudit(ctx, "agent.token_minted", models.TargetRef{Type: "agent", ID: agent.ID.String()}, map[string]any{
 		"agent_id":  agent.ID.String(),
 		"client_id": client.ClientID,
@@ -335,7 +335,7 @@ func (s *Service) ExchangeToken(ctx context.Context, req TokenExchangeRequest) (
 	if err != nil {
 		return TokenResponse{}, fmt.Errorf("sign exchanged token: %w", err)
 	}
-	_ = s.Storage.UpdateAgentLastActive(ctx, requestingAgent.ID, now)
+	s.touchAgentLastActive(ctx, requestingAgent.ID, now)
 	s.Audit.EmitAudit(ctx, "token.exchanged", models.TargetRef{Type: "delegation_grant", ID: grant.ID.String()}, map[string]any{
 		"grant_id":     grant.ID.String(),
 		"actor_agent":  requestingAgent.ID.String(),
