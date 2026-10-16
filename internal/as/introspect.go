@@ -302,14 +302,16 @@ func (s *Service) chainStillActive(ctx context.Context, resp *IntrospectionRespo
 	// Grant check is never cached: revocations must propagate immediately.
 	if resp.DelegationGrantID != "" {
 		var id models.ULID
-		if err := id.UnmarshalText([]byte(resp.DelegationGrantID)); err == nil {
-			g, err := s.Storage.DelegationGrantByID(ctx, id)
-			if err != nil {
-				return false
-			}
-			if !delegation.Active(g, now) {
-				return false
-			}
+		if err := id.UnmarshalText([]byte(resp.DelegationGrantID)); err != nil {
+			// A grant id we cannot parse can never be shown active: fail closed.
+			return false
+		}
+		g, err := s.Storage.DelegationGrantByID(ctx, id)
+		if err != nil {
+			return false
+		}
+		if !delegation.Active(g, now) {
+			return false
 		}
 	}
 

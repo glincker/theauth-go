@@ -90,7 +90,15 @@ func (s *Service) SetPolicy(p Policy) { s.policy = p }
 type touchGate struct {
 	mu   sync.Mutex
 	last map[models.ULID]time.Time
+	// swept is when the map was last pruned. Pruning is O(len(last)), so it
+	// runs at most once per interval instead of on every call while the map
+	// stays above touchGateSweepThreshold with recently active sessions.
+	swept time.Time
 }
+
+// touchGateSweepThreshold is the entry count above which allow prunes stale
+// entries. Not a tuning knob: it only bounds memory for long-lived processes.
+const touchGateSweepThreshold = 4096
 
 func (g *touchGate) allow(id models.ULID, now time.Time, interval time.Duration) bool {
 	g.mu.Lock()
@@ -102,7 +110,8 @@ func (g *touchGate) allow(id models.ULID, now time.Time, interval time.Duration)
 		return false
 	}
 	g.last[id] = now
-	if len(g.last) > 4096 {
+	if len(g.last) > touchGateSweepThreshold && now.Sub(g.swept) >= interval {
+		g.swept = now
 		for k, t := range g.last {
 			if now.Sub(t) >= interval {
 				delete(g.last, k)
@@ -200,6 +209,11 @@ func (s *Service) validate(ctx context.Context, token string, touch bool) (*mode
 	}
 	if err != nil {
 		return nil, nil, err
+	}
+	if sess == nil {
+		// A storage adapter that reports no error without a row must not
+		// reach the dereferences below.
+		return nil, nil, models.ErrInvalidToken
 	}
 	now := time.Now()
 	if sess.Expired(now) {

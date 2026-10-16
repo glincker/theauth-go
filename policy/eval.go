@@ -58,15 +58,18 @@ func (e Evaluator) Evaluate(req Request, policies ...*Policy) Decision {
 				continue
 			}
 			d := Decision{Effect: s.Effect, PolicyID: p.ID, StatementID: s.ID}
-			if d.StatementID == "" {
-				d.StatementID = fmt.Sprintf("stmt-%d", i)
-			}
 			if s.Effect == Deny {
+				if d.StatementID == "" {
+					d.StatementID = statementIndexID(i)
+				}
 				d.Reason = "explicit deny"
 				return d
 			}
 			if s.Effect == Escalate {
 				if escalate == nil {
+					if d.StatementID == "" {
+						d.StatementID = statementIndexID(i)
+					}
 					d.Reason = "escalation required by statement"
 					d.Escalation = &Escalation{Tier: s.Tier, Requirement: s.Require, Reason: d.Reason}
 					if d.Escalation.Requirement == "" {
@@ -77,6 +80,9 @@ func (e Evaluator) Evaluate(req Request, policies ...*Policy) Decision {
 				continue
 			}
 			if allow == nil {
+				if d.StatementID == "" {
+					d.StatementID = statementIndexID(i)
+				}
 				d.Allowed = true
 				d.Reason = "allowed by statement"
 				allow = &d
@@ -90,6 +96,13 @@ func (e Evaluator) Evaluate(req Request, policies ...*Policy) Decision {
 		return e.applyRisk(req, *allow)
 	}
 	return Decision{Reason: "no matching allow statement (default deny)"}
+}
+
+// statementIndexID is the StatementID given to an unnamed statement: its
+// position within the policy document. Built only for the statement that is
+// actually returned, so non-selected matches do not allocate.
+func statementIndexID(i int) string {
+	return fmt.Sprintf("stmt-%d", i)
 }
 
 // EvaluateWithBoundary requires identity policies to allow and the boundary

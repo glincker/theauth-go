@@ -213,7 +213,20 @@ type Service struct {
 // NewService constructs a Service. cfg may be the zero value; Start applies
 // defaults. The Service is not yet running until Start returns.
 func NewService(storage Storage, cfg Config) *Service {
-	s := &Service{storage: storage, cfg: cfg, hooks: &obs.Hooks{}}
+	bufSize := cfg.BufferSize
+	if bufSize <= 0 {
+		bufSize = 4096
+	}
+	// The channels are created here, not in Start: Start flips started before
+	// it could assign them, and a concurrent emit would read a nil channel.
+	s := &Service{
+		storage: storage,
+		cfg:     cfg,
+		hooks:   &obs.Hooks{},
+		ch:      make(chan models.AuditEvent, bufSize),
+		stop:    make(chan struct{}),
+		done:    make(chan struct{}),
+	}
 	s.mDroppedTotal = s.hooks.Counter(obs.MetricAuditDroppedTotal, nil)
 	s.mQueueDepth = s.hooks.Gauge(obs.MetricAuditQueueDepth, nil)
 	s.mGapMarkers = s.hooks.Counter(MetricAuditGapMarkersTotal, nil)
@@ -245,13 +258,6 @@ func (s *Service) Start() error {
 	if !s.started.CompareAndSwap(false, true) {
 		return nil
 	}
-	bufSize := s.cfg.BufferSize
-	if bufSize <= 0 {
-		bufSize = 4096
-	}
-	s.ch = make(chan models.AuditEvent, bufSize)
-	s.stop = make(chan struct{})
-	s.done = make(chan struct{})
 	go s.writerLoop()
 	return nil
 }
