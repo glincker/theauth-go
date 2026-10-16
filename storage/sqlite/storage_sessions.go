@@ -18,7 +18,11 @@ const liveSession = `revoked_at IS NULL AND expires_at > ?`
 
 // ListUserSessions returns the user's live sessions, newest first.
 func (s *Store) ListUserSessions(ctx context.Context, userID theauth.ULID) ([]theauth.Session, error) {
-	rows, err := s.db.QueryContext(ctx, s.q(`SELECT `+sessionCols+
+	cols, withAuth, err := s.sessionCols(ctx)
+	if err != nil {
+		return nil, wrap("list user sessions", err)
+	}
+	rows, err := s.db.QueryContext(ctx, s.q(`SELECT `+cols+
 		` FROM theauth_sessions WHERE user_id = ? AND `+liveSession+` ORDER BY created_at DESC, id DESC`),
 		idStr(userID), toMicro(time.Now()))
 	if err != nil {
@@ -27,7 +31,7 @@ func (s *Store) ListUserSessions(ctx context.Context, userID theauth.ULID) ([]th
 	defer func() { _ = rows.Close() }()
 	var out []theauth.Session
 	for rows.Next() {
-		sess, err := scanSession(rows)
+		sess, err := scanSession(rows, withAuth)
 		if err != nil {
 			return nil, wrap("list user sessions", err)
 		}

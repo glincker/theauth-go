@@ -40,7 +40,14 @@ func (s *Store) AppendSessionAuthMethods(ctx context.Context, id theauth.ULID, m
 		merged []string
 		outAt  time.Time
 	)
-	err := s.inTx(ctx, "append session auth methods", func(tx DBTX) error {
+	has, err := s.hasSessionAuthCols(ctx)
+	if err != nil {
+		return nil, time.Time{}, wrap("append session auth methods", err)
+	}
+	if !has {
+		return nil, time.Time{}, fmt.Errorf("theauth sqlite: append session auth methods: %w: migration 0034 (session auth methods) is not applied", theauth.ErrStorageMissingCapability)
+	}
+	err = s.inTx(ctx, "append session auth methods", func(tx DBTX) error {
 		res, err := tx.ExecContext(ctx, s.q(`UPDATE theauth_sessions SET auth_time = MAX(COALESCE(auth_time, 0), ?) WHERE id = ?`),
 			toMicro(at), idStr(id))
 		if err != nil {
