@@ -11,6 +11,8 @@ import (
 	"errors"
 	"fmt"
 
+	theauth "github.com/glincker/theauth-go/v2"
+	"github.com/glincker/theauth-go/v2/internal/audit"
 	"github.com/glincker/theauth-go/v2/policy"
 )
 
@@ -20,6 +22,9 @@ var (
 	ErrDenied = errors.New("toolguard: tool call denied")
 	// ErrApprovalRequired is matched by *ApprovalRequiredError.
 	ErrApprovalRequired = errors.New("toolguard: approval required")
+	// ErrTaintViolation is matched by *TaintViolationError, a call a taint rule
+	// with effect deny refused. It also matches ErrDenied.
+	ErrTaintViolation = errors.New("toolguard: taint violation")
 	// ErrGuardFailed wraps a failure of the check itself. The tool did not run.
 	ErrGuardFailed = errors.New("toolguard: check failed")
 )
@@ -58,6 +63,27 @@ func (e *DeniedError) Error() string {
 // Is makes errors.Is(err, ErrDenied) true.
 func (e *DeniedError) Is(target error) bool { return target == ErrDenied }
 
+// TaintViolationError is returned when a taint rule with effect deny refuses a
+// call. It is distinct from a plain policy deny: errors.Is matches both
+// ErrTaintViolation and ErrDenied.
+type TaintViolationError struct {
+	Tool    string
+	AgentID string
+	Reason  string
+	// Verdict holds the violated checks and the labels they were computed from.
+	Verdict *policy.TaintVerdict
+}
+
+// Error implements error.
+func (e *TaintViolationError) Error() string {
+	return fmt.Sprintf("toolguard: %s refused for agent %s: %s", e.Tool, e.AgentID, e.Reason)
+}
+
+// Is makes errors.Is match ErrTaintViolation and ErrDenied.
+func (e *TaintViolationError) Is(target error) bool {
+	return target == ErrTaintViolation || target == ErrDenied
+}
+
 // Call describes one tool invocation to authorize.
 type Call struct {
 	AgentID string
@@ -71,6 +97,14 @@ type Call struct {
 	DataClass    string
 	Irreversible bool
 	Attributes   map[string]string
+	// Provenance labels the arguments, keyed by argument name. The key "*"
+	// (CallLabelsKey) labels the whole call. Nil means unlabeled, and the call
+	// is evaluated as before.
+	Provenance map[string][]string
+	// Args are the call arguments (a struct or a map with string keys). When
+	// the Guard has a Tracker, labels of tracked strings inside Args are merged
+	// into Provenance. Tool sets it from the typed arguments when empty.
+	Args any
 }
 
 func (c Call) action() string {
@@ -109,6 +143,14 @@ type Guard struct {
 	Approvals Approvals
 	// OnDecision, when set, sees every decision. It cannot change the outcome.
 	OnDecision func(Call, policy.Decision)
+	// Tracker, when set, adds labels of tracked strings found in Call.Args and
+	// registers each successful Tool result as tool_output:<tool>.
+	Tracker *ProvenanceTracker
+	// Audit, when set, receives one decision record for every call that has
+	// provenance labels, with the labels and the taint verdict as the record's
+	// input provenance. A call without labels emits nothing. The method value
+	// (*theauth.TheAuth).EmitAudit fits.
+	Audit func(ctx context.Context, action string, target theauth.TargetRef, metadata map[string]any)
 }
 
 type approvalKey struct{}
@@ -127,15 +169,27 @@ func approvalID(ctx context.Context) string {
 // Authorize returns nil when the call may run. Otherwise it returns a
 // *DeniedError, an *ApprovalRequiredError, or an error wrapping ErrGuardFailed.
 func (g *Guard) Authorize(ctx context.Context, c Call) error {
+	_, err := g.authorize(ctx, c)
+	return err
+}
+
+// authorize returns the resolved provenance along with the outcome.
+func (g *Guard) authorize(ctx context.Context, c Call) (map[string][]string, error) {
+	prov, d, err := g.decide(ctx, c)
+	g.audit(ctx, c, prov, d, err)
+	return prov, err
+}
+
+func (g *Guard) decide(ctx context.Context, c Call) (map[string][]string, *policy.Decision, error) {
 	if g == nil || g.Policies == nil {
-		return fmt.Errorf("%w: no policy source configured", ErrGuardFailed)
+		return nil, nil, fmt.Errorf("%w: no policy source configured", ErrGuardFailed)
 	}
 	if c.AgentID == "" {
-		return fmt.Errorf("%w: no agent id for tool %q", ErrGuardFailed, c.Tool)
+		return nil, nil, fmt.Errorf("%w: no agent id for tool %q", ErrGuardFailed, c.Tool)
 	}
 	pols, err := g.Policies(ctx, c.AgentID)
 	if err != nil {
-		return fmt.Errorf("%w: load policies for agent %s: %w", ErrGuardFailed, c.AgentID, err)
+		return nil, nil, fmt.Errorf("%w: load policies for agent %s: %w", ErrGuardFailed, c.AgentID, err)
 	}
 	attrs := make(map[string]string, len(c.Attributes)+2)
 	for k, v := range c.Attributes {
@@ -143,6 +197,11 @@ func (g *Guard) Authorize(ctx context.Context, c Call) error {
 	}
 	attrs["agent_id"] = c.AgentID
 	attrs["tool"] = c.Tool
+	var tracked map[string][]string
+	if g.Tracker != nil && c.Args != nil {
+		tracked = g.Tracker.ArgLabels(c.Args)
+	}
+	prov := MergeProvenance(c.Provenance, tracked)
 	d := g.Evaluator.Evaluate(policy.Request{
 		Action:       c.action(),
 		Resource:     c.resource(),
@@ -151,17 +210,83 @@ func (g *Guard) Authorize(ctx context.Context, c Call) error {
 		Currency:     c.Currency,
 		DataClass:    c.DataClass,
 		Irreversible: c.Irreversible,
+		Provenance:   prov,
 	}, pols...)
 	if g.OnDecision != nil {
 		g.OnDecision(c, d)
 	}
 	switch d.Effect {
 	case policy.Allow:
-		return nil
+		return prov, &d, nil
 	case policy.Escalate:
-		return g.escalate(ctx, c, d)
+		return prov, &d, g.escalate(ctx, c, d)
 	}
-	return &DeniedError{Tool: c.Tool, AgentID: c.AgentID, Reason: d.Reason}
+	if d.Taint != nil && d.Taint.Verdict == policy.TaintDeny {
+		return prov, &d, &TaintViolationError{Tool: c.Tool, AgentID: c.AgentID, Reason: d.Reason, Verdict: d.Taint}
+	}
+	return prov, &d, &DeniedError{Tool: c.Tool, AgentID: c.AgentID, Reason: d.Reason}
+}
+
+// audit records one decision when the call carried provenance labels.
+func (g *Guard) audit(ctx context.Context, c Call, prov map[string][]string, d *policy.Decision, err error) {
+	if g.Audit == nil || d == nil || len(prov) == 0 {
+		return
+	}
+	outcome := "allowed"
+	var approval *ApprovalRequiredError
+	var taint *TaintViolationError
+	switch {
+	case errors.As(err, &taint):
+		outcome = "taint_denied"
+	case errors.Is(err, ErrDenied):
+		outcome = "denied"
+	case errors.As(err, &approval):
+		outcome = "approval_required"
+	case err != nil:
+		outcome = "failed"
+	case d.Effect == policy.Escalate:
+		outcome = "approved"
+	}
+	record := map[string]any{"labels": provenanceRecord(prov)}
+	if d.Taint != nil {
+		record["taint"] = map[string]any{
+			"verdict": d.Taint.Verdict,
+			"matches": matchesRecord(d.Taint.Matches),
+		}
+	}
+	md, _ := audit.MetadataFromContext(ctx)
+	md.ActorID = c.AgentID
+	md.InputProvenance = record
+	g.Audit(audit.WithAuditMetadata(ctx, md), "agent.authorize",
+		theauth.TargetRef{Type: "tool", ID: c.Tool},
+		map[string]any{
+			"agent_id": c.AgentID, "tool": c.Tool, "action": c.action(), "resource": c.resource(),
+			"effect": string(d.Effect), "outcome": outcome, "reason": d.Reason,
+		})
+}
+
+func provenanceRecord(prov map[string][]string) map[string]any {
+	out := make(map[string]any, len(prov))
+	for k, ls := range prov {
+		items := make([]any, len(ls))
+		for i, l := range ls {
+			items[i] = l
+		}
+		out[k] = items
+	}
+	return out
+}
+
+func matchesRecord(ms []policy.TaintMatch) []any {
+	out := make([]any, len(ms))
+	for i, m := range ms {
+		labels := make([]any, len(m.Labels))
+		for j, l := range m.Labels {
+			labels[j] = l
+		}
+		out[i] = map[string]any{"rule": m.Rule, "kind": m.Kind, "arg": m.Arg, "labels": labels, "effect": string(m.Effect)}
+	}
+	return out
 }
 
 func (g *Guard) escalate(ctx context.Context, c Call, d policy.Decision) error {
@@ -201,9 +326,18 @@ func (g *Guard) escalate(ctx context.Context, c Call, d policy.Decision) error {
 func Tool[A, R any](g *Guard, build func(ctx context.Context, args A) Call, fn func(ctx context.Context, args A) (R, error)) func(ctx context.Context, args A) (R, error) {
 	return func(ctx context.Context, args A) (R, error) {
 		var zero R
-		if err := g.Authorize(ctx, build(ctx, args)); err != nil {
+		c := build(ctx, args)
+		if c.Args == nil && g != nil && g.Tracker != nil {
+			c.Args = args
+		}
+		prov, err := g.authorize(ctx, c)
+		if err != nil {
 			return zero, err
 		}
-		return fn(ctx, args)
+		res, err := fn(ctx, args)
+		if err == nil && g.Tracker != nil {
+			g.Tracker.TrackResult(c.Tool, res, DeriveLabels(prov)...)
+		}
+		return res, err
 	}
 }
