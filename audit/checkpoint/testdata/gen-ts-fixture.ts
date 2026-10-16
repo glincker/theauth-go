@@ -12,7 +12,8 @@ import { asc } from "drizzle-orm";
 
 const HMAC = "interop-fixture-hmac-key";
 const T0 = new Date("2026-10-01T00:00:00Z");
-const out = process.argv[2] as string;
+// Fixed output path, relative to sdk/packages/core/.tmp-ex/ where this script is run from.
+const out = new URL("../../../../go/audit/checkpoint/testdata/ts-fixture.json", import.meta.url);
 
 const db = await createDatabase({ provider: "sqlite", url: ":memory:" });
 await createTables(db, "sqlite");

@@ -12,7 +12,7 @@ These files pin the Go package to the TypeScript SDK (`packages/core/src/audit/c
 mkdir sdk/packages/core/.tmp-ex
 cp go/audit/checkpoint/testdata/gen-ts-fixture.ts sdk/packages/core/.tmp-ex/gen.ts
 cd sdk/packages/core
-npx tsx .tmp-ex/gen.ts "$PWD/../../../go/audit/checkpoint/testdata/ts-fixture.json"
+npx tsx .tmp-ex/gen.ts
 rm -rf .tmp-ex
 ```
 
@@ -26,7 +26,7 @@ THEAUTH_WRITE_GO_FIXTURE=1 go test -run TestWriteGoFixture ./audit/checkpoint
 mkdir sdk/packages/core/.tmp-ex
 cp go/audit/checkpoint/testdata/verify-go-fixture.ts sdk/packages/core/.tmp-ex/
 cd sdk/packages/core
-npx tsx .tmp-ex/verify-go-fixture.ts "$PWD/../../../go/audit/checkpoint/testdata/go-fixture.json"
+npx tsx .tmp-ex/verify-go-fixture.ts
 rm -rf .tmp-ex
 ```
 

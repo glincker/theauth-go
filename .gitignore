@@ -60,3 +60,6 @@ docs-local/
 /cmd/theauth-go/theauth-go
 /examples/cli-login/cli-login
 /examples/doctor-admin/doctor-admin
+
+# built binary of the receipts example
+examples/audit-receipts-go/audit-receipts-go

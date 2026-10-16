@@ -1,14 +1,16 @@
 /**
  * Verifies testdata/go-fixture.json (written by the Go package) with the
  * TypeScript SDK verifiers. Copy this file to sdk/packages/core/.tmp-ex/ and run:
- *   npx tsx .tmp-ex/verify-go-fixture.ts <abs path to go-fixture.json>
+ *   npx tsx .tmp-ex/verify-go-fixture.ts
  */
 import { readFileSync } from "node:fs";
 import { verifyConsistencyProof, verifyInclusionProof } from "../src/audit/checkpoint.js";
 import { verifyReceipt } from "../src/audit/checkpoint-receipt.js";
 import { verifyCheckpoint } from "../src/audit/checkpoint-sign.js";
 
-const fx = JSON.parse(readFileSync(process.argv[2] as string, "utf8"));
+// Fixed input path, relative to sdk/packages/core/.tmp-ex/ where this script is run from.
+const fixtureUrl = new URL("../../../../go/audit/checkpoint/testdata/go-fixture.json", import.meta.url);
+const fx = JSON.parse(readFileSync(fixtureUrl, "utf8"));
 let failures = 0;
 let checks = 0;
 function expect(name: string, got: { valid: boolean; reason?: string }, want: string | null) {
