@@ -16,6 +16,7 @@ import (
 	"github.com/glincker/theauth-go/v2/internal/audit"
 	"github.com/glincker/theauth-go/v2/internal/emailnorm"
 	"github.com/glincker/theauth-go/v2/internal/httpx"
+	"github.com/glincker/theauth-go/v2/internal/models"
 	internaloauth "github.com/glincker/theauth-go/v2/internal/oauth"
 	"github.com/glincker/theauth-go/v2/internal/password"
 	internalsaml "github.com/glincker/theauth-go/v2/internal/saml"
@@ -518,6 +519,55 @@ func (a *TheAuth) EmitAudit(ctx context.Context, action string, target TargetRef
 		actorSession = s
 	}
 	a.auditSvc.Emit(ctx, action, target, metadata, actorUser, actorSession)
+}
+
+// AuditChainResult is the outcome of VerifyAuditChain.
+type AuditChainResult = models.AuditChainResult
+
+// AuditChainBreak locates the first row at which an audit chain fails to verify.
+type AuditChainBreak = models.AuditChainBreak
+
+// ErrAuditUnavailable is returned by EmitDecision, in fail-closed mode, when a
+// decision-class audit event could not be queued.
+var ErrAuditUnavailable = audit.ErrAuditUnavailable
+
+// ErrAuditChainUnsupported is returned by VerifyAuditChain, with an
+// AuditChainResult whose Supported is false, when the storage backend keeps no
+// hash chain.
+var ErrAuditChainUnsupported = models.ErrAuditChainUnsupported
+
+// EmitDecision is EmitAudit for decision-class events (authorization, policy,
+// approval, delegation). With Config.Audit.FailClosed set it returns
+// ErrAuditUnavailable when the event could not be queued, so the caller can
+// deny the action instead of proceeding unrecorded; otherwise it behaves
+// exactly like EmitAudit and returns nil. Non-blocking. When Config.Audit is
+// nil it is a silent no-op returning nil. Forwards to auditSvc.EmitDecision.
+func (a *TheAuth) EmitDecision(ctx context.Context, action string, target TargetRef, metadata map[string]any) error {
+	a.dispatchAuthEvent(ctx, action, target, metadata)
+	a.sharedSignalsTap(ctx, action, target, metadata)
+	a.revocationFromAudit(ctx, action, target, metadata)
+	if a.auditSvc == nil {
+		return nil
+	}
+	metadata = apitokens.WithActorChain(ctx, metadata)
+	var actorUser *ULID
+	if u, ok := UserFromContext(ctx); ok && u != nil {
+		id := u.ID
+		actorUser = &id
+	}
+	var actorSession *Session
+	if s, ok := SessionFromContext(ctx); ok && s != nil {
+		actorSession = s
+	}
+	return a.auditSvc.EmitDecision(ctx, action, target, metadata, actorUser, actorSession)
+}
+
+// VerifyAuditChain verifies the tamper-evident audit hash chain of the storage
+// backend. Only the sqlite backend keeps a chain. On any other backend it
+// returns a result with Supported and OK both false plus
+// ErrAuditChainUnsupported: an unchecked log is never reported as verified.
+func (a *TheAuth) VerifyAuditChain(ctx context.Context) (AuditChainResult, error) {
+	return audit.VerifyChain(ctx, a.storage)
 }
 
 // QueryAudit returns up to q.Limit events plus an opaque cursor for the

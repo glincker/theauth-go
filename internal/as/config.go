@@ -93,6 +93,15 @@ type Config struct {
 	// endpoint emits. Defaults to 60 seconds.
 	IntrospectionCacheTTL time.Duration
 
+	// SubjectActiveCacheTTL bounds how long a positive "subject is still
+	// active" answer (agent status, user disabled flag) is reused on the
+	// introspection cache-hit path, saving one storage read per request.
+	// Revocation stays immediate: agent suspend or revoke and the revocation
+	// bus (see Service.SubscribeRevocations) drop the entry at once. Zero
+	// means the 1s default, negative disables the cache, and values above
+	// 2s are clamped to 2s.
+	SubjectActiveCacheTTL time.Duration
+
 	// Clock is the time source used by the introspection cache and the
 	// chain-cache TTL. Defaults to a wrapper around time.Now when nil.
 	// Tests pass a fake clock to assert revocation propagation
@@ -313,6 +322,12 @@ func Validate(cfg *Config, encryptionKey []byte) error {
 	}
 	if cfg.IntrospectionCacheTTL <= 0 {
 		cfg.IntrospectionCacheTTL = 60 * time.Second
+	}
+	switch {
+	case cfg.SubjectActiveCacheTTL == 0:
+		cfg.SubjectActiveCacheTTL = time.Second
+	case cfg.SubjectActiveCacheTTL > maxSubjectActiveCacheTTL:
+		cfg.SubjectActiveCacheTTL = maxSubjectActiveCacheTTL
 	}
 	if cfg.Clock == nil {
 		cfg.Clock = realClock{}

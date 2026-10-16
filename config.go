@@ -100,6 +100,16 @@ type AuditConfig struct {
 	// the next batch. Built-in implementations are in sub-packages of
 	// audit/sinks/.
 	Sinks []AuditSink
+
+	// FailClosed makes decision-class audit events fail closed: when one
+	// cannot be queued, the internal audit service's EmitDecision returns an
+	// error so the caller can deny the action. Off by default, so audit
+	// pressure never fails or blocks request paths unless opted in.
+	FailClosed bool
+
+	// DecisionActionPrefixes overrides which audit action prefixes count as
+	// decision-class for FailClosed. Empty uses the internal defaults.
+	DecisionActionPrefixes []string
 }
 
 // AdminConfig mounts /admin/v1/* when non-nil on the same chi router passed
@@ -400,6 +410,14 @@ type AuthorizationServerConfig struct {
 	// introspection endpoint emits. Defaults to 60 seconds. Resource
 	// servers may cache responses up to this duration.
 	IntrospectionCacheTTL time.Duration
+
+	// SubjectActiveCacheTTL bounds how long a positive "subject is still
+	// active" lookup (agent status, user disabled state) is reused during
+	// introspection. Revocation events for the subject drop the entry at
+	// once, so this only bounds staleness for changes the host makes
+	// without publishing an event. Defaults to 1 second, capped at 2
+	// seconds; a negative value disables the cache.
+	SubjectActiveCacheTTL time.Duration
 
 	// Clock is the time source used by the introspection cache and the
 	// chain-cache TTL. Defaults to a wrapper around time.Now when nil.
@@ -880,6 +898,7 @@ func validateASConfig(cfg *AuthorizationServerConfig, encryptionKey []byte) erro
 		AllowAnonymousRegistration:     cfg.AllowAnonymousRegistration,
 		RegistrationRateLimitPerMinute: cfg.RegistrationRateLimitPerMinute,
 		IntrospectionCacheTTL:          cfg.IntrospectionCacheTTL,
+		SubjectActiveCacheTTL:          cfg.SubjectActiveCacheTTL,
 		Clock:                          cfg.Clock,
 		LoginURL:                       cfg.LoginURL,
 		DisableRotation:                cfg.DisableRotation,
@@ -918,6 +937,7 @@ func validateASConfig(cfg *AuthorizationServerConfig, encryptionKey []byte) erro
 	cfg.RegistrationAccessTokenTTL = internal.RegistrationAccessTokenTTL
 	cfg.RegistrationRateLimitPerMinute = internal.RegistrationRateLimitPerMinute
 	cfg.IntrospectionCacheTTL = internal.IntrospectionCacheTTL
+	cfg.SubjectActiveCacheTTL = internal.SubjectActiveCacheTTL
 	cfg.Clock = internal.Clock
 	cfg.LoginURL = internal.LoginURL
 	cfg.RateLimits = internal.RateLimits

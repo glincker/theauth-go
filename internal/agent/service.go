@@ -456,6 +456,9 @@ func (s *Service) changeAgentStatus(ctx context.Context, agentID models.ULID, st
 		"reason":   reason,
 	}
 	s.emitAgentEvent(ctx, action, *cur, meta)
+	if status != models.AgentStatusActive {
+		return s.cascadeAgentRevocation(ctx, *cur, status, reason, now)
+	}
 	return nil
 }
 

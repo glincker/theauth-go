@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -648,4 +649,57 @@ func TestSCIM_DeactivateScopesRevocationToOrg(t *testing.T) {
 	_ = r.Body.Close()
 	requireRevoked(t, store, inA, true)
 	requireRevoked(t, store, inB, false)
+}
+
+func TestSCIM_DeactivateDisablesUserAndFiresRevocation(t *testing.T) {
+	a, store, _, token, srv := newSCIMTestStack(t)
+	uid, hash := scimUserWithSession(t, store, srv, token, "disable-me@acme.test")
+	u, err := store.UserByEmail(context.Background(), "disable-me@acme.test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var mu sync.Mutex
+	var got []theauth.RevocationEvent
+	unsub, err := a.SubscribeRevocations(func(ev theauth.RevocationEvent) {
+		mu.Lock()
+		got = append(got, ev)
+		mu.Unlock()
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer unsub()
+
+	r := scimReq(t, srv, "PATCH", "/scim/v2/Users/"+uid, token, map[string]interface{}{
+		"schemas":    []string{"urn:ietf:params:scim:api:messages:2.0:PatchOp"},
+		"Operations": []map[string]interface{}{{"op": "replace", "path": "active", "value": false}},
+	})
+	_ = r.Body.Close()
+	if r.StatusCode != http.StatusOK {
+		t.Fatalf("patch status %d", r.StatusCode)
+	}
+	requireRevoked(t, store, hash, true)
+	st, err := store.AccountStateByUserID(context.Background(), u.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if st.DisabledAt == nil {
+		t.Fatal("user not disabled after SCIM deactivate")
+	}
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		mu.Lock()
+		var seen bool
+		for _, ev := range got {
+			seen = seen || (ev.Kind == theauth.RevocationOwner && ev.UserID == u.ID.String())
+		}
+		mu.Unlock()
+		if seen {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("no owner revocation event after SCIM deactivate")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
 }

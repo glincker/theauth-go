@@ -40,11 +40,9 @@ func (c *fakeClock) Advance(d time.Duration) {
 // scenario from issue #38: a resource server introspects an agent's
 // client_credentials token (caching the response), the agent is then
 // suspended, and a same-token re-introspect within IntrospectionCacheTTL
-// still reports the stale active=true (the cache does not re-run the
-// self-agent-status check on a cache hit, see introspect.go's
-// introspectJWT vs. the cache-hit path in IntrospectToken). Only once the
-// injected fake clock is advanced past the TTL does the cache miss force
-// a fresh check that observes the suspension. Before Clock existed, this
+// reports active=false because the cache-hit path re-checks the agent
+// status. The fake clock is then advanced past the TTL to confirm a fresh
+// check agrees. Before Clock existed, this
 // scenario had no synchronous test path short of sleeping 60+ seconds.
 func TestIntrospectAfterSuspendPropagatesOncePastCacheTTL(t *testing.T) {
 	clock := newFakeClock(time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC))
@@ -106,12 +104,11 @@ func TestIntrospectAfterSuspendPropagatesOncePastCacheTTL(t *testing.T) {
 		t.Fatalf("SuspendAgent: %v", err)
 	}
 
-	// Re-introspecting the same token within the TTL still hits the cache
-	// and returns the stale active=true, since a cache hit only re-verifies
-	// an actor chain / delegation grant, not the self-agent-status check.
+	// A cache hit now re-checks the agent status, so the suspension is
+	// visible inside the cache TTL.
 	resp, _, err = a.IntrospectToken(ctx, tok.AccessToken, secret.ClientID, secret.Secret, "https://files.example.com/mcp")
-	if err != nil || !resp.Active {
-		t.Fatalf("expected stale active=true within cache TTL, got %+v (err=%v)", resp, err)
+	if err != nil || resp.Active {
+		t.Fatalf("expected active=false within cache TTL after suspend, got %+v (err=%v)", resp, err)
 	}
 
 	// Advance the fake clock past IntrospectionCacheTTL: no sleep required.

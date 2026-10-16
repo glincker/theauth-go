@@ -95,6 +95,10 @@ type Service struct {
 	// (perf re-audit 2026-06-21, item 3).
 	chainCache sync.Map // map[string]*chainCacheEntry
 
+	// subjectCache memoizes positive subjectActive answers for
+	// Cfg.SubjectActiveCacheTTL. See subject_cache.go.
+	subjectCache sync.Map // map[string]time.Time
+
 	// clientAuthCache memoizes the result of an Argon2id verify on
 	// client_secret_hash. Keyed by client_id; cached entries bind the
 	// verified *OAuthClient snapshot to the sha256 of the presented secret.
@@ -405,6 +409,7 @@ func (s *Service) InvalidateChainCache(agentID string) {
 		return
 	}
 	s.chainCache.Delete(agentID)
+	s.InvalidateSubject(models.AgentSubjectPrefix + agentID)
 }
 
 // ResolveClient looks up an OAuth client by client_id, routing through

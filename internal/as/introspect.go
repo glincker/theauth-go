@@ -121,6 +121,15 @@ func (s *Service) IntrospectToken(ctx context.Context, token, clientID, clientSe
 				return resp, body, nil
 			}
 		}
+		// Agent self tokens (sub agent:<id>) and user-subject tokens carry
+		// no act chain, so they would otherwise ride the cache for up to
+		// IntrospectionCacheTTL after the agent is suspended or the user
+		// disabled.
+		if resp.Active && !s.subjectActive(ctx, resp.Sub) {
+			resp = IntrospectionResponse{Active: false}
+			body, _ := json.Marshal(resp)
+			return resp, body, nil
+		}
 		return resp, cached, nil
 	}
 	// Heuristic: a JWT has three dot-separated segments. Refresh tokens
@@ -230,13 +239,44 @@ func (s *Service) introspectClaims(ctx context.Context, claims jwt.Claims) Intro
 	// that agent is no longer active. This catches the agent-self-token
 	// path (client_credentials grant) without touching the chain checks
 	// above.
-	if strings.HasPrefix(resp.Sub, models.AgentSubjectPrefix) {
-		ag, err := s.lookupAgent(ctx, resp.Sub)
-		if err != nil || ag == nil || ag.Status != models.AgentStatusActive {
-			return IntrospectionResponse{Active: false}
-		}
+	if !s.subjectActive(ctx, resp.Sub) {
+		return IntrospectionResponse{Active: false}
 	}
 	return resp
+}
+
+// accountStateReader is the optional capability of the user store that
+// reports a user's disabled flag.
+type accountStateReader interface {
+	AccountStateByUserID(ctx context.Context, userID models.ULID) (models.AccountState, error)
+}
+
+// subjectActiveLookup reports whether the token subject may still act: an
+// "agent:<id>" subject must name an active agent, and a user subject must not
+// be disabled. Subjects that are neither (client ids) pass. A state lookup
+// failure other than "not found" fails closed. It always reads storage;
+// subjectActive (subject_cache.go) fronts it with a tiny cache.
+func (s *Service) subjectActiveLookup(ctx context.Context, sub string) bool {
+	if strings.HasPrefix(sub, models.AgentSubjectPrefix) {
+		ag, err := s.lookupAgent(ctx, sub)
+		return err == nil && ag != nil && ag.Status == models.AgentStatusActive
+	}
+	if s.Users == nil || sub == "" {
+		return true
+	}
+	rd, ok := s.Users.(accountStateReader)
+	if !ok {
+		return true
+	}
+	var uid models.ULID
+	if err := uid.UnmarshalText([]byte(sub)); err != nil {
+		return true
+	}
+	st, err := rd.AccountStateByUserID(ctx, uid)
+	if err != nil {
+		return errors.Is(err, models.ErrStorageNotFound)
+	}
+	return st.DisabledAt == nil
 }
 
 // chainStillActive walks the full actor chain (innermost-first) and

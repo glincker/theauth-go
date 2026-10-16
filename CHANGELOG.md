@@ -44,15 +44,24 @@ adheres to [Semantic Versioning](https://semver.org/) from v1.0 forward.
 - `provider/generic`: six more catalog providers, `linear`, `paypal`, `kick`, `huggingface`, `vercel` and `yandex` (16 in total). `Spec` gains `UserBody` (JSON request body for GraphQL profile endpoints), `UserAuthScheme` (for example `OAuth`), `NoPKCE` and `Fields.AvatarURLFormat`; all default to the old behavior. A token or refresh response whose `scope` is an array (Linear) no longer fails the exchange.
 - `provider/oidc`: `oidc.Cognito(region, userPoolID, clientID, clientSecret)` preset for Amazon Cognito user pools.
 
+- Tri-state policy decisions in `policy`: `Effect` gains `Escalate`, `Statement` gains `Tier` and `Require`, and `Decision` gains `Escalation` (`Tier`, `Requirement`, `Reason`). `Request` and `Resource` take `Amount`, `Currency`, `DataClass` and `Irreversible`, and `Evaluator.Risk` (`[]RiskTier`) maps them to a tier that requires approval or step-up. `Evaluator.Classify` returns the matching tier. `Allowed` is true only for allow. `RequirePolicy` answers 403 `policy.escalation_required` for approval and 401 `auth.step_up_required` for step-up, the same shapes the core middleware already uses.
+- Audit decision records: `AuditEvent` gains `SubjectID`, `ActorID`, `PolicyVersion`, `ApproverID`, `DelegationChain` and `InputProvenance`, plus `PrevHash` and `Hash`. The SQLite store chains events per organization over keyed pseudonyms of the ids, so deleting a user blanks the raw ids without breaking verification. `(*TheAuth).VerifyAuditChain` returns `AuditChainResult` (`Supported`, `OK`, `Checked`, `Unchained`, `Erased`, `FirstBreak`). Memory, Postgres and MySQL return `Supported: false` with `ErrAuditChainUnsupported`; only SQLite chains today. Migration: SQLite `0017_audit_accountability`.
+- Dropped audit events are no longer silent: the writer emits an `audit.events_dropped` event with the counts and the drop window, and increments `theauth_audit_gap_markers_total`. `AuditConfig.FailClosed` and `AuditConfig.DecisionActionPrefixes` make `(*TheAuth).EmitDecision` return `ErrAuditUnavailable` when a decision event is dropped. `Emit` is unchanged and nothing blocks by default.
+- `AuthorizationServerConfig.SubjectActiveCacheTTL`: how long a positive "agent or user still active" lookup is reused during introspection. Default 1 second, capped at 2 seconds, negative disables it. Revocation events clear the entry at once.
+- `RevocationOrgMember`: a revocation kind for a user who lost one organization, emitted by org scoped SCIM deactivation.
+
 ### Fixed
 
 - SCIM user deactivation (`PATCH active=false`) and `DELETE /scim/v2/Users/{id}` now revoke the user's sessions before removing the organization membership: every session when it was their last organization (or sessions cannot be listed), otherwise only the sessions active in that organization. They previously removed the membership only, so an existing session stayed live. A revocation failure answers 500 and leaves the membership so the IdP retries.
 - An OAuth sign-in that returns no refresh token (Google after the first consent) no longer overwrites the stored refresh token with an empty one.
 - JWT client authentication and the jwt-bearer grant now accept the fixed-length R||S ECDSA signatures that RFC 7518 requires for ES256 and ES384. They previously verified only ASN.1 DER, which standard JOSE libraries do not emit. DER is still accepted.
+- SCIM deactivation and `DELETE /scim/v2/Users/{id}` of a user's last organization now also disable the user, revoke their API tokens and publish a revocation event, so `WatchRevocation` streams are cut. Deactivating one of several organizations publishes an org scoped event and leaves the user's other organizations alone. A failed membership delete now returns 500 instead of being ignored.
+- Introspection now checks agent status and the user's disabled state on a cache hit. Agent self tokens and user subject tokens could previously stay active for up to the introspection cache TTL after a revoke or disable.
 
 ### Security
 
 - CIMD `token_endpoint_auth_method` is now validated against an allowlist (`none`, `private_key_jwt`). `client_secret_*` and unknown methods are rejected, and `private_key_jwt` requires exactly one of `jwks` or `jwks_uri`. Previously the value was copied through unchecked. Unknown document fields are still ignored.
+- Suspending or revoking an agent now also revokes its delegation grants and the API tokens minted for it, ends delegation scoped revocation streams, and publishes one `agent.cascade.revoked` event. Minted agent tokens are matched to the agent by name and owner, so for an organization owned agent a same named agent's tokens can be revoked too (fails closed). Storing an agent id on the token would remove that.
 
 ## [2.9.0] - 2026-10-10
 
