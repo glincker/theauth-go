@@ -141,6 +141,11 @@ type Guard struct {
 	Evaluator policy.Evaluator
 	Policies  PoliciesFunc
 	Approvals Approvals
+	// Limit, when set, runs before policies are loaded and may refuse the call
+	// (for example with a per agent rate limit). Its error is wrapped with
+	// ErrGuardFailed, so the tool does not run; the original stays reachable
+	// with errors.Is and errors.As. (*theauth.TheAuth).CheckAgentRate fits.
+	Limit func(ctx context.Context, agentID string) error
 	// OnDecision, when set, sees every decision. It cannot change the outcome.
 	OnDecision func(Call, policy.Decision)
 	// Tracker, when set, adds labels of tracked strings found in Call.Args and
@@ -186,6 +191,11 @@ func (g *Guard) decide(ctx context.Context, c Call) (map[string][]string, *polic
 	}
 	if c.AgentID == "" {
 		return nil, nil, fmt.Errorf("%w: no agent id for tool %q", ErrGuardFailed, c.Tool)
+	}
+	if g.Limit != nil {
+		if err := g.Limit(ctx, c.AgentID); err != nil {
+			return nil, nil, fmt.Errorf("%w: limit for agent %s: %w", ErrGuardFailed, c.AgentID, err)
+		}
 	}
 	pols, err := g.Policies(ctx, c.AgentID)
 	if err != nil {

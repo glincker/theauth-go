@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/glincker/theauth-go/v2"
@@ -141,6 +142,30 @@ RETURNING
 		return theauth.BackchannelRequest{}, err
 	}
 	return r, nil
+}
+
+// RedeemBackchannelRequest implements theauth.BackchannelRedeemer. One
+// conditional UPDATE moves an approved, unexpired request to consumed and
+// returns it, so exactly one concurrent caller wins. Any other state (pending,
+// denied, expired, consumed, unknown) returns ok == false.
+func (s *Store) RedeemBackchannelRequest(ctx context.Context, authReqID string, now time.Time) (theauth.BackchannelRequest, bool, error) {
+	const q = `
+UPDATE backchannel_requests SET status = 'consumed'
+WHERE auth_req_id = $1 AND status = 'approved' AND expires_at > $2
+RETURNING
+  auth_req_id, client_id, user_id,
+  login_hint, login_hint_token, id_token_hint,
+  scope, binding_message, client_notification_token,
+  status, access_token, refresh_token, id_token,
+  poll_interval, last_poll_at, expires_at, created_at`
+	r, err := scanBackchannelRequest(s.pool.QueryRow(ctx, q, authReqID, timeToTs(now)))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return theauth.BackchannelRequest{}, false, nil
+	}
+	if err != nil {
+		return theauth.BackchannelRequest{}, false, fmt.Errorf("redeem backchannel request: %w", err)
+	}
+	return r, true, nil
 }
 
 // scan helper

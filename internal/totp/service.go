@@ -446,6 +446,13 @@ func (s *Service) IssuePending2FA(ctx context.Context, userID models.ULID, ua, i
 		ExpiresAt: now.Add(10 * time.Minute),
 		AuthLevel: models.AuthLevelPending2FA,
 	}
+	if rec := models.AuthRecordFrom(ctx); len(rec.Methods) > 0 {
+		sess.AuthMethods = rec.Methods
+		sess.AuthTime = rec.At
+		if sess.AuthTime.IsZero() {
+			sess.AuthTime = now
+		}
+	}
 	stored, err := s.storage.CreateSessionWithAuthLevel(ctx, sess)
 	if err != nil {
 		return "", models.Session{}, err
@@ -497,8 +504,9 @@ func (s *Service) Verify(ctx context.Context, pendingSessionToken, code string) 
 	if err := s.storage.UpdateSessionAuthLevel(ctx, sess.ID, models.AuthLevelFull); err != nil {
 		return "", models.Session{}, err
 	}
-	s.emitMFA(ctx, sess.UserID, "totp", true)
 	updated := *sess
+	s.recordSecondFactor(ctx, &updated)
+	s.emitMFA(ctx, sess.UserID, "totp", true)
 	updated.AuthLevel = models.AuthLevelFull
 	return pendingSessionToken, updated, nil
 }
@@ -536,8 +544,9 @@ func (s *Service) ConsumeRecoveryCode(ctx context.Context, pendingSessionToken, 
 	if err := s.storage.UpdateSessionAuthLevel(ctx, sess.ID, models.AuthLevelFull); err != nil {
 		return "", models.Session{}, err
 	}
-	s.emitMFA(ctx, sess.UserID, "recovery_code", true)
 	updated := *sess
+	s.recordSecondFactor(ctx, &updated)
+	s.emitMFA(ctx, sess.UserID, "recovery_code", true)
 	updated.AuthLevel = models.AuthLevelFull
 	return pendingSessionToken, updated, nil
 }
@@ -612,4 +621,28 @@ func (s *Service) recordPendingFailure(ctx context.Context, sessID models.ULID, 
 // clearPendingFailure resets the counter on a successful verify.
 func (s *Service) clearPendingFailure(sessID models.ULID) {
 	s.pendingFailures.Delete(sessID)
+}
+
+// authAppender is the optional storage capability that records a completed
+// second factor on the session (theauth.SessionAuthStorage).
+type authAppender interface {
+	AppendSessionAuthMethods(ctx context.Context, id models.ULID, methods []string, at time.Time) ([]string, time.Time, error)
+}
+
+// recordSecondFactor appends "otp" and "mfa" to the freshly upgraded session
+// and refreshes sess with the stored record. Best effort: the code was
+// already consumed and the session promoted, so a failed or absent record
+// only logs; the session then reads as before the record existed.
+func (s *Service) recordSecondFactor(ctx context.Context, sess *models.Session) {
+	ap, ok := s.storage.(authAppender)
+	if !ok {
+		return
+	}
+	methods, at, err := ap.AppendSessionAuthMethods(ctx, sess.ID, []string{models.AMROTP, models.AMRMFA}, time.Now())
+	if err != nil {
+		slog.Warn("theauth: record second factor on session failed", "session_id", sess.ID.String(), "err", err.Error())
+		return
+	}
+	sess.AuthMethods = methods
+	sess.AuthTime = at
 }

@@ -42,6 +42,20 @@ type AgentConfig struct {
 	// secrets. Defaults to 32 (256 bits). Stored hashed (Argon2id);
 	// transmitted exactly once at creation or rotation.
 	AgentSecretLength int
+
+	// PolicyEngine, when set, attaches IAM policy to agents. Every agent token
+	// mint (client credentials, token exchange, jwt-bearer) is evaluated
+	// against the agent's policies: an explicit Deny fails the mint with
+	// access_denied, scopes no Allow statement covers are narrowed away, and
+	// the ids and hash of the policies in force go into the token's
+	// agent_policy claim and the audit event. Build one with the agentpolicy
+	// package. Nil leaves minting unchanged.
+	PolicyEngine AgentPolicyEngine
+
+	// RateLimit bounds how often each agent may mint tokens or call
+	// AuthorizeAgent, keyed by agent id. A mint over the limit gets HTTP 429
+	// with a Retry-After header. The zero value disables the limit.
+	RateLimit AgentRateLimit
 }
 
 // RBACConfig configures organization-scoped roles and permissions. The zero
@@ -494,11 +508,12 @@ type AuthorizationServerConfig struct {
 	// acr_values_supported. Nil keeps the defaults and advertises nothing.
 	ACRValues map[string]string
 
-	// SessionAMR reports the RFC 8176 authentication methods the session
-	// was established with, for the amr and acr claims. Sessions do not
-	// record their sign-in method, so nil assumes ["pwd"]; supply this
-	// (for example from your own login records) to emit "otp", "hwk" or
-	// "mfa" and satisfy a higher acr. Called on /oauth/authorize only.
+	// SessionAMR overrides the RFC 8176 authentication methods the session
+	// was established with, for the amr and acr claims. By default amr is
+	// Session.AuthMethods, which the library records at sign-in and extends
+	// on a second factor or step-up (see SessionAuthStorage); sessions with
+	// no record assume ["pwd"]. A non-empty result from this function wins
+	// over both. Called on /oauth/authorize only.
 	SessionAMR func(ctx context.Context, sess *Session) []string
 
 	// PAR wires RFC 9126 Pushed Authorization Requests. When non-nil and
@@ -586,7 +601,47 @@ type AuthorizationServerConfig struct {
 	// /oauth/end_session (RP-initiated logout), back-channel logout and
 	// pairwise subjects. See docs/oidc-provider.md.
 	OIDC *OIDCConfig
+
+	// ConsentHandler hands the consent decision to the host app. It runs
+	// after the user is authenticated and the authorize request is valid,
+	// and returns Approve (with optionally narrowed scopes and a grant
+	// expiry), Deny or Interact (render the host's own consent page, then
+	// resume with TheAuth.CompleteConsent). Nil keeps auto-approve. See
+	// docs/oauth-consent.md.
+	ConsentHandler ConsentHandler
+
+	// ConsentMaxGrantTTL caps the lifetime of a grant approved through the
+	// ConsentHandler. Zero means no cap beyond the token TTLs.
+	ConsentMaxGrantTTL time.Duration
+
+	// ConsentTicketTTL is the validity of a consent_ticket. Default 10m.
+	ConsentTicketTTL time.Duration
 }
+
+// ConsentHandler, ConsentRequest, ConsentDecision and friends are the root
+// aliases for the host-owned consent API.
+type (
+	ConsentHandler  = internalas.ConsentHandler
+	ConsentRequest  = internalas.ConsentRequest
+	ConsentDecision = internalas.ConsentDecision
+	ConsentClient   = internalas.ConsentClient
+	ConsentAction   = internalas.ConsentAction
+)
+
+// Consent actions and client metadata sources.
+const (
+	ConsentApprove          = internalas.ConsentApprove
+	ConsentDeny             = internalas.ConsentDeny
+	ConsentInteract         = internalas.ConsentInteract
+	ConsentSourceRegistered = internalas.ConsentSourceRegistered
+	ConsentSourceCIMD       = internalas.ConsentSourceCIMD
+)
+
+// Consent errors returned by CompleteConsent.
+var (
+	ErrConsentTicketInvalid   = internalas.ErrConsentTicketInvalid
+	ErrConsentDecisionInvalid = internalas.ErrConsentDecisionInvalid
+)
 
 // OIDCConfig is the root alias for the OpenID Provider settings.
 type OIDCConfig = internalas.OIDCConfig
@@ -919,6 +974,9 @@ func validateASConfig(cfg *AuthorizationServerConfig, encryptionKey []byte) erro
 		RegistrationTokenTTL:           cfg.RegistrationTokenTTL,
 		DeviceTokens:                   cfg.DeviceTokens,
 		OIDC:                           cfg.OIDC,
+		ConsentHandler:                 cfg.ConsentHandler,
+		ConsentMaxGrantTTL:             cfg.ConsentMaxGrantTTL,
+		ConsentTicketTTL:               cfg.ConsentTicketTTL,
 	}
 	if err := internalas.Validate(&internal, encryptionKey); err != nil {
 		return err

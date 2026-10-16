@@ -589,6 +589,7 @@ func (s *Service) FinishLogin(ctx context.Context, challengeToken string, body i
 	// with these same values after a successful validation anyway.
 	assertedBE := parsed.Response.AuthenticatorData.Flags.HasBackupEligible()
 	assertedBS := parsed.Response.AuthenticatorData.Flags.HasBackupState()
+	assertedUV := parsed.Response.AuthenticatorData.Flags.HasUserVerified()
 	// reconcileCredID is set to the raw credential id when this login used a
 	// legacy row with no recorded backup flags; after a successful validation
 	// we persist the asserted flags so the next login enforces them strictly.
@@ -683,7 +684,7 @@ func (s *Service) FinishLogin(ctx context.Context, challengeToken string, body i
 			return "", models.Session{}, ErrReplayDetected
 		}
 	}
-	sessTok, sess, err := s.sessions.Issue(ctx, *user, ua, ip)
+	sessTok, sess, err := s.sessions.Issue(models.WithAuthMethods(ctx, passkeyAMR(assertedBE, assertedUV)...), *user, ua, ip)
 	if err != nil {
 		return "", models.Session{}, err
 	}
@@ -775,4 +776,22 @@ func (s *Service) clonePolicy() string {
 		return CloneWarningFlag
 	}
 	return CloneWarningReject
+}
+
+// passkeyAMR names what a passkey assertion proved, without inferring more.
+// A backup eligible credential (BE flag) is a multi-device, synced passkey
+// whose private key lives in a credential manager, so it is a software
+// secured key: "swk". A credential that is not backup eligible is bound to
+// one authenticator (security key or platform module): "hwk". "user" is
+// added only when the authenticator set the user verified flag in this
+// assertion. A passkey alone never records "mfa".
+func passkeyAMR(backupEligible, userVerified bool) []string {
+	m := []string{models.AMRHardwareKey}
+	if backupEligible {
+		m = []string{models.AMRSoftwareKey}
+	}
+	if userVerified {
+		m = append(m, models.AMRUserVerified)
+	}
+	return m
 }

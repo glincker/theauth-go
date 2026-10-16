@@ -67,6 +67,10 @@ type Service struct {
 	// root package.
 	AgentLookup AgentLookup
 
+	// AgentGate, when set, vets every agent token mint against the agent's
+	// attached policies and rate limit. Nil leaves minting unchanged.
+	AgentGate AgentGate
+
 	// signingKeys is the in-memory snapshot of the JWKS state machine.
 	// The rotation goroutine swaps it atomically under mu.
 	mu           sync.RWMutex
@@ -109,6 +113,9 @@ type Service struct {
 	// not configured; in that case ResolveClient falls through to the
 	// legacy OAuthClientByClientID path for every client_id.
 	cimdSvc *cimd.Service
+
+	// consentReplay records used consent tickets (single use).
+	consentReplay kv.ReplayCache
 
 	// dpopSvc is the RFC 9449 proof verifier. nil when Cfg.DPoP is nil
 	// (DPoP disabled); the token endpoint short-circuits dpop handling
@@ -286,6 +293,12 @@ func New(d Deps) *Service {
 		s.oidcCache = d.Cfg.Stores.Cache
 		if s.oidcCache == nil {
 			s.oidcCache = kv.NewMemory()
+		}
+	}
+	if s.Cfg.ConsentHandler != nil {
+		s.consentReplay = d.Cfg.Stores.ReplayCache
+		if s.consentReplay == nil {
+			s.consentReplay = kv.NewMemory()
 		}
 	}
 	applyRateLimitDefaults(&s.Cfg)

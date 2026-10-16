@@ -93,6 +93,11 @@ func (s *Service) ClientCredentialsToken(ctx context.Context, req TokenRequest) 
 	if len(requested) == 0 {
 		return TokenResponse{}, models.ErrOAuthInvalidScope
 	}
+	gated, gerr := s.gateMint(ctx, *agent, models.AgentMintClientCredentials, audience, requested, len(req.Scope) > 0, nil)
+	if gerr != nil {
+		return TokenResponse{}, gerr
+	}
+	requested = gated.Scopes
 	now := time.Now().UTC()
 	jti := ulid.New().String()
 	claims := jwt.Claims{
@@ -113,6 +118,15 @@ func (s *Service) ClientCredentialsToken(ctx context.Context, req TokenRequest) 
 			},
 		},
 	}
+	auditMeta := map[string]any{
+		"agent_id":  agent.ID.String(),
+		"client_id": client.ClientID,
+		"jti":       jti,
+		"resource":  audience,
+		"scope":     requested,
+		"grant":     models.GrantTypeClientCredentials,
+	}
+	addAgentPolicy(claims.Extra, auditMeta, gated)
 	if err := s.applyOnTokenIssued(ctx, &claims); err != nil {
 		return TokenResponse{}, err
 	}
@@ -121,14 +135,7 @@ func (s *Service) ClientCredentialsToken(ctx context.Context, req TokenRequest) 
 		return TokenResponse{}, fmt.Errorf("sign agent token: %w", err)
 	}
 	s.touchAgentLastActive(ctx, agent.ID, now)
-	s.Audit.EmitAudit(ctx, "agent.token_minted", models.TargetRef{Type: "agent", ID: agent.ID.String()}, map[string]any{
-		"agent_id":  agent.ID.String(),
-		"client_id": client.ClientID,
-		"jti":       jti,
-		"resource":  audience,
-		"scope":     requested,
-		"grant":     models.GrantTypeClientCredentials,
-	})
+	s.Audit.EmitAudit(ctx, "agent.token_minted", models.TargetRef{Type: "agent", ID: agent.ID.String()}, auditMeta)
 	return TokenResponse{
 		AccessToken: access,
 		TokenType:   "Bearer",
@@ -292,6 +299,11 @@ func (s *Service) ExchangeToken(ctx context.Context, req TokenExchangeRequest) (
 	if !ok || len(finalScope) == 0 {
 		return TokenResponse{}, models.ErrOAuthInvalidScope
 	}
+	gated, gerr := s.gateMint(ctx, *requestingAgent, models.AgentMintTokenExchange, resourceID, finalScope, len(req.Scope) > 0, nil)
+	if gerr != nil {
+		return TokenResponse{}, gerr
+	}
+	finalScope = gated.Scopes
 	// Step 10: duration tightening. exp = strict-min of every policy
 	// bound.
 	subjectExp := time.Unix(subjectClaims.Exp, 0)
@@ -323,6 +335,16 @@ func (s *Service) ExchangeToken(ctx context.Context, req TokenExchangeRequest) (
 			"delegation_grant_id": grant.ID.String(),
 		},
 	}
+	exchangeMeta := map[string]any{
+		"grant_id":     grant.ID.String(),
+		"actor_agent":  requestingAgent.ID.String(),
+		"root_subject": root.String(),
+		"resource":     resourceID,
+		"scope":        finalScope,
+		"chain_depth":  newDepth,
+		"jti":          jti,
+	}
+	addAgentPolicy(claims.Extra, exchangeMeta, gated)
 	exchangedType := "Bearer"
 	if proofJKT != "" {
 		claims.Extra["cnf"] = map[string]string{"jkt": proofJKT}
@@ -336,15 +358,7 @@ func (s *Service) ExchangeToken(ctx context.Context, req TokenExchangeRequest) (
 		return TokenResponse{}, fmt.Errorf("sign exchanged token: %w", err)
 	}
 	s.touchAgentLastActive(ctx, requestingAgent.ID, now)
-	s.Audit.EmitAudit(ctx, "token.exchanged", models.TargetRef{Type: "delegation_grant", ID: grant.ID.String()}, map[string]any{
-		"grant_id":     grant.ID.String(),
-		"actor_agent":  requestingAgent.ID.String(),
-		"root_subject": root.String(),
-		"resource":     resourceID,
-		"scope":        finalScope,
-		"chain_depth":  newDepth,
-		"jti":          jti,
-	})
+	s.Audit.EmitAudit(ctx, "token.exchanged", models.TargetRef{Type: "delegation_grant", ID: grant.ID.String()}, exchangeMeta)
 	return TokenResponse{
 		AccessToken:     access,
 		TokenType:       exchangedType,

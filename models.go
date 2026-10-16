@@ -60,6 +60,25 @@ const (
 	AuthLevelPending2FA = models.AuthLevelPending2FA
 )
 
+// Authentication method references recorded on Session.AuthMethods.
+const (
+	AMRPassword     = models.AMRPassword
+	AMROTP          = models.AMROTP
+	AMRHardwareKey  = models.AMRHardwareKey
+	AMRSoftwareKey  = models.AMRSoftwareKey
+	AMRUserVerified = models.AMRUserVerified
+	AMRMFA          = models.AMRMFA
+	AMREmail        = models.AMREmail
+	AMRFederated    = models.AMRFederated
+	AMRSSO          = models.AMRSSO
+)
+
+// MergeAuthMethods appends the methods in add that existing lacks, lower
+// cased, keeping order. Handy for hosts building their own step-up.
+func MergeAuthMethods(existing []string, add ...string) []string {
+	return models.MergeAuthMethods(existing, add...)
+}
+
 // v0.7 multi-tenancy + SAML + SCIM
 
 const (

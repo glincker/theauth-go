@@ -11,6 +11,7 @@ import (
 var (
 	_ theauth.SessionManagementStorage = (*Store)(nil)
 	_ theauth.SessionLinkStorage       = (*Store)(nil)
+	_ theauth.SessionAuthStorage       = (*Store)(nil)
 )
 
 const liveSession = `revoked_at IS NULL AND expires_at > ?`

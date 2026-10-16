@@ -269,6 +269,18 @@ func (s *Service) JWTBearerGrant(ctx context.Context, req TokenRequest, assertio
 			return TokenResponse{}, err
 		}
 	}
+	// An agent client's IAM policy and rate limit apply to this mint too.
+	var gated models.AgentMintResult
+	if s.AgentGate != nil && req.ClientID != "" {
+		if ag, lerr := s.Storage.AgentByClientID(ctx, req.ClientID); lerr == nil && ag != nil {
+			g, gerr := s.gateMint(ctx, *ag, models.AgentMintJWTBearer, audience, grantScope, len(grantScope) > 0, append([]string{}, ag.Scope...))
+			if gerr != nil {
+				return TokenResponse{}, gerr
+			}
+			gated = g
+			grantScope = g.Scopes
+		}
+	}
 	// Mint access token (no refresh: the external JWT is the renewable credential).
 	jtiOut := ulid.New().String()
 	accessClaims := jwt.Claims{
@@ -282,6 +294,18 @@ func (s *Service) JWTBearerGrant(ctx context.Context, req TokenRequest, assertio
 		Scope:    scopeJoin(grantScope),
 		Typ:      jwt.TypeAccessToken,
 	}
+	bearerMeta := map[string]any{
+		"issuer":   claims.Iss,
+		"subject":  claims.Sub,
+		"resource": req.Resource,
+		"scope":    grantScope,
+		"jti":      jtiOut,
+		"grant":    models.GrantTypeJWTBearer,
+	}
+	if c := agentPolicyClaim(gated); c != nil {
+		accessClaims.Extra = map[string]any{"agent_policy": c}
+	}
+	addAgentPolicy(nil, bearerMeta, gated)
 	if herr := s.applyOnTokenIssued(ctx, &accessClaims); herr != nil {
 		return TokenResponse{}, herr
 	}
@@ -289,14 +313,7 @@ func (s *Service) JWTBearerGrant(ctx context.Context, req TokenRequest, assertio
 	if aerr != nil {
 		return TokenResponse{}, fmt.Errorf("sign jwt-bearer token: %w", aerr)
 	}
-	s.Audit.EmitAudit(ctx, "jwt_bearer.token_minted", models.TargetRef{Type: "user", ID: userID.String()}, map[string]any{
-		"issuer":   claims.Iss,
-		"subject":  claims.Sub,
-		"resource": req.Resource,
-		"scope":    grantScope,
-		"jti":      jtiOut,
-		"grant":    models.GrantTypeJWTBearer,
-	})
+	s.Audit.EmitAudit(ctx, "jwt_bearer.token_minted", models.TargetRef{Type: "user", ID: userID.String()}, bearerMeta)
 	return TokenResponse{
 		AccessToken: access,
 		TokenType:   "Bearer",

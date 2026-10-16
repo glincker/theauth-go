@@ -38,6 +38,7 @@ type OAuthClient struct {
 	ApplicationType         string   `json:"application_type"`
 	Contacts                []string `json:"contacts,omitempty"`
 	LogoURI                 string   `json:"logo_uri,omitempty"`
+	ClientURI               string   `json:"client_uri,omitempty"`
 	PolicyURI               string   `json:"policy_uri,omitempty"`
 	TosURI                  string   `json:"tos_uri,omitempty"`
 	JwksURI                 string   `json:"jwks_uri,omitempty"`

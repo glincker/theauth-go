@@ -472,6 +472,9 @@ func TestHandleACS_SignedResponseIntegration(t *testing.T) {
 	if !found {
 		t.Fatal("integration ACS: session cookie not set")
 	}
+	if got := sessions.rec.Methods; len(got) != 1 || got[0] != models.AMRSSO {
+		t.Fatalf("SAML session auth record = %v, want [%s]", got, models.AMRSSO)
+	}
 }
 
 // TestHandleACS_UnsignedResponseIntegration confirms that an unsigned
@@ -705,9 +708,12 @@ func (s *inMemSAMLStorage) SetSessionActiveOrganization(_ context.Context, _ mod
 // fakeSessionIssuer satisfies internalsaml.SessionIssuer.
 type fakeSessionIssuer struct {
 	token string
+	// rec is the authentication record the SAML service asked to store.
+	rec models.AuthRecord
 }
 
-func (f *fakeSessionIssuer) Issue(_ context.Context, u models.User, _, _ string) (string, models.Session, error) {
+func (f *fakeSessionIssuer) Issue(ctx context.Context, u models.User, _, _ string) (string, models.Session, error) {
+	f.rec = models.AuthRecordFrom(ctx)
 	tok := f.token
 	if tok == "" {
 		tok = "fake-sess-tok"

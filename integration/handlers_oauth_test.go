@@ -1,11 +1,13 @@
 package integration
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -106,7 +108,7 @@ func newOAuthTestServer(t *testing.T, mockURL string) (*httptest.Server, *theaut
 
 func TestOAuthGitHubEndToEnd(t *testing.T) {
 	mock := mockGitHubServer(t, "gho_e2e", "e2e@example.com", 4242)
-	srv, _ := newOAuthTestServer(t, mock.URL)
+	srv, a := newOAuthTestServer(t, mock.URL)
 
 	// 1) /start should 302 to the provider's authorize URL and set the state
 	// cookie. Use a client that does NOT auto-follow redirects so we can see
@@ -175,6 +177,11 @@ func TestOAuthGitHubEndToEnd(t *testing.T) {
 	}
 	if sessionCookie == nil || sessionCookie.Value == "" {
 		t.Fatal("/callback: session cookie not set")
+	}
+
+	// The social sign-in is recorded on the session as federated.
+	if sess, _, err := testutil.ValidateSessionForTest(a, context.Background(), sessionCookie.Value); err != nil || !reflect.DeepEqual(sess.AuthMethods, []string{theauth.AMRFederated}) || sess.AuthTime.IsZero() {
+		t.Fatalf("oauth session record = %+v err %v, want [fed] with AuthTime", sess, err)
 	}
 
 	// 3) /auth/me with the new session cookie returns the user with email

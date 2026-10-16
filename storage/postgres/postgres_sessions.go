@@ -17,10 +17,11 @@ import (
 var (
 	_ theauth.SessionManagementStorage = (*Store)(nil)
 	_ theauth.SessionLinkStorage       = (*Store)(nil)
+	_ theauth.SessionAuthStorage       = (*Store)(nil)
 )
 
 const sessionCols = `id, user_id, token_hash, user_agent, ip, created_at, expires_at, revoked_at,
-auth_level, active_organization_id, last_seen_at, elevated_until, credential_id`
+auth_level, active_organization_id, last_seen_at, elevated_until, credential_id, auth_methods, auth_time`
 
 const liveSession = `revoked_at IS NULL AND expires_at > $%d`
 
@@ -36,8 +37,10 @@ func scanSessionWith(r pgx.Row, extra ...any) (theauth.Session, error) {
 		ip                      *netip.Addr
 		created, expires        pgtype.Timestamptz
 		revoked, seen, elevated pgtype.Timestamptz
+		methods                 []string
+		authTime                pgtype.Timestamptz
 	)
-	dest := append([]any{&id, &userID, &hash, &ua, &ip, &created, &expires, &revoked, &level, &org, &seen, &elevated, &cred}, extra...)
+	dest := append([]any{&id, &userID, &hash, &ua, &ip, &created, &expires, &revoked, &level, &org, &seen, &elevated, &cred, &methods, &authTime}, extra...)
 	if err := r.Scan(dest...); err != nil {
 		return theauth.Session{}, err
 	}
@@ -45,6 +48,10 @@ func scanSessionWith(r pgx.Row, extra ...any) (theauth.Session, error) {
 		ID: pgUUIDToULID(id), UserID: pgUUIDToULID(userID), TokenHash: hash, UserAgent: ua, IP: pgIPToStr(ip),
 		CreatedAt: tsToTime(created), ExpiresAt: tsToTime(expires), RevokedAt: tsToTimePtr(revoked),
 		AuthLevel: level, ElevatedUntil: tsToTimePtr(elevated), CredentialID: cred,
+		AuthMethods: methods,
+	}
+	if authTime.Valid {
+		s.AuthTime = authTime.Time
 	}
 	if seen.Valid {
 		s.LastSeenAt = seen.Time
@@ -68,11 +75,12 @@ func (s *Store) insertSession(ctx context.Context, sess theauth.Session, level s
 		level = theauth.AuthLevelFull
 	}
 	out, err := scanSession(s.pool.QueryRow(ctx, `
-INSERT INTO sessions (id, user_id, token_hash, user_agent, ip, created_at, expires_at, auth_level, last_seen_at, credential_id)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+INSERT INTO sessions (id, user_id, token_hash, user_agent, ip, created_at, expires_at, auth_level, last_seen_at, credential_id, auth_methods, auth_time)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
 RETURNING `+sessionCols,
 		ulidToPgUUID(sess.ID), ulidToPgUUID(sess.UserID), sess.TokenHash, sess.UserAgent, ipStrToPg(sess.IP),
-		timeToTs(sess.CreatedAt), timeToTs(sess.ExpiresAt), level, zeroToNullTs(sess.LastSeenAt), sess.CredentialID))
+		timeToTs(sess.CreatedAt), timeToTs(sess.ExpiresAt), level, zeroToNullTs(sess.LastSeenAt), sess.CredentialID,
+		methodsOrNil(sess.AuthMethods), zeroToNullTs(sess.AuthTime)))
 	if err != nil {
 		return theauth.Session{}, fmt.Errorf("postgres: create session: %w", err)
 	}
@@ -226,7 +234,7 @@ RETURNING id, user_id, credential_id, session_ttl, created_at, expires_at, consu
 }
 
 const sessionUserCols = `s.id, s.user_id, s.token_hash, s.user_agent, s.ip, s.created_at, s.expires_at, s.revoked_at,
-s.auth_level, s.active_organization_id, s.last_seen_at, s.elevated_until, s.credential_id`
+s.auth_level, s.active_organization_id, s.last_seen_at, s.elevated_until, s.credential_id, s.auth_methods, s.auth_time`
 
 // SessionAndUserByTokenHash returns a session and its user in one round trip,
 // instead of the two sequential queries SessionByTokenHash plus UserByID cost.
@@ -244,4 +252,47 @@ FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.token_hash = $1`, hash)
 	}
 	user := rowToUser(u)
 	return &sess, &user, nil
+}
+
+// methodsOrNil maps an empty method list to SQL NULL ("no record").
+func methodsOrNil(m []string) []string {
+	if len(m) == 0 {
+		return nil
+	}
+	return m
+}
+
+// AppendSessionAuthMethods adds methods to the session's auth_methods and
+// advances auth_time. The row is locked FOR UPDATE for the read-merge-write,
+// so concurrent appends serialize and none loses methods.
+func (s *Store) AppendSessionAuthMethods(ctx context.Context, id theauth.ULID, methods []string, at time.Time) ([]string, time.Time, error) {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return nil, time.Time{}, fmt.Errorf("postgres: append session auth methods: begin: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	var (
+		cur      []string
+		authTime pgtype.Timestamptz
+	)
+	err = tx.QueryRow(ctx, `SELECT auth_methods, auth_time FROM sessions WHERE id = $1 FOR UPDATE`, ulidToPgUUID(id)).Scan(&cur, &authTime)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, time.Time{}, fmt.Errorf("postgres: append session auth methods: %w", storage.ErrNotFound)
+		}
+		return nil, time.Time{}, fmt.Errorf("postgres: append session auth methods: %w", err)
+	}
+	merged := theauth.MergeAuthMethods(cur, methods...)
+	newTime := tsToTime(authTime)
+	if authTime.Valid && !at.After(newTime) {
+		at = newTime
+	}
+	if _, err := tx.Exec(ctx, `UPDATE sessions SET auth_methods = $2, auth_time = $3 WHERE id = $1`,
+		ulidToPgUUID(id), merged, timeToTs(at)); err != nil {
+		return nil, time.Time{}, fmt.Errorf("postgres: append session auth methods: %w", err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, time.Time{}, fmt.Errorf("postgres: append session auth methods: commit: %w", err)
+	}
+	return merged, at, nil
 }

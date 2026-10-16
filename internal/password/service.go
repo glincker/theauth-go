@@ -254,7 +254,7 @@ func (s *Service) Signup(ctx context.Context, emailAddr, password string) (creat
 		return nil, "", err
 	}
 
-	sessToken, _, err := s.sessions.Issue(ctx, user, "", "")
+	sessToken, _, err := s.sessions.Issue(models.WithAuthMethods(ctx, models.AMRPassword), user, "", "")
 	if err != nil {
 		return nil, "", err
 	}
@@ -335,7 +335,7 @@ func (s *Service) Signin(ctx context.Context, emailAddr, password, userAgent, ip
 	if s.cfg.TOTPEnabled {
 		secret, err := s.storage.TOTPSecretByUserID(ctx, user.ID)
 		if err == nil && secret != nil && secret.ConfirmedAt != nil && !s.trustedDevice(ctx, user.ID) {
-			pendTok, _, err := s.totpPending.IssuePending2FA(ctx, user.ID, userAgent, ip)
+			pendTok, _, err := s.totpPending.IssuePending2FA(models.WithAuthMethods(ctx, models.AMRPassword), user.ID, userAgent, ip)
 			if err != nil {
 				return "", nil, "", err
 			}
@@ -345,7 +345,7 @@ func (s *Service) Signin(ctx context.Context, emailAddr, password, userAgent, ip
 			return "", nil, "", err
 		}
 	}
-	sessToken, _, err := s.sessions.Issue(ctx, *user, userAgent, ip)
+	sessToken, _, err := s.sessions.Issue(models.WithAuthMethods(ctx, models.AMRPassword), *user, userAgent, ip)
 	if err != nil {
 		return "", nil, "", err
 	}

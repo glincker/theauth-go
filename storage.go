@@ -169,6 +169,25 @@ type CIBAStorage interface {
 	TouchBackchannelPoll(ctx context.Context, authReqID string, now time.Time, newInterval int) (BackchannelRequest, error)
 }
 
+// BackchannelStatusConsumed marks an approved CIBA request whose tokens were
+// already delivered through BackchannelRedeemer.
+const BackchannelStatusConsumed = "consumed"
+
+// BackchannelRedeemer is an optional CIBAStorage capability that makes CIBA
+// token delivery single use. RedeemBackchannelRequest moves an approved,
+// unexpired request to BackchannelStatusConsumed in one atomic step and
+// returns it with its tokens. Exactly one concurrent caller gets ok == true;
+// every other caller, and any caller for a pending, denied, expired, consumed
+// or unknown request, gets ok == false with a nil error.
+//
+// Memory, Postgres and SQLite implement it. Without it the authorization
+// server falls back to an in-process lock, which is only correct on a single
+// node, so multi node deployments need a storage with this capability. Run
+// storagetest.RunCIBARedeem against a custom one.
+type BackchannelRedeemer interface {
+	RedeemBackchannelRequest(ctx context.Context, authReqID string, now time.Time) (BackchannelRequest, bool, error)
+}
+
 // RFC 8628 device grant and registration tokens
 
 // DeviceAuthorizationStorage is the optional persistence extension for the
@@ -673,6 +692,21 @@ type SessionManagementStorage interface {
 	RevokeSessionsByCredential(ctx context.Context, credentialID string) (int, error)
 	// SetSessionElevatedUntil sets or clears ElevatedUntil on one session.
 	SetSessionElevatedUntil(ctx context.Context, id ULID, until *time.Time) error
+}
+
+// SessionAuthStorage is the optional capability behind recording how a
+// session authenticated. The built-in backends already persist
+// Session.AuthMethods and Session.AuthTime on CreateSession and return them
+// from every session read; this interface adds the atomic append used when a
+// second factor or step-up completes. It is detected by type assertion and
+// is not part of Storage, so third party storages keep compiling; without it
+// sessions simply carry no record and behave as before.
+type SessionAuthStorage interface {
+	// AppendSessionAuthMethods atomically adds the methods missing from the
+	// session's AuthMethods (order kept, no duplicates) and advances AuthTime
+	// to at when at is later than the stored value, in one race safe step.
+	// It returns the resulting record and ErrStorageNotFound for an unknown id.
+	AppendSessionAuthMethods(ctx context.Context, id ULID, methods []string, at time.Time) ([]string, time.Time, error)
 }
 
 // SessionLinkStorage is the optional capability behind programmatic session

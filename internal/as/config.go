@@ -128,6 +128,21 @@ type Config struct {
 	// marshal time, registered fields always win.
 	OnTokenIssued func(ctx context.Context, claims map[string]any) (map[string]any, error)
 
+	// ConsentHandler, when set, hands the consent decision to the host app:
+	// it runs after the user is authenticated and the request is valid, and
+	// may approve (optionally with narrowed scopes and a grant expiry), deny
+	// or send the user to the host's own consent page. Nil keeps the
+	// existing auto-approve behavior. See docs/oauth-consent.md.
+	ConsentHandler ConsentHandler
+
+	// ConsentMaxGrantTTL caps how long a grant approved through the
+	// ConsentHandler may live (access and refresh tokens). Zero means no cap
+	// beyond the token TTLs.
+	ConsentMaxGrantTTL time.Duration
+
+	// ConsentTicketTTL is how long a consent_ticket stays valid. Default 10m.
+	ConsentTicketTTL time.Duration
+
 	// LoginURL is the path on this origin where unauthenticated authorize
 	// requests are redirected. Defaults to "/auth/login".
 	LoginURL string

@@ -574,6 +574,7 @@ func synthesizeClient(doc Document) *models.OAuthClient {
 		ApplicationType:         doc.ApplicationType,
 		Contacts:                append([]string(nil), doc.Contacts...),
 		LogoURI:                 doc.LogoURI,
+		ClientURI:               doc.ClientURI,
 		PolicyURI:               doc.PolicyURI,
 		TosURI:                  doc.TosURI,
 		SoftwareID:              doc.SoftwareID,

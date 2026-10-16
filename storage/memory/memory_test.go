@@ -252,6 +252,7 @@ func TestMemoryCapabilityContracts(t *testing.T) {
 	}{
 		{"core", func(t *testing.T) { storagetest.RunCore(t, coreOnlyStore{New()}) }},
 		{"session management", func(t *testing.T) { storagetest.RunSessionManagement(t, New()) }},
+		{"session auth methods", func(t *testing.T) { storagetest.RunSessionAuthMethods(t, New()) }},
 		{"account lifecycle", func(t *testing.T) { storagetest.RunAccountLifecycle(t, New()) }},
 		{"webauthn", func(t *testing.T) { storagetest.RunWebAuthn(t, New()) }},
 		{"totp", func(t *testing.T) { storagetest.RunTOTP(t, New()) }},

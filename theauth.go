@@ -501,6 +501,7 @@ type TheAuth struct {
 	// minimal Storage interface so the constructor cycle stays broken
 	// and the PR B oauthStorage back-door is gone for good.
 	agentSvc      *agent.Service
+	agentGate     *agent.Gate
 	delegationSvc *delegation.Service
 
 	// PR D architecture reorg (2026-06-20): high-complexity services

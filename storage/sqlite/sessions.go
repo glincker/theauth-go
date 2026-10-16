@@ -3,21 +3,24 @@ package sqlite
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
+	"fmt"
 	"time"
 
 	"github.com/glincker/theauth-go/v2"
 )
 
-const sessionCols = `id, user_id, token_hash, user_agent, ip, created_at, expires_at, revoked_at, auth_level, last_seen_at, elevated_until, credential_id`
+const sessionCols = `id, user_id, token_hash, user_agent, ip, created_at, expires_at, revoked_at, auth_level, last_seen_at, elevated_until, credential_id, auth_methods, auth_time`
 
 func scanSession(r scanner) (theauth.Session, error) {
 	var (
 		id, userID, ua, ip, level, cred string
 		hash                            []byte
 		created, expires, seen          int64
-		revoked, elevated               sql.NullInt64
+		revoked, elevated, authTime     sql.NullInt64
+		methodsJSON                     sql.NullString
 	)
-	if err := r.Scan(&id, &userID, &hash, &ua, &ip, &created, &expires, &revoked, &level, &seen, &elevated, &cred); err != nil {
+	if err := r.Scan(&id, &userID, &hash, &ua, &ip, &created, &expires, &revoked, &level, &seen, &elevated, &cred, &methodsJSON, &authTime); err != nil {
 		return theauth.Session{}, err
 	}
 	sid, err := parseID(id)
@@ -32,7 +35,19 @@ func scanSession(r scanner) (theauth.Session, error) {
 	if seen != 0 {
 		lastSeen = fromMicro(seen)
 	}
+	var methods []string
+	if methodsJSON.Valid && methodsJSON.String != "" {
+		if err := json.Unmarshal([]byte(methodsJSON.String), &methods); err != nil {
+			return theauth.Session{}, fmt.Errorf("decode session auth methods: %w", err)
+		}
+	}
+	var authAt time.Time
+	if authTime.Valid {
+		authAt = fromMicro(authTime.Int64)
+	}
 	return theauth.Session{
+		AuthMethods:   methods,
+		AuthTime:      authAt,
 		ID:            sid,
 		UserID:        uid,
 		TokenHash:     hash,
@@ -55,11 +70,12 @@ func (s *Store) CreateSession(ctx context.Context, sess theauth.Session) (theaut
 		level = theauth.AuthLevelFull
 	}
 	row := s.db.QueryRowContext(ctx, s.q(`
-INSERT INTO theauth_sessions (id, user_id, token_hash, user_agent, ip, created_at, expires_at, auth_level, last_seen_at, credential_id)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+INSERT INTO theauth_sessions (id, user_id, token_hash, user_agent, ip, created_at, expires_at, auth_level, last_seen_at, credential_id, auth_methods, auth_time)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 RETURNING `+sessionCols),
 		idStr(sess.ID), idStr(sess.UserID), sess.TokenHash, sess.UserAgent, sess.IP,
 		toMicro(orNow(sess.CreatedAt)), toMicro(sess.ExpiresAt), level, lastSeenMicro(sess.LastSeenAt), sess.CredentialID,
+		methodsJSONVal(sess.AuthMethods), authTimeVal(sess.AuthTime),
 	)
 	out, err := scanSession(row)
 	if err != nil {

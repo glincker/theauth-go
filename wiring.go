@@ -347,6 +347,18 @@ func wireServices(a *TheAuth, cfg Config, providers map[string]Provider, sp saml
 		a.agentSvc = agent.New(oss, agentPolicy, a, a.as.InvalidateClientAuthCache)
 		a.agentSvc.SetHooks(a.hooks)
 		a.agentSvc.SetChainCacheInvalidator(a.as.InvalidateChainCache)
+		if cfg.AgentIdentity != nil {
+			a.agentGate = agent.NewGate(agent.GateConfig{
+				Storage:   oss,
+				Engine:    cfg.AgentIdentity.PolicyEngine,
+				RateLimit: cfg.AgentIdentity.RateLimit.window(),
+				Audit:     a,
+				Hooks:     a.hooks,
+			})
+			if a.agentGate != nil {
+				a.as.AgentGate = a.agentGate
+			}
+		}
 		var delegationPolicy *delegation.Config
 		if cfg.AgentIdentity != nil {
 			delegationPolicy = &delegation.Config{
@@ -649,6 +661,9 @@ func asConfigFromRoot(c *AuthorizationServerConfig) internalas.Config {
 		RegistrationTokenTTL:           c.RegistrationTokenTTL,
 		DeviceTokens:                   c.DeviceTokens,
 		OIDC:                           c.OIDC,
+		ConsentHandler:                 c.ConsentHandler,
+		ConsentMaxGrantTTL:             c.ConsentMaxGrantTTL,
+		ConsentTicketTTL:               c.ConsentTicketTTL,
 	}
 }
 

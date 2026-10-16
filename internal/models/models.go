@@ -2,6 +2,7 @@ package models
 
 import (
 	"errors"
+	"strings"
 	"time"
 
 	"github.com/oklog/ulid/v2"
@@ -65,6 +66,97 @@ type Session struct {
 	// CredentialID names the upstream credential (for example an API token
 	// id) a session minted from a session link is tied to; empty otherwise.
 	CredentialID string `json:"credentialId,omitempty"`
+	// AuthMethods lists the RFC 8176 authentication method references the
+	// session proved so far, in the order they were proved (for example
+	// ["pwd","otp","mfa"]). Nil on sessions created before the record
+	// existed or by a storage without SessionAuthStorage; see AMR* constants.
+	AuthMethods []string `json:"authMethods,omitempty"`
+	// AuthTime is when the user last proved identity with a method in
+	// AuthMethods: sign-in time, advanced by every second factor or step-up.
+	// The zero time on sessions without an AuthMethods record.
+	AuthTime time.Time `json:"authTime,omitempty"`
+}
+
+// RFC 8176 authentication method references recorded on a session. The
+// registered values are pwd, otp, hwk, swk and mfa. AMREmail, AMRFederated
+// and AMRSSO are theauth specific values for flows RFC 8176 has no name for;
+// they are never confused with the registered ones.
+const (
+	// AMRPassword is a password sign-in or password step-up.
+	AMRPassword = "pwd"
+	// AMROTP is a one-time code: TOTP or a recovery code.
+	AMROTP = "otp"
+	// AMRHardwareKey is a passkey bound to one authenticator (hwk): the
+	// credential is not backup eligible.
+	AMRHardwareKey = "hwk"
+	// AMRSoftwareKey is a synced, backup eligible passkey (swk): its key lives
+	// in a credential manager, not in a single device.
+	AMRSoftwareKey = "swk"
+	// AMRUserVerified marks that the authenticator reported user verification
+	// (PIN or biometric) for a passkey assertion ("user", RFC 8176 section 2).
+	AMRUserVerified = "user"
+	// AMRMFA marks that two or more distinct factors were proved.
+	AMRMFA = "mfa"
+	// AMREmail is a magic link or emailed code sign-in (not RFC 8176).
+	AMREmail = "email"
+	// AMRFederated is a social OAuth sign-in (not RFC 8176).
+	AMRFederated = "fed"
+	// AMRSSO is an enterprise SAML sign-in (not RFC 8176).
+	AMRSSO = "sso"
+)
+
+// HasMethod reports whether the session recorded the authentication method m
+// (case-insensitive). False for sessions without a record.
+func (s Session) HasMethod(m string) bool {
+	m = strings.ToLower(strings.TrimSpace(m))
+	for _, have := range s.AuthMethods {
+		if strings.ToLower(have) == m {
+			return true
+		}
+	}
+	return false
+}
+
+// HasAnyMethod reports whether the session recorded at least one of methods.
+func (s Session) HasAnyMethod(methods ...string) bool {
+	for _, m := range methods {
+		if s.HasMethod(m) {
+			return true
+		}
+	}
+	return false
+}
+
+// HasAllMethods reports whether the session recorded every one of methods.
+func (s Session) HasAllMethods(methods ...string) bool {
+	for _, m := range methods {
+		if !s.HasMethod(m) {
+			return false
+		}
+	}
+	return true
+}
+
+// MergeAuthMethods returns existing followed by the entries of add that are
+// not yet present, normalized to lower case with blanks dropped. It never
+// reorders existing entries.
+func MergeAuthMethods(existing []string, add ...string) []string {
+	seen := make(map[string]struct{}, len(existing)+len(add))
+	out := make([]string, 0, len(existing)+len(add))
+	for _, list := range [][]string{existing, add} {
+		for _, m := range list {
+			m = strings.ToLower(strings.TrimSpace(m))
+			if m == "" {
+				continue
+			}
+			if _, dup := seen[m]; dup {
+				continue
+			}
+			seen[m] = struct{}{}
+			out = append(out, m)
+		}
+	}
+	return out
 }
 
 // Expired reports whether the session is no longer usable at the given time.
