@@ -1,0 +1,21 @@
+DROP TABLE IF EXISTS theauth_audit_secrets;
+DROP TABLE IF EXISTS theauth_audit_chain_heads;
+DROP INDEX IF EXISTS theauth_audit_chain_idx;
+ALTER TABLE audit_events
+    DROP COLUMN IF EXISTS hash,
+    DROP COLUMN IF EXISTS prev_hash,
+    DROP COLUMN IF EXISTS chain_seq,
+    DROP COLUMN IF EXISTS chain_key,
+    DROP COLUMN IF EXISTS chain_session,
+    DROP COLUMN IF EXISTS chain_ip,
+    DROP COLUMN IF EXISTS chain_metadata,
+    DROP COLUMN IF EXISTS approver_pseudonym,
+    DROP COLUMN IF EXISTS actor_pseudonym,
+    DROP COLUMN IF EXISTS subject_pseudonym,
+    DROP COLUMN IF EXISTS actor_user_pseudonym,
+    DROP COLUMN IF EXISTS input_provenance,
+    DROP COLUMN IF EXISTS delegation_chain,
+    DROP COLUMN IF EXISTS approver_id,
+    DROP COLUMN IF EXISTS policy_version,
+    DROP COLUMN IF EXISTS actor_id,
+    DROP COLUMN IF EXISTS subject_id;

@@ -42,6 +42,7 @@ func TestPostgresCapabilityContracts(t *testing.T) {
 		{"OpaqueTokens", func(t *testing.T, s *Store) { storagetest.RunOpaqueTokens(t, s) }},
 		{"SessionManagement", func(t *testing.T, s *Store) { storagetest.RunSessionManagement(t, s) }},
 		{"AccountLifecycle", func(t *testing.T, s *Store) { storagetest.RunAccountLifecycle(t, s) }},
+		{"AuditChain", func(t *testing.T, s *Store) { storagetest.RunAuditChain(t, s) }},
 	}
 	for _, tc := range suites {
 		t.Run(tc.name, func(t *testing.T) { tc.run(t, capsStore(t)) })

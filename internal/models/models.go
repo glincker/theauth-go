@@ -376,7 +376,7 @@ type AuditEvent struct {
 	DelegationChain []string       `json:"delegationChain,omitempty"`
 	InputProvenance map[string]any `json:"inputProvenance,omitempty"`
 
-	// Hash chain output, set by stores that chain (sqlite). ChainSeq counts
+	// Hash chain output, set by stores that chain (sqlite, postgres, mysql). ChainSeq counts
 	// up from 1 per chain key (the organization id, or empty). Zero Hash
 	// means the row is not chained.
 	ChainSeq uint64 `json:"chainSeq,omitempty"`
@@ -391,6 +391,8 @@ type AuditChainBreak struct {
 	Seq      int64  `json:"seq"`
 	// Reason is one of hash_mismatch, prev_hash_mismatch, seq_gap,
 	// pseudonym_mismatch (a raw id column was edited after the row was written).
+	// On postgres and mysql, hash_mismatch also covers a native jsonb/inet or
+	// foreign key column that disagrees with the hashed text.
 	Reason string `json:"reason"`
 }
 
