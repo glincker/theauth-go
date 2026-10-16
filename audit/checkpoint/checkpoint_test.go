@@ -26,19 +26,56 @@ func leavesN(n int) [][]byte {
 	return out
 }
 
+type tsMerkleVector struct {
+	Size              int    `json:"size"`
+	Root              string `json:"root"`
+	InclusionDigest   string `json:"inclusionDigest"`
+	ConsistencyDigest string `json:"consistencyDigest"`
+}
+
+func digestPaths(t *testing.T, n int, paths func(i int) [][][]byte) string {
+	t.Helper()
+	h := sha256.New()
+	for i := 0; i < n; i++ {
+		for _, p := range paths(i) {
+			for _, node := range p {
+				h.Write(node)
+			}
+		}
+	}
+	return hex.EncodeToString(h.Sum(nil))
+}
+
+func checkTSVector(t *testing.T, c tsMerkleVector) {
+	t.Helper()
+	ls := leavesN(c.Size)
+	if got := hex.EncodeToString(MerkleRoot(ls)); got != c.Root {
+		t.Errorf("size %d root %s want %s", c.Size, got, c.Root)
+	}
+	inc := digestPaths(t, c.Size, func(i int) [][][]byte {
+		p, _ := InclusionPath(ls, i)
+		return [][][]byte{p}
+	})
+	con := digestPaths(t, c.Size+1, func(m int) [][][]byte {
+		p, _ := ConsistencyPath(ls, m)
+		return [][][]byte{p}
+	})
+	if inc != c.InclusionDigest {
+		t.Errorf("size %d inclusion digest differs from TS", c.Size)
+	}
+	if con != c.ConsistencyDigest {
+		t.Errorf("size %d consistency digest differs from TS", c.Size)
+	}
+}
+
 func TestMerkleMatchesTSVectors(t *testing.T) {
 	raw, err := os.ReadFile("testdata/ts-merkle-vectors.json")
 	if err != nil {
 		t.Fatal(err)
 	}
 	var v struct {
-		EmptyRoot string `json:"emptyRoot"`
-		Vectors   []struct {
-			Size              int    `json:"size"`
-			Root              string `json:"root"`
-			InclusionDigest   string `json:"inclusionDigest"`
-			ConsistencyDigest string `json:"consistencyDigest"`
-		} `json:"vectors"`
+		EmptyRoot string           `json:"emptyRoot"`
+		Vectors   []tsMerkleVector `json:"vectors"`
 	}
 	if err := json.Unmarshal(raw, &v); err != nil {
 		t.Fatal(err)
@@ -47,29 +84,7 @@ func TestMerkleMatchesTSVectors(t *testing.T) {
 		t.Fatalf("empty root %s want %s", got, v.EmptyRoot)
 	}
 	for _, c := range v.Vectors {
-		ls := leavesN(c.Size)
-		if got := hex.EncodeToString(MerkleRoot(ls)); got != c.Root {
-			t.Errorf("size %d root %s want %s", c.Size, got, c.Root)
-		}
-		inc, con := sha256.New(), sha256.New()
-		for i := 0; i < c.Size; i++ {
-			p, _ := InclusionPath(ls, i)
-			for _, h := range p {
-				inc.Write(h)
-			}
-		}
-		for m := 0; m <= c.Size; m++ {
-			p, _ := ConsistencyPath(ls, m)
-			for _, h := range p {
-				con.Write(h)
-			}
-		}
-		if got := hex.EncodeToString(inc.Sum(nil)); got != c.InclusionDigest {
-			t.Errorf("size %d inclusion digest differs from TS", c.Size)
-		}
-		if got := hex.EncodeToString(con.Sum(nil)); got != c.ConsistencyDigest {
-			t.Errorf("size %d consistency digest differs from TS", c.Size)
-		}
+		checkTSVector(t, c)
 	}
 }
 
@@ -83,50 +98,62 @@ func TestRFC6962KnownRoots(t *testing.T) {
 	}
 }
 
+func checkInclusionAt(t *testing.T, ls [][]byte, root []byte, n, i int) {
+	t.Helper()
+	path, err := InclusionPath(ls, i)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !VerifyInclusionPath(ls[i], int64(i), int64(n), path, root) {
+		t.Fatalf("n=%d i=%d: inclusion rejected", n, i)
+	}
+	if i+1 < n && VerifyInclusionPath(ls[i], int64(i+1), int64(n), path, root) {
+		t.Fatalf("n=%d i=%d: wrong index accepted", n, i)
+	}
+	if n > 1 && VerifyInclusionPath(ls[i], int64(i), int64(n), path[:len(path)-1], root) {
+		t.Fatalf("n=%d i=%d: short path accepted", n, i)
+	}
+	if len(path) == 0 {
+		return
+	}
+	bad := append([][]byte{append([]byte(nil), path[0]...)}, path[1:]...)
+	bad[0][0] ^= 1
+	if VerifyInclusionPath(ls[i], int64(i), int64(n), bad, root) {
+		t.Fatalf("n=%d i=%d: flipped path accepted", n, i)
+	}
+}
+
+func checkConsistencyAt(t *testing.T, ls [][]byte, root []byte, n, m int) {
+	t.Helper()
+	path, err := ConsistencyPath(ls, m)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !VerifyConsistencyPath(int64(m), int64(n), MerkleRoot(ls[:m]), root, path) {
+		t.Fatalf("n=%d m=%d: consistency rejected", n, m)
+	}
+	if m == 0 || m >= n {
+		return
+	}
+	other := leavesN(n)
+	other[m-1] = LeafHash([]byte("rewritten"))
+	if VerifyConsistencyPath(int64(m), int64(n), MerkleRoot(other[:m]), root, path) {
+		t.Fatalf("n=%d m=%d: rewritten old leaf accepted", n, m)
+	}
+	if len(path) > 0 && VerifyConsistencyPath(int64(m), int64(n), MerkleRoot(ls[:m]), root, path[:len(path)-1]) {
+		t.Fatalf("n=%d m=%d: short consistency path accepted", n, m)
+	}
+}
+
 func TestProofsAllSizes(t *testing.T) {
 	for n := 1; n <= 33; n++ {
 		ls := leavesN(n)
 		root := MerkleRoot(ls)
 		for i := 0; i < n; i++ {
-			path, err := InclusionPath(ls, i)
-			if err != nil {
-				t.Fatal(err)
-			}
-			if !VerifyInclusionPath(ls[i], int64(i), int64(n), path, root) {
-				t.Fatalf("n=%d i=%d: inclusion rejected", n, i)
-			}
-			if i+1 < n && VerifyInclusionPath(ls[i], int64(i+1), int64(n), path, root) {
-				t.Fatalf("n=%d i=%d: wrong index accepted", n, i)
-			}
-			if n > 1 && VerifyInclusionPath(ls[i], int64(i), int64(n), path[:len(path)-1], root) {
-				t.Fatalf("n=%d i=%d: short path accepted", n, i)
-			}
-			if len(path) > 0 {
-				bad := append([][]byte{append([]byte(nil), path[0]...)}, path[1:]...)
-				bad[0][0] ^= 1
-				if VerifyInclusionPath(ls[i], int64(i), int64(n), bad, root) {
-					t.Fatalf("n=%d i=%d: flipped path accepted", n, i)
-				}
-			}
+			checkInclusionAt(t, ls, root, n, i)
 		}
 		for m := 0; m <= n; m++ {
-			path, err := ConsistencyPath(ls, m)
-			if err != nil {
-				t.Fatal(err)
-			}
-			if !VerifyConsistencyPath(int64(m), int64(n), MerkleRoot(ls[:m]), root, path) {
-				t.Fatalf("n=%d m=%d: consistency rejected", n, m)
-			}
-			if m > 0 && m < n {
-				other := leavesN(n)
-				other[m-1] = LeafHash([]byte("rewritten"))
-				if VerifyConsistencyPath(int64(m), int64(n), MerkleRoot(other[:m]), root, path) {
-					t.Fatalf("n=%d m=%d: rewritten old leaf accepted", n, m)
-				}
-				if len(path) > 0 && VerifyConsistencyPath(int64(m), int64(n), MerkleRoot(ls[:m]), root, path[:len(path)-1]) {
-					t.Fatalf("n=%d m=%d: short consistency path accepted", n, m)
-				}
-			}
+			checkConsistencyAt(t, ls, root, n, m)
 		}
 	}
 }
@@ -169,6 +196,45 @@ func testLog(n int) (Log, *Ed25519Signer, PublicKey) {
 	return Log{Source: rows, SaltKey: []byte("salt-key")}, s, pub
 }
 
+func checkLogRow(t *testing.T, lg Log, cp Checkpoint, pub PublicKey, n, i int) {
+	t.Helper()
+	ctx := context.Background()
+	id := fmt.Sprintf("row-%03d", i)
+	p, err := CreateInclusionProof(ctx, lg, id, cp)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if o := VerifyInclusionProof(p, cp, pub); !o.Valid {
+		t.Fatalf("n=%d i=%d: %+v", n, i, o)
+	}
+	if i%7 != 0 {
+		return
+	}
+	r, err := CreateReceipt(ctx, lg, id, cp, []string{"action", "result"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if o := VerifyReceipt(r, pub); !o.Valid {
+		t.Fatalf("receipt n=%d i=%d: %+v", n, i, o)
+	}
+}
+
+func checkLogConsistency(t *testing.T, lg Log, signer *Ed25519Signer, cp Checkpoint, pub PublicKey, n, m int) {
+	t.Helper()
+	ctx := context.Background()
+	old, err := CreateCheckpoint(ctx, Log{Source: lg.Source.(StaticSource)[:m], SaltKey: lg.SaltKey}, CreateOptions{Signer: signer})
+	if err != nil {
+		t.Fatal(err)
+	}
+	cons, err := CreateConsistencyProof(ctx, lg, old, cp)
+	if err != nil {
+		t.Fatalf("n=%d m=%d: %v", n, m, err)
+	}
+	if o := VerifyConsistencyProof(cons, old, cp, pub); !o.Valid {
+		t.Fatalf("n=%d m=%d: %+v", n, m, o)
+	}
+}
+
 func TestLogSizes(t *testing.T) {
 	ctx := context.Background()
 	for n := 1; n <= 33; n++ {
@@ -178,36 +244,10 @@ func TestLogSizes(t *testing.T) {
 			t.Fatalf("n=%d: %v size %d", n, err, cp.Size)
 		}
 		for i := 0; i < n; i++ {
-			id := fmt.Sprintf("row-%03d", i)
-			p, err := CreateInclusionProof(ctx, lg, id, cp)
-			if err != nil {
-				t.Fatal(err)
-			}
-			if o := VerifyInclusionProof(p, cp, pub); !o.Valid {
-				t.Fatalf("n=%d i=%d: %+v", n, i, o)
-			}
-			if i%7 == 0 {
-				r, err := CreateReceipt(ctx, lg, id, cp, []string{"action", "result"})
-				if err != nil {
-					t.Fatal(err)
-				}
-				if o := VerifyReceipt(r, pub); !o.Valid {
-					t.Fatalf("receipt n=%d i=%d: %+v", n, i, o)
-				}
-			}
+			checkLogRow(t, lg, cp, pub, n, i)
 		}
 		for m := 0; m <= n; m++ {
-			old, err := CreateCheckpoint(ctx, Log{Source: lg.Source.(StaticSource)[:m], SaltKey: lg.SaltKey}, CreateOptions{Signer: signer})
-			if err != nil {
-				t.Fatal(err)
-			}
-			cons, err := CreateConsistencyProof(ctx, lg, old, cp)
-			if err != nil {
-				t.Fatalf("n=%d m=%d: %v", n, m, err)
-			}
-			if o := VerifyConsistencyProof(cons, old, cp, pub); !o.Valid {
-				t.Fatalf("n=%d m=%d: %+v", n, m, o)
-			}
+			checkLogConsistency(t, lg, signer, cp, pub, n, m)
 		}
 	}
 }

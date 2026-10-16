@@ -104,6 +104,16 @@ func ConsistencyPath(leaves [][]byte, oldSize int) ([][]byte, error) {
 	return subProof(oldSize, leaves, true), nil
 }
 
+// skipEvenLevels climbs while fn is a right-edge even node (RFC 9162 steps
+// that shift both cursors until fn is odd or zero).
+func skipEvenLevels(fn, sn int64) (int64, int64) {
+	for fn&1 == 0 && fn != 0 {
+		fn >>= 1
+		sn >>= 1
+	}
+	return fn, sn
+}
+
 // RootFromInclusion recomputes the root from a leaf hash and its audit path
 // (RFC 9162 section 2.1.3.2). ok is false when the path shape is wrong.
 func RootFromInclusion(leafHash []byte, index, size int64, path [][]byte) (root []byte, ok bool) {
@@ -118,12 +128,7 @@ func RootFromInclusion(leafHash []byte, index, size int64, path [][]byte) (root 
 		}
 		if fn&1 == 1 || fn == sn {
 			r = NodeHash(p, r)
-			if fn&1 == 0 {
-				for fn&1 == 0 && fn != 0 {
-					fn >>= 1
-					sn >>= 1
-				}
-			}
+			fn, sn = skipEvenLevels(fn, sn)
 		} else {
 			r = NodeHash(r, p)
 		}
@@ -157,21 +162,30 @@ func VerifyInclusionPath(leafHash []byte, index, size int64, path [][]byte, root
 	return ok && eq(got, root)
 }
 
+// consistencyTrivial decides the cases that need no hashing: bad sizes or
+// hashes, equal sizes and an empty old tree. decided is false otherwise.
+func consistencyTrivial(oldSize, newSize int64, oldRoot, newRoot []byte, path [][]byte) (result, decided bool) {
+	if oldSize < 0 || oldSize > newSize {
+		return false, true
+	}
+	if len(oldRoot) != hashBytes || len(newRoot) != hashBytes || !allHashes(path) {
+		return false, true
+	}
+	if oldSize == newSize {
+		return len(path) == 0 && eq(oldRoot, newRoot), true
+	}
+	if oldSize == 0 {
+		return len(path) == 0, true
+	}
+	return false, false
+}
+
 // VerifyConsistencyPath reports whether path proves the tree of newSize leaves
 // (root newRoot) extends the tree of oldSize leaves (root oldRoot) without
 // changing any old leaf (RFC 9162 section 2.1.4.2).
 func VerifyConsistencyPath(oldSize, newSize int64, oldRoot, newRoot []byte, path [][]byte) bool {
-	if oldSize < 0 || oldSize > newSize {
-		return false
-	}
-	if len(oldRoot) != hashBytes || len(newRoot) != hashBytes || !allHashes(path) {
-		return false
-	}
-	if oldSize == newSize {
-		return len(path) == 0 && eq(oldRoot, newRoot)
-	}
-	if oldSize == 0 {
-		return len(path) == 0
+	if result, decided := consistencyTrivial(oldSize, newSize, oldRoot, newRoot, path); decided {
+		return result
 	}
 	var nodes [][]byte
 	if isPowerOfTwo(oldSize) {
@@ -181,30 +195,32 @@ func VerifyConsistencyPath(oldSize, newSize int64, oldRoot, newRoot []byte, path
 	if len(nodes) == 0 {
 		return false
 	}
-	fn, sn := oldSize-1, newSize-1
+	fr, sr, sn, ok := foldConsistency(oldSize-1, newSize-1, nodes)
+	return ok && sn == 0 && eq(fr, oldRoot) && eq(sr, newRoot)
+}
+
+// foldConsistency runs the RFC 9162 iterative fold over nodes and returns the
+// reconstructed old and new roots plus the final sn cursor. ok is false when
+// the path has more nodes than the tree shape allows.
+func foldConsistency(fn, sn int64, nodes [][]byte) (fr, sr []byte, snOut int64, ok bool) {
 	for fn&1 == 1 {
 		fn >>= 1
 		sn >>= 1
 	}
-	fr, sr := nodes[0], nodes[0]
+	fr, sr = nodes[0], nodes[0]
 	for _, c := range nodes[1:] {
 		if sn == 0 {
-			return false
+			return nil, nil, sn, false
 		}
 		if fn&1 == 1 || fn == sn {
 			fr = NodeHash(c, fr)
 			sr = NodeHash(c, sr)
-			if fn&1 == 0 {
-				for fn&1 == 0 && fn != 0 {
-					fn >>= 1
-					sn >>= 1
-				}
-			}
+			fn, sn = skipEvenLevels(fn, sn)
 		} else {
 			sr = NodeHash(sr, c)
 		}
 		fn >>= 1
 		sn >>= 1
 	}
-	return sn == 0 && eq(fr, oldRoot) && eq(sr, newRoot)
+	return fr, sr, sn, true
 }
