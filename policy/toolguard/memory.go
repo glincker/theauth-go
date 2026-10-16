@@ -17,7 +17,7 @@ type memRequest struct {
 }
 
 // MemoryApprovals is an in-process Approvals for tests and single-node hosts.
-// A multi-node host needs a shared store with the same single-use rule.
+// A multi-node host uses NewStorageApprovals over a shared store instead.
 type MemoryApprovals struct {
 	mu   sync.Mutex
 	reqs map[string]*memRequest

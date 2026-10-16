@@ -53,6 +53,7 @@ func TestMySQLCapabilityContracts(t *testing.T) {
 		run  func(t *testing.T, s *mysql.Store)
 	}{
 		{"APITokens", func(t *testing.T, s *mysql.Store) { storagetest.RunAPITokens(t, s) }},
+		{"ToolApprovals", func(t *testing.T, s *mysql.Store) { storagetest.RunToolApprovals(t, s) }},
 		{"DeviceCodes", func(t *testing.T, s *mysql.Store) { storagetest.RunDeviceCodes(t, s) }},
 		{"DeviceAuthorizations", func(t *testing.T, s *mysql.Store) { storagetest.RunDeviceAuthorizations(t, s) }},
 		{"RegistrationTokens", func(t *testing.T, s *mysql.Store) { storagetest.RunRegistrationTokens(t, s) }},

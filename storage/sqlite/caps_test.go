@@ -19,6 +19,7 @@ func TestCapabilityContracts(t *testing.T) {
 		run  func(t *testing.T, s *sqlitestore.Store)
 	}{
 		{"APITokens", func(t *testing.T, s *sqlitestore.Store) { storagetest.RunAPITokens(t, s) }},
+		{"ToolApprovals", func(t *testing.T, s *sqlitestore.Store) { storagetest.RunToolApprovals(t, s) }},
 		{"DeviceCodes", func(t *testing.T, s *sqlitestore.Store) { storagetest.RunDeviceCodes(t, s) }},
 		{"DeviceIdentity", func(t *testing.T, s *sqlitestore.Store) { storagetest.RunDeviceIdentity(t, s) }},
 		{"SessionManagement", func(t *testing.T, s *sqlitestore.Store) { storagetest.RunSessionManagement(t, s) }},

@@ -35,6 +35,7 @@ func TestPostgresCapabilityContracts(t *testing.T) {
 		run  func(t *testing.T, s *Store)
 	}{
 		{"APITokens", func(t *testing.T, s *Store) { storagetest.RunAPITokens(t, s) }},
+		{"ToolApprovals", func(t *testing.T, s *Store) { storagetest.RunToolApprovals(t, s) }},
 		{"DeviceCodes", func(t *testing.T, s *Store) { storagetest.RunDeviceCodes(t, s) }},
 		{"DeviceAuthorizations", func(t *testing.T, s *Store) { storagetest.RunDeviceAuthorizations(t, s) }},
 		{"RegistrationTokens", func(t *testing.T, s *Store) { storagetest.RunRegistrationTokens(t, s) }},
