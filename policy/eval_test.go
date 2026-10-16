@@ -170,3 +170,58 @@ func TestEvaluateConcurrent(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestEscalateAndRiskTiers(t *testing.T) {
+	yes := true
+	risk := []RiskTier{
+		{Name: "medium", MinAmount: 100, Currency: "USD", Require: RequireApproval},
+		{Name: "high", MinAmount: 10000, Require: RequireStepUp},
+		{Name: "critical", DataClasses: []string{"pii"}, Irreversible: &yes, Require: RequireApproval},
+		{Name: "public", DataClasses: []string{"public"}, Require: RequireNone},
+	}
+	allow := pol(t, "p", `{"id":"pay","effect":"allow","actions":["pay:*"],"resources":["*"]}`)
+	esc := pol(t, "e", `{"id":"wire","effect":"escalate","tier":"wire","actions":["wire:*"],"resources":["*"]}`)
+	denyAll := pol(t, "d", `{"id":"nope","effect":"deny","actions":["wire:*"],"resources":["*"]}`)
+	tests := []struct {
+		name     string
+		policies []*Policy
+		req      Request
+		allowed  bool
+		effect   Effect
+		tier     string
+		require  Requirement
+	}{
+		{"allow below tiers", []*Policy{allow}, Request{Action: "pay:x", Resource: "r", Amount: 5, Currency: "USD"}, true, Allow, "", ""},
+		{"tier approval", []*Policy{allow}, Request{Action: "pay:x", Resource: "r", Amount: 500, Currency: "USD"}, false, Escalate, "medium", RequireApproval},
+		{"strongest tier wins", []*Policy{allow}, Request{Action: "pay:x", Resource: "r", Amount: 20000, Currency: "USD"}, false, Escalate, "high", RequireStepUp},
+		{"all fields must hold", []*Policy{allow}, Request{Action: "pay:x", Resource: "r", Amount: 500, Currency: "EUR"}, true, Allow, "", ""},
+		{"irreversible pii", []*Policy{allow}, Request{Action: "pay:x", Resource: "r", DataClass: "pii", Irreversible: true}, false, Escalate, "critical", RequireApproval},
+		{"pii reversible allows", []*Policy{allow}, Request{Action: "pay:x", Resource: "r", DataClass: "pii"}, true, Allow, "", ""},
+		{"tier none allows", []*Policy{allow}, Request{Action: "pay:x", Resource: "r", DataClass: "public"}, true, Allow, "", ""},
+		{"escalate statement", []*Policy{esc}, Request{Action: "wire:x", Resource: "r"}, false, Escalate, "wire", RequireApproval},
+		{"escalate beats allow", []*Policy{allow, esc}, Request{Action: "wire:x", Resource: "r"}, false, Escalate, "wire", RequireApproval},
+		{"deny beats escalate", []*Policy{esc, denyAll}, Request{Action: "wire:x", Resource: "r"}, false, Deny, "", ""},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			d := Evaluator{Risk: risk}.Evaluate(tc.req, tc.policies...)
+			if d.Allowed != tc.allowed || d.Effect != tc.effect {
+				t.Fatalf("decision = %+v", d)
+			}
+			if tc.effect == Escalate {
+				if d.Escalation == nil || d.Escalation.Tier != tc.tier || d.Escalation.Requirement != tc.require {
+					t.Fatalf("escalation = %+v", d.Escalation)
+				}
+			} else if d.Escalation != nil {
+				t.Fatalf("unexpected escalation %+v", d.Escalation)
+			}
+		})
+	}
+}
+
+func TestEscalateValidation(t *testing.T) {
+	_, err := Parse([]byte(`{"version":"1","statements":[{"effect":"escalate","require":"bogus","actions":["a"],"resources":["*"]}]}`))
+	if err == nil {
+		t.Fatal("bad require should be rejected")
+	}
+}

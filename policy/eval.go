@@ -15,28 +15,40 @@ type Request struct {
 	Attributes map[string]string
 	IP         string
 	Now        time.Time
+	// Typed risk attributes. They feed Evaluator.Risk tier matching.
+	Amount       float64
+	Currency     string
+	DataClass    string
+	Irreversible bool
 }
 
 // Decision is the audited outcome of an evaluation.
 type Decision struct {
+	// Allowed is true only when Effect is Allow. Escalate and deny are both
+	// false, so existing callers that gate on Allowed stay safe.
 	Allowed     bool   `json:"allowed"`
 	Effect      Effect `json:"effect,omitempty"`
 	PolicyID    string `json:"policyId,omitempty"`
 	StatementID string `json:"statementId,omitempty"`
 	Reason      string `json:"reason"`
 	Boundary    bool   `json:"boundary,omitempty"`
+	// Escalation is set when Effect is Escalate.
+	Escalation *Escalation `json:"escalation,omitempty"`
 }
 
 // Evaluator evaluates requests against policies. The zero value is ready.
 type Evaluator struct {
 	// Now supplies the clock for conditions when Request.Now is zero.
 	Now func() time.Time
+	// Risk maps request risk attributes to tiers that can escalate an
+	// otherwise allowed request. Empty means no risk tiers.
+	Risk []RiskTier
 }
 
 // Evaluate applies explicit-deny-wins then default-deny across policies.
 func (e Evaluator) Evaluate(req Request, policies ...*Policy) Decision {
 	req = e.prepare(req)
-	var allow *Decision
+	var allow, escalate *Decision
 	for _, p := range policies {
 		if p == nil {
 			continue
@@ -53,6 +65,17 @@ func (e Evaluator) Evaluate(req Request, policies ...*Policy) Decision {
 				d.Reason = "explicit deny"
 				return d
 			}
+			if s.Effect == Escalate {
+				if escalate == nil {
+					d.Reason = "escalation required by statement"
+					d.Escalation = &Escalation{Tier: s.Tier, Requirement: s.Require, Reason: d.Reason}
+					if d.Escalation.Requirement == "" {
+						d.Escalation.Requirement = RequireApproval
+					}
+					escalate = &d
+				}
+				continue
+			}
 			if allow == nil {
 				d.Allowed = true
 				d.Reason = "allowed by statement"
@@ -60,8 +83,11 @@ func (e Evaluator) Evaluate(req Request, policies ...*Policy) Decision {
 			}
 		}
 	}
+	if escalate != nil {
+		return *escalate
+	}
 	if allow != nil {
-		return *allow
+		return e.applyRisk(req, *allow)
 	}
 	return Decision{Reason: "no matching allow statement (default deny)"}
 }

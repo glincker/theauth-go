@@ -27,10 +27,22 @@ const AuditActionDecision = "policy.decision"
 // ErrorCodeDenied is the problem code returned on a denied request.
 const ErrorCodeDenied = "policy.denied"
 
+// ErrorCodeEscalate is the problem code returned when the action needs a
+// human approval before it may run.
+const ErrorCodeEscalate = "policy.escalation_required"
+
+// ErrorCodeStepUp matches the step-up code the core middleware returns.
+const ErrorCodeStepUp = "auth.step_up_required"
+
 // Resource names what a request touches and supplies {var} values.
 type Resource struct {
 	Name       string
 	Attributes map[string]string
+	// Typed risk attributes, matched against Evaluator.Risk tiers.
+	Amount       float64
+	Currency     string
+	DataClass    string
+	Irreversible bool
 }
 
 // Options configures a Guard.
@@ -133,6 +145,17 @@ func (g *Guard) RequirePolicy(action string, resourceFn func(*http.Request) Reso
 				return
 			}
 			g.audit(r.Context(), p, req, d)
+			if d.Effect == Escalate && d.Escalation != nil {
+				status, code := http.StatusForbidden, ErrorCodeEscalate
+				if d.Escalation.Requirement == RequireStepUp {
+					status, code = http.StatusUnauthorized, ErrorCodeStepUp
+				}
+				writeJSON(w, status, map[string]any{
+					"code": code, "status": status,
+					"detail": d.Reason, "decision": d, "escalation": d.Escalation,
+				})
+				return
+			}
 			if !d.Allowed {
 				writeJSON(w, http.StatusForbidden, map[string]any{
 					"code": ErrorCodeDenied, "status": http.StatusForbidden,
@@ -164,7 +187,10 @@ func (g *Guard) request(r *http.Request, p *theauth.Principal, action string, re
 	for k, v := range res.Attributes {
 		attrs[k] = v
 	}
-	return Request{Action: action, Resource: res.Name, Attributes: attrs, IP: g.clientIP(r)}
+	return Request{
+		Action: action, Resource: res.Name, Attributes: attrs, IP: g.clientIP(r),
+		Amount: res.Amount, Currency: res.Currency, DataClass: res.DataClass, Irreversible: res.Irreversible,
+	}
 }
 
 func (g *Guard) clientIP(r *http.Request) string {
@@ -184,7 +210,7 @@ func (g *Guard) audit(ctx context.Context, p *theauth.Principal, req Request, d 
 	}
 	md := map[string]any{
 		"allowed": d.Allowed, "action": req.Action, "resource": req.Resource,
-		"reason": d.Reason, "boundary": d.Boundary,
+		"reason": d.Reason, "boundary": d.Boundary, "effect": string(d.Effect),
 		"principal_kind": string(p.Kind),
 	}
 	if d.PolicyID != "" {

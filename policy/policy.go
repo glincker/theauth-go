@@ -31,6 +31,9 @@ type Effect string
 const (
 	Allow Effect = "allow"
 	Deny  Effect = "deny"
+	// Escalate permits the action only after a human approves it or the
+	// caller steps up. It never runs the action on its own.
+	Escalate Effect = "escalate"
 )
 
 // Condition operators.
@@ -63,6 +66,10 @@ type Statement struct {
 	Actions    []string    `json:"actions"`
 	Resources  []string    `json:"resources"`
 	Conditions []Condition `json:"conditions,omitempty"`
+	// Tier and Require apply to escalate statements. Require defaults to
+	// RequireApproval.
+	Tier    string      `json:"tier,omitempty"`
+	Require Requirement `json:"require,omitempty"`
 }
 
 // Policy is a versioned document of statements.
@@ -121,8 +128,11 @@ func (p *Policy) Validate() error {
 }
 
 func (s Statement) validate() error {
-	if s.Effect != Allow && s.Effect != Deny {
-		return fmt.Errorf("effect must be allow or deny, got %q", s.Effect)
+	if s.Effect != Allow && s.Effect != Deny && s.Effect != Escalate {
+		return fmt.Errorf("effect must be allow, deny or escalate, got %q", s.Effect)
+	}
+	if s.Effect == Escalate && s.Require != "" && s.Require != RequireApproval && s.Require != RequireStepUp {
+		return fmt.Errorf("require must be approval or step_up, got %q", s.Require)
 	}
 	if err := checkPatterns("actions", s.Actions); err != nil {
 		return err

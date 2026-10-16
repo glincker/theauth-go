@@ -82,6 +82,8 @@ func newEnv(t *testing.T) *env {
 		_, _ = w.Write([]byte(d.StatementID))
 	})
 	mux.Handle("POST /projects/{project}/deploy", g.RequirePolicy("deploy:create", res)(ok))
+	mux.Handle("POST /projects/{project}/wire", g.RequirePolicy("wire:send", res)(ok))
+	mux.Handle("POST /projects/{project}/wipe", g.RequirePolicy("wipe:run", res)(ok))
 	mux.Handle("GET /projects/{project}", g.RequirePolicy("project:read", res)(ok))
 	e.srv = httptest.NewServer(mux)
 	t.Cleanup(e.srv.Close)
@@ -249,5 +251,26 @@ func TestRequirePolicy(t *testing.T) {
 func TestNewRequiresDeps(t *testing.T) {
 	if _, err := policy.New(policy.Options{}); err == nil {
 		t.Fatal("want error")
+	}
+}
+
+func TestRequirePolicyEscalate(t *testing.T) {
+	e := newEnv(t)
+	raw, _ := e.token(theauth.MintAPITokenInput{})
+	e.put("esc", `{"version":"1","statements":[
+	  {"id":"wire","effect":"escalate","tier":"money","actions":["wire:send"],"resources":["project/*"]},
+	  {"id":"wipe","effect":"escalate","tier":"destructive","require":"step_up","actions":["wipe:run"],"resources":["project/*"]}]}`)
+	e.attach(policy.SubjectUser, e.user.ID.String(), "esc")
+
+	code, body, _ := e.call("POST", "/projects/p1/wire", raw)
+	if code != 403 || body["code"] != policy.ErrorCodeEscalate {
+		t.Fatalf("approval escalate: %d %v", code, body)
+	}
+	if esc, _ := body["escalation"].(map[string]any); esc["tier"] != "money" || esc["requirement"] != "approval" {
+		t.Fatalf("escalation payload: %v", body)
+	}
+	code, body, _ = e.call("POST", "/projects/p1/wipe", raw)
+	if code != 401 || body["code"] != policy.ErrorCodeStepUp {
+		t.Fatalf("step_up escalate: %d %v", code, body)
 	}
 }
