@@ -14,24 +14,12 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
-// Observability re-exports are the public surface for plugging tracing +
-// metrics adapters into TheAuth. The underlying types live in
-// internal/observability so the implementation is auditable in one diff
-// and downstream consumers never import an internal/ path.
-//
-// Design (locked 2026-06-21):
-//
-//   - Adapter pattern, NO hard dependency on OpenTelemetry, Prometheus, or
-//     any other vendor. Consumers wire their own implementations.
-//   - mcpresource/go.mod stays zero-dep; it never depends on this package.
-//   - Cardinality discipline: high-cardinality identifiers (client_id,
-//     user_id, IP) go on spans as attributes, NEVER on metric labels.
-//
-// See examples/observability-otel and examples/observability-prom for
-// reference adapter implementations.
+// Observability re-exports the adapter types for tracing and metrics. Implementations live in
+// internal/observability. Adapters keep vendor SDKs (OpenTelemetry, Prometheus) out of this module.
+// Keep high-cardinality identifiers (client_id, user_id, IP) on spans, never on metric labels. See
+// examples/observability-otel and observability-prom.
 
-// Tracer is the span starter adapters implement. See
-// internal/observability.Tracer for the full contract.
+// Tracer starts spans. Adapters implement it; see internal/observability.Tracer for the contract.
 type Tracer = observability.Tracer
 
 // Span is the per-operation span handle.
@@ -52,8 +40,7 @@ func BoolAttr(k string, v bool) Attr { return observability.BoolAttr(k, v) }
 // ErrAttr wraps an error as a string span attribute under the key "error".
 func ErrAttr(err error) Attr { return observability.ErrAttr(err) }
 
-// Metrics is the instrument factory adapters implement. See
-// internal/observability.Metrics for the full contract.
+// Metrics is the instrument factory that adapters implement.
 type Metrics = observability.Metrics
 
 // Counter is a monotonic counter.
@@ -65,23 +52,18 @@ type Histogram = observability.Histogram
 // Gauge is a settable, incrementable, decrementable instantaneous value.
 type Gauge = observability.Gauge
 
-// Labels is the (name -> value) label set for a single metric instance.
-// Cardinality discipline: callers MUST NOT put high-cardinality identifiers
-// into Labels.
+// Labels is the name-to-value label set for one metric instance. Never put high-cardinality
+// identifiers in it.
 type Labels = observability.Labels
 
-// Hooks bundles the consumer-supplied observability adapters. Attach to
-// Config.Observability to wire tracing + metrics into TheAuth. Either
-// field MAY be nil; the library falls back to no-op adapters per field.
+// Hooks bundles the observability adapters attached to Config.Observability. Either field may be
+// nil; the library falls back to no-op adapters per field.
 type Hooks = observability.Hooks
 
-// Status is the canonical span / metric status enum used across every
-// instrumented operation in the library.
+// Status is the canonical span / metric status enum used across every instrumented operation in the
+// library.
 type Status = observability.Status
 
-// Span / metric / attribute names re-exported so consumers building
-// dashboards or alerts can reference them by symbol rather than by
-// stringly-typed name.
 const (
 	StatusSuccess = observability.StatusSuccess
 	StatusError   = observability.StatusError
@@ -138,15 +120,11 @@ const (
 	AttrKind      = observability.AttrKind
 )
 
-// LatencyBuckets is the shared histogram bucket layout used by every
-// _latency_seconds metric the library emits. Consumers pre-registering
-// Prometheus histograms MUST use this exact slice so bucket boundaries
-// align between library call sites and consumer registrations.
+// LatencyBuckets is the shared histogram layout for every _latency_seconds metric. Consumers
+// pre-registering histograms must use this exact slice so bucket boundaries line up.
 var LatencyBuckets = observability.LatencyBuckets
 
-// coalesceHooks returns a non-nil *Hooks. The constructor uses this so
-// every internal service can call hooks.StartSpan / hooks.Counter without
-// nil-checking the pointer (the nil-safe helpers handle nil inner fields).
+// coalesceHooks returns a non-nil *Hooks so internal services need no nil check on the pointer.
 func coalesceHooks(h *Hooks) *Hooks {
 	if h == nil {
 		return &Hooks{}
@@ -154,10 +132,7 @@ func coalesceHooks(h *Hooks) *Hooks {
 	return h
 }
 
-// Hooks returns the observability bundle in use. Returns a non-nil pointer
-// even when no Observability was configured (the no-op bundle). Exposed so
-// consumers writing custom services on top of theauth-go can share the
-// same Tracer / Metrics adapters without re-wiring.
+// ObservabilityHooks returns the bundle in use, never nil, so custom services can share the same adapters.
 func (a *TheAuth) ObservabilityHooks() *Hooks {
 	if a == nil {
 		return &Hooks{}
@@ -165,42 +140,28 @@ func (a *TheAuth) ObservabilityHooks() *Hooks {
 	return a.hooks
 }
 
-// DefaultRedactor masks values for keys named password, secret, token, code,
-// refresh_token, access_token (case-insensitive) at any nesting depth.
+// DefaultRedactor masks values for password, secret, token, code, refresh_token and access_token
+// keys at any depth.
 func DefaultRedactor(metadata map[string]any) map[string]any { return audit.DefaultRedactor(metadata) }
 
-// SeededSecretKeys returns a copy of the case-insensitive key blocklist
-// applied by the default redactor.
+// SeededSecretKeys returns a copy of the key blocklist the default redactor applies.
 func SeededSecretKeys() []string { return audit.SeededSecretKeys() }
 
-// HashEmailForAudit returns sha256(lowercase(email)) hex-encoded.
+// HashEmailForAudit returns the hex sha256 of the lowercased email.
 func HashEmailForAudit(email string) string { return audit.HashEmailForAudit(email) }
 
-// AuditSink streams audit events to an external SIEM or observability
-// system. Implementations must be best-effort: a failed Stream call must
-// never block writes to the canonical storage layer. Failures increment
-// Stats.AuditSinkFailed.
-//
-// Built-in implementations live under audit/sinks/:
-//
-//   - audit/sinks/otlp: OTLP/HTTP logs exporter
-//   - audit/sinks/splunkhec: Splunk HTTP Event Collector
-//   - audit/sinks/webhook: generic CloudEvents 1.0 POST
+// AuditSink streams audit events to an external system. Sinks are best effort: a failed Stream
+// never blocks canonical writes and is counted in Stats.AuditSinkFailed. Built-in sinks live under
+// audit/sinks/ (otlp, splunkhec, webhook).
 type AuditSink interface {
-	// Stream sends a batch of audit events to the external system.
-	// Implementations should apply a reasonable timeout internally.
-	// A non-nil error is logged and counted in Stats.AuditSinkFailed;
-	// it does not affect storage writes.
 	Stream(ctx context.Context, batch []AuditEvent) error
 
-	// Name identifies the sink for logging and metrics labels.
 	Name() string
 }
 
 // AuthEventType names one security-relevant authentication event.
 type AuthEventType = authevents.Type
 
-// The AuthEventType values emitted by the library. The strings are stable.
 const (
 	AuthEventLoginSuccess           = authevents.LoginSuccess
 	AuthEventLoginFailure           = authevents.LoginFailure
@@ -222,22 +183,20 @@ const (
 	AuthEventOAuthLinked            = authevents.OAuthLinked
 )
 
-// AuthEvent is the PII-minimal record handed to Config.AuthEventSink. It
-// carries a user id and a truncated IP prefix, never an email, name or token.
+// AuthEvent is the PII-minimal record handed to Config.AuthEventSink. It carries a user id and a
+// truncated IP prefix, never an email, name or token.
 type AuthEvent = authevents.Event
 
-// AuthEventSink receives every AuthEvent synchronously on the emitting
-// goroutine. Implementations must return quickly and must not block; a
-// panic is recovered and logged.
+// AuthEventSink receives every AuthEvent synchronously. Implementations must return quickly; panics
+// are recovered.
 type AuthEventSink = authevents.Sink
 
-// AuthEventChannelSink returns an AuthEventSink that forwards events to ch
-// without ever blocking: when ch is full the event is dropped.
+// AuthEventChannelSink returns an AuthEventSink that forwards to ch and drops events when ch is
+// full (never blocks).
 func AuthEventChannelSink(ch chan<- AuthEvent) AuthEventSink { return authevents.ChannelSink(ch) }
 
-// RecordTokenMinted is the hook point for token issuers (API tokens, device
-// codes, service tokens) to report a mint. kind is a short label such as
-// "api" or "device"; it must not contain the token itself.
+// RecordTokenMinted reports a token mint from an issuer (API tokens, device codes). kind is a short
+// label such as "api"; it must never contain the token itself.
 func (a *TheAuth) RecordTokenMinted(ctx context.Context, userID ULID, kind string) {
 	a.EmitAudit(ctx, "token.minted", TargetRef{Type: "user", ID: userID.String()}, map[string]any{"kind": kind})
 }
@@ -261,8 +220,7 @@ func (a *TheAuth) dispatchAuthEvent(ctx context.Context, action string, target T
 	}
 }
 
-// auditContextMiddleware attaches the client IP and user agent to the
-// request context so every audit event and AuthEvent carries them.
+// auditContextMiddleware attaches the client IP and user agent to the request context for audit events.
 func (a *TheAuth) auditContextMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if _, ok := audit.MetadataFromContext(r.Context()); !ok {
@@ -279,7 +237,6 @@ func (a *TheAuth) auditContextMiddleware(next http.Handler) http.Handler {
 // Severity ranks a doctor finding.
 type Severity = doctor.Severity
 
-// Doctor severities, most serious first.
 const (
 	SeverityCritical = doctor.SeverityCritical
 	SeverityHigh     = doctor.SeverityHigh
@@ -294,7 +251,6 @@ type Finding = doctor.Finding
 // Report is the result of TheAuth.Doctor.
 type Report = doctor.Report
 
-// Doctor finding IDs. They are stable and appear in docs/SECURITY-DOCTOR.md.
 const (
 	DoctorSignupOpen        = doctor.DoctorSignupOpen
 	DoctorBootstrapOff      = doctor.DoctorBootstrapOff
@@ -324,23 +280,19 @@ const (
 // DoctorFindingIDs lists every finding ID a check can emit.
 func DoctorFindingIDs() []string { return doctor.DoctorFindingIDs() }
 
-// DoctorAdminLister is the optional storage capability that lets Doctor check
-// second-factor coverage for administrators.
+// DoctorAdminLister is the optional storage capability that lets Doctor check second-factor
+// coverage for admins.
 type DoctorAdminLister interface {
-	// ListAdminUserIDs returns the IDs of every user holding an admin role.
 	ListAdminUserIDs(ctx context.Context) ([]ULID, error)
 }
 
-// DoctorSessionCounter is the optional storage capability that lets Doctor
-// count sessions that expired but were never pruned.
+// DoctorSessionCounter is the optional storage capability that counts expired but unpruned sessions.
 type DoctorSessionCounter interface {
-	// CountExpiredSessions counts sessions whose expiry is before the cutoff.
 	CountExpiredSessions(ctx context.Context, before time.Time) (int, error)
 }
 
-// Doctor inspects the live Config and storage and reports security-posture
-// findings, most serious first. It never mutates state and never includes
-// secrets in the report.
+// Doctor inspects the live Config and storage and reports security-posture findings, most serious
+// first. It never mutates state and never includes secrets.
 func (a *TheAuth) Doctor(ctx context.Context) Report {
 	return doctor.Build(a.gatherDoctorInput(ctx, time.Now().UTC()))
 }
@@ -460,8 +412,7 @@ func (a *TheAuth) tallyAdminMFA(ctx context.Context, in *doctor.Input, l DoctorA
 	}
 }
 
-// mountDoctor serves GET /auth/admin/doctor for callers holding the root
-// ability, via session or API bearer token.
+// mountDoctor serves GET /auth/admin/doctor to callers holding the root ability.
 func (a *TheAuth) mountDoctor(r chi.Router, ipLimit func(http.Handler) http.Handler) {
 	r.With(ipLimit, a.RequireAbility(AbilityRoot)).Get("/admin/doctor", a.handleDoctor)
 }

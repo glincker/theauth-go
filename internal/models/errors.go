@@ -5,15 +5,9 @@ import (
 	"time"
 )
 
-// Sentinel errors that the storage layer and service code share. These names
-// are re-exported from the root package (github.com/glincker/theauth-go/v2)
-// via var aliases for backward compatibility with v0.1+ callers that
-// errors.Is-check against them.
-//
-// Only model-layer sentinels live here: storage misses, expiry states,
-// RBAC catalog rejections, organization invariants. Service-flow and
-// wire-protocol sentinels (OAuth error strings, password reset codes,
-// admin precondition checks) stay in the root package.
+// Sentinel errors shared by the storage layer and services. The root re-exports them through var
+// aliases for v0.1 callers that errors.Is-check them. Only model-layer sentinels live here;
+// wire-protocol and service-flow sentinels stay in root.
 var (
 	// ErrInvalidToken is returned by any service that fails to authenticate
 	// or validate a presented opaque token.
@@ -27,17 +21,12 @@ var (
 	// row is past ExpiresAt or already used.
 	ErrMagicLinkExpired = errors.New("theauth: magic link expired")
 
-	// ErrStorageNotFound is the canonical "row missing" sentinel that storage
-	// adapters return on lookup misses. Lives in the models package so service
-	// code can errors.Is-check without importing the storage package
-	// (which would create an import cycle).
+	// ErrStorageNotFound is the canonical row-missing sentinel. Storage adapters return it on lookup
+	// misses, and services can check it without importing storage.
 	ErrStorageNotFound = errors.New("theauth: storage row not found")
 
-	// ErrBadCursor is returned by storage adapters (storage/postgres,
-	// storage/mysql) when a caller-supplied keyset pagination cursor fails
-	// to decode. Handlers errors.Is-check against this instead of
-	// substring-matching err.Error(), so a wording change in the wrapped
-	// decode error can never silently break 400-vs-500 branching.
+	// ErrBadCursor is returned by storage adapters when a keyset pagination cursor fails to decode.
+	// Handlers match it with errors.Is.
 	ErrBadCursor = errors.New("theauth: invalid pagination cursor")
 
 	// ErrLastOwner is returned when an org member removal would leave the
@@ -45,9 +34,7 @@ var (
 	ErrLastOwner = errors.New("theauth: cannot remove the last owner")
 
 	// ErrSlugTaken is returned when the supplied organization slug already
-	// exists. Lifted to internal/models in PR F so the extracted
-	// organization handler package can errors.Is-check it without
-	// importing root.
+	// exists. It lives in internal/models so internal packages can match it.
 	ErrSlugTaken = errors.New("theauth: organization slug already taken")
 
 	// ErrForbidden indicates the caller lacks a required permission for
@@ -69,11 +56,9 @@ var (
 	// to 500 rather than returning this error directly.
 	ErrRBACDisabled = errors.New("theauth: RBAC disabled (Config.RBAC is nil)")
 
-	// v2.0 OAuth 2.1 authorization server sentinels. Lifted to the models
-	// package (PR B architecture reorg, 2026-06-20) so the internal/as
-	// extraction can reference them without taking an import cycle on the
-	// root package. Re-exported from root errors_v20.go as var aliases for
-	// backward compatibility with v2.0 callers that errors.Is-check them.
+	// OAuth 2.1 authorization server sentinels, kept in the models package so the internal/as package
+	// can reference them without an import cycle. root package. Re-exported from root errors_v20.go as
+	// var aliases for backward compatibility with v2.0 callers that errors.Is-check them.
 
 	// ErrASRequiresEncryptionKey is returned by New when
 	// Config.AuthorizationServer is non-nil but Config.EncryptionKey is not a
@@ -230,12 +215,9 @@ func (e *OAuthConflictRedirectError) Error() string {
 	return "theauth: oauth conflict redirect to " + e.URL
 }
 
-// Stable error codes that callers can switch on. New endpoints return
-// TheAuthError; old endpoints keep returning the sentinels above. Lifted
-// to the models package (PR D architecture reorg, 2026-06-20) so internal
-// service packages (password, totp, webauthn, saml) can construct
-// TheAuthError with these codes without taking an import cycle on the
-// root package. Re-exported from root errors.go as untyped string
+// Stable error codes that callers can switch on. New endpoints return TheAuthError; old endpoints
+// keep returning the sentinels above. They live in internal/models so internal packages can build
+// TheAuthError without an import cycle. Re-exported from root errors.go as untyped string
 // constants.
 const (
 	CodeWeakPassword         = "weak_password"
@@ -263,8 +245,7 @@ const (
 // TheAuthError is the structured error type returned by v0.2+ service
 // methods. Callers can errors.As-extract it and switch on Code for stable
 // handling, or errors.Is-check against a value of the same Code for shorter
-// paths. Lifted to the models package (PR B architecture reorg, 2026-06-20)
-// so internal subpackages can construct it without taking an import cycle
+// paths.
 // on the root package. Re-exported from root errors.go as a type alias.
 type TheAuthError struct {
 	Code    string
@@ -316,7 +297,8 @@ func (e *TheAuthError) Is(target error) bool {
 
 // Sentinels shared by the import helpers and the capability checks.
 var (
-	// ErrStorageMissingCapability is returned by New when an enabled feature needs a capability the storage lacks.
+	// ErrStorageMissingCapability is returned by New when an enabled feature needs a capability the
+	// storage lacks.
 	ErrStorageMissingCapability = errors.New("theauth: storage does not implement a required capability")
 	// ErrImportDuplicate is returned by the import helpers when the record already exists.
 	ErrImportDuplicate = errors.New("theauth: import: record already exists")

@@ -8,13 +8,11 @@ import (
 	"github.com/glincker/theauth-go/v2/internal/revocation"
 )
 
-// maxSubjectActiveCacheTTL caps Config.SubjectActiveCacheTTL so a
-// misconfiguration cannot turn the cache into a revocation delay.
+// maxSubjectActiveCacheTTL caps Config.SubjectActiveCacheTTL, so a misconfiguration cannot delay revocation.
 const maxSubjectActiveCacheTTL = 2 * time.Second
 
-// subjectActive is subjectActiveLookup behind a tiny positive-only cache
-// keyed by subject. Only "active" answers are stored, so a negative answer
-// is never sticky and a resumed agent or re-enabled user works at once.
+// subjectActive is subjectActiveLookup behind a positive-only cache. Only active answers are
+// stored, so a negative answer is never sticky.
 func (s *Service) subjectActive(ctx context.Context, sub string) bool {
 	ttl := s.Cfg.SubjectActiveCacheTTL
 	if ttl <= 0 || sub == "" {
@@ -34,8 +32,8 @@ func (s *Service) subjectActive(ctx context.Context, sub string) bool {
 	return active
 }
 
-// InvalidateSubject drops the cached "active" answer for a token subject
-// ("agent:<id>" or a user ID) so the next introspection reads storage.
+// InvalidateSubject drops the cached active answer for a token subject, so the next introspection
+// reads storage.
 func (s *Service) InvalidateSubject(sub string) {
 	if s == nil || sub == "" {
 		return
@@ -43,10 +41,8 @@ func (s *Service) InvalidateSubject(sub string) {
 	s.subjectCache.Delete(sub)
 }
 
-// SubscribeRevocations drops the cached answer for the subject named by
-// every agent and owner revocation event, so the cache never delays a
-// revocation, including ones published by another node. It returns the
-// unsubscribe func.
+// SubscribeRevocations drops the cached answer for the subject of every agent and owner revocation
+// event, so the cache never delays a revocation, even one published by another node.
 func (s *Service) SubscribeRevocations(bus revocation.Bus) (func(), error) {
 	return bus.Subscribe(func(ev revocation.Event) {
 		switch ev.Kind {

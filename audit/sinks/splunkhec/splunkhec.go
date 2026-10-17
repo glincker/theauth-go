@@ -1,15 +1,5 @@
-// Package splunkhec provides an AuditSink that forwards batches of audit
-// events to a Splunk HTTP Event Collector (HEC) endpoint. Each event is
-// wrapped in a Splunk HEC envelope and POSTed as a JSON newline-delimited
-// body to POST /services/collector/event.
-//
-// Usage:
-//
-//	sink, err := splunkhec.New("https://splunk.example.com:8088", "my-hec-token")
-//	if err != nil {
-//	    log.Fatal(err)
-//	}
-//	cfg := &theauth.AuditConfig{Sinks: []theauth.AuditSink{sink}}
+// Package splunkhec provides an AuditSink that forwards audit event batches to a Splunk
+// HTTP Event Collector (HEC) endpoint.
 package splunkhec
 
 import (
@@ -59,9 +49,8 @@ func WithRedactor(r func(models.AuditEvent) models.AuditEvent) Option {
 	return func(s *Sink) { s.redactor = r }
 }
 
-// New constructs a Splunk HEC sink. endpoint must be the base URL of the
-// Splunk indexer (e.g. "https://splunk.example.com:8088"). token is the
-// HEC token; it is sent in the Authorization header as "Splunk <token>".
+// New constructs a Splunk HEC sink. endpoint is the indexer base URL; token is sent as
+// "Splunk <token>" in the Authorization header.
 func New(endpoint, token string, opts ...Option) (*Sink, error) {
 	if endpoint == "" {
 		return nil, fmt.Errorf("splunkhec: endpoint must not be empty")
@@ -83,10 +72,7 @@ func New(endpoint, token string, opts ...Option) (*Sink, error) {
 // Name returns the sink identifier used in logs and metrics.
 func (s *Sink) Name() string { return "splunk-hec" }
 
-// Stream sends the batch to Splunk HEC. Each event is encoded as a
-// separate HEC envelope; all envelopes are concatenated and sent in one
-// HTTP request. Returns an error for any non-2xx response or network
-// failure.
+// Stream sends the batch as newline-delimited HEC envelopes in one HTTP request.
 func (s *Sink) Stream(ctx context.Context, batch []models.AuditEvent) error {
 	var buf bytes.Buffer
 	enc := json.NewEncoder(&buf)

@@ -161,7 +161,7 @@ func TestNewRejectsUnsupportedSigningAlg(t *testing.T) {
 // RotateSigningKey and asserts that exactly one row has state = current
 // when all goroutines finish. This guards against the race that previously
 // allowed two rows to hold state = current when rotations interleaved
-// between the demote-current and promote-next storage calls (M4, 2026-06-21).
+// between the demote-current and promote-next storage calls.
 //
 // The memory storage backend serialises all JWKS writes under its own mutex,
 // so this test exercises the as-package coordination layer. Postgres-specific

@@ -18,197 +18,134 @@ import (
 	"github.com/glincker/theauth-go/v2/kv"
 )
 
-// Service bundles the OAuth 2.1 authorization server runtime: JWKS state +
-// rotation goroutine, introspection cache, client-auth Argon2id cache, and
-// every per-request entry point (authorize, token, introspect, revoke,
-// metadata, DCR, token-exchange).
-//
-// Constructed exactly once by *theauth.TheAuth.New when
-// Config.AuthorizationServer is non-nil; root holds it on TheAuth.as and
-// per-method forwarders delegate to the entry points below. Stop() is
-// called by *TheAuth.Close so the rotation goroutine drains cleanly.
-//
-// The exported fields (Cfg, Storage, EncryptionKey, AgentPolicy) are
-// configuration set at New time; the unexported fields are the runtime
-// state. Root code (handlers, agent / delegation services that move in PR
-// C / PR E) reads Cfg and Storage directly while we incrementally extract;
-// no behavior change vs. the pre-PR-B *asState the field replaced.
+// Service is the OAuth 2.1 authorization server runtime: JWKS state and rotation, introspection and
+// client-auth caches, and every per-request entry point. Constructed once by theauth.New; Stop runs
+// from Close.
 type Service struct {
-	// Cfg is the validated authorization server configuration. Read-only
-	// after New. Exposed so root files that have not yet moved into a
-	// dedicated internal package (handlers_oauth_server.go, service_agent.go,
-	// service_delegation.go, handlers_account.go, handlers_admin_agents.go)
-	// can read configuration the way the old *asState did.
+	// Cfg is the validated AS configuration, read-only after New.
 	Cfg Config
 
-	// Storage is the OAuthServerStorage adapter persisting AS state.
-	// Exposed for the same reason as Cfg.
+	// Storage persists the AS state.
 	Storage Storage
 
-	// EncryptionKey is the 32-byte AES-256 key used to seal JWKS private
-	// keys at rest. Not exposed via accessor; used internally by jwks.go.
+	// EncryptionKey seals JWKS private keys at rest.
 	encryptionKey []byte
 
-	// AgentPolicy is the subset of root *AgentConfig the AS needs at
-	// token-exchange time. Nil when the deployment does not configure an
-	// agent identity service; in that case ClientCredentialsToken and
-	// ExchangeToken short-circuit with unsupported_grant_type.
+	// AgentPolicy is what the AS needs from the agent config at token-exchange time. Nil means no
+	// agent identity service.
 	AgentPolicy *AgentPolicy
 
-	// Audit is the back-reference to the root audit emitter so AS-issued
-	// audit events flow through the same writer as the rest of the
-	// service. Defaults to audit.NoopEmitter when wiring code passes nil.
+	// Audit is the audit emitter shared with the rest of the service. Nil wiring gets audit.NoopEmitter.
 	Audit audit.Emitter
 
-	// AgentLookup resolves an "agent:<id>" subject claim back to the
-	// owning Agent row. The implementation lives on the root *TheAuth
-	// (service_agent.go::agentBySubjectClaim) which moves in PR C; for
-	// now we depend on the interface so internal/as never references the
-	// root package.
+	// AgentLookup resolves an "agent:<id>" subject back to its Agent row, keeping this package free of the root.
 	AgentLookup AgentLookup
 
-	// AgentGate, when set, vets every agent token mint against the agent's
-	// attached policies and rate limit. Nil leaves minting unchanged.
+	// AgentGate, when set, vets every agent token mint against the agent's policies and rate limit.
 	AgentGate AgentGate
 
-	// signingKeys is the in-memory snapshot of the JWKS state machine.
-	// The rotation goroutine swaps it atomically under mu.
+	// signingKeys is the in-memory snapshot of the JWKS state machine, swapped atomically under mu.
 	mu           sync.RWMutex
 	keys         []models.JWKSKey
 	keyMap       map[string]models.JWKSKey
 	privKeyByKID map[string]crypto.Signer
 	pubByKID     map[string]verifyKey
 
-	// rotationMu serialises RotateSigningKey calls so that concurrent
-	// operators cannot observe a split-brain state where two storage rows
-	// both carry state = current. The underlying storage transaction (when
-	// the backend implements JWKSAtomicRotator) provides the DB-level
-	// guarantee; this mutex provides the in-process coordination.
+	// rotationMu serialises RotateSigningKey so concurrent callers never see two rows both marked
+	// current. The storage transaction (JWKSAtomicRotator) gives the database-level guarantee; this
+	// mutex covers the process.
 	rotationMu sync.Mutex
 
 	rotationStop chan struct{}
 	rotationDone chan struct{}
 
-	// introspectCache memoizes recent introspection responses keyed by
-	// token hash. Honors IntrospectionCacheTTL.
+	// introspectCache memoizes introspection responses by token hash, honoring IntrospectionCacheTTL.
 	introspectCache sync.Map // map[string]*introspectCacheEntry
 
-	// chainCache memoizes the result of chainStillActive keyed by the
-	// outermost agent ID string. Bounded staleness: entries older than 5s
-	// are re-walked. Invalidated by InvalidateChainCache on suspend/revoke
-	// (perf re-audit 2026-06-21, item 3).
+	// chainCache memoizes chainStillActive results by outermost agent ID. Entries expire after 5s and
+	// are dropped on suspend or revoke, so revocation is seen quickly.
 	chainCache sync.Map // map[string]*chainCacheEntry
 
-	// subjectCache memoizes positive subjectActive answers for
-	// Cfg.SubjectActiveCacheTTL. See subject_cache.go.
+	// subjectCache memoizes positive subjectActive answers for Cfg.SubjectActiveCacheTTL.
 	subjectCache sync.Map // map[string]time.Time
 
-	// clientAuthCache memoizes the result of an Argon2id verify on
-	// client_secret_hash. Keyed by client_id; cached entries bind the
-	// verified *OAuthClient snapshot to the sha256 of the presented secret.
+	// clientAuthCache memoizes an Argon2id verify of client_secret_hash. Entries bind the verified
+	// client to the sha256 of the presented secret.
 	clientAuthCache *clientauthcache.Cache[*models.OAuthClient]
 
-	// cimdSvc resolves https-URL client_ids per the MCP authorization
-	// spec 2025-11-25 (Client ID Metadata Documents). Nil when CIMD is
-	// not configured; in that case ResolveClient falls through to the
-	// legacy OAuthClientByClientID path for every client_id.
+	// cimdSvc resolves https client_ids as Client ID Metadata Documents. Nil when CIMD is off.
 	cimdSvc *cimd.Service
 
-	// consentReplay records used consent tickets (single use).
+	// consentReplay records used consent tickets, which are single use.
 	consentReplay kv.ReplayCache
 
-	// dpopSvc is the RFC 9449 proof verifier. nil when Cfg.DPoP is nil
-	// (DPoP disabled); the token endpoint short-circuits dpop handling
-	// in that case and never reads from this field.
+	// dpopSvc verifies RFC 9449 proofs. Nil when DPoP is disabled.
 	dpopSvc *dpop.Service
 
-	// jwtBearerStorage is the optional durable JTI replay cache. Set at New
-	// time when the root Storage also satisfies JWTBearerStorage. When nil
-	// the in-process jtiCache sync.Map is used (not durable across restarts).
+	// jwtBearerStorage is the durable JTI replay cache when the root Storage supports it. Otherwise
+	// jtiCache is used.
 	jwtBearerStorage JWTBearerStorageAdapter
 
-	// jwks fetches and caches remote JWKS documents (client jwks_uri and
-	// trusted issuer JWKSURL) behind an SSRF guard.
+	// jwks fetches and caches remote JWKS documents behind an SSRF guard.
 	jwks *jwksFetcher
 
-	// jtiCache is the in-process fallback JTI replay cache used when
-	// jwtBearerStorage is nil. Keyed by "client:<jti>" or "grant:<jti>".
+	// jtiCache is the in-process JTI replay fallback, keyed by "client:<jti>" or "grant:<jti>".
 	jtiCache sync.Map // map[string]time.Time
 
-	// Limiter backs the per-IP and per-client request limits on the AS
-	// endpoints. Never nil after New (defaults to in-process memory).
+	// Limiter backs the per-IP and per-client limits on AS endpoints. Never nil after New.
 	Limiter kv.RateLimiter
 
-	// verifySem caps concurrent Argon2id client-secret verifications. Nil
-	// when the cap is disabled.
+	// verifySem caps concurrent Argon2id client-secret verifications. Nil when the cap is off.
 	verifySem chan struct{}
 
-	// Users resolves local users for userinfo and logout tokens. Nil
-	// disables userinfo.
+	// Users resolves local users for userinfo and logout tokens. Nil disables userinfo.
 	Users UserLookup
 
-	// oidcCache holds the session linkage state; see oidc.go.
+	// oidcCache holds session linkage state for OIDC logout.
 	oidcCache kv.Cache
 
 	// logoutWG tracks in-flight back-channel logout deliveries.
 	logoutWG sync.WaitGroup
 
-	// Hooks is the consumer-supplied observability bundle. Never nil:
-	// New substitutes the no-op bundle when Deps.Hooks is nil. Every
-	// instrumented path uses Hooks.StartSpan / Hooks.Counter directly so
-	// nil-checks live at the bundle level, not at every emit site.
+	// Hooks is the observability bundle. Never nil: New substitutes a no-op bundle.
 	Hooks *obs.Hooks
 
-	// cached instruments owned by the AS service. Constructed once at
-	// New time so the hot paths (token, introspect) do not pay a map
-	// lookup on every request. Each instrument is created with a fixed
-	// label SET; per-call label VALUES still flow through the factory
-	// (the adapter is expected to cache the resulting child instrument).
+	// Instruments created once at New so hot paths do not look them up per request. Label sets are
+	// fixed; label values are supplied at emit time.
 	mIntrospectLatency obs.Histogram
 	mCacheSizeGauge    obs.Gauge
 }
 
-// introspectCacheEntry holds one cached introspection response body plus
-// its expiry deadline. Replaced wholesale on cache miss; never mutated.
+// introspectCacheEntry is one cached introspection body and its expiry. It is replaced on miss,
+// never mutated.
 type introspectCacheEntry struct {
 	expiresAt time.Time
 	body      []byte
 }
 
-// chainCacheEntry holds the result of one chainStillActive walk keyed by
-// the outermost agent ID. Entries are considered stale after 5 seconds
-// (matching the spirit of IntrospectionCacheTTL but kept short enough to
-// make revocation observable quickly). Invalidated explicitly on
-// suspend/revoke via InvalidateChainCache (perf re-audit 2026-06-21,
-// item 3).
+// chainCacheEntry is one chainStillActive result keyed by the outermost agent ID. It goes stale
+// after 5 seconds, so revocation becomes visible quickly; InvalidateChainCache drops it on suspend
+// or revoke.
 type chainCacheEntry struct {
 	active    bool
 	checkedAt time.Time
 }
 
-// chainCacheTTL is the maximum age for a chain-cache entry. Kept at 5s
-// so revocation propagation lags the operator decision by at most one
-// re-audit window rather than the full IntrospectionCacheTTL.
+// chainCacheTTL is the maximum age of a chain-cache entry. It is short so revocation lags the
+// operator decision by little.
 const chainCacheTTL = 5 * time.Second
 
-// AgentLookup resolves an "agent:<id>" sub or act.sub claim into the
-// underlying Agent row. Implementations live outside the as package
-// because the agent identity service is owned by root (and moves in PR C).
+// AgentLookup resolves an "agent:<id>" sub or act.sub claim to its Agent row.
 type AgentLookup interface {
-	// AgentBySubjectClaim parses the supplied claim and returns the agent
-	// row. Returns (nil, nil) when the claim does not name an agent so
-	// callers can branch cleanly. Returns (nil, models.ErrAgentNotFound)
-	// when the claim names an agent that does not exist.
+	// AgentBySubjectClaim returns the agent for the claim. (nil, nil) means the claim names no agent; (nil,
+	// models.ErrAgentNotFound) means it names a missing agent.
 	AgentBySubjectClaim(ctx context.Context, sub string) (*models.Agent, error)
 }
 
-// AgentLookupFunc is a func adapter that lets root wire its own method
-// (TheAuth.agentBySubjectClaim) without declaring an explicit type.
+// AgentLookupFunc adapts a function to AgentLookup, so root can wire a method directly.
 type AgentLookupFunc func(ctx context.Context, sub string) (*models.Agent, error)
 
-// AgentBySubjectClaim satisfies AgentLookup by calling the underlying
-// function. Returns (nil, nil) when the function is nil so the optional
-// dependency stays optional at no extra wiring cost.
+// AgentBySubjectClaim calls the function. A nil function returns (nil, nil), keeping the dependency optional.
 func (f AgentLookupFunc) AgentBySubjectClaim(ctx context.Context, sub string) (*models.Agent, error) {
 	if f == nil {
 		return nil, nil
@@ -216,8 +153,7 @@ func (f AgentLookupFunc) AgentBySubjectClaim(ctx context.Context, sub string) (*
 	return f(ctx, sub)
 }
 
-// Deps bundles the constructor inputs so New stays readable as the
-// authorization server picks up more knobs in future phases.
+// Deps bundles the constructor inputs so New stays readable as knobs are added.
 type Deps struct {
 	Cfg           Config
 	Storage       Storage
@@ -225,19 +161,15 @@ type Deps struct {
 	AgentPolicy   *AgentPolicy
 	Audit         audit.Emitter
 	AgentLookup   AgentLookup
-	// JWTBearerStorage is optional: when non-nil it backs the JTI replay
-	// cache with a durable store. When nil the in-process sync.Map is used.
+	// JWTBearerStorage, when non-nil, backs the JTI replay cache durably.
 	JWTBearerStorage JWTBearerStorageAdapter
-	// Hooks wires the consumer-supplied tracer + metrics adapters. MAY
-	// be nil; New substitutes the no-op bundle.
+	// Hooks is the observability adapters. May be nil; New substitutes the no-op bundle.
 	Hooks *obs.Hooks
 	// Users resolves local users for the OIDC userinfo endpoint.
 	Users UserLookup
 }
 
-// New constructs a Service. The supplied Config must already have been
-// validated via Validate(). The Service is inert until Start is called;
-// Start bootstraps the JWKS state and launches the rotation goroutine.
+// New constructs a Service from a validated Config. The Service is inert until Start.
 func New(d Deps) *Service {
 	emitter := d.Audit
 	if emitter == nil {
@@ -245,9 +177,7 @@ func New(d Deps) *Service {
 	}
 	var dpopSvc *dpop.Service
 	if d.Cfg.DPoP != nil {
-		// Validate already ran in Validate(); if New is called directly
-		// the dpop.New constructor will reapply defaults so we never
-		// land on a zero-valued config.
+		// dpop.New reapplies defaults, so a zero-valued config is never used even if Validate was skipped.
 		dc := *d.Cfg.DPoP
 		if dc.ReplayCache == nil {
 			dc.ReplayCache = d.Cfg.Stores.ReplayCache
@@ -316,18 +246,13 @@ func New(d Deps) *Service {
 		}
 		s.cimdSvc = cimd.NewService(cc, emitter)
 	}
-	// Pre-allocate the instruments with stable label sets so the hot
-	// path (introspect, clientauthcache size gauge) does not allocate
-	// per request. Per-request label VALUES that vary (grant_type,
-	// status) are looked up at emit time below.
+	// Instruments are allocated up front so the hot path does not allocate per request.
 	s.mIntrospectLatency = hooks.Histogram(obs.MetricOAuthIntrospectLatency, obs.Labels{}, obs.LatencyBuckets)
 	s.mCacheSizeGauge = hooks.Gauge(obs.MetricClientAuthCacheSize, obs.Labels{"kind": "oauth_client"})
 	return s
 }
 
-// DPoP returns the underlying DPoP verifier or nil when DPoP is
-// disabled. Exposed so handlers in internal/as/handlers can call
-// IssueNonce / Verify without round-tripping through the Service.
+// DPoP returns the DPoP verifier, or nil when DPoP is disabled.
 func (s *Service) DPoP() *dpop.Service {
 	if s == nil {
 		return nil
@@ -335,12 +260,8 @@ func (s *Service) DPoP() *dpop.Service {
 	return s.dpopSvc
 }
 
-// tokenEndpointURL returns the canonical token endpoint URL derived from
-// the configured issuer. Used as the expected aud value in client assertions
-// per RFC 7523 section 3.
-// TokenEndpointURL is the canonical absolute URL of the token endpoint,
-// derived from the configured issuer. It is the expected DPoP htu and the
-// client-assertion audience.
+// TokenEndpointURL is the canonical token endpoint URL derived from the issuer. It is the expected
+// DPoP htu and the client-assertion audience (RFC 7523 section 3).
 func (s *Service) TokenEndpointURL() string { return s.tokenEndpointURL() }
 
 func (s *Service) tokenEndpointURL() string {
@@ -350,10 +271,8 @@ func (s *Service) tokenEndpointURL() string {
 	return s.Cfg.Issuer + "/oauth/token"
 }
 
-// Start bootstraps the JWKS state (loading existing keys or minting fresh
-// ones) and launches the rotation goroutine when DisableRotation is false.
-// Safe to call multiple times; the rotation goroutine is gated by a
-// non-nil rotationStop channel so a second call after Stop is a no-op.
+// Start bootstraps the JWKS state and launches the rotation goroutine unless DisableRotation is
+// set. Calling it again is safe.
 func (s *Service) Start(ctx context.Context) error {
 	if s == nil {
 		return nil
@@ -373,7 +292,7 @@ func (s *Service) Start(ctx context.Context) error {
 	return nil
 }
 
-// Stop shuts the rotation goroutine and waits for it to finish. Idempotent.
+// Stop shuts the rotation goroutine and waits for it. Idempotent.
 func (s *Service) Stop() {
 	if s == nil {
 		return
@@ -386,7 +305,6 @@ func (s *Service) Stop() {
 	}
 	select {
 	case <-s.rotationStop:
-		// already closed
 	default:
 		close(s.rotationStop)
 	}
@@ -399,11 +317,8 @@ func (s *Service) Stop() {
 	}
 }
 
-// InvalidateClientAuthCache drops the cached Argon2-verified entry for
-// clientID. Called from every code path that rotates or removes the
-// stored client_secret_hash so a freshly minted secret is never shadowed
-// by a stale verified entry and a deleted client cannot continue
-// authenticating from cache.
+// InvalidateClientAuthCache drops the verified-secret cache entry for clientID. It runs on every
+// secret rotation or client removal, so a stale entry can never authenticate.
 func (s *Service) InvalidateClientAuthCache(clientID string) {
 	if s == nil || s.clientAuthCache == nil {
 		return
@@ -412,11 +327,8 @@ func (s *Service) InvalidateClientAuthCache(clientID string) {
 	s.updateCacheSizeGauge()
 }
 
-// InvalidateChainCache drops the cached chainStillActive result for the
-// supplied agent ID string. Must be called whenever an agent's status
-// changes to suspended or revoked so the next introspection re-walks the
-// chain and does not serve a stale "active" answer (perf re-audit
-// 2026-06-21, item 3).
+// InvalidateChainCache drops the cached chain result for an agent. It must run when an agent is
+// suspended or revoked, so the next introspection re-walks the chain.
 func (s *Service) InvalidateChainCache(agentID string) {
 	if s == nil || agentID == "" {
 		return
@@ -425,28 +337,9 @@ func (s *Service) InvalidateChainCache(agentID string) {
 	s.InvalidateSubject(models.AgentSubjectPrefix + agentID)
 }
 
-// ResolveClient looks up an OAuth client by client_id, routing through
-// the CIMD service when the client_id parses as an https URL, otherwise
-// falling through to the storage-backed DCR registration.
-//
-// Per the MCP authorization spec 2025-11-25, an https-shaped client_id
-// is canonically a CIMD URL. We honor that signal with no fallback:
-//
-//   - CIMD configured + policy allows: fetch the document, validate,
-//     synthesize an OAuthClient. Cache honors CIMDConfig.CacheTTL.
-//   - CIMD configured + policy denies: invalid_client. No silent fall
-//     through to storage; that would let a malicious client publish a
-//     URL whose host the operator does not trust and still authenticate
-//     by happening to have the same string registered as a DCR
-//     client_id.
-//   - CIMD not configured (Cfg.CIMD == nil) and client_id is an https
-//     URL: invalid_client. Same downgrade-attack reasoning. Operators
-//     who want to disable CIMD altogether should also reject https-
-//     shaped client_ids; allowing them through to storage opens the
-//     same hole.
-//   - Otherwise (client_id is an opaque string like "client-01J..."):
-//     consult Storage.OAuthClientByClientID. This is the v2.0 phase 1+2
-//     DCR path, unchanged.
+// ResolveClient looks up an OAuth client by client_id. An https-shaped client_id is a CIMD URL per
+// the MCP spec 2025-11-25, so it goes to the CIMD service with no fallback. Other ids use
+// storage-backed DCR registration.
 func (s *Service) ResolveClient(ctx context.Context, clientID string) (*models.OAuthClient, error) {
 	if s == nil {
 		return nil, errors.New("theauth: authorization server not configured")
@@ -467,10 +360,8 @@ func (s *Service) ResolveClient(ctx context.Context, clientID string) (*models.O
 	return s.Storage.OAuthClientByClientID(ctx, clientID)
 }
 
-// ResourceByIdentifier returns the configured ProtectedResource matching
-// the supplied identifier, or false when not found. Identifier matching
-// is case sensitive and trims a single trailing slash on the input to
-// absorb caller inconsistency.
+// ResourceByIdentifier returns the configured ProtectedResource with the given identifier. Matching
+// is case sensitive and tolerates one trailing slash.
 func (s *Service) ResourceByIdentifier(id string) (models.ProtectedResource, bool) {
 	if s == nil {
 		return models.ProtectedResource{}, false
@@ -485,9 +376,8 @@ func (s *Service) ResourceByIdentifier(id string) (models.ProtectedResource, boo
 	return models.ProtectedResource{}, false
 }
 
-// validateScopeAgainstResource returns the intersection of requested and
-// supported scopes; returns error if requested contains any scope outside
-// the resource's catalog. Mirror of root validateScopeAgainstResource.
+// validateScopeAgainstResource returns the requested scopes intersected with the resource catalog.
+// It errors on any scope outside the catalog.
 func validateScopeAgainstResource(requested []string, resource models.ProtectedResource) ([]string, error) {
 	if len(requested) == 0 {
 		return nil, errors.New("scope required")
@@ -509,7 +399,6 @@ func validateScopeAgainstResource(requested []string, resource models.ProtectedR
 	return out, nil
 }
 
-// scopeSubset reports whether every element of sub is present in sup.
 func scopeSubset(sub, sup []string) bool {
 	have := map[string]struct{}{}
 	for _, s := range sup {
@@ -523,12 +412,10 @@ func scopeSubset(sub, sup []string) bool {
 	return true
 }
 
-// scopeJoin renders a scope slice as the space-separated form used in JWT
-// claims, RFC 7591 client metadata, and Cache-Control responses.
+// scopeJoin renders scopes in the space-separated form used by JWT claims and client metadata.
 func scopeJoin(scope []string) string { return strings.Join(scope, " ") }
 
-// scopeSplit parses a space-separated scope string into a deduped slice
-// preserving order of first occurrence.
+// scopeSplit parses a space-separated scope string into a deduped slice, keeping first occurrences in order.
 func scopeSplit(s string) []string {
 	parts := strings.Fields(s)
 	seen := map[string]struct{}{}
@@ -543,14 +430,12 @@ func scopeSplit(s string) []string {
 	return out
 }
 
-// errAuthorizeLoginRequired is the sentinel returned by StartAuthorize
-// when the user is anonymous. Root maps this to a redirect to LoginURL.
+// errAuthorizeLoginRequired is returned by StartAuthorize for an anonymous user. The root maps it
+// to a redirect to LoginURL.
 var errAuthorizeLoginRequired = errors.New("theauth: authorize requires user session")
 
-// IsLoginRequired reports whether the supplied error signals the
-// authorize path needs an authenticated user. Mirror of the root
-// IsLoginRequired; both must agree on the sentinel value, so the root
-// version simply delegates here.
+// IsLoginRequired reports whether err is errAuthorizeLoginRequired. The root version delegates here
+// so both agree on the sentinel.
 func IsLoginRequired(err error) bool {
 	return errors.Is(err, errAuthorizeLoginRequired)
 }

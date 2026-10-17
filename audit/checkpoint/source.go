@@ -12,9 +12,8 @@ type EventQuerier interface {
 	QueryAuditEvents(ctx context.Context, q models.AuditQuery) (events []models.AuditEvent, nextCursor string, err error)
 }
 
-// EventSource reads every chained audit event from a store and presents it as
-// a row of hash version GoChainHashVersion. Events without a chain hash (a
-// store that does not chain, or rows written before chaining) are skipped.
+// EventSource reads every chained audit event from a store as rows of hash version
+// GoChainHashVersion. Unchained events are skipped.
 type EventSource struct {
 	Store EventQuerier
 	// PageSize is the query page size. Zero means 500.

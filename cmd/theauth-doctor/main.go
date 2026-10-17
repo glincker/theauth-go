@@ -1,6 +1,5 @@
-// Command theauth-doctor fetches the security report of a running theauth-go
-// server and prints it. It holds no secrets of its own: the bearer token comes
-// from the environment or a file.
+// Command theauth-doctor prints the security report of a running theauth-go server. It holds no
+// secrets; the bearer token comes from the environment or a file.
 package main
 
 import (

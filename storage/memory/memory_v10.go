@@ -16,13 +16,10 @@ import (
 	"github.com/oklog/ulid/v2"
 )
 
-// ulidParseFn aliases the Crockford-base32 ULID parser. Wrapped here to
-// keep the upstream import scope local to cursor decoding.
+// ulidParseFn aliases the Crockford-base32 ULID parser for cursor decoding.
 var ulidParseFn = ulid.Parse
 
-// v1.0: RBAC + audit log additive state. Held in a sidecar so the existing
-// New() literal stays compact; audit events live in a capped ring buffer so
-// long-running tests never OOM.
+// v1.0 RBAC and audit state, held in a sidecar. Audit events live in a capped ring buffer.
 
 const auditRingCap = 10000
 
@@ -39,9 +36,7 @@ type v10State struct {
 	mu sync.Mutex // protects audit ring writes only (Store.mu protects everything else)
 }
 
-// auditState returns the sidecar state for the audit ring. Audit writes do not
-// hold Store.mu, so the lazy creation of the state is done under it here.
-// The ring itself is still guarded by v10State.mu.
+// auditState lazily creates the audit ring state. The ring is guarded by v10State.mu.
 func (s *Store) auditState() *v10State {
 	s.mu.Lock()
 	v := s.ensureV10()
@@ -62,8 +57,6 @@ func (s *Store) ensureV10() *v10State {
 	}
 	return s.v10
 }
-
-// Permissions
 
 func (s *Store) InsertPermission(_ context.Context, p theauth.Permission) (theauth.Permission, error) {
 	s.mu.Lock()
@@ -103,8 +96,6 @@ func (s *Store) ListPermissions(_ context.Context) ([]theauth.Permission, error)
 	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
 	return out, nil
 }
-
-// Roles
 
 func (s *Store) InsertRole(_ context.Context, r theauth.Role) (theauth.Role, error) {
 	s.mu.Lock()
@@ -150,8 +141,7 @@ func (s *Store) DeleteRole(_ context.Context, id theauth.ULID) error {
 	}
 	delete(v.roles, id)
 	delete(v.rolePerms, id)
-	// Cascade user_roles for this role (memberKey re-uses the 2-tuple shape;
-	// .orgID stores roleID for these entries).
+	// Cascade user_roles; roleID is stored in .orgID for these entries.
 	for k := range v.userRoles {
 		if k.orgID == id {
 			delete(v.userRoles, k)
@@ -230,8 +220,7 @@ func (s *Store) PermissionsByRole(_ context.Context, roleID theauth.ULID) ([]str
 	return s.permsForRoleLocked(roleID), nil
 }
 
-// permsForRoleLocked returns the permission name slice for one role.
-// Caller must already hold s.mu (read or write).
+// permsForRoleLocked returns one role's permission names. Caller holds s.mu.
 func (s *Store) permsForRoleLocked(roleID theauth.ULID) []string {
 	v := s.v10
 	if v == nil {
@@ -247,8 +236,6 @@ func (s *Store) permsForRoleLocked(roleID theauth.ULID) []string {
 	sort.Strings(out)
 	return out
 }
-
-// User-role grants
 
 func (s *Store) GrantUserRole(_ context.Context, ur theauth.UserRole) error {
 	s.mu.Lock()
@@ -354,8 +341,6 @@ func (s *Store) CountUsersWithPermissionInOrg(_ context.Context, orgID theauth.U
 	return len(users), nil
 }
 
-// Audit
-
 func (s *Store) InsertAuditEvents(_ context.Context, events []theauth.AuditEvent) error {
 	if len(events) == 0 {
 		return nil
@@ -451,8 +436,6 @@ func (s *Store) QueryAuditEvents(_ context.Context, q theauth.AuditQuery) ([]the
 	return out, next, nil
 }
 
-// cursor codec (mirrors admin.Cursor)
-
 func encodeCursor(ts time.Time, id theauth.ULID) string {
 	raw := strconv.FormatInt(ts.UnixMicro(), 10) + ":" + id.String()
 	return base64.RawURLEncoding.EncodeToString([]byte(raw))
@@ -477,8 +460,6 @@ func decodeCursor(s string) (time.Time, theauth.ULID, error) {
 	}
 	return time.UnixMicro(micros), id, nil
 }
-
-// helpers
 
 func sameOrgPtr(a, b *theauth.ULID) bool {
 	if a == nil && b == nil {

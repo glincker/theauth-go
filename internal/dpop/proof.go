@@ -20,21 +20,16 @@ import (
 	"time"
 )
 
-// proof.go: RFC 9449 section 4 DPoP proof JWT parser + verifier. The
-// verifier is intentionally standalone (no third-party JWT library) so it
-// can be reused unmodified by the mcpresource module without pulling new
-// transitive dependencies.
+// proof.go is the RFC 9449 section 4 proof parser and verifier. It has no third-party JWT
+// dependency, so mcpresource can reuse it.
 
 // ProofTyp is the typ value mandated by RFC 9449 section 4.2 for DPoP
 // proof JWTs. Verification rejects any other value.
 const ProofTyp = "dpop+jwt"
 
-// Supported signing algorithms. RFC 9449 section 4.2 admits any
-// asymmetric signing alg from JWA section 3.1 except "none"; HS* MACs are
-// excluded because they are symmetric and therefore cannot prove
-// possession of a private key. Phase 1 ships the four ECDSA / RSA / EdDSA
-// algorithms that real DPoP implementations exercise; operators wanting
-// the long tail (ES512, ES256K) can extend Service.AllowedSignAlgs.
+// Supported signing algorithms. RFC 9449 section 4.2 admits asymmetric algorithms only. HS* is
+// excluded because a MAC cannot prove possession of a private key. Operators can extend
+// Service.AllowedSignAlgs for the long tail (ES512, ES256K).
 const (
 	AlgES256 = "ES256"
 	AlgES384 = "ES384"
@@ -43,18 +38,12 @@ const (
 	AlgEdDSA = "EdDSA"
 )
 
-// DefaultAllowedAlgs is the algorithm set Service.New seeds when the
-// operator does not specify AllowedSignAlgs. EdDSA is included because it
-// is a popular asymmetric option in modern client stacks (WebCrypto in
-// browsers, libsodium in mobile apps) even though RFC 9449 leaves it
-// optional.
+// DefaultAllowedAlgs is the set Service.New uses when AllowedSignAlgs is unset. EdDSA is included
+// because browsers and mobile SDKs use it, even though RFC 9449 leaves it optional.
 var DefaultAllowedAlgs = []string{AlgES256, AlgES384, AlgRS256, AlgPS256, AlgEdDSA}
 
-// JWK is the minimal JSON Web Key shape the proof verifier needs. Only
-// the public-key members for the supported algorithms are present; private
-// members are intentionally not parsed (the AS never receives one) so
-// malformed proofs cannot trick the verifier into walking unexpected
-// fields.
+// JWK is the minimal JSON Web Key the verifier needs: public members only. Private members are not
+// parsed, so a malformed proof cannot steer the verifier into unexpected fields.
 type JWK struct {
 	Kty string `json:"kty"`
 	Crv string `json:"crv,omitempty"`
@@ -85,49 +74,40 @@ type ProofClaims struct {
 	Nonce string `json:"nonce,omitempty"`
 }
 
-// Proof is the parsed + verified DPoP proof JWT. Service.Verify returns
-// it so callers can pull out the JWK thumbprint, jti, and the matched
-// nonce string without re-parsing.
+// Proof is a parsed and verified DPoP proof. Callers read the thumbprint, jti and nonce from it
+// without re-parsing.
 type Proof struct {
 	Header     ProofHeader
 	Claims     ProofClaims
 	Thumbprint string // base64url(SHA-256(canonical JWK))
 }
 
-// VerifyParams bundles the per-request inputs for a proof verification.
-// The verifier compares htm/htu against Method + URL, and (when non-empty)
-// AccessToken against the ath claim.
+// VerifyParams are the per-request inputs of a proof check. htm and htu are compared against Method
+// and URL, and AccessToken, when set, against ath.
 type VerifyParams struct {
-	// Method is the HTTP method of the request the proof accompanies.
-	// Compared against the htm claim case-insensitively per RFC 9449
-	// section 4.3.
+	// Method is the HTTP method of the request. It is compared with htm case-insensitively (RFC 9449
+	// section 4.3).
 	Method string
 
-	// URL is the request URL. Compared against the htu claim after
-	// stripping fragment and query string from both sides, matching the
-	// RFC 9449 section 4.3 step 11 rule.
+	// URL is the request URL. htu is compared after stripping the fragment and query from both sides
+	// (RFC 9449 section 4.3).
 	URL string
 
-	// AccessToken, when non-empty, requires the proof to carry an ath
-	// claim equal to base64url(SHA-256(AccessToken)). Token endpoints
-	// leave this empty (no access token in flight yet); resource servers
-	// always pass the bearer token they received.
+	// AccessToken, when set, requires the proof's ath claim to equal base64url(SHA-256(AccessToken)).
+	// Token endpoints leave it empty.
 	AccessToken string
 
 	// Now is the reference time for iat / nonce expiry checks. Defaults to
 	// time.Now().UTC() when zero.
 	Now time.Time
 
-	// RequireNonce forces the proof to carry a nonce claim that the
-	// service's nonce store accepts. When false, a proof without a nonce
-	// is allowed; a proof WITH a nonce is still verified against the
-	// store (so a client cannot pass an arbitrary nonce).
+	// RequireNonce forces the proof to carry a nonce the store accepts. A nonce that is present is
+	// always verified, so a client cannot pass an arbitrary string.
 	RequireNonce bool
 }
 
-// Sentinel errors. Callers (handlers / middleware) use errors.Is to map
-// them onto RFC 9449 wire responses: invalid_dpop_proof for the structural
-// failures, use_dpop_nonce for the nonce-required signal.
+// Sentinel errors. Handlers use errors.Is to map them to RFC 9449 wire responses:
+// invalid_dpop_proof or use_dpop_nonce.
 var (
 	ErrMalformedProof   = errors.New("dpop: malformed proof JWT")
 	ErrUnsupportedAlg   = errors.New("dpop: unsupported alg")
@@ -144,12 +124,8 @@ var (
 	ErrJKTMismatch      = errors.New("dpop: proof key thumbprint does not match cnf.jkt")
 )
 
-// ParseProof splits a compact-serialized JWT into header + claims +
-// signature and parses the header + payload JSON. The signature is left
-// unverified; callers MUST invoke Service.Verify (which calls
-// ParseProof internally) to actually trust the result. Exposed so tests
-// and tracing tooling can inspect a proof without re-implementing the
-// split logic.
+// ParseProof splits a compact JWT and parses its header and payload. The signature is not verified,
+// so callers must use Service.Verify.
 func ParseProof(token string) (ProofHeader, ProofClaims, []byte, []byte, error) {
 	parts := strings.Split(token, ".")
 	if len(parts) != 3 {
@@ -179,10 +155,8 @@ func ParseProof(token string) (ProofHeader, ProofClaims, []byte, []byte, error) 
 	return hdr, claims, sig, signingInput, nil
 }
 
-// verifySignature dispatches to the per-alg verifier. The alg in the
-// header is the source of truth; the caller MUST have already checked it
-// is in the operator-configured AllowedSignAlgs set so unknown algorithms
-// fail early.
+// verifySignature dispatches to the per-algorithm verifier. The header alg is the source of truth;
+// the caller has already checked the allow list.
 func verifySignature(alg string, jwk *JWK, signingInput, sig []byte) error {
 	if jwk == nil {
 		return fmt.Errorf("%w: missing jwk", ErrMalformedProof)
@@ -218,11 +192,8 @@ func verifyECDSA(jwk *JWK, signingInput, sig []byte, curve elliptic.Curve, h has
 	if err != nil {
 		return fmt.Errorf("%w: jwk y decode", ErrMalformedProof)
 	}
-	// On-curve check uses the modern crypto/ecdh API (the elliptic
-	// package equivalent, IsOnCurve, was deprecated in Go 1.21).
-	// crypto/ecdh.NewPublicKey validates that the encoded point lies on
-	// the curve and rejects the identity point, then we hand the
-	// big.Int coordinates to ecdsa.Verify.
+	// The on-curve check uses crypto/ecdh (elliptic.IsOnCurve is deprecated since Go 1.21). It also
+	// rejects the identity point.
 	byteSize := (curve.Params().BitSize + 7) / 8
 	uncompressed := make([]byte, 1+2*byteSize)
 	uncompressed[0] = 0x04
@@ -274,9 +245,8 @@ func verifyRSA(jwk *JWK, signingInput, sig []byte, hashAlg crypto.Hash, pss bool
 	if len(nBytes) == 0 || len(eBytes) == 0 {
 		return fmt.Errorf("%w: jwk n/e empty", ErrMalformedProof)
 	}
-	// RSA modulus must be >= 2048 bits to defend against weak keys
-	// smuggled in by a malicious client. RFC 7518 section 6.3.1 mandates
-	// 2048 as the minimum for RSA-based JWS algs.
+	// RSA moduli must be at least 2048 bits, to block weak keys smuggled in by a client (RFC 7518
+	// section 6.3.1).
 	if len(nBytes)*8 < 2048 {
 		return fmt.Errorf("%w: rsa modulus shorter than 2048 bits", ErrMalformedProof)
 	}
@@ -320,10 +290,8 @@ func verifyEdDSA(jwk *JWK, signingInput, sig []byte) error {
 	return nil
 }
 
-// Thumbprint computes the RFC 7638 base64url(SHA-256(canonical_json(jwk))).
-// The canonical JSON ordering is fixed per RFC 7638 section 3 and depends
-// on the key type: EC keys order {crv, kty, x, y}; RSA keys order {e, kty,
-// n}; OKP keys order {crv, kty, x}. Any other algorithm is rejected.
+// Thumbprint computes the RFC 7638 base64url(SHA-256(canonical JSON)). Key order is fixed by key
+// type, and other algorithms are rejected.
 func Thumbprint(jwk *JWK) (string, error) {
 	if jwk == nil {
 		return "", fmt.Errorf("%w: nil jwk", ErrMalformedProof)
@@ -352,11 +320,8 @@ func Thumbprint(jwk *JWK) (string, error) {
 	return base64.RawURLEncoding.EncodeToString(sum[:]), nil
 }
 
-// canonicalURI returns the htu comparison form of u: scheme + host +
-// path, with default ports stripped and fragment + query removed. Matches
-// the RFC 9449 section 4.3 requirement that "the htu claim equals the
-// HTTP URI value for the HTTP request in which the JWT was received,
-// without query and fragment parts".
+// canonicalURI returns the htu comparison form: scheme, host and path, with default ports and query
+// and fragment removed (RFC 9449 section 4.3).
 func canonicalURI(rawURL string) (string, error) {
 	parsed, err := url.Parse(rawURL)
 	if err != nil {

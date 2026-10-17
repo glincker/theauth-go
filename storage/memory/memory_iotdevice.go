@@ -38,7 +38,6 @@ func cloneDeviceJoinToken(t theauth.DeviceJoinToken) theauth.DeviceJoinToken {
 	return t
 }
 
-// InsertDevice satisfies DeviceIdentityStorage.
 func (s *Store) InsertDevice(_ context.Context, d theauth.Device) error {
 	st := &s.iotdev
 	st.mu.Lock()
@@ -55,7 +54,6 @@ func (s *Store) InsertDevice(_ context.Context, d theauth.Device) error {
 	return nil
 }
 
-// DeviceByID satisfies DeviceIdentityStorage.
 func (s *Store) DeviceByID(_ context.Context, id theauth.ULID) (*theauth.Device, error) {
 	st := &s.iotdev
 	st.mu.Lock()
@@ -69,7 +67,6 @@ func (s *Store) DeviceByID(_ context.Context, id theauth.ULID) (*theauth.Device,
 	return &cp, nil
 }
 
-// ListDevices satisfies DeviceIdentityStorage.
 func (s *Store) ListDevices(_ context.Context, orgID *theauth.ULID) ([]theauth.Device, error) {
 	st := &s.iotdev
 	st.mu.Lock()
@@ -91,7 +88,6 @@ func (s *Store) ListDevices(_ context.Context, orgID *theauth.ULID) ([]theauth.D
 	return out, nil
 }
 
-// RevokeDevice satisfies DeviceIdentityStorage.
 func (s *Store) RevokeDevice(_ context.Context, id theauth.ULID, at time.Time) (bool, error) {
 	st := &s.iotdev
 	st.mu.Lock()
@@ -107,7 +103,6 @@ func (s *Store) RevokeDevice(_ context.Context, id theauth.ULID, at time.Time) (
 	return true, nil
 }
 
-// TouchDevice satisfies DeviceIdentityStorage.
 func (s *Store) TouchDevice(_ context.Context, id theauth.ULID, at time.Time) error {
 	st := &s.iotdev
 	st.mu.Lock()
@@ -120,7 +115,6 @@ func (s *Store) TouchDevice(_ context.Context, id theauth.ULID, at time.Time) er
 	return nil
 }
 
-// InsertDeviceJoinToken satisfies DeviceIdentityStorage.
 func (s *Store) InsertDeviceJoinToken(_ context.Context, t theauth.DeviceJoinToken) error {
 	st := &s.iotdev
 	st.mu.Lock()
@@ -130,7 +124,6 @@ func (s *Store) InsertDeviceJoinToken(_ context.Context, t theauth.DeviceJoinTok
 	return nil
 }
 
-// DeviceJoinTokenByHash satisfies DeviceIdentityStorage.
 func (s *Store) DeviceJoinTokenByHash(_ context.Context, hash []byte) (*theauth.DeviceJoinToken, error) {
 	st := &s.iotdev
 	st.mu.Lock()
@@ -145,7 +138,6 @@ func (s *Store) DeviceJoinTokenByHash(_ context.Context, hash []byte) (*theauth.
 	return nil, theauth.ErrStorageNotFound
 }
 
-// DeviceJoinTokenByID satisfies DeviceIdentityStorage.
 func (s *Store) DeviceJoinTokenByID(_ context.Context, id theauth.ULID) (*theauth.DeviceJoinToken, error) {
 	st := &s.iotdev
 	st.mu.Lock()
@@ -159,7 +151,6 @@ func (s *Store) DeviceJoinTokenByID(_ context.Context, id theauth.ULID) (*theaut
 	return &cp, nil
 }
 
-// RevokeDeviceJoinToken satisfies DeviceIdentityStorage.
 func (s *Store) RevokeDeviceJoinToken(_ context.Context, id theauth.ULID, at time.Time) (bool, error) {
 	st := &s.iotdev
 	st.mu.Lock()
@@ -174,7 +165,6 @@ func (s *Store) RevokeDeviceJoinToken(_ context.Context, id theauth.ULID, at tim
 	return true, nil
 }
 
-// RedeemDeviceJoinToken satisfies DeviceIdentityStorage.
 func (s *Store) RedeemDeviceJoinToken(_ context.Context, id, deviceID theauth.ULID, now time.Time) (bool, error) {
 	st := &s.iotdev
 	st.mu.Lock()
@@ -190,7 +180,6 @@ func (s *Store) RedeemDeviceJoinToken(_ context.Context, id, deviceID theauth.UL
 	return true, nil
 }
 
-// RefundDeviceJoinToken satisfies DeviceIdentityStorage.
 func (s *Store) RefundDeviceJoinToken(_ context.Context, id theauth.ULID) error {
 	st := &s.iotdev
 	st.mu.Lock()

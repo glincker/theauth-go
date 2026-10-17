@@ -1,23 +1,5 @@
 // Package otelbridge bridges theauth.Tracer to go.opentelemetry.io/otel.
-//
-// Usage:
-//
-//	import (
-//	    "github.com/glincker/theauth-go/v2"
-//	    otelbridge "github.com/glincker/theauth-go/examples/observability-otel"
-//	    "go.opentelemetry.io/otel"
-//	)
-//
-//	tracer := otel.Tracer("my-service")
-//	hooks := &theauth.Hooks{Tracer: otelbridge.New(tracer)}
-//	auth, _ := theauth.New(theauth.Config{
-//	    ...
-//	    Observability: hooks,
-//	})
-//
-// The bridge is intentionally small (under 100 LOC) so consumers can copy
-// it inline if they need a tweaked version. Adding new attribute kinds is
-// a switch case in toOtelKeyValue below.
+// It is kept small so consumers can copy it inline and tweak it.
 package otelbridge
 
 import (
@@ -34,8 +16,7 @@ type Tracer struct {
 	t trace.Tracer
 }
 
-// New returns a bridge backed by the supplied otel tracer. The tracer
-// is typically obtained via otel.Tracer("your-service-name").
+// New returns a bridge backed by the supplied otel tracer.
 func New(t trace.Tracer) *Tracer {
 	return &Tracer{t: t}
 }
@@ -77,10 +58,8 @@ func (s *bridgeSpan) RecordError(err error) {
 	s.span.SetStatus(codes.Error, err.Error())
 }
 
-// toOtelKeyValues maps theauth.Attr values into otel attribute.KeyValue.
-// The type switch covers the four kinds documented in
-// internal/observability/tracer.go. Unknown kinds fall back to the
-// stringer interface or fmt.Sprintf via attribute.String.
+// toOtelKeyValues maps theauth.Attr values to otel attribute.KeyValue; unknown kinds fall back
+// to their string form.
 func toOtelKeyValues(attrs []theauth.Attr) []attribute.KeyValue {
 	if len(attrs) == 0 {
 		return nil
@@ -103,8 +82,7 @@ func toOtelKeyValues(attrs []theauth.Attr) []attribute.KeyValue {
 				out = append(out, attribute.String(a.Key, v.Error()))
 			}
 		default:
-			// Fallback for fmt.Stringer / arbitrary types. Stringify so
-			// the attribute still lands on the span rather than dropping.
+			// Stringify so the attribute still lands on the span rather than being dropped.
 			out = append(out, attribute.String(a.Key, stringify(v)))
 		}
 	}

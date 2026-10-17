@@ -1,8 +1,5 @@
-// Package handlers exposes the OAuth 2.1 + MCP authorization server HTTP endpoints.
-//
-// Routes: GET /.well-known/oauth-authorization-server, GET /.well-known/oauth-protected-resource, GET /oauth/jwks, GET /oauth/authorize (auth-gated), POST /oauth/token, POST /oauth/revoke, POST /oauth/introspect, POST /oauth/register (rate-limited when cap > 0).
-//
-// Extracted from root handlers_oauth_server.go in PR F of the 2026-06 architecture reorg. The root *theauth.TheAuth constructs a Handler here and Mount is invoked from the thin mountAS forwarder.
+// Package handlers serves the OAuth 2.1 and MCP authorization server HTTP endpoints: metadata,
+// JWKS, authorize, token, revoke, introspect and register. Routes are listed in Mount.
 package handlers
 
 import (
@@ -28,32 +25,25 @@ type Handler struct {
 	userFromCtx  func(r *http.Request) (*models.User, bool)
 	bearerHashes [][32]byte
 	clientIP     func(r *http.Request) string
-	// authContext reports how and when the request's session authenticated;
-	// nil leaves tokens without auth_time, acr and amr.
-	authContext func(r *http.Request) (internalas.AuthContext, bool)
-	// sessionEnder revokes the request's session for end_session.
+	// authContext reports how the request's session authenticated. Nil leaves tokens without
+	// auth_time, acr and amr.
+	authContext  func(r *http.Request) (internalas.AuthContext, bool)
 	sessionEnder func(w http.ResponseWriter, r *http.Request)
 }
 
-// New constructs a Handler. The userFromCtx shim pulls the
-// authenticated user out of the request context after the Authn
-// middleware has run on /oauth/authorize. The bearerHashes slice is
-// the pre-computed sha256 digest set of operator-supplied DCR
-// registration tokens (Config.AuthorizationServer.RegistrationTokens);
-// nil or empty means no bearer-gated registration is permitted.
+// New constructs a Handler. userFromCtx reads the user the Authn middleware attached. bearerHashes
+// are the digests of the operator DCR registration tokens; empty means no bearer-gated registration
+// is permitted.
 func New(svc *internalas.Service, userFromCtx func(r *http.Request) (*models.User, bool), bearerHashes [][32]byte) *Handler {
 	return &Handler{svc: svc, userFromCtx: userFromCtx, bearerHashes: bearerHashes}
 }
 
-// Mount registers the AS routes onto r. The caller supplies authn
-// (for /oauth/authorize) and a rateLimit middleware factory that
-// returns the per-IP cap for /oauth/register; rateLimit may be nil
-// when the operator opted out of the cap.
+// Mount registers the AS routes on r. authn guards /oauth/authorize, and rateLimit (may be nil)
+// caps /oauth/register.
 func (h *Handler) Mount(r chi.Router, authn func(http.Handler) http.Handler, registerLimit func(http.Handler) http.Handler) {
 	r.Get("/.well-known/oauth-authorization-server", h.handleASMetadata)
-	// RFC 8414 section 3.1: when the issuer has a path component the
-	// well-known segment is inserted between host and path. The OIDC
-	// discovery name is served too, since MCP clients probe both.
+	// RFC 8414 section 3.1: with an issuer path, the well-known segment goes between host and path.
+	// The OIDC discovery name is served too, since MCP clients probe both.
 	r.Get("/.well-known/oauth-authorization-server/*", h.handleASMetadataPath)
 	r.Get("/.well-known/openid-configuration", h.handleASMetadata)
 	r.Get("/.well-known/openid-configuration/*", h.handleASMetadataPath)
@@ -69,32 +59,24 @@ func (h *Handler) Mount(r chi.Router, authn func(http.Handler) http.Handler, reg
 	} else {
 		r.Post("/oauth/register", h.handleRegister)
 	}
-	// PAR (RFC 9126): POST /oauth/par is registered only when PAR is enabled
-	// and the backend supports it. Doing the check here instead of in the
-	// handler keeps the router clean: unknown routes get a 405 rather than a
-	// runtime error body.
+	// PAR (RFC 9126) is registered only when enabled and supported, so unknown routes get a 405 rather
+	// than a handler error.
 	if h.svc.IsPAREnabled() {
 		r.With(h.limited).Post("/oauth/par", h.handlePAR)
 	}
-	// CIBA: only mount when CIBA is configured and storage supports it.
 	if h.svc.IsCIBAEnabled() {
 		r.With(h.limited).Post("/oauth/bc-authorize", h.handleBCAuthorize)
 	}
-	// RFC 8628 device grant: start endpoint plus the user-code page.
 	if h.svc.IsDeviceEnabled() {
 		h.mountDevice(r, authn)
 	}
-	// OpenID Provider: userinfo and end_session.
 	if h.svc.OIDCEnabled() {
 		h.mountOIDC(r, authn)
 	}
-	// Constrained device enrollment.
 	if h.svc.DeviceTokensEnabled() {
 		h.mountDeviceIdentity(r)
 	}
 }
-
-// discovery
 
 func (h *Handler) handleASMetadata(w http.ResponseWriter, _ *http.Request) {
 	doc, err := h.svc.ASMetadataDoc()
@@ -107,9 +89,7 @@ func (h *Handler) handleASMetadata(w http.ResponseWriter, _ *http.Request) {
 	_ = json.NewEncoder(w).Encode(doc)
 }
 
-// handleASMetadataPath serves the RFC 8414 path-inserted form. The path
-// after the well-known segment must equal the issuer path, otherwise the
-// request is for a different issuer and gets a 404.
+// handleASMetadataPath serves the RFC 8414 path-inserted form. A different issuer path gets a 404.
 func (h *Handler) handleASMetadataPath(w http.ResponseWriter, r *http.Request) {
 	want := "/" + strings.Trim(chi.URLParam(r, "*"), "/")
 	got := ""
@@ -133,9 +113,8 @@ func (h *Handler) handleProtectedResourceMetadata(w http.ResponseWriter, r *http
 			if _, ok := h.svc.ResourceByIdentifier(strings.TrimPrefix(resourceID, "/")); ok {
 				ident = strings.TrimPrefix(resourceID, "/")
 			} else if id, ok := h.resourceByPath(resourceID); ok {
-				// RFC 9728 section 3.1: the suffix is the resource path,
-				// and the resource may live on a different origin than
-				// the issuer.
+				// RFC 9728 section 3.1: the suffix is the resource path, and the resource may live on another
+				// origin than the issuer.
 				ident = id
 			}
 		}
@@ -156,8 +135,7 @@ func (h *Handler) handleProtectedResourceMetadata(w http.ResponseWriter, r *http
 	_ = json.NewEncoder(w).Encode(doc)
 }
 
-// resourceByPath finds a configured resource whose identifier path equals
-// the well-known suffix (trailing slash ignored).
+// resourceByPath finds the configured resource whose identifier path equals the well-known suffix.
 func (h *Handler) resourceByPath(suffix string) (string, bool) {
 	want := "/" + strings.Trim(suffix, "/")
 	for _, res := range h.svc.Cfg.Resources {
@@ -183,15 +161,12 @@ func (h *Handler) handleJWKS(w http.ResponseWriter, _ *http.Request) {
 	_, _ = w.Write(body)
 }
 
-// authorize
-
 func (h *Handler) handleAuthorize(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	clientID := q.Get("client_id")
 	requestURI := q.Get("request_uri")
 	requestObject := q.Get("request")
 
-	// RFC 9101: request and request_uri cannot coexist.
 	if requestURI != "" && requestObject != "" {
 		writeOAuthError(w, http.StatusBadRequest, oauthErrInvalidRequest, "request and request_uri are mutually exclusive")
 		return
@@ -201,31 +176,26 @@ func (h *Handler) handleAuthorize(w http.ResponseWriter, r *http.Request) {
 
 	switch {
 	case requestURI != "":
-		// PAR path: consume the pushed request.
-		// RFC 9126 section 3: when request_uri is present, inline params
-		// (other than client_id) MUST be absent.
+		// PAR path: consume the pushed request. RFC 9126 section 3 forbids inline params (other than
+		// client_id) alongside request_uri.
 		if hasInlineAuthorizeParams(q, clientID) {
 			writeOAuthError(w, http.StatusBadRequest, oauthErrInvalidRequest, "inline params must not accompany request_uri")
 			return
 		}
-		// RequirePAR check happens implicitly: if PAR is required and the
-		// client sent inline params, the hasInlineAuthorizeParams guard
-		// above catches it. A request_uri path always passes.
 		var err error
 		req, err = h.svc.ConsumePushedRequest(r.Context(), requestURI)
 		if err != nil {
 			writeOAuthError(w, http.StatusBadRequest, oauthErrInvalidRequest, "invalid or expired request_uri")
 			return
 		}
-		// Bind client_id from query (MUST match inner client_id).
 		if clientID != "" && req.ClientID != clientID {
 			writeOAuthError(w, http.StatusBadRequest, oauthErrInvalidRequest, "client_id mismatch with request_uri")
 			return
 		}
 
 	case requestObject != "":
-		// JAR path: parse and verify the request JWT.
-		// RFC 9101 section 5: outer params (except client_id) are ignored.
+		// JAR path: parse and verify the request JWT. RFC 9101 section 5: outer params (except client_id)
+		// are ignored.
 		client, err := h.svc.ResolveClient(r.Context(), clientID)
 		if err != nil {
 			writeOAuthError(w, http.StatusUnauthorized, oauthErrInvalidClient, "unknown client")
@@ -236,19 +206,15 @@ func (h *Handler) handleAuthorize(w http.ResponseWriter, r *http.Request) {
 			writeOAuthError(w, http.StatusBadRequest, oauthErrInvalidRequest, err.Error())
 			return
 		}
-		// Outer client_id is authoritative when the inner JWT omits it.
 		if req.ClientID == "" {
 			req.ClientID = clientID
 		}
 
 	default:
-		// Classic inline-param path.
-		// If RequirePAR is on, reject.
 		if h.svc.Cfg.PAR != nil && h.svc.Cfg.PAR.RequirePAR {
 			writeOAuthError(w, http.StatusBadRequest, oauthErrInvalidRequest, "pushed_authorization_request_required")
 			return
 		}
-		// If RequireJAR is on, reject.
 		if h.svc.Cfg.JAR != nil && h.svc.Cfg.JAR.RequireJAR {
 			writeOAuthError(w, http.StatusBadRequest, oauthErrInvalidRequest, "request_object_required")
 			return
@@ -300,10 +266,8 @@ func (h *Handler) handleAuthorize(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, res.RedirectURL, http.StatusFound)
 }
 
-// hasInlineAuthorizeParams returns true when the query string contains any
-// authorization parameter other than client_id and request_uri. Used to
-// enforce RFC 9126 section 3's prohibition on mixing request_uri with inline
-// params.
+// hasInlineAuthorizeParams reports whether the query carries an authorization parameter other than
+// client_id and request_uri.
 func hasInlineAuthorizeParams(q url.Values, clientID string) bool {
 	check := []string{
 		"response_type", "redirect_uri", "scope", "state",
@@ -318,8 +282,6 @@ func hasInlineAuthorizeParams(q url.Values, clientID string) bool {
 	return false
 }
 
-// PAR
-
 func (h *Handler) handlePAR(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
 		writeOAuthError(w, http.StatusBadRequest, oauthErrInvalidRequest, "malformed form")
@@ -327,8 +289,7 @@ func (h *Handler) handlePAR(w http.ResponseWriter, r *http.Request) {
 	}
 	clientID, _ := parseClientCredentials(r)
 
-	// JAR support inside PAR: if a "request" param is present, extract
-	// the authorization request from the JWT (RFC 9101 inside RFC 9126).
+	// JAR inside PAR: a "request" parameter is unpacked from its JWT (RFC 9101 inside RFC 9126).
 	var req internalas.AuthorizeRequest
 	if ro := r.PostFormValue("request"); ro != "" {
 		client, err := h.svc.ResolveClient(r.Context(), clientID)
@@ -390,7 +351,6 @@ func (h *Handler) handlePAR(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) writeAuthorizeError(w http.ResponseWriter, r *http.Request, req internalas.AuthorizeRequest, err error) {
 	code := mapOAuthErrorCode(err)
-	// RFC 6749 4.1.2.1: never redirect to a redirect_uri that is not registered.
 	if req.RedirectURI != "" && h.svc.RedirectURIRegisteredFor(r.Context(), req.ClientID, req.RedirectURI) && code != oauthErrInvalidRequest && code != oauthErrInvalidTarget {
 		u, perr := url.Parse(req.RedirectURI)
 		if perr == nil {
@@ -408,8 +368,6 @@ func (h *Handler) writeAuthorizeError(w http.ResponseWriter, r *http.Request, re
 	writeOAuthError(w, http.StatusBadRequest, code, err.Error())
 }
 
-// token
-
 func (h *Handler) handleToken(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
 		writeOAuthError(w, http.StatusBadRequest, oauthErrInvalidRequest, "malformed form")
@@ -417,27 +375,20 @@ func (h *Handler) handleToken(w http.ResponseWriter, r *http.Request) {
 	}
 	clientID, clientSecret := parseClientCredentials(r)
 	grantType := r.PostFormValue("grant_type")
-	// RFC 7523 section 2.2 client_assertion fields.
 	clientAssertionType := r.PostFormValue("client_assertion_type")
 	clientAssertion := r.PostFormValue("client_assertion")
-	// When client_id is absent but client_assertion is present, extract the
-	// client_id from the assertion iss claim (RFC 7523 requires iss = client_id).
+	// Without client_id, take it from the assertion iss claim (RFC 7523 requires iss = client_id).
 	if clientID == "" && clientAssertion != "" {
 		clientID = jwtPeekIss(clientAssertion)
 	}
-	// DPoP proof comes in via the DPoP header (RFC 9449 section 4). The
-	// HTTPMethod / HTTPURL are passed through to the verifier so it can
-	// match against the htm / htu claims; the verifier strips fragment +
-	// query string from htu so it is fine to pass the full URL here.
+	// The DPoP proof arrives in the DPoP header (RFC 9449 section 4). The verifier strips the query from htu.
 	dpopHeader := r.Header.Get("DPoP")
-	// The DPoP htu comes from the configured issuer, never from request
-	// headers: X-Forwarded-Proto/Host are client-controlled unless a proxy
-	// scrubs them, and trusting them lets a proof minted for another origin
-	// pass the htu check.
+	// The DPoP htu comes from the configured issuer, never from request headers: X-Forwarded-* are
+	// client controlled unless a proxy scrubs them, so trusting them would let a proof for another
+	// origin pass.
 	httpURL := h.svc.TokenEndpointURL()
-	// authorization_details is honoured on the code and refresh grants only.
-	// Ignoring it elsewhere would hand out a token narrower or wider than
-	// the caller believes, so refuse it.
+	// authorization_details is honoured only on the code and refresh grants. Ignoring it elsewhere
+	// would issue a token that differs from what the caller asked for, so it is refused.
 	if r.PostFormValue("authorization_details") != "" &&
 		grantType != models.GrantTypeAuthorizationCode && grantType != models.GrantTypeRefreshToken {
 		writeOAuthError(w, http.StatusBadRequest, oauthErrInvalidAuthorizationDetails, "authorization_details is not supported for this grant")
@@ -537,11 +488,9 @@ func (h *Handler) handleToken(w http.ResponseWriter, r *http.Request) {
 			Assertion:           assertion,
 			ClientAssertionType: clientAssertionType,
 			ClientAssertion:     clientAssertion,
-			// Used by the device assertion grant to bind the token to the
-			// proof key.
-			DPoPProof:  dpopHeader,
-			HTTPMethod: r.Method,
-			HTTPURL:    httpURL,
+			DPoPProof:           dpopHeader,
+			HTTPMethod:          r.Method,
+			HTTPURL:             httpURL,
 		}
 		resp, err := h.svc.JWTBearerGrant(r.Context(), req, assertion)
 		if err != nil {
@@ -586,10 +535,8 @@ func (h *Handler) handleToken(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// jwtPeekIss extracts the iss claim from a compact JWT without verifying
-// the signature. Used to extract client_id from client_assertion when the
-// caller does not include it as a separate form field (RFC 7523 permits
-// this; the AS must extract it from the assertion).
+// jwtPeekIss reads the iss claim without verifying the signature. It is used only to find client_id
+// for client assertions (RFC 7523).
 func jwtPeekIss(token string) string {
 	parts := strings.Split(token, ".")
 	if len(parts) != 3 {
@@ -633,8 +580,6 @@ func writeTokenError(w http.ResponseWriter, err error) {
 	writeOAuthError(w, status, code, err.Error())
 }
 
-// revoke
-
 func (h *Handler) handleRevoke(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
 		writeOAuthError(w, http.StatusBadRequest, oauthErrInvalidRequest, "malformed form")
@@ -657,8 +602,6 @@ func (h *Handler) handleRevoke(w http.ResponseWriter, r *http.Request) {
 	}
 	w.WriteHeader(http.StatusOK)
 }
-
-// introspect
 
 func (h *Handler) handleIntrospect(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
@@ -687,8 +630,6 @@ func (h *Handler) handleIntrospect(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write(body)
 }
 
-// register
-
 func (h *Handler) handleRegister(w http.ResponseWriter, r *http.Request) {
 	r.Body = http.MaxBytesReader(w, r.Body, 1<<16)
 	var req internalas.ClientRegistrationRequest
@@ -706,8 +647,7 @@ func (h *Handler) handleRegister(w http.ResponseWriter, r *http.Request) {
 		}
 		rawToken := strings.TrimSpace(authz[len("bearer "):])
 		if !h.dcrBearerValid(rawToken) {
-			// Not one of the static operator tokens: try stored, scoped,
-			// single-use registration tokens.
+			// Not a static operator token: try stored, scoped, single-use registration tokens.
 			t, terr := h.svc.RedeemRegistrationToken(r.Context(), rawToken, req)
 			switch {
 			case terr == nil:
@@ -750,11 +690,8 @@ func (h *Handler) handleRegister(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(resp)
 }
 
-// helpers
-
-// parseClientCredentials extracts client_id / client_secret from the
-// request. HTTP Basic auth takes precedence per RFC 6749 section 2.3.1;
-// absent that, fall back to client_id / client_secret in the form body.
+// parseClientCredentials reads client_id and client_secret. HTTP Basic takes precedence (RFC 6749
+// section 2.3.1), then the form body.
 func parseClientCredentials(r *http.Request) (string, string) {
 	if u, p, ok := r.BasicAuth(); ok {
 		return u, p
@@ -771,10 +708,9 @@ func parseClientCredentials(r *http.Request) (string, string) {
 	return r.PostFormValue("client_id"), r.PostFormValue("client_secret")
 }
 
-// writeOAuthError emits the standard OAuth error JSON body shape.
+// writeOAuthError writes the standard OAuth error body. Server faults never echo internal error
+// text; it goes to the log only.
 func writeOAuthError(w http.ResponseWriter, status int, code, description string) {
-	// Never echo internal error text (storage errors, driver messages) to
-	// the client on a server fault. The detail goes to the log only.
 	if status >= http.StatusInternalServerError || code == oauthErrServerError {
 		slog.Error("oauth endpoint server error", "code", code, "detail", description)
 		description = "internal server error"
@@ -788,13 +724,8 @@ func writeOAuthError(w http.ResponseWriter, status int, code, description string
 	}{Error: code, ErrorDescription: description})
 }
 
-// dcrBearerValid reports whether the supplied raw token (no "Bearer "
-// prefix) matches any operator-configured RegistrationTokens entry.
-// The comparison runs against pre-computed sha256 digests under
-// crypto/subtle.ConstantTimeCompare; the loop walks every configured
-// digest so an attacker cannot probe individual tokens via timing.
-// Returns false when the input is empty or when no tokens are
-// configured (security audit H1, 2026-06-20).
+// dcrBearerValid reports whether a raw bearer token matches an operator RegistrationTokens digest.
+// The loop visits every digest so timing cannot reveal which token matched (security audit H1).
 func (h *Handler) dcrBearerValid(rawToken string) bool {
 	if rawToken == "" || len(h.bearerHashes) == 0 {
 		return false
@@ -809,7 +740,7 @@ func (h *Handler) dcrBearerValid(rawToken string) bool {
 	return matched == 1
 }
 
-// mapOAuthErrorCode maps internal sentinels to wire error codes.
+// mapOAuthErrorCode maps internal sentinels to OAuth wire error codes.
 func mapOAuthErrorCode(err error) string {
 	switch {
 	case errors.Is(err, errLoginRequired):
@@ -844,34 +775,26 @@ func mapOAuthErrorCode(err error) string {
 	return oauthErrServerError
 }
 
-// OAuth wire error codes. Package-private mirrors of the exported
-// OAuthErr* constants in root errors_v20.go; kept here so the
-// extracted handler does not import root just to read string
-// constants.
+// OAuth wire error codes, mirroring the exported OAuthErr* constants at the root.
 const (
-	// oauthErrLoginRequired is the OIDC Core 3.1.2.6 error for prompt=none.
-	oauthErrLoginRequired           = "login_required"
-	oauthErrInvalidRequest          = "invalid_request"
-	oauthErrInvalidClient           = "invalid_client"
-	oauthErrInvalidGrant            = "invalid_grant"
-	oauthErrInvalidScope            = "invalid_scope"
-	oauthErrUnsupportedGrantType    = "unsupported_grant_type"
-	oauthErrUnsupportedResponseType = "unsupported_response_type"
-	oauthErrAccessDenied            = "access_denied"
-	oauthErrServerError             = "server_error"
-	oauthErrInvalidTarget           = "invalid_target"
-	// RFC 9396 section 5.
+	oauthErrLoginRequired               = "login_required"
+	oauthErrInvalidRequest              = "invalid_request"
+	oauthErrInvalidClient               = "invalid_client"
+	oauthErrInvalidGrant                = "invalid_grant"
+	oauthErrInvalidScope                = "invalid_scope"
+	oauthErrUnsupportedGrantType        = "unsupported_grant_type"
+	oauthErrUnsupportedResponseType     = "unsupported_response_type"
+	oauthErrAccessDenied                = "access_denied"
+	oauthErrServerError                 = "server_error"
+	oauthErrInvalidTarget               = "invalid_target"
 	oauthErrInvalidAuthorizationDetails = "invalid_authorization_details"
-	// RFC 9449 wire codes returned from the token endpoint when a DPoP
-	// proof is missing, malformed, or rejected.
+	// RFC 9449 wire codes for a missing, malformed or rejected DPoP proof at the token endpoint.
 	oauthErrInvalidDPoPProof = "invalid_dpop_proof"
 	oauthErrUseDPoPNonce     = "use_dpop_nonce"
 )
 
-// writeTokenErrorDPoP extends writeTokenError with the RFC 9449
-// invalid_dpop_proof / use_dpop_nonce wire mapping. When the AS demands
-// a nonce, a fresh DPoP-Nonce header accompanies the 400 response so the
-// client can immediately retry.
+// writeTokenErrorDPoP extends writeTokenError with the RFC 9449 mappings. A demanded nonce gets a
+// fresh DPoP-Nonce header so the client can retry at once.
 func (h *Handler) writeTokenErrorDPoP(w http.ResponseWriter, err error) {
 	if errors.Is(err, internalas.ErrDPoPNonceRequired) {
 		nonce := h.svc.IssueDPoPNonce()
@@ -896,10 +819,7 @@ func (h *Handler) writeTokenErrorDPoP(w http.ResponseWriter, err error) {
 	writeTokenError(w, err)
 }
 
-// scopeSplit parses a space-separated scope string into a deduped
-// slice preserving order of first occurrence. Mirrors the legacy root
-// scope_helpers.go::scopeSplit, kept package-private here because
-// handlers_oauth_server.go was the only consumer.
+// scopeSplit parses a space-separated scope string into a deduped slice, keeping first occurrences in order.
 func scopeSplit(s string) []string {
 	parts := strings.Fields(s)
 	seen := map[string]struct{}{}

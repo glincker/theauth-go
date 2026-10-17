@@ -1,18 +1,6 @@
-// Package agentpolicy attaches IAM policy documents to agents so the library,
-// not a prompt, decides what an agent may do.
-//
-// Build an Engine from the host's policy documents and hand it to
-// theauth.AgentConfig.PolicyEngine. Every agent token mint (client
-// credentials, token exchange, jwt-bearer) is then evaluated against the
-// agent's policies: an explicit Deny fails the mint with access_denied, scopes
-// no Allow statement covers are narrowed away, and the ids and hash of the
-// policies in force are recorded in the token and the audit event.
-//
-// The same Engine answers the call time question through Policies, which
-// plugs into policy/toolguard.Guard, and through (*theauth.TheAuth).AuthorizeAgent.
-//
-// An agent with no attached policy is not restricted, so adopting the package
-// changes nothing until a policy is attached.
+// Package agentpolicy attaches IAM policy documents to agents, so the library decides what an agent
+// may do. Build an Engine and pass it as theauth.AgentConfig.PolicyEngine. An explicit Deny fails
+// the mint, and an agent with no policy is unrestricted.
 package agentpolicy
 
 import (
@@ -32,18 +20,15 @@ import (
 	"github.com/oklog/ulid/v2"
 )
 
-// Resolver returns the policies attached to one agent. It is the host's hook
-// into its own IAM store. An error makes every mint for that agent fail
-// closed (the client sees temporarily_unavailable).
+// Resolver returns the policies attached to one agent. An error makes every mint for that agent fail closed.
 type Resolver func(ctx context.Context, ag theauth.Agent) ([]policy.Policy, error)
 
 // Resolution is what ResolverV2 returns for one agent.
 type Resolution struct {
 	// Policies are attached to the agent, after Config.Policies.
 	Policies []policy.Policy
-	// RateLimit, when non-nil, replaces the configured AgentConfig.RateLimit
-	// for this agent. It must have Requests > 0; Per defaults to one minute and
-	// Burst to Requests. An invalid value fails the mint closed.
+	// RateLimit, when non-nil, replaces AgentConfig.RateLimit for this agent. Requests must be above
+	// zero; an invalid value fails closed.
 	RateLimit *theauth.AgentRateLimit
 }
 
@@ -54,14 +39,11 @@ type ResolverV2 func(ctx context.Context, ag theauth.Agent) (Resolution, error)
 type Mode int
 
 const (
-	// AllowList is the default. Nothing is permitted unless an allow
-	// statement covers it, so a policy set with no allow statement is an
-	// error, not an open door.
+	// AllowList is the default. Nothing is permitted unless an allow statement covers it, so no allow
+	// statement is an error.
 	AllowList Mode = iota
-	// DenyList permits what no statement matches. Only deny and escalate
-	// statements restrict. Grants are still capped by the agent's registered
-	// scopes, the resource catalog and the delegation, so a deny list never
-	// widens access; it only narrows it.
+	// DenyList permits what no statement matches. Grants stay capped by the agent's scopes, the
+	// resource catalog and the delegation.
 	DenyList
 )
 
@@ -101,9 +83,8 @@ type Engine struct {
 	eval     policy.Evaluator
 }
 
-// New validates the configured policies and builds an Engine. In AllowList
-// mode it rejects static policies that hold no allow statement when no
-// resolver could add one.
+// New validates the policies and builds an Engine. In AllowList mode it rejects static policies
+// with no allow statement, unless a resolver could add one.
 func New(cfg Config) (*Engine, error) {
 	e := &Engine{mode: cfg.Mode, eval: cfg.Evaluator}
 	switch {
@@ -231,10 +212,8 @@ func digest(pols []*policy.Policy) ([]string, string) {
 	return slices.Compact(ids), hex.EncodeToString(h.Sum(nil))
 }
 
-// Policies returns a function for toolguard.Guard.Policies that resolves the
-// same policies the engine uses at mint time, so the guard and the token
-// endpoint cannot drift. It needs the agent row, so it takes the TheAuth
-// instance to look the agent up.
+// Policies returns the resolver toolguard.Guard uses. It reads the same policies as the mint path,
+// so the guard and token endpoint cannot drift.
 func (e *Engine) Policies(a *theauth.TheAuth) func(ctx context.Context, agentID string) ([]*policy.Policy, error) {
 	return func(ctx context.Context, agentID string) ([]*policy.Policy, error) {
 		id, err := ulid.Parse(agentID)

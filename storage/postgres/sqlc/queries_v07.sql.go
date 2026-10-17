@@ -3,13 +3,8 @@
 //   sqlc v1.30.0
 // source: queries.sql
 //
-// Hand-maintained mirror of the v0.7 query block (organizations,
-// organization_members, sessions.active_organization_id, saml_connections,
-// saml_identities, scim_tokens, groups, group_members, plus the SCIM-scoped
-// users views). The sqlc binary was not available locally at v0.7 codegen
-// time; this file matches the v1.30.0 emit format used by queries.sql.go
-// and queries_v05.sql.go so re-running sqlc generate later produces a
-// stable diff.
+// Hand-maintained mirror of the v0.7 query block; the sqlc binary was unavailable at codegen time.
+// Emit format matches queries.sql.go so a later sqlc generate gives a stable diff.
 
 package sqlc
 
@@ -18,8 +13,6 @@ import (
 
 	"github.com/jackc/pgx/v5/pgtype"
 )
-
-// organizations
 
 const insertOrganization = `-- name: InsertOrganization :one
 INSERT INTO organizations (id, name, slug, created_at, updated_at)
@@ -209,8 +202,6 @@ func (q *Queries) SetSessionActiveOrganization(ctx context.Context, arg SetSessi
 	return r.RowsAffected(), nil
 }
 
-// saml
-
 const insertSAMLConnection = `-- name: InsertSAMLConnection :one
 INSERT INTO saml_connections (
     id, organization_id, idp_entity_id, idp_sso_url, idp_x509_cert,
@@ -385,8 +376,6 @@ func (q *Queries) TouchSAMLIdentityLastLogin(ctx context.Context, arg TouchSAMLI
 	return err
 }
 
-// scim tokens
-
 const insertSCIMToken = `-- name: InsertSCIMToken :one
 INSERT INTO scim_tokens (id, organization_id, token_hash, name, created_at)
 VALUES ($1, $2, $3, $4, $5)
@@ -471,22 +460,8 @@ func (q *Queries) TouchSCIMTokenLastUsed(ctx context.Context, arg TouchSCIMToken
 	return err
 }
 
-// users scoped queries
-//
-// SELECT * on users returns the v0.7 columns we added at the tail
-// (external_id, given_name, family_name, display_name). Postgres returns
-// columns in ALTER TABLE order; we Scan into the same order. Pre-v0.7
-// stored procs SELECT users.* will continue to compile because the older
-// User scan in queries.sql.go does not reference the new columns and
-// pgx silently ignores extra columns on a Scan target that has fewer
-// fields than the row.
-//
-// We deliberately do not regenerate queries.sql.go for CreateUser /
-// UserByEmail / UserByID; those keep returning the v0.5 column set and
-// add empty strings via the rowToUser mapper.
-//
-// The two scoped queries (ListUsersByOrganization, UserByExternalIDInOrg)
-// SELECT u.* and we Scan into the new struct.
+// users scoped queries: SELECT u.* returns the v0.7 columns at the tail, scanned in ALTER TABLE order.
+// CreateUser, UserByEmail and UserByID keep the v0.5 column set.
 
 const listUsersByOrganization = `-- name: ListUsersByOrganization :many
 SELECT u.id, u.email, u.email_verified_at, u.name, u.avatar_url, u.created_at, u.updated_at, u.password_hash, u.external_id, u.given_name, u.family_name, u.display_name FROM users u
@@ -605,8 +580,6 @@ func (q *Queries) UpdateUserSCIM(ctx context.Context, arg UpdateUserSCIMParams) 
 	}
 	return r.RowsAffected(), nil
 }
-
-// groups
 
 const insertGroup = `-- name: InsertGroup :one
 INSERT INTO groups (id, organization_id, display_name, external_id, created_at)

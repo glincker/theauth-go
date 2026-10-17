@@ -96,9 +96,8 @@ func BearerToken(r *http.Request) (string, bool) {
 	return strings.TrimSpace(h[7:]), true
 }
 
-// RequireAbility accepts either a full session or an API bearer token and
-// rejects callers that do not currently hold ability. A presented bearer
-// token never falls back to the cookie. Needs Config.APITokens.
+// RequireAbility accepts a full session or an API bearer token holding ability. A presented bearer
+// token never falls back to the cookie.
 func (s *Service) RequireAbility(ability string) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

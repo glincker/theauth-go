@@ -171,9 +171,8 @@ type DeviceRequestInfo struct {
 	ExpiresAt          time.Time
 }
 
-// LookupDeviceRequest returns the pending request behind a user code so the
-// approver can review it. Failed lookups count against a per-approver budget
-// (ErrDeviceAttemptsExceeded once spent).
+// LookupDeviceRequest returns the pending request behind a user code so the approver can review it.
+// Failed lookups count against a per-approver budget.
 func (s *Service) LookupDeviceRequest(ctx context.Context, approver *User, ip, userCode string) (*DeviceRequestInfo, error) {
 	if s.dev == nil {
 		return nil, ErrDeviceDisabled
@@ -212,10 +211,8 @@ func (s *Service) lookupPending(ctx context.Context, approver *User, ip, userCod
 	return rec, nil
 }
 
-// DecideDeviceRequest approves or denies a pending request as approver. On
-// approval the abilities are the requested set (or the narrower subset in
-// abilities) capped to what the approver holds now. Root is granted only when
-// requested and the approver holds root; it is never downgraded silently.
+// DecideDeviceRequest approves or denies a pending request. Approved abilities are capped to what
+// the approver holds now. Root is granted only when requested and held.
 func (s *Service) DecideDeviceRequest(ctx context.Context, approver *User, ip, userCode string, approve bool, abilities []string) error {
 	if s.dev == nil {
 		return ErrDeviceDisabled
@@ -268,10 +265,8 @@ type DeviceToken struct {
 	ExpiresIn time.Duration
 }
 
-// RedeemDeviceCode exchanges an approved device code for a token. The
-// approved to redeemed transition is one atomic claim, so concurrent polls
-// mint at most one token. Polling faster than the interval returns
-// ErrDeviceSlowDown and widens the interval.
+// RedeemDeviceCode exchanges an approved device code for a token. The approved-to-redeemed step is
+// one atomic claim, so at most one token is minted.
 func (s *Service) RedeemDeviceCode(ctx context.Context, deviceCode string) (DeviceToken, error) {
 	if s.dev == nil {
 		return DeviceToken{}, ErrDeviceDisabled
@@ -391,9 +386,7 @@ func (s *Service) ListDeviceRequests(ctx context.Context) ([]DeviceRequestSummar
 	return out, nil
 }
 
-// DecideDeviceRequestByID approves or denies a pending request by its ID with
-// the same rules as DecideDeviceRequest. An unknown, expired or already
-// decided ID returns ErrDeviceInvalid or ErrDeviceExpired.
+// DecideDeviceRequestByID decides a pending request by ID under the same rules as DecideDeviceRequest.
 func (s *Service) DecideDeviceRequestByID(ctx context.Context, approver *User, id ULID, approve bool, abilities []string) error {
 	if s.dev == nil {
 		return ErrDeviceDisabled

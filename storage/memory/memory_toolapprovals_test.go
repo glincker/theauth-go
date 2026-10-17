@@ -7,3 +7,5 @@ import (
 )
 
 func TestToolApprovalContract(t *testing.T) { storagetest.RunToolApprovals(t, New()) }
+
+func TestToolApprovalAdminContract(t *testing.T) { storagetest.RunToolApprovalAdmin(t, New()) }

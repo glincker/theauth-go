@@ -12,37 +12,25 @@ import (
 	"github.com/glincker/theauth-go/v2/internal/models"
 )
 
-// authctx.go: the authentication context (OIDC Core auth_time, acr, amr)
-// the AS records on codes and refresh families and emits in access tokens
-// and introspection responses so resource servers can enforce RFC 9470
-// step-up (mcpresource RequireStepUp).
+// authctx.go holds the authentication context (OIDC auth_time, acr, amr). It is emitted in tokens
+// so resource servers can enforce RFC 9470 step-up.
 
-// Default acr values emitted when Config.ACRValues has no entry for the
-// authentication method set.
 const (
-	// ACRSingleFactor is the default acr for a session authenticated with
-	// one factor (for example a password, magic link or social login).
+	// ACRSingleFactor is the default acr for a one-factor session (password, magic link, social login).
 	ACRSingleFactor = "urn:theauth:acr:1fa"
-	// ACRMultiFactor is the default acr for a session whose amr lists the
-	// "mfa" method or two or more distinct methods.
+	// ACRMultiFactor is the default acr when amr lists "mfa" or two or more distinct methods.
 	ACRMultiFactor = "urn:theauth:acr:mfa"
 )
 
-// AuthContext describes how and when the user behind a request
-// authenticated. The authorize handler builds it from the session; callers
-// of StartAuthorize that bypass the handler attach one with WithAuthContext.
+// AuthContext describes how and when the user behind a request authenticated. StartAuthorize
+// callers that bypass the handler attach one with WithAuthContext.
 type AuthContext struct {
-	// AuthTime is when the user last proved identity (login or step-up).
-	// The zero time means unknown.
+	// AuthTime is when the user last proved identity. The zero time means unknown.
 	AuthTime time.Time
-	// AMR lists the RFC 8176 authentication method references, for example
-	// "pwd", "otp", "hwk", "mfa".
-	AMR []string
-	// ACR, when non-empty, overrides the value derived from AMR and
-	// Config.ACRValues.
+	AMR      []string
+	// ACR, when set, overrides the value derived from AMR and Config.ACRValues.
 	ACR string
-	// SessionID identifies the browser session behind the request. OIDC
-	// uses it for the sid claim and back-channel logout.
+	// SessionID is the browser session behind the request, used for the sid claim and back-channel logout.
 	SessionID string
 }
 
@@ -59,20 +47,18 @@ func AuthContextFrom(ctx context.Context) (AuthContext, bool) {
 	return ac, ok
 }
 
-// errAuthorizeReauthRequired is returned by StartAuthorize when the session
-// is older than max_age or does not satisfy acr_values. The handler answers
-// it like a missing session: a redirect to LoginURL.
+// errAuthorizeReauthRequired is returned by StartAuthorize when the session is older than max_age
+// or misses acr_values. The handler redirects to LoginURL.
 var errAuthorizeReauthRequired = errors.New("theauth: authorize requires re-authentication")
 
-// IsReauthRequired reports whether err means the authorize request needs the
-// user to authenticate again (max_age exceeded or acr_values unmet).
+// IsReauthRequired reports whether err means the authorize request needs the user to authenticate
+// again (max_age exceeded or acr_values unmet).
 func IsReauthRequired(err error) bool {
 	return errors.Is(err, errAuthorizeReauthRequired)
 }
 
-// ACRMethodKey is the lookup key into Config.ACRValues for a method set: the
-// distinct, lowercased amr values sorted and joined with "+", for example
-// "otp+pwd".
+// ACRMethodKey is the Config.ACRValues lookup key for a method set: the sorted, lowercased amr
+// values joined with "+".
 func ACRMethodKey(amr []string) string {
 	seen := map[string]struct{}{}
 	out := make([]string, 0, len(amr))
@@ -91,10 +77,7 @@ func ACRMethodKey(amr []string) string {
 	return strings.Join(out, "+")
 }
 
-// acrFor maps an authentication method set to an acr string. An exact entry
-// in Config.ACRValues wins; otherwise the documented default applies:
-// ACRMultiFactor when amr holds "mfa" or two or more distinct methods, else
-// ACRSingleFactor. An empty method set has no acr.
+// acrFor maps a method set to an acr. An exact Config.ACRValues entry wins; otherwise the default applies.
 func (s *Service) acrFor(ac AuthContext) string {
 	if ac.ACR != "" {
 		return ac.ACR
@@ -112,8 +95,7 @@ func (s *Service) acrFor(ac AuthContext) string {
 	return ACRSingleFactor
 }
 
-// acrValuesSupported lists the configured acr strings, sorted and unique,
-// for the acr_values_supported metadata field. Nil when none are configured.
+// acrValuesSupported lists the configured acr strings for the acr_values_supported metadata field.
 func (s *Service) acrValuesSupported() []string {
 	if len(s.Cfg.ACRValues) == 0 {
 		return nil
@@ -134,9 +116,7 @@ func (s *Service) acrValuesSupported() []string {
 	return out
 }
 
-// reauthNeeded reports whether the request's max_age or acr_values are not
-// met by the session's authentication context. A missing context fails any
-// stated requirement (fail closed).
+// reauthNeeded reports whether max_age or acr_values is unmet. A missing context fails closed.
 func (s *Service) reauthNeeded(req AuthorizeRequest, ac AuthContext, have bool, now time.Time) bool {
 	if req.MaxAge != nil {
 		if !have || ac.AuthTime.IsZero() {
@@ -162,8 +142,8 @@ func (s *Service) reauthNeeded(req AuthorizeRequest, ac AuthContext, have bool, 
 	return false
 }
 
-// ParseMaxAge parses an OIDC max_age parameter. An empty string is absent
-// (nil). Anything that is not a non-negative integer is invalid_request.
+// ParseMaxAge parses an OIDC max_age. Empty is absent (nil); anything but a non-negative integer is
+// invalid_request.
 func ParseMaxAge(raw string) (*int64, error) {
 	if raw == "" {
 		return nil, nil
@@ -175,9 +155,8 @@ func ParseMaxAge(raw string) (*int64, error) {
 	return &n, nil
 }
 
-// NormalizeACRValues returns a copy of m with every key rewritten to its
-// ACRMethodKey form so operators may write "pwd+otp" in any order. Entries
-// with an empty key or value are dropped. Nil for an empty input.
+// NormalizeACRValues rewrites every key to ACRMethodKey form, so "pwd+otp" works in any order.
+// Empty keys and values are dropped.
 func NormalizeACRValues(m map[string]string) map[string]string {
 	if len(m) == 0 {
 		return nil
@@ -196,8 +175,7 @@ func NormalizeACRValues(m map[string]string) map[string]string {
 	return out
 }
 
-// setAuthContextClaims adds auth_time, acr and amr to claims. Each claim is
-// emitted only when the grant recorded a value.
+// setAuthContextClaims adds auth_time, acr and amr to claims, each only when the grant recorded it.
 func setAuthContextClaims(claims *jwt.Claims, authTime time.Time, acr string, amr []string) {
 	if authTime.IsZero() && acr == "" && len(amr) == 0 {
 		return
@@ -216,8 +194,7 @@ func setAuthContextClaims(claims *jwt.Claims, authTime time.Time, acr string, am
 	}
 }
 
-// authContextFromExtra reads auth_time, acr and amr back out of a decoded
-// claim set (JSON numbers arrive as float64, arrays as []any).
+// authContextFromExtra reads auth_time, acr and amr back from a decoded claim set.
 func authContextFromExtra(extra map[string]any) (int64, string, []string) {
 	var at int64
 	switch v := extra["auth_time"].(type) {

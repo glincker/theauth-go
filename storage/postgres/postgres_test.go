@@ -25,22 +25,9 @@ func testPool(t testing.TB) *pgxpool.Pool {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// Drop + recreate for clean state, then apply every embedded migration via
-	// Migrate (storage/postgres/migrate.go), not a hand-maintained file list.
-	// This used to hardcode os.ReadFile calls for 0001 through 0008 only, so
-	// every migration added after 0008 (0009 through 0017 as of this fix) was
-	// silently never applied here even though the files existed on disk -
-	// tests exercising a newer migration's columns failed with a bogus
-	// "column does not exist" rather than a real assertion failure. Migrate
-	// walks migrations/*.up.sql directly, so this can't go stale again the
-	// same way. theauth_schema_migrations (Migrate's ledger) is dropped
-	// alongside the schema tables so Migrate always replays every migration
-	// fresh for this pool, matching the "clean state per test" contract the
-	// old code had - without also dropping the ledger, Migrate would see
-	// prior versions already recorded (from another test's pool against the
-	// same CI Postgres instance) and skip recreating the tables just dropped
-	// above. Order matters for the table drops: dependent tables drop first
-	// (v0.5 + v0.7 reference users; v0.7 SAML/SCIM reference organizations).
+	// Drop and recreate the schema, then replay every embedded migration via Migrate so new
+	// migrations are never skipped. The ledger is dropped too, or Migrate would skip the
+	// rebuilt tables. Dependent tables drop first.
 	_, _ = pool.Exec(context.Background(), `
 		DROP TABLE IF EXISTS theauth_schema_migrations CASCADE;
 		DROP TABLE IF EXISTS theauth_tool_approvals CASCADE;
@@ -276,8 +263,7 @@ func TestPostgresOAuthAccountUpsertAndLookup(t *testing.T) {
 		t.Fatalf("UserID mismatch after insert")
 	}
 
-	// Update path: same (provider, provider_user_id) should refresh tokens
-	// and bump updated_at, keep the original ID + created_at.
+	// Update path: the same (provider, provider_user_id) refreshes tokens and bumps updated_at.
 	second, err := s.UpsertOAuthAccount(ctx, theauth.OAuthAccount{
 		ID:             ulid.New(), // ignored due to ON CONFLICT
 		UserID:         uid,
@@ -339,17 +325,8 @@ func TestPostgresMagicLinkConsume(t *testing.T) {
 	}
 }
 
-// TestPostgresStoreContract runs the full storagetest contract suite against
-// the Postgres backend. Opt in by setting THEAUTH_PG_CONTRACT=1 alongside
-// THEAUTH_TEST_PG_DSN. The Postgres backend currently fails this suite
-// beyond the UpdateAgentLastActive divergence fixed in v2.5.x: NOT NULL
-// constraint violations (agents.scope_grant, webauthn_credentials.aaguid),
-// foreign-key violations (delegation_grants, audit_events), and cascading
-// not-found errors across Agents, Delegations, WebAuthn, AuthorizationCodes,
-// RefreshTokens, and JWKSKeys, likely because storagetest fixtures don't populate
-// fields/rows Postgres enforces but the lenient memory backend doesn't.
-// Tracked as dedicated follow-up work (see docs/ROADMAP.md); the contract suite
-// stays authoritative against the memory backend in CI today.
+// TestPostgresStoreContract runs the storagetest contract suite against Postgres (opt in with
+// THEAUTH_PG_CONTRACT=1 and THEAUTH_TEST_PG_DSN). Known constraint gaps are tracked in docs/ROADMAP.md.
 func TestPostgresStoreContract(t *testing.T) {
 	if os.Getenv("THEAUTH_PG_CONTRACT") != "1" {
 		t.Skip("THEAUTH_PG_CONTRACT=1 not set; Postgres contract test gated on opt-in until backend ErrNotFound divergences are fixed")

@@ -12,7 +12,8 @@ type CreateOptions struct {
 	Signer Signer
 	// Since covers only rows with timestamp at or after this. Recorded and signed.
 	Since *time.Time
-	// Until covers only rows with timestamp at or before this. Use it to leave out rows that may still be arriving.
+	// Until covers only rows with timestamp at or before this. Use it to leave out rows that may still
+	// be arriving.
 	Until *time.Time
 	// Now overrides the clock (tests).
 	Now time.Time
@@ -69,9 +70,8 @@ func CreateCheckpoint(ctx context.Context, lg Log, opts CreateOptions) (Checkpoi
 	return cp, nil
 }
 
-// leavesMatching rebuilds the first cp.Size leaves and confirms they still
-// hash to the checkpoint root. A mismatch means the log was rewritten, shrunk,
-// or a row landed inside the covered range after the checkpoint.
+// leavesMatching rebuilds the first cp.Size leaves and checks they still hash to the checkpoint
+// root. A mismatch means the log was rewritten, shrunk, or had a row land inside the covered range.
 func (lg Log) leavesMatching(ctx context.Context, cp Checkpoint) ([]leaf, error) {
 	if !wellFormed(cp) {
 		return nil, newErr(ErrInvalidCheckpoint, "malformed checkpoint")

@@ -13,7 +13,6 @@ import (
 
 var _ theauth.OpaqueTokenStorage = (*Store)(nil)
 
-// InsertOpaqueAccessToken satisfies OpaqueTokenStorage.
 func (s *Store) InsertOpaqueAccessToken(ctx context.Context, t theauth.OpaqueAccessToken) error {
 	_, err := s.db.ExecContext(ctx, `
 INSERT INTO oauth_opaque_access_tokens (hash, jti, client_id, claims, issued_at, expires_at)
@@ -22,7 +21,6 @@ VALUES (?, ?, ?, ?, ?, ?)`,
 	return err
 }
 
-// OpaqueAccessTokenByHash satisfies OpaqueTokenStorage.
 func (s *Store) OpaqueAccessTokenByHash(ctx context.Context, hash []byte) (*theauth.OpaqueAccessToken, error) {
 	var (
 		out             theauth.OpaqueAccessToken
@@ -45,7 +43,6 @@ FROM oauth_opaque_access_tokens WHERE hash = ?`, hash,
 	return &out, nil
 }
 
-// RevokeOpaqueAccessToken satisfies OpaqueTokenStorage.
 func (s *Store) RevokeOpaqueAccessToken(ctx context.Context, hash []byte) error {
 	_, err := s.db.ExecContext(ctx,
 		`UPDATE oauth_opaque_access_tokens SET revoked_at = ? WHERE hash = ? AND revoked_at IS NULL`,

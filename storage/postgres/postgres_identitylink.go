@@ -1,9 +1,6 @@
 package postgres
 
-// Identity-linking storage methods (v2.3). These run raw SQL via
-// pgxpool.Pool rather than going through sqlc-generated code so that no
-// schema regeneration is required. The queries are straightforward
-// single-table statements with no complex joins or aggregates.
+// Identity-linking methods run raw SQL on pgxpool.Pool, not sqlc, so no schema regeneration is needed.
 
 import (
 	"context"
@@ -65,8 +62,7 @@ func (s *Store) OAuthAccountsByUserID(ctx context.Context, userID theauth.ULID) 
 	return out, rows.Err()
 }
 
-// MoveOAuthAccount reassigns the row keyed by (provider, providerUserID) to
-// newUserID.
+// MoveOAuthAccount reassigns the row keyed by (provider, providerUserID) to newUserID.
 func (s *Store) MoveOAuthAccount(ctx context.Context, provider, providerUserID string, newUserID theauth.ULID) error {
 	tag, err := s.pool.Exec(ctx,
 		`UPDATE oauth_accounts SET user_id = $3, updated_at = now()
@@ -114,9 +110,8 @@ func (s *Store) UserPasswordHashByID(ctx context.Context, userID theauth.ULID) (
 	return hash, nil
 }
 
-// MovePasswordHash copies the Argon2id hash from secondaryID to primaryID,
-// overwriting any existing hash for primaryID, then clears secondaryID's row.
-// A no-op when secondaryID has no password row.
+// MovePasswordHash copies the Argon2id hash from secondaryID to primaryID, overwriting any existing
+// primary hash, then clears secondaryID's row. A no-op when secondaryID has no password row.
 func (s *Store) MovePasswordHash(ctx context.Context, primaryID, secondaryID theauth.ULID) error {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
@@ -167,9 +162,8 @@ func (s *Store) MoveWebAuthnCredentials(ctx context.Context, primaryID, secondar
 	return err
 }
 
-// MoveTOTPSecret reassigns the TOTP secret from secondaryID to primaryID.
-// If primaryID already has a confirmed TOTP secret the secondary row is
-// deleted without overwriting the active primary factor.
+// MoveTOTPSecret reassigns the TOTP secret. A confirmed primary secret wins; the secondary row is
+// dropped without overwriting it.
 func (s *Store) MoveTOTPSecret(ctx context.Context, primaryID, secondaryID theauth.ULID) error {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {

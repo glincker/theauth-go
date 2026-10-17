@@ -13,21 +13,12 @@ import (
 	"github.com/glincker/theauth-go/v2/internal/models"
 )
 
-// introspect.go: RFC 7662 token introspection.
-//
-// Resource servers POST a token here to learn whether it is still active
-// and to retrieve the claims required for authorization decisions. The
-// endpoint is gated to authenticated clients (the resource server
-// registers as an OAuth client and presents its own client_id/secret on
-// every call). A successful response carries a Cache-Control: max-age
-// header sized from IntrospectionCacheTTL so resource servers can
-// de-duplicate within the configured window without losing revocation
-// propagation freshness.
+// Resource servers POST a token here to learn whether it is active and which claims apply. The
+// endpoint requires an authenticated client. Responses carry Cache-Control sized from
+// IntrospectionCacheTTL.
 
-// IntrospectionResponse mirrors the JSON shape mandated by RFC 7662
-// section 2.2 plus the v2.0 act chain and delegation_grant_id
-// forward-compatibility fields (populated only when phase 3 + 4 mints
-// token-exchanged access tokens; always absent in this PR).
+// IntrospectionResponse is the RFC 7662 section 2.2 response, plus the act chain and
+// delegation_grant_id fields.
 type IntrospectionResponse struct {
 	Active    bool   `json:"active"`
 	Scope     string `json:"scope,omitempty"`
@@ -39,21 +30,13 @@ type IntrospectionResponse struct {
 	Aud       string `json:"aud,omitempty"`
 	Iss       string `json:"iss,omitempty"`
 	Jti       string `json:"jti,omitempty"`
-	// Act + DelegationGrantID are populated when the token was minted
-	// via the RFC 8693 token-exchange grant. Resource servers walk Act
-	// inward to outward to render Principal.ActorChain.
-	// DelegationGrantID lets audit pipelines correlate every
-	// chain-validation failure back to the grant that authorised the
-	// original delegation.
+	// Act and DelegationGrantID are set for RFC 8693 token-exchange tokens. Resource servers walk Act
+	// to render the chain.
 	Act               *models.ActorClaim `json:"act,omitempty"`
 	DelegationGrantID string             `json:"delegation_grant_id,omitempty"`
-	// Cnf is the RFC 7800 confirmation claim. Populated when the token
-	// was minted as DPoP-bound (cnf.jkt = base64url SHA-256 thumbprint
-	// of the proof key). Resource servers compare this against the
-	// thumbprint of the inbound DPoP proof on every protected call.
+	// Cnf is the RFC 7800 confirmation claim, set for DPoP-bound tokens (cnf.jkt is the proof key thumbprint).
 	Cnf *ConfirmationClaim `json:"cnf,omitempty"`
-	// AuthorizationDetails carries the RFC 9396 details the token was
-	// granted, when it has any.
+	// AuthorizationDetails carries the RFC 9396 details the token was granted, when it has any.
 	AuthorizationDetails json.RawMessage `json:"authorization_details,omitempty"`
 	// AuthTime, ACR and AMR report the user authentication context the
 	// token was issued under (OIDC Core, RFC 9470), when it has one.
@@ -65,22 +48,14 @@ type IntrospectionResponse struct {
 	DeviceID string `json:"device_id,omitempty"`
 }
 
-// ConfirmationClaim is the JSON shape of the RFC 7800 cnf claim. Only
-// the jkt member is populated today; future confirmation methods (mTLS
-// x5t#S256, kid) can land here additively.
+// ConfirmationClaim is the JSON shape of the RFC 7800 cnf claim. Only jkt is populated today.
 type ConfirmationClaim struct {
 	JKT string `json:"jkt,omitempty"`
 }
 
-// IntrospectToken validates the supplied token and returns the
-// structured introspection response. Token type detection: JWTs are
-// recognised by the three dot-separated base64 segments; everything
-// else is treated as a refresh token (looked up by hash).
-//
-// Audience binding: when expectedAud is non-empty (resource server
-// passes its own identifier), tokens with a mismatching aud return
-// active=false. Tokens missing an aud claim are rejected; phase 1 + 2
-// mints them with a resource-derived aud unconditionally.
+// IntrospectToken validates a token and returns its introspection response. JWTs are recognised by
+// their three segments; anything else is a refresh token looked up by hash. A non-empty expectedAud
+// makes mismatched audiences inactive.
 func (s *Service) IntrospectToken(ctx context.Context, token, clientID, clientSecret, expectedAud string) (introResp IntrospectionResponse, body []byte, err error) {
 	if s == nil {
 		return IntrospectionResponse{}, nil, errors.New("theauth: authorization server not configured")
@@ -98,12 +73,9 @@ func (s *Service) IntrospectToken(ctx context.Context, token, clientID, clientSe
 	if cached, ok := s.introspectCacheGet(token, expectedAud); ok {
 		var resp IntrospectionResponse
 		_ = json.Unmarshal(cached, &resp)
-		// Even on cache hit we re-verify the actor chain (and delegation
-		// grant) so revocation propagation honors the
-		// IntrospectionCacheTTL upper bound but never lags behind a
-		// resume / revoke decision the operator made AFTER the cache
-		// was populated. Inactive chain entries flip active=false and
-		// bypass the cache body entirely.
+		// Cache hits re-verify the actor chain and delegation grant, so revocations land within
+		// IntrospectionCacheTTL and never lag an operator decision. Inactive chain entries bypass the
+		// cache.
 		if resp.Active && resp.Jti != "" && s.accessJTIRevoked(ctx, resp.Jti) {
 			resp = IntrospectionResponse{Active: false}
 			body, _ := json.Marshal(resp)
@@ -121,10 +93,8 @@ func (s *Service) IntrospectToken(ctx context.Context, token, clientID, clientSe
 				return resp, body, nil
 			}
 		}
-		// Agent self tokens (sub agent:<id>) and user-subject tokens carry
-		// no act chain, so they would otherwise ride the cache for up to
-		// IntrospectionCacheTTL after the agent is suspended or the user
-		// disabled.
+		// Agent self tokens and user tokens carry no act chain, so they re-check subject state on every
+		// call rather than riding the cache after a suspend or disable.
 		if resp.Active && !s.subjectActive(ctx, resp.Sub) {
 			resp = IntrospectionResponse{Active: false}
 			body, _ := json.Marshal(resp)
@@ -132,8 +102,7 @@ func (s *Service) IntrospectToken(ctx context.Context, token, clientID, clientSe
 		}
 		return resp, cached, nil
 	}
-	// Heuristic: a JWT has three dot-separated segments. Refresh tokens
-	// are base64url single segments.
+	// A JWT has three dot-separated segments. Refresh tokens are single base64url segments.
 	if strings.Count(token, ".") == 2 {
 		resp := s.introspectJWT(ctx, token, expectedAud)
 		body, _ = json.Marshal(resp)
@@ -171,12 +140,10 @@ func (s *Service) introspectOpaque(ctx context.Context, token, expectedAud strin
 	return s.introspectClaims(ctx, claims), true
 }
 
-// introspectClaims turns a verified access token claim set into the RFC 7662
-// response, applying the denylist and the actor chain checks. JWT and opaque
-// tokens share it so both answer identically.
+// introspectClaims turns a verified access token claim set into the RFC 7662 response, applying the
+// denylist and actor chain checks. JWT and opaque tokens share it so both answer identically.
 func (s *Service) introspectClaims(ctx context.Context, claims jwt.Claims) IntrospectionResponse {
-	// Audience binding is mandatory: tokens without an aud claim are
-	// rejected.
+	// Audience binding is mandatory: tokens without an aud claim are rejected.
 	if claims.Aud == "" {
 		return IntrospectionResponse{Active: false}
 	}
@@ -197,10 +164,6 @@ func (s *Service) introspectClaims(ctx context.Context, claims jwt.Claims) Intro
 
 		AuthorizationDetails: authorizationDetailsRaw(claims.Extra),
 	}
-	// Populate the act chain and delegation_grant_id from the JWT
-	// Extras so the cached body carries them and a downstream resource
-	// server can render the Principal.ActorChain without a second AS
-	// call.
 	if raw, ok := claims.Extra["act"]; ok && raw != nil {
 		resp.Act = actorClaimFromAny(raw)
 	}
@@ -224,38 +187,28 @@ func (s *Service) introspectClaims(ctx context.Context, claims jwt.Claims) Intro
 			return IntrospectionResponse{Active: false}
 		}
 	}
-	// Walk the chain on every fresh introspection: any actor in the
-	// chain being suspended/revoked, or the delegation grant being
-	// revoked, flips active=false immediately. Cache hits perform the
-	// same check on the cached body so revocations are observable
-	// within IntrospectionCacheTTL of the operator decision (or
-	// sooner).
+	// Every fresh introspection walks the chain: a suspended or revoked actor, or a revoked grant,
+	// makes the token inactive.
 	if resp.Act != nil || resp.DelegationGrantID != "" {
 		if !s.chainStillActive(ctx, &resp) {
 			return IntrospectionResponse{Active: false}
 		}
 	}
-	// Walk the sub: if it names an agent ("agent:<id>"), reject when
-	// that agent is no longer active. This catches the agent-self-token
-	// path (client_credentials grant) without touching the chain checks
-	// above.
+	// An agent subject must still be active. This covers agent self tokens that carry no act chain.
 	if !s.subjectActive(ctx, resp.Sub) {
 		return IntrospectionResponse{Active: false}
 	}
 	return resp
 }
 
-// accountStateReader is the optional capability of the user store that
-// reports a user's disabled flag.
+// accountStateReader is the optional user store capability that reports a user's disabled flag.
 type accountStateReader interface {
 	AccountStateByUserID(ctx context.Context, userID models.ULID) (models.AccountState, error)
 }
 
-// subjectActiveLookup reports whether the token subject may still act: an
-// "agent:<id>" subject must name an active agent, and a user subject must not
-// be disabled. Subjects that are neither (client ids) pass. A state lookup
-// failure other than "not found" fails closed. It always reads storage;
-// subjectActive (subject_cache.go) fronts it with a tiny cache.
+// subjectActiveLookup reports whether the token subject may still act. Agent subjects must be
+// active and user subjects must not be disabled; other subjects pass. Lookup failures other than
+// not-found fail closed.
 func (s *Service) subjectActiveLookup(ctx context.Context, sub string) bool {
 	if strings.HasPrefix(sub, models.AgentSubjectPrefix) {
 		ag, err := s.lookupAgent(ctx, sub)
@@ -279,31 +232,20 @@ func (s *Service) subjectActiveLookup(ctx context.Context, sub string) bool {
 	return st.DisabledAt == nil
 }
 
-// chainStillActive walks the full actor chain (innermost-first) and
-// verifies every agent referenced is currently active, plus the
-// delegation grant (when present) is not revoked. Returns false if
-// anything is off; caller flips active=false.
-//
-// Perf re-audit 2026-06-21 (item 3): when a token has an act chain but
-// NO delegation grant, the agent-walk result is cached in chainCache
-// keyed by the outermost agent ID for up to chainCacheTTL (5s). Callers
-// that suspend or revoke an agent MUST call InvalidateChainCache so the
-// next walk sees the fresh status without waiting for the TTL to expire.
-//
-// Tokens with a DelegationGrantID skip the cache because grant revocations
-// do not flow through the agent service; they are therefore always
-// re-checked against storage.
+// chainStillActive walks the actor chain and checks that each agent is active and the delegation
+// grant is not revoked. Chain results without a grant are cached for chainCacheTTL, so callers that
+// suspend or revoke an agent must call InvalidateChainCache. Tokens with a grant are never cached,
+// because grant revocations skip the agent service.
 func (s *Service) chainStillActive(ctx context.Context, resp *IntrospectionResponse) bool {
 	if s == nil {
 		return true
 	}
 	now := s.Cfg.Clock.Now()
 
-	// Grant check is never cached: revocations must propagate immediately.
+	// Grant checks are never cached: revocations must propagate immediately.
 	if resp.DelegationGrantID != "" {
 		var id models.ULID
 		if err := id.UnmarshalText([]byte(resp.DelegationGrantID)); err != nil {
-			// A grant id we cannot parse can never be shown active: fail closed.
 			return false
 		}
 		g, err := s.Storage.DelegationGrantByID(ctx, id)
@@ -315,11 +257,6 @@ func (s *Service) chainStillActive(ctx context.Context, resp *IntrospectionRespo
 		}
 	}
 
-	// Agent-chain walk: cache only when there is no delegation grant, so
-	// the cache key (outermost act.sub) uniquely identifies the chain
-	// state without needing to track grant invalidations. When a grant ID
-	// is present the grant check above already ran; fall through to the
-	// agent walk without caching.
 	cacheKey := ""
 	if resp.Act != nil && resp.DelegationGrantID == "" {
 		cacheKey = resp.Act.Sub
@@ -330,7 +267,6 @@ func (s *Service) chainStillActive(ctx context.Context, resp *IntrospectionRespo
 				if s.Cfg.Clock.Now().Sub(entry.checkedAt) < chainCacheTTL {
 					return entry.active
 				}
-				// Stale: fall through to re-walk.
 				s.chainCache.Delete(cacheKey)
 			}
 		}
@@ -358,11 +294,9 @@ func (s *Service) chainStillActive(ctx context.Context, resp *IntrospectionRespo
 	return active
 }
 
-// lookupAgent resolves an "agent:<id>" subject claim through the
-// AgentLookup callback. When the callback is unset (no agent identity
-// service configured) returns (nil, nil) so the chain check falls
-// through to "no agent metadata to verify" and the JWT signature path
-// remains the sole source of truth.
+// lookupAgent resolves an "agent:<id>" subject through the AgentLookup callback. Without the
+// callback the chain check has no agent metadata to verify, and the JWT signature stays the only
+// source of truth.
 func (s *Service) lookupAgent(ctx context.Context, sub string) (*models.Agent, error) {
 	if s.AgentLookup == nil {
 		return nil, nil
@@ -370,10 +304,7 @@ func (s *Service) lookupAgent(ctx context.Context, sub string) (*models.Agent, e
 	return s.AgentLookup.AgentBySubjectClaim(ctx, sub)
 }
 
-// actorClaimFromAny converts the {sub, act?} map shape into an
-// *ActorClaim pointer. Mirrors actorFromAny in token_v34.go but returns
-// the public ActorClaim type so the introspection response can
-// serialize it.
+// actorClaimFromAny converts the {sub, act} map shape into the public ActorClaim type.
 func actorClaimFromAny(raw any) *models.ActorClaim {
 	m, ok := raw.(map[string]any)
 	if !ok {
@@ -416,10 +347,8 @@ func (s *Service) introspectRefreshToken(ctx context.Context, token string) Intr
 	}
 }
 
-// introspectCacheGet returns the cached body for a (token, aud) pair or
-// false when missing/expired. Cache entries are keyed by sha256 of the
-// token plus the expected aud so different resource servers do not
-// pollute each other.
+// introspectCacheGet returns the cached body for a (token, aud) pair, or false when missing or
+// expired. Keys are sha256 digests, so different resource servers never share an entry.
 func (s *Service) introspectCacheGet(token, aud string) ([]byte, bool) {
 	if s == nil {
 		return nil, false
@@ -452,8 +381,6 @@ func (s *Service) introspectCacheSet(token, aud string, body []byte) {
 
 func introspectCacheKey(token, aud string) string {
 	hash := crypto.HashToken(token)
-	// hex-encode to keep the key printable; aud is appended separated by
-	// '\x00' so an audience containing a colon does not collide.
 	const hex = "0123456789abcdef"
 	out := make([]byte, len(hash)*2+1+len(aud))
 	for i, b := range hash {
@@ -465,14 +392,7 @@ func introspectCacheKey(token, aud string) string {
 	return string(out)
 }
 
-// delegationActive + narrowDelegatedScope previously lived here as
-// duplicates of the root service_delegation.go helpers. PR C of the
-// 2026-06 architecture reorg consolidated both into
-// internal/delegation; this file now imports delegation.Active and
-// delegation.NarrowScope so the helpers exist in exactly one place.
-
-// purgeIntrospectCache drops every cached introspection body so a fresh
-// revocation is visible immediately on this instance.
+// purgeIntrospectCache drops every cached body so a revocation is visible immediately on this instance.
 func (s *Service) purgeIntrospectCache() {
 	if s == nil {
 		return

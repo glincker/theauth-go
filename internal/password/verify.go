@@ -25,7 +25,8 @@ func VerifyCredential(plain, stored string, allowLegacy bool) (ok bool, newHash 
 	return ok, newHash, err
 }
 
-// UpgradeHash persists a rehashed password and reports whether it was stored; a storage failure is logged, never returned.
+// UpgradeHash persists a rehashed password and reports whether it was stored; a storage failure is
+// logged, never returned.
 func UpgradeHash(ctx context.Context, set func(context.Context, models.ULID, string) error, userID models.ULID, newHash string) bool {
 	if err := set(ctx, userID, newHash); err != nil {
 		slog.Error("theauth: persist upgraded password hash failed", "user_id", userID.String(), "err", err.Error())

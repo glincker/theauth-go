@@ -10,16 +10,19 @@ Feature guides for the OAuth server, agents and shared state are kept here until
 
 Running it:
 
+- [dev-mode.md](dev-mode.md): `go run .../cmd/theauth-dev@latest` starts a seeded in-memory server and walks through an agent, a delegation, an allowed and a denied tool call, and a verified audit chain.
 - [mcp-oauth-sqlite.md](mcp-oauth-sqlite.md): the OAuth 2.1 authorization server on SQLite for an MCP server, including mounting under a path prefix and revocation with `mcpresource`.
+- [approvals.md](approvals.md): HTTP inbox to list, approve and deny agent tool approvals with four-eyes and audit.
 - [storage-capabilities.md](storage-capabilities.md): which capability interfaces each backend (memory, SQLite, Postgres, MySQL) implements, with migration numbers.
 - [pluggable-stores.md](pluggable-stores.md): shared rate limits, replay cache and document cache across replicas.
 
 Authorization server:
 
-- [oauth-consent.md](oauth-consent.md), [session-auth-methods.md](session-auth-methods.md), [access-token-policy.md](access-token-policy.md), [rich-authorization-requests.md](rich-authorization-requests.md), [oauth-endpoint-limits.md](oauth-endpoint-limits.md), [mcp-metadata-paths.md](mcp-metadata-paths.md), [client-compat.md](client-compat.md), [oidc-provider.md](oidc-provider.md), [id-jag.md](id-jag.md), [device-authorization.md](device-authorization.md), [registration-tokens.md](registration-tokens.md), [device-tokens.md](device-tokens.md) and [admission.md](admission.md).
+- [oauth-consent.md](oauth-consent.md), [session-auth-methods.md](session-auth-methods.md), [access-token-policy.md](access-token-policy.md), [rich-authorization-requests.md](rich-authorization-requests.md), [oauth-endpoint-limits.md](oauth-endpoint-limits.md), [mcp-metadata-paths.md](mcp-metadata-paths.md), [client-compat.md](client-compat.md), [oidc-provider.md](oidc-provider.md), [id-jag.md](id-jag.md), [device-authorization.md](device-authorization.md), [registration-tokens.md](registration-tokens.md), [device-tokens.md](device-tokens.md), [token-vault.md](token-vault.md) and [admission.md](admission.md).
 
 Agents and audit:
 
+- [ai-assistants.md](ai-assistants.md).
 - [agent-policies.md](agent-policies.md) and [policy-shrink.md](policy-shrink.md).
 - [shared-signals.md](shared-signals.md).
 

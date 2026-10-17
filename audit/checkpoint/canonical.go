@@ -13,12 +13,9 @@ import (
 	"unicode/utf8"
 )
 
-// CanonicalJSON serializes v the way the TypeScript SDK's canonicalJson does:
-// object keys sorted by UTF-16 code unit at every depth, null for nil, no
-// whitespace, JavaScript JSON.stringify string escaping and Number formatting.
-// Supported inputs are nil, bool, string, json.Number, every Go integer and
-// float type, []any, map[string]any and anything else that round-trips through
-// encoding/json. Non-finite floats encode as null, like JSON.stringify.
+// CanonicalJSON serializes v as the TypeScript SDK's canonicalJson does: keys sorted by UTF-16 code
+// unit at every depth, no whitespace, JavaScript string escaping and number formatting. Non-finite
+// floats encode as null.
 func CanonicalJSON(v any) (string, error) {
 	var b strings.Builder
 	if err := writeCanonical(&b, v, 0); err != nil {

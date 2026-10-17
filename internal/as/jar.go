@@ -20,29 +20,19 @@ import (
 	"github.com/glincker/theauth-go/v2/internal/models"
 )
 
-// jar.go: RFC 9101 JWT-Secured Authorization Requests (JAR).
-//
-// When a /oauth/authorize or /oauth/par request carries a "request" parameter,
-// the AS:
-//   1. Decodes and verifies the JWT signature using the client's public key
-//      (resolved from jwks_uri or inline jwks on the OAuthClient row).
-//   2. Validates iss == client_id, aud == AS issuer, exp, iat, optional nbf.
-//   3. Uses the inner JWT claims as the authorization parameters; outer query/
-//      form params (except client_id and request itself) are ignored per
-//      RFC 9101 section 5.
-//
-// Rejected algorithms: HS* and "none". Accepted: ES256, ES384, RS256, PS256, EdDSA.
+// jar.go implements RFC 9101 JWT-Secured Authorization Requests. When a "request" parameter is
+// present, the JWT signature is verified against the client key (jwks_uri or inline jwks), iss and
+// aud are checked, and the inner claims replace the outer parameters (RFC 9101 section 5). HS* and
+// none are always rejected.
 
-// JARConfig holds the knobs for the JAR sub-system. Non-nil presence on
-// Config.JAR enables JAR. The zero value is not valid; use DefaultJARConfig().
+// JARConfig configures JAR. Non-nil presence on Config.JAR enables it; use DefaultJARConfig for the
+// zero value.
 type JARConfig struct {
-	// AcceptedAlgorithms lists the JWS algorithms the AS accepts on
-	// request objects. Defaults to ["ES256", "RS256", "EdDSA"].
-	// HS* and "none" are always rejected regardless of this list.
+	// AcceptedAlgorithms lists the JWS algorithms accepted on request objects (default ES256, RS256,
+	// EdDSA). HS* and none are always rejected.
 	AcceptedAlgorithms []string
 
-	// RequireJAR, when true, causes /oauth/authorize and /oauth/par to
-	// reject any request that does not carry a request= parameter.
+	// RequireJAR makes /oauth/authorize and /oauth/par reject requests without a request parameter.
 	// Off by default.
 	RequireJAR bool
 }
@@ -54,15 +44,13 @@ func DefaultJARConfig() *JARConfig {
 	}
 }
 
-// applyJARDefaults fills in zero-value JARConfig fields.
 func applyJARDefaults(c *JARConfig) {
 	if len(c.AcceptedAlgorithms) == 0 {
 		c.AcceptedAlgorithms = []string{"ES256", "RS256", "EdDSA"}
 	}
 }
 
-// jarAlgorithmsAdvertised returns the JAR alg list for the AS metadata.
-// Returns nil when JAR is not enabled.
+// jarAlgorithmsAdvertised returns the JAR algorithms for AS metadata, or nil when JAR is off.
 func (s *Service) jarAlgorithmsAdvertised() []string {
 	if s == nil || s.Cfg.JAR == nil {
 		return nil
@@ -79,16 +67,13 @@ func (s *Service) IsJAREnabled() bool {
 	return s != nil && s.Cfg.JAR != nil
 }
 
-// jarHeader is the minimal JOSE header we decode to discover alg+kid.
 type jarHeader struct {
 	Alg string `json:"alg"`
 	Kid string `json:"kid,omitempty"`
 }
 
-// jarClaims contains the authorization request claims inside the JAR JWT.
-// All standard authorize params appear here; unknown fields land in Extra.
+// jarClaims holds the authorization request claims inside the JAR JWT. Unknown fields land in Extra.
 type jarClaims struct {
-	// RFC 7519 registered claims.
 	Iss string `json:"iss"`
 	Aud string `json:"aud"`
 	Exp int64  `json:"exp"`
@@ -96,7 +81,6 @@ type jarClaims struct {
 	Nbf int64  `json:"nbf,omitempty"`
 	Jti string `json:"jti,omitempty"`
 
-	// Authorization request claims (RFC 9101 section 4).
 	ResponseType        string `json:"response_type,omitempty"`
 	ClientID            string `json:"client_id,omitempty"`
 	RedirectURI         string `json:"redirect_uri,omitempty"`
@@ -110,15 +94,10 @@ type jarClaims struct {
 	ACRValues           string `json:"acr_values,omitempty"`
 	Prompt              string `json:"prompt,omitempty"`
 
-	// AuthorizationDetails is the RFC 9396 array (RFC 9101 allows any
-	// request parameter inside the object).
 	AuthorizationDetails json.RawMessage `json:"authorization_details,omitempty"`
 }
 
-// ParseRequestObject validates and decodes a JAR request object JWT.
-// Returns the AuthorizeRequest extracted from the JWT claims.
-// clientID is the client_id from the outer request (used for validation);
-// issuer is this AS's issuer URL.
+// ParseRequestObject validates and decodes a JAR request object and returns the authorize request it carries.
 func (s *Service) ParseRequestObject(ctx interface{ Done() <-chan struct{} }, rawJWT string, clientID string, issuer string, client *models.OAuthClient) (AuthorizeRequest, error) {
 	if s == nil {
 		return AuthorizeRequest{}, errors.New("theauth: authorization server not configured")
@@ -143,7 +122,6 @@ func (s *Service) ParseRequestObject(ctx interface{ Done() <-chan struct{} }, ra
 		return AuthorizeRequest{}, fmt.Errorf("%w: request object header parse", models.ErrOAuthInvalidRequest)
 	}
 
-	// Reject HS* and none unconditionally.
 	if jarAlgIsForbidden(hdr.Alg) {
 		return AuthorizeRequest{}, fmt.Errorf("%w: algorithm %q not permitted in request objects", models.ErrOAuthInvalidRequest, hdr.Alg)
 	}
@@ -151,13 +129,11 @@ func (s *Service) ParseRequestObject(ctx interface{ Done() <-chan struct{} }, ra
 		return AuthorizeRequest{}, fmt.Errorf("%w: algorithm %q not in AcceptedAlgorithms", models.ErrOAuthInvalidRequest, hdr.Alg)
 	}
 
-	// Resolve the client's public key(s).
 	keys, err := resolveClientJARKeys(client)
 	if err != nil || len(keys) == 0 {
 		return AuthorizeRequest{}, fmt.Errorf("%w: client has no usable public key for JAR", models.ErrOAuthInvalidClient)
 	}
 
-	// Verify signature.
 	signingInput := parts[0] + "." + parts[1]
 	sigBytes, err := base64.RawURLEncoding.DecodeString(parts[2])
 	if err != nil {
@@ -179,13 +155,11 @@ func (s *Service) ParseRequestObject(ctx interface{ Done() <-chan struct{} }, ra
 		return AuthorizeRequest{}, fmt.Errorf("%w: request object signature verification failed", models.ErrOAuthInvalidRequest)
 	}
 
-	// Decode claims.
 	var claims jarClaims
 	if err := json.Unmarshal(payloadBytes, &claims); err != nil {
 		return AuthorizeRequest{}, fmt.Errorf("%w: request object claims parse", models.ErrOAuthInvalidRequest)
 	}
 
-	// Validate registered claims.
 	now := time.Now()
 	skew := s.Cfg.ClockSkew
 	if claims.Exp == 0 || time.Unix(claims.Exp, 0).Add(skew).Before(now) {
@@ -198,12 +172,10 @@ func (s *Service) ParseRequestObject(ctx interface{ Done() <-chan struct{} }, ra
 		return AuthorizeRequest{}, fmt.Errorf("%w: request object not yet valid", models.ErrOAuthInvalidRequest)
 	}
 
-	// iss MUST equal client_id (RFC 9101 section 4).
 	if claims.Iss != clientID {
 		return AuthorizeRequest{}, fmt.Errorf("%w: request object iss %q must equal client_id %q", models.ErrOAuthInvalidRequest, claims.Iss, clientID)
 	}
 
-	// aud MUST equal this AS issuer (RFC 9101 section 4).
 	if claims.Aud != issuer {
 		return AuthorizeRequest{}, fmt.Errorf("%w: request object aud %q must equal issuer %q", models.ErrOAuthInvalidRequest, claims.Aud, issuer)
 	}
@@ -226,8 +198,7 @@ func (s *Service) ParseRequestObject(ctx interface{ Done() <-chan struct{} }, ra
 	}, nil
 }
 
-// jarAlgIsForbidden returns true for algorithms that must never be accepted
-// in request objects (HS* and "none").
+// jarAlgIsForbidden reports algorithms that must never be accepted in request objects (HS* and none).
 func jarAlgIsForbidden(alg string) bool {
 	if alg == "" || strings.ToLower(alg) == "none" {
 		return true
@@ -235,7 +206,6 @@ func jarAlgIsForbidden(alg string) bool {
 	return strings.HasPrefix(strings.ToUpper(alg), "HS")
 }
 
-// jarAlgAccepted returns true when alg is in the operator-configured allow list.
 func jarAlgAccepted(alg string, accepted []string) bool {
 	for _, a := range accepted {
 		if strings.EqualFold(a, alg) {
@@ -245,16 +215,13 @@ func jarAlgAccepted(alg string, accepted []string) bool {
 	return false
 }
 
-// clientPublicKey wraps a parsed public key from the client JWKS.
 type clientPublicKey struct {
 	Alg string
 	Key crypto.PublicKey
 }
 
-// resolveClientJARKeys parses the client's JWKS (from Jwks field or as a
-// stand-in for jwks_uri which requires an HTTP fetch). For jwks_uri the
-// caller's transport layer would handle the fetch; we keep this offline for
-// now and return the inline jwks bytes.
+// resolveClientJARKeys returns the client's inline JWKS. jwks_uri needs an HTTP fetch, which the
+// transport layer does.
 func resolveClientJARKeys(client *models.OAuthClient) ([]clientPublicKey, error) {
 	if client == nil {
 		return nil, errors.New("nil client")
@@ -265,12 +232,10 @@ func resolveClientJARKeys(client *models.OAuthClient) ([]clientPublicKey, error)
 	return parseJWKS(client.Jwks)
 }
 
-// clientJWKSDoc is the minimal shape we parse from a client's JSON Web Key Set.
 type clientJWKSDoc struct {
 	Keys []json.RawMessage `json:"keys"`
 }
 
-// jwkBase captures the fields shared by all JWK key types.
 type jwkBase struct {
 	Kty string `json:"kty"`
 	Alg string `json:"alg,omitempty"`
@@ -289,7 +254,6 @@ func parseJWKS(data []byte) ([]clientPublicKey, error) {
 		if err := json.Unmarshal(raw, &base); err != nil {
 			continue
 		}
-		// Skip non-sig keys.
 		if base.Use != "" && base.Use != "sig" {
 			continue
 		}
@@ -419,7 +383,7 @@ func parseOKPJWK(raw json.RawMessage, base jwkBase) (ed25519.PublicKey, string, 
 	return ed25519.PublicKey(xBytes), alg, nil
 }
 
-// jarVerifySignature verifies a JWS signature for a JAR JWT.
+// jarVerifySignature verifies a JWS signature over a JAR JWT.
 func jarVerifySignature(alg string, signingInput, sig []byte, cpk clientPublicKey) error {
 	switch strings.ToUpper(alg) {
 	case "ES256":
@@ -488,8 +452,8 @@ func verifyECDSA(pub *ecdsa.PublicKey, h crypto.Hash, signingInput, sig []byte) 
 	return nil
 }
 
-// ecdsaSigParts decodes a JWS ECDSA signature: two fixed-length big-endian
-// integers concatenated as specified in RFC 7518 section 3.4.
+// ecdsaSigParts decodes a JWS ECDSA signature: two fixed-length big-endian integers, R then S (RFC
+// 7518 section 3.4).
 func ecdsaSigParts(sig []byte) (*big.Int, *big.Int, error) {
 	if len(sig)%2 != 0 {
 		return nil, nil, errors.New("ECDSA signature has odd length")
@@ -526,8 +490,7 @@ func verifyRSAPSS(pub *rsa.PublicKey, h crypto.Hash, signingInput, sig []byte) e
 	})
 }
 
-// GenerateECKeyJWK generates an ephemeral ECDSA P-256 key and returns
-// the private key + its public JWK representation. Used by tests.
+// GenerateECKeyJWK generates an ephemeral P-256 key and its public JWK. Used by tests.
 func GenerateECKeyJWK() (*ecdsa.PrivateKey, []byte, error) {
 	priv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
@@ -535,7 +498,6 @@ func GenerateECKeyJWK() (*ecdsa.PrivateKey, []byte, error) {
 	}
 	xBytes := priv.X.Bytes()
 	yBytes := priv.Y.Bytes()
-	// Pad to curve field size (32 bytes for P-256).
 	xBytes = padTo(xBytes, 32)
 	yBytes = padTo(yBytes, 32)
 	jwk := map[string]string{
@@ -563,7 +525,7 @@ func padTo(b []byte, size int) []byte {
 	return out
 }
 
-// BuildJARJWT creates a signed JAR JWT with the supplied claims. Used by tests.
+// BuildJARJWT signs a JAR JWT with the supplied claims. Used by tests.
 func BuildJARJWT(priv *ecdsa.PrivateKey, clientID, issuer string, req AuthorizeRequest, exp time.Time) (string, error) {
 	claims := map[string]interface{}{
 		"iss":                   clientID,
@@ -602,7 +564,6 @@ func BuildJARJWT(priv *ecdsa.PrivateKey, clientID, issuer string, req AuthorizeR
 		return "", err
 	}
 
-	// RFC 7518 section 3.4: fixed-length concatenated R||S.
 	curveSize := 32 // P-256
 	rBytes := padTo(r.Bytes(), curveSize)
 	sBytes := padTo(s.Bytes(), curveSize)

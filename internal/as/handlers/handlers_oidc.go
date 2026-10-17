@@ -1,6 +1,6 @@
 package handlers
 
-// handlers_oidc.go: OpenID Provider endpoints: userinfo and end_session.
+// handlers_oidc.go serves the OpenID Provider endpoints: userinfo and end_session.
 
 import (
 	"encoding/json"
@@ -12,9 +12,8 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
-// SetSessionEnder installs the function that ends the request's browser
-// session and clears its cookie. end_session calls it after the request
-// validated. Nil leaves the session alone.
+// SetSessionEnder installs the function that ends the browser session and clears its cookie. Nil
+// leaves the session alone.
 func (h *Handler) SetSessionEnder(fn func(w http.ResponseWriter, r *http.Request)) {
 	h.sessionEnder = fn
 }
@@ -26,8 +25,8 @@ func (h *Handler) mountOIDC(r chi.Router, authn func(http.Handler) http.Handler)
 	r.With(authn).Post("/oauth/end_session", h.handleEndSession)
 }
 
-// bearerToken extracts the access token and its auth scheme from the
-// Authorization header, or from the access_token form field on POST.
+// bearerToken extracts the access token and scheme from the Authorization header, or the
+// access_token form field on POST.
 func bearerToken(r *http.Request) (token, scheme string) {
 	if v := r.Header.Get("Authorization"); v != "" {
 		if i := strings.IndexByte(v, ' '); i > 0 {

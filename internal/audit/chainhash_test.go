@@ -8,9 +8,8 @@ import (
 	oklog "github.com/oklog/ulid/v2"
 )
 
-// The golden event, secret and hash are mirrored in the storage/sqlite,
-// storage/postgres and storage/mysql tests, which insert this exact event with
-// this exact secret and assert the stored hash equals the constant. Together they prove the hash input is identical across backends.
+// The golden event and secret are mirrored in the sqlite, postgres and mysql tests, which assert
+// the same stored hash.
 func goldenEvent(t *testing.T) models.AuditEvent {
 	t.Helper()
 	id, err := oklog.Parse("01JAAAAAAAAAAAAAAAAAAAAAAA")

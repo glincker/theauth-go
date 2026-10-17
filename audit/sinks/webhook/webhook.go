@@ -1,19 +1,5 @@
-// Package webhook provides an AuditSink that POSTs audit events as
-// CloudEvents 1.0 envelopes to a configurable HTTP endpoint. Each batch
-// event is sent as a separate CloudEvents HTTP request. The full request
-// body is HMAC-SHA256 signed together with a send timestamp: the MAC input
-// is "<unix-seconds>." followed by the body. The signature goes in
-// X-CloudEvents-Signature and the timestamp in X-CloudEvents-Timestamp, so
-// recipients can verify authenticity and reject replays older than a window
-// (see Verify).
-//
-// Usage:
-//
-//	sink, err := webhook.New("https://receiver.example.com/audit", []byte("secret"))
-//	if err != nil {
-//	    log.Fatal(err)
-//	}
-//	cfg := &theauth.AuditConfig{Sinks: []theauth.AuditSink{sink}}
+// Package webhook provides an AuditSink that POSTs audit events as CloudEvents 1.0 envelopes,
+// HMAC-SHA256 signed. Verify rejects stale timestamps to bound replay.
 package webhook
 
 import (
@@ -56,8 +42,7 @@ type Sink struct {
 	now        func() time.Time
 }
 
-// SignatureHeader and TimestampHeader name the request headers that carry
-// the MAC and the signed send time.
+// SignatureHeader and TimestampHeader name the headers carrying the MAC and send time.
 const (
 	SignatureHeader = "X-CloudEvents-Signature"
 	TimestampHeader = "X-CloudEvents-Timestamp"
@@ -72,11 +57,8 @@ var (
 	ErrTimestampStale    = errors.New("webhook: timestamp outside replay window")
 )
 
-// Verify checks a received webhook. It recomputes HMAC-SHA256 over
-// "<timestamp>." + body, compares in constant time, and rejects the request
-// when the timestamp is more than window away from now (either direction),
-// which bounds how long a captured request can be replayed. A window <= 0
-// uses DefaultReplayWindow.
+// Verify recomputes the MAC over "<timestamp>."+body in constant time and rejects
+// timestamps further than window from now (DefaultReplayWindow when window <= 0).
 func Verify(secret, body []byte, signature, timestamp string, window time.Duration, now time.Time) error {
 	if signature == "" || timestamp == "" {
 		return ErrSignatureMissing
@@ -133,10 +115,8 @@ func WithRedactor(r func(models.AuditEvent) models.AuditEvent) Option {
 	return func(s *Sink) { s.redactor = r }
 }
 
-// New constructs a CloudEvents webhook sink. endpoint is the URL that
-// receives POST requests. hmacSecret is used to sign each request body
-// with HMAC-SHA256; pass nil or an empty slice to skip signing (not
-// recommended for production use).
+// New constructs a webhook sink POSTing to endpoint. A nil or empty hmacSecret disables
+// signing, which is not recommended for production.
 func New(endpoint string, hmacSecret []byte, opts ...Option) (*Sink, error) {
 	if endpoint == "" {
 		return nil, fmt.Errorf("webhook: endpoint must not be empty")
@@ -156,10 +136,8 @@ func New(endpoint string, hmacSecret []byte, opts ...Option) (*Sink, error) {
 // Name returns the sink identifier used in logs and metrics.
 func (s *Sink) Name() string { return "webhook" }
 
-// Stream sends each event in the batch as a separate CloudEvents 1.0
-// HTTP POST. Returns the first error encountered; subsequent events in
-// the batch are still attempted on a best-effort basis, but only the
-// first error is reported.
+// Stream POSTs each event as its own CloudEvents request, attempting every event and
+// returning the first error.
 func (s *Sink) Stream(ctx context.Context, batch []models.AuditEvent) error {
 	var firstErr error
 	for _, evt := range batch {
@@ -211,9 +189,7 @@ func (s *Sink) send(ctx context.Context, evt models.AuditEvent) error {
 	return nil
 }
 
-// newRequestID generates a random hex string for use as the CloudEvents
-// event ID. Panics only on critical entropy failure; the probability is
-// negligible on any production OS.
+// newRequestID returns a random hex CloudEvents event ID.
 func newRequestID() string {
 	b := make([]byte, 16)
 	if _, err := rand.Read(b); err != nil {

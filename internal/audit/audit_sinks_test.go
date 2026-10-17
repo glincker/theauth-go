@@ -73,9 +73,8 @@ func (s *recordSink) AllEvents() []theauth.AuditEvent {
 	return out
 }
 
-// TestSinkFailureNonBlocking asserts that a sink that always returns an
-// error does not prevent the canonical storage write from succeeding, and
-// that Stats.AuditSinkFailed is incremented.
+// TestSinkFailureNonBlocking checks that a failing sink does not block the canonical write and that
+// AuditSinkFailed counts it.
 func TestSinkFailureNonBlocking(t *testing.T) {
 	t.Parallel()
 
@@ -103,14 +102,11 @@ func TestSinkFailureNonBlocking(t *testing.T) {
 		a.EmitAudit(ctx, "test.sink_failure", theauth.TargetRef{Type: "test", ID: "1"}, nil)
 	}
 
-	// Close drains the writer goroutine before returning. After Close the
-	// memory store is accessed from a single goroutine (the test), so
-	// there is no race.
+	// Close drains the writer before returning, so the test goroutine is the only one touching the
+	// store afterwards.
 	a.Close()
 
-	// Sink goroutines are fire-and-forget: they are launched by the writer
-	// loop but Close only waits for the writer loop itself. Give the sink
-	// goroutines a brief window to finish.
+	// Sink goroutines are fire-and-forget and Close does not wait for them, so give them a brief window.
 	deadline := time.Now().Add(2 * time.Second)
 	for time.Now().Before(deadline) {
 		if sink.Calls() > 0 {

@@ -1,12 +1,5 @@
-// Package postgres: migrate.go exposes a runtime applier for the embedded
-// SQL migration files under storage/postgres/migrations. Consumers call
-// Migrate once at boot before constructing the Store, so the schema is in
-// place when theauth.New attaches.
-//
-// Migrate is safe to call concurrently across replicas: it acquires a
-// transaction-scoped Postgres advisory lock so only one replica drives a
-// migration at a time. The applied versions are recorded in the
-// theauth_schema_migrations table; reruns are no-ops.
+// Package postgres: migrate.go applies the embedded SQL migrations at boot, before theauth.New.
+// Migrate is safe across replicas (transaction-scoped advisory lock) and reruns are no-ops.
 package postgres
 
 import (
@@ -31,11 +24,8 @@ const (
 	migrationsLockName = "theauth-go.migrate"
 )
 
-// Migrate applies every embedded up migration that has not already been
-// recorded in theauth_schema_migrations, in version order, under a Postgres
-// transaction-scoped advisory lock. Returns nil when the schema is at the
-// latest version. Callers should invoke Migrate before constructing
-// theauth.New(...) so the storage adapter sees a fully-migrated schema.
+// Migrate applies embedded up migrations not yet in theauth_schema_migrations, in version order,
+// under a transaction-scoped advisory lock. Call it before theauth.New.
 func Migrate(ctx context.Context, pool *pgxpool.Pool) error {
 	files, err := loadMigrationFiles()
 	if err != nil {

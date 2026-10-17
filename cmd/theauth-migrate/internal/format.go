@@ -8,9 +8,8 @@ import "time"
 // changes in a backward-incompatible way.
 const SchemaVersion = "1"
 
-// Bundle is the intermediate normalized representation produced by a reader
-// (cognito or auth0) and consumed by the applier. Operators can inspect and
-// edit this JSON before running --apply.
+// Bundle is the normalized representation a reader produces and the applier consumes. Operators can
+// inspect and edit this JSON before --apply.
 type Bundle struct {
 	SchemaVersion string           `json:"schema_version"`
 	Source        string           `json:"source"` // "cognito" or "auth0"
@@ -49,9 +48,8 @@ type OAuthAccount struct {
 	ProviderUserID string `json:"provider_user_id"`
 }
 
-// PasswordRecord holds a password hash from the vendor export.
-// For Cognito this is always empty because Cognito does not export hashes.
-// For Auth0 this may contain a bcrypt hash.
+// PasswordRecord holds a password hash from the vendor export. Cognito leaves it empty; Auth0 may
+// carry a bcrypt hash.
 type PasswordRecord struct {
 	SourceUserID string `json:"source_user_id"`
 	// Hash is the raw vendor hash string. For Auth0 bcrypt this starts with

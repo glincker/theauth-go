@@ -6,9 +6,8 @@ import (
 	"github.com/glincker/theauth-go/v2/crypto"
 )
 
-// BenchmarkPKCEChallenge measures NewCodeVerifier + CodeChallenge as a
-// pair: one runs on every OAuth start, the other on every authorize URL
-// build.
+// BenchmarkPKCEChallenge measures NewCodeVerifier and CodeChallenge together, which run on every
+// authorize flow.
 func BenchmarkPKCEChallenge(b *testing.B) {
 	b.ReportAllocs()
 	b.ResetTimer()

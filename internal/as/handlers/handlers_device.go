@@ -1,12 +1,6 @@
 package handlers
 
-// handlers_device.go: HTTP surface for the RFC 8628 device grant.
-//
-//	POST /oauth/device_authorization   start (rate limited)
-//	GET  /oauth/device                 verification page (HTML) or lookup (JSON)
-//	POST /oauth/device                 confirm or decide (form or JSON)
-//
-// The device_code arm of POST /oauth/token lives in handlers.go.
+// handlers_device.go is the HTTP surface of the RFC 8628 device grant: start, verification page and confirm.
 
 import (
 	"encoding/json"
@@ -37,7 +31,7 @@ func (h *Handler) mountDevice(r chi.Router, authn func(http.Handler) http.Handle
 	r.With(authn).Post(devicePath, h.handleDeviceDecision)
 }
 
-// handleDeviceAuthorization implements RFC 8628 section 3.1 and 3.2.
+// handleDeviceAuthorization implements RFC 8628 sections 3.1 and 3.2.
 func (h *Handler) handleDeviceAuthorization(w http.ResponseWriter, r *http.Request) {
 	r.Body = http.MaxBytesReader(w, r.Body, maxLimitedBody)
 	if err := r.ParseForm(); err != nil {
@@ -93,8 +87,6 @@ func (h *Handler) writeDeviceTokenError(w http.ResponseWriter, err error) {
 	}
 }
 
-// verification page
-
 func wantsJSON(r *http.Request) bool {
 	if strings.HasPrefix(r.Header.Get("Content-Type"), "application/json") {
 		return true
@@ -110,8 +102,7 @@ func (h *Handler) deviceSubject(r *http.Request) (*models.User, string) {
 	return user, "user:" + user.ID.String()
 }
 
-// requireUser answers anonymous visitors: JSON callers get 401, browsers are
-// sent to sign in and back.
+// requireUser answers anonymous visitors: JSON callers get 401, browsers are sent to sign in and back.
 func (h *Handler) requireUser(w http.ResponseWriter, r *http.Request) (*models.User, string, bool) {
 	user, subject := h.deviceSubject(r)
 	if user != nil {
@@ -251,8 +242,7 @@ func (h *Handler) renderDevice(w http.ResponseWriter, r *http.Request, status in
 	hdr.Set("Referrer-Policy", "no-referrer")
 	hdr.Set("X-Content-Type-Options", "nosniff")
 	hdr.Set("X-Frame-Options", "DENY")
-	// The page is one self-contained document: no scripts, no framing, forms
-	// only to this origin. Custom renderers may replace these headers.
+	// The page is a single self-contained document: no scripts, no framing, and forms post only to this origin.
 	hdr.Set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'")
 	if cfg.Page != nil {
 		w.WriteHeader(status)
@@ -268,8 +258,8 @@ func (h *Handler) renderDevice(w http.ResponseWriter, r *http.Request, status in
 	}
 }
 
-// defaultDeviceCSS is deliberately plain. Every color is a custom property so
-// a theme only needs to override a few variables.
+// defaultDeviceCSS is plain on purpose. Every color is a custom property, so a theme overrides only
+// a few variables.
 const defaultDeviceCSS = `:root{--bg:#fff;--fg:#111;--muted:#555;--accent:#1d4ed8;--danger:#b91c1c;--border:#d4d4d8}
 @media (prefers-color-scheme:dark){:root{--bg:#111;--fg:#f4f4f5;--muted:#a1a1aa;--accent:#60a5fa;--danger:#f87171;--border:#3f3f46}}
 body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.5 system-ui,sans-serif}

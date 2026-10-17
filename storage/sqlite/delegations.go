@@ -61,10 +61,8 @@ func scanGrant(r scanner) (theauth.DelegationGrant, error) {
 	}, nil
 }
 
-// InsertDelegationGrant stores g. At most one live (not revoked) grant may
-// exist per (user, agent, resource): a second live insert, or a duplicate id,
-// returns ErrStorageNotFound. A revoked grant frees the tuple, so a fresh
-// grant may replace it (memory adapter semantics).
+// InsertDelegationGrant allows at most one live grant per (user, agent, resource). A second live
+// insert or a duplicate id returns ErrStorageNotFound; a revoked grant frees the tuple.
 func (s *Store) InsertDelegationGrant(ctx context.Context, g theauth.DelegationGrant) (theauth.DelegationGrant, error) {
 	g.CreatedAt = orNow(g.CreatedAt).UTC().Truncate(time.Microsecond)
 	scope, err := encodeList(g.Scope)
@@ -133,11 +131,9 @@ func (s *Store) queryGrants(ctx context.Context, op, where string, arg string) (
 	return out, wrap(op, rows.Err())
 }
 
-// RevokeDelegationGrant revokes a grant atomically. The UPDATE is conditional
-// on revoked_at IS NULL, so exactly one concurrent caller wins and the first
-// reason and time are kept. Every later call changes nothing and returns
-// ErrStorageNotFound, the contract of the Postgres and memory adapters that
-// internal/delegation and internal/agent rely on to emit one audit event.
+// RevokeDelegationGrant is conditional on revoked_at IS NULL, so exactly one concurrent caller
+// wins and keeps its reason and time. Later calls return ErrStorageNotFound; internal/delegation
+// relies on that to emit one audit event.
 func (s *Store) RevokeDelegationGrant(ctx context.Context, id theauth.ULID, at time.Time, reason string) error {
 	res, err := s.db.ExecContext(ctx, s.q(`UPDATE theauth_delegation_grants SET revoked_at = ?, revocation_note = ? WHERE id = ? AND revoked_at IS NULL`),
 		toMicro(at), reason, idStr(id))

@@ -19,11 +19,10 @@ import (
 	"github.com/glincker/theauth-go/v2/internal/models"
 )
 
-// consent.go: host-owned consent. When Config.ConsentHandler is set, the
-// authorize endpoint calls it after the user is authenticated and the
-// request is validated. The host answers Approve (with an optionally
-// narrowed scope and a grant expiry), Deny, or Interact (render its own
-// page, then resume through CompleteConsent with a signed ticket).
+// consent.go implements host-owned consent. When Config.ConsentHandler is set, the handler is
+// called after authentication and validation. The host approves (optionally narrowing scopes and
+// setting an expiry), denies, or interacts and resumes through CompleteConsent with a signed
+// ticket.
 
 // ConsentAction is the host's answer to a consent question.
 type ConsentAction string
@@ -37,7 +36,6 @@ const (
 	ConsentInteract ConsentAction = "interact"
 )
 
-// Client metadata sources reported in ConsentClient.MetadataSource.
 const (
 	ConsentSourceRegistered = "registered"
 	ConsentSourceCIMD       = "cimd"
@@ -47,22 +45,17 @@ const (
 	defaultConsentTicketTTL = 10 * time.Minute
 	consentTicketParam      = "consent_ticket"
 	consentTicketVersion    = 1
-	// grantExpirySep separates the random part of an authorization code or
-	// refresh token from the grant expiry (unix seconds) it carries. The
-	// stored key is a hash of the whole string, so the suffix cannot be
-	// altered without invalidating the token.
+	// grantExpirySep separates a token's random part from the grant expiry it carries. The stored key
+	// hashes the whole string, so the suffix cannot be changed without invalidating the token.
 	grantExpirySep = "~"
 )
 
-// Consent errors.
 var (
-	// ErrConsentTicketInvalid is returned by CompleteConsent for a ticket
-	// that is malformed, forged, expired, already used or bound to another
-	// user, session or client.
+	// ErrConsentTicketInvalid is returned by CompleteConsent for a malformed, forged, expired, reused
+	// or foreign ticket.
 	ErrConsentTicketInvalid = errors.New("theauth: consent ticket invalid")
-	// ErrConsentDecisionInvalid is returned for a decision the library
-	// refuses: scopes outside the request, no scopes, a past expiry, an
-	// unusable interaction URL or an unknown action.
+	// ErrConsentDecisionInvalid is returned for a decision the library refuses: out-of-request scopes,
+	// no scopes, a past expiry or an unusable URL.
 	ErrConsentDecisionInvalid = errors.New("theauth: consent decision invalid")
 )
 
@@ -75,48 +68,39 @@ type ConsentClient struct {
 	PolicyURI   string
 	TosURI      string
 	RedirectURI string
-	// MetadataSource is ConsentSourceRegistered (stored client, for example
-	// from dynamic registration) or ConsentSourceCIMD (fetched from the
+	// MetadataSource is ConsentSourceRegistered (stored client) or ConsentSourceCIMD (fetched from the
 	// client_id URL).
 	MetadataSource string
-	// Verified is true for CIMD clients: the metadata document was fetched
-	// over https from the client_id URL and its client_id matches that URL.
-	// It does not vouch for the name or logo. Registered clients are
-	// self-asserted, so it is false.
+	// Verified is true for CIMD clients whose metadata was fetched over https from the client_id URL.
+	// It does not vouch for the name or logo. Registered clients are self-asserted, so it is false.
 	Verified bool
 }
 
 // ConsentRequest is the read-only question put to the ConsentHandler.
 type ConsentRequest struct {
-	User   models.User
-	Client ConsentClient
-	// RequestedScopes is the validated scope the client asked for.
-	RequestedScopes []string
-	// RequestedResource is the resource indicator of the request.
-	RequestedResource string
-	// RequestedAuthorizationDetails is the raw RFC 9396 JSON, empty if none.
+	User                          models.User
+	Client                        ConsentClient
+	RequestedScopes               []string
+	RequestedResource             string
 	RequestedAuthorizationDetails string
 	State                         string
-	// MaxGrantTTL is the server cap on grant lifetime (zero: none).
-	MaxGrantTTL time.Duration
+	MaxGrantTTL                   time.Duration
 }
 
 // ConsentDecision is the host's answer.
 type ConsentDecision struct {
-	Action ConsentAction
-	// GrantedScopes must be a non-empty subset of the requested scopes.
+	Action        ConsentAction
 	GrantedScopes []string
-	// ExpiresAt and MaxTTL bound the grant (access and refresh tokens). When
-	// both are set the earlier wins. Both are clamped to the server maxima.
+	// ExpiresAt and MaxTTL bound the grant. When both are set the earlier wins; both are clamped to
+	// the server maxima.
 	ExpiresAt time.Time
 	MaxTTL    time.Duration
-	// RedirectToConsentURL is where Interact sends the user agent: an
-	// absolute path on this origin ("/consent") or an http(s) URL. The
-	// library adds consent_ticket to its query.
+	// RedirectToConsentURL is where Interact sends the user agent: an absolute path on this origin or
+	// an http(s) URL.
 	RedirectToConsentURL string
 }
 
-// ConsentHandler decides whether, and with which scopes, to grant.
+// ConsentHandler decides whether to grant, and with which scopes.
 type ConsentHandler func(ctx context.Context, req ConsentRequest) (ConsentDecision, error)
 
 // consentTicket is the signed payload binding a pending authorization.
@@ -192,20 +176,17 @@ func (s *Service) parseTicket(raw string) (consentTicket, error) {
 	return t, nil
 }
 
-// consentOutcome is the result of the consent step.
 type consentOutcome struct {
 	redirect string // set for Interact and Deny: respond with this redirect
 	scope    []string
 	expiry   time.Time
 }
 
-// consentResume carries a verified ticket and the host's decision.
 type consentResume struct {
 	ticket   consentTicket
 	decision ConsentDecision
 }
 
-// consentStep runs the handler (or applies the resumed decision).
 func (s *Service) consentStep(ctx context.Context, req AuthorizeRequest, client *models.OAuthClient, user *models.User, scope []string, resume *consentResume) (consentOutcome, error) {
 	var dec ConsentDecision
 	if resume != nil {
@@ -279,8 +260,7 @@ func (s *Service) consentRequest(req AuthorizeRequest, client *models.OAuthClien
 	}
 }
 
-// subsetScopes returns granted deduplicated, failing unless it is non-empty
-// and every entry is in requested.
+// subsetScopes returns granted, deduplicated, failing unless it is non-empty and every entry is in requested.
 func subsetScopes(granted, requested []string) ([]string, error) {
 	if len(granted) == 0 {
 		return nil, fmt.Errorf("%w: no scopes granted", ErrConsentDecisionInvalid)
@@ -304,8 +284,8 @@ func subsetScopes(granted, requested []string) ([]string, error) {
 	return out, nil
 }
 
-// clampGrantExpiry computes the absolute grant expiry, or the zero time when
-// the grant is bounded only by the token TTLs.
+// clampGrantExpiry computes the absolute grant expiry, or the zero time when only the token TTLs
+// bound the grant.
 func (s *Service) clampGrantExpiry(dec ConsentDecision, now time.Time) (time.Time, error) {
 	var exp time.Time
 	if !dec.ExpiresAt.IsZero() {
@@ -358,8 +338,8 @@ func (s *Service) interactURL(ctx context.Context, req AuthorizeRequest, user *m
 		UID: user.ID.String(),
 		Req: req,
 	}
-	// The pushed-request and JAR handles are resolved already; do not carry
-	// them into a ticket that outlives them.
+	// The pushed-request and JAR handles are resolved already, so they are not carried into a ticket
+	// that outlives them.
 	t.Req.RequestURI, t.Req.RequestObject = "", ""
 	if ac, ok := AuthContextFrom(ctx); ok {
 		t.SID = ac.SessionID
@@ -390,13 +370,10 @@ func (s *Service) burnTicket(ctx context.Context, t consentTicket) error {
 	return nil
 }
 
-// CompleteConsent resumes an authorization that the ConsentHandler answered
-// with Interact. ticket is the consent_ticket query value the host received;
-// user is the currently signed-in user (it must be the user the ticket was
-// issued to); ctx should carry the same AuthContext as the authorize request.
-// The result is a redirect back to the client: a code, or access_denied for
-// a Deny decision. The host MUST protect the endpoint that calls this against
-// CSRF, since a forged call could approve on the user's behalf.
+// CompleteConsent resumes an authorization the ConsentHandler answered with Interact. user must be
+// the user the ticket was issued to. The result is a redirect to the client (a code, or
+// access_denied). The host MUST protect the calling endpoint against CSRF, since a forged call
+// could approve on the user's behalf.
 func (s *Service) CompleteConsent(ctx context.Context, ticket string, dec ConsentDecision, user *models.User) (AuthorizeResult, error) {
 	if s == nil || s.Cfg.ConsentHandler == nil {
 		return AuthorizeResult{}, errors.New("theauth: consent not configured")
@@ -420,8 +397,8 @@ func (s *Service) CompleteConsent(ctx context.Context, ticket string, dec Consen
 	return s.startAuthorize(ctx, t.Req, user, &consentResume{ticket: t, decision: dec})
 }
 
-// splitGrantExpiry returns the grant expiry carried by a code or refresh
-// token, or the zero time when it carries none.
+// splitGrantExpiry returns the grant expiry carried by a code or refresh token, or the zero time
+// when it has none.
 func splitGrantExpiry(tok string) time.Time {
 	i := strings.LastIndex(tok, grantExpirySep)
 	if i < 0 {

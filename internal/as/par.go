@@ -11,28 +11,18 @@ import (
 	"github.com/glincker/theauth-go/v2/internal/models"
 )
 
-// par.go: RFC 9126 Pushed Authorization Requests (PAR).
-//
-// POST /oauth/par accepts the same parameters as /oauth/authorize, validates
-// them immediately, stores the payload behind a request_uri of the form
-// urn:ietf:params:oauth:request_uri:<256-bit-random>, and returns:
-//
-//	{"request_uri": "...", "expires_in": <seconds>}
-//
-// GET /oauth/authorize then accepts request_uri instead of (or in addition
-// to, which is an error) inline parameters.
+// par.go implements RFC 9126 pushed authorization requests. POST /oauth/par validates the request,
+// stores it behind a 256-bit request_uri and returns it. GET /oauth/authorize then accepts
+// request_uri instead of inline parameters.
 
-// PARConfig holds the knobs for the PAR sub-system. Non-nil presence
-// on Config.PAR enables PAR. The zero value is not valid; use
-// DefaultPARConfig() when constructing a custom value.
+// PARConfig configures PAR. Non-nil presence on Config.PAR enables it; use DefaultPARConfig for a
+// starting value.
 type PARConfig struct {
-	// RequestURITTL is how long a pushed request_uri stays valid.
-	// Defaults to 60 seconds per RFC 9126 section 2.2.
+	// RequestURITTL is how long a pushed request_uri stays valid (default 60 seconds, RFC 9126 section 2.2).
 	RequestURITTL time.Duration
 
-	// RequirePAR, when true, causes /oauth/authorize to reject any request
-	// that carries inline authorization parameters (i.e. every request must
-	// first go through /oauth/par). Off by default.
+	// RequirePAR makes /oauth/authorize reject inline authorization parameters, so every request goes
+	// through /oauth/par. Off by default.
 	RequirePAR bool
 }
 
@@ -41,31 +31,24 @@ func DefaultPARConfig() *PARConfig {
 	return &PARConfig{RequestURITTL: 60 * time.Second}
 }
 
-// applyPARDefaults fills in zero-value PARConfig fields.
 func applyPARDefaults(c *PARConfig) {
 	if c.RequestURITTL <= 0 {
 		c.RequestURITTL = 60 * time.Second
 	}
 }
 
-// requestURIPrefix is the URN prefix mandated by RFC 9126 section 2.2.
 const requestURIPrefix = "urn:ietf:params:oauth:request_uri:"
 
-// PARStorage is the optional persistence interface for pushed authorization
-// requests. When the Storage passed to as.New also satisfies PARStorage, PAR
-// is enabled. When the backend does not implement it, PAR is automatically
-// disabled (even if Config.PAR is set).
+// PARStorage is the optional persistence for pushed requests. PAR is enabled only when the Storage
+// implements it.
 type PARStorage interface {
-	// InsertPushedRequest persists a pushed request. requestURI is the full
-	// urn:ietf:params:oauth:request_uri:<token> string. payload is the
-	// JSON-serialized AuthorizeRequest. expiresAt is the absolute expiry.
+	// InsertPushedRequest persists a pushed request. payload is the JSON-serialized AuthorizeRequest
+	// and expiresAt the absolute expiry.
 	InsertPushedRequest(ctx context.Context, requestURI string, payload []byte, expiresAt time.Time) error
 
-	// ConsumePushedRequest atomically fetches and deletes the pushed request
-	// identified by requestURI. Returns ErrStorageNotFound when the URI has
-	// already been consumed, never existed, or is expired. Callers MUST
-	// treat not-found and expired identically to prevent timing side channels
-	// (RFC 9126 section 4.3).
+	// ConsumePushedRequest atomically fetches and deletes a pushed request. Missing, consumed and
+	// expired requests all return ErrStorageNotFound, so callers cannot tell them apart by timing (RFC
+	// 9126 section 4.3).
 	ConsumePushedRequest(ctx context.Context, requestURI string) (payload []byte, err error)
 }
 
@@ -75,8 +58,8 @@ type PARResponse struct {
 	ExpiresIn  int    `json:"expires_in"`
 }
 
-// PushAuthorize validates the request, stores it, and returns a request_uri.
-// The caller is responsible for client authentication before invoking this.
+// PushAuthorize validates the request, stores it and returns a request_uri. The caller
+// authenticates the client first.
 func (s *Service) PushAuthorize(ctx context.Context, req AuthorizeRequest) (PARResponse, error) {
 	if s == nil {
 		return PARResponse{}, errors.New("theauth: authorization server not configured")
@@ -89,7 +72,6 @@ func (s *Service) PushAuthorize(ctx context.Context, req AuthorizeRequest) (PARR
 		return PARResponse{}, models.ErrOAuthInvalidRequest
 	}
 
-	// Validate parameters the same way /oauth/authorize does.
 	if req.ResponseType != models.ResponseTypeCode {
 		return PARResponse{}, models.ErrOAuthUnsupportedResponseType
 	}
@@ -114,19 +96,17 @@ func (s *Service) PushAuthorize(ctx context.Context, req AuthorizeRequest) (PARR
 	if err != nil {
 		return PARResponse{}, err
 	}
-	// Store the normalised values so the later authorize call sees the
-	// canonical audience and the already-narrowed scope.
+	// Store the normalised values, so the later authorize call sees the canonical audience and the
+	// narrowed scope.
 	req.Resource = audience
 	req.Scope = scope
 
-	// Mint request_uri.
 	token := make([]byte, 32)
 	if _, err := rand.Read(token); err != nil {
 		return PARResponse{}, err
 	}
 	requestURI := requestURIPrefix + hex.EncodeToString(token)
 
-	// Serialize the validated request for storage.
 	payload, err := serializeAuthorizeRequest(req)
 	if err != nil {
 		return PARResponse{}, err
@@ -146,8 +126,8 @@ func (s *Service) PushAuthorize(ctx context.Context, req AuthorizeRequest) (PARR
 	}, nil
 }
 
-// ConsumePushedRequest looks up and atomically deletes the stored request.
-// Returns the deserialized AuthorizeRequest or an error if not found/expired.
+// ConsumePushedRequest looks up and atomically deletes a stored request, returning it or an error
+// when missing or expired.
 func (s *Service) ConsumePushedRequest(ctx context.Context, requestURI string) (AuthorizeRequest, error) {
 	if s == nil {
 		return AuthorizeRequest{}, errors.New("theauth: authorization server not configured")
@@ -166,8 +146,7 @@ func (s *Service) ConsumePushedRequest(ctx context.Context, requestURI string) (
 	return deserializeAuthorizeRequest(payload)
 }
 
-// IsPAREnabled reports whether PAR is configured and the storage backend
-// supports it.
+// IsPAREnabled reports whether PAR is configured and the storage supports it.
 func (s *Service) IsPAREnabled() bool {
 	if s == nil || s.Cfg.PAR == nil {
 		return false

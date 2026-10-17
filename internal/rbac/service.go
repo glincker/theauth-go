@@ -1,14 +1,6 @@
-// Package rbac owns the v1.0 role + permission management surface:
-// permission seeding, organization-scoped role CRUD, grant / revoke, and
-// the HasPermission / PermissionsForUser checks consumed by middleware.
-// Extracted from root service_rbac.go in PR A of the 2026-06 architecture
-// reorg.
-//
-// The permission catalog, name index, and default role seeds are validated
-// once at theauth.New time and passed into the Service constructor; this
-// package does not re-derive them. Callers that need the legacy catalog
-// helpers (SeededPermissions, DefaultRoleSeeds) keep using the root
-// package functions, which still exist for backward compat.
+// Package rbac owns role and permission management: permission seeding, organization-scoped role CRUD, grant
+// and revoke, and the HasPermission and PermissionsForUser checks used by middleware. The catalog and default
+// seeds are validated once at theauth.New and passed in.
 package rbac
 
 import (

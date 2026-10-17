@@ -11,16 +11,12 @@ import (
 	"github.com/glincker/theauth-go/v2/internal/models"
 )
 
-// oidc_userinfo.go: the OpenID Connect UserInfo endpoint (OIDC Core 5.3).
-
-// Userinfo errors. The handler maps them to RFC 6750 responses.
 var (
 	ErrUserInfoInvalidToken      = errors.New("userinfo: invalid access token")
 	ErrUserInfoInsufficientScope = errors.New("userinfo: access token lacks the openid scope")
 )
 
-// UserInfoRequest carries the presented access token and, for DPoP bound
-// tokens, the proof and the request it accompanies.
+// UserInfoRequest carries the presented access token and, for DPoP-bound tokens, the proof and its request.
 type UserInfoRequest struct {
 	AccessToken string
 	DPoPProof   string
@@ -28,9 +24,8 @@ type UserInfoRequest struct {
 	HTTPURL     string
 }
 
-// UserInfo answers the claims of the user behind an access token that was
-// issued with the openid scope. profile and email claims follow the token's
-// scopes.
+// UserInfo returns the claims of the user behind an access token issued with the openid scope.
+// profile and email follow the token's scopes.
 func (s *Service) UserInfo(ctx context.Context, req UserInfoRequest) (map[string]any, error) {
 	if !s.OIDCEnabled() {
 		return nil, errOIDCDisabled
@@ -92,7 +87,6 @@ func (s *Service) userInfoClaims(ctx context.Context, token string) (jwt.Claims,
 	return s.lookupOpaqueClaims(ctx, token)
 }
 
-// userInfoProofOK checks a DPoP proof against the token's cnf.jkt.
 func (s *Service) userInfoProofOK(req UserInfoRequest, jkt string) bool {
 	if s.dpopSvc == nil || req.DPoPProof == "" {
 		return false

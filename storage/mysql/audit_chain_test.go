@@ -33,9 +33,8 @@ func chainTestStore(t *testing.T) (*mysql.Store, *sql.DB) {
 	return mysql.New(db), db
 }
 
-// TestAuditChainGoldenVectorMatchesSharedHash inserts the golden event pinned
-// in internal/audit/chainhash_test.go (also asserted against sqlite and
-// postgres) and checks the stored hash. Needs a live MySQL (see capsStore).
+// TestAuditChainGoldenVectorMatchesSharedHash checks the stored hash of the golden event pinned in
+// internal/audit (also asserted for sqlite and postgres). Needs a live MySQL.
 func TestAuditChainGoldenVectorMatchesSharedHash(t *testing.T) {
 	ctx := context.Background()
 	s, db := chainTestStore(t)

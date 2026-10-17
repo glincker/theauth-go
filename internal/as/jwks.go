@@ -25,22 +25,12 @@ import (
 	"github.com/glincker/theauth-go/v2/internal/ulid"
 )
 
-// jwks.go: JWKS state machine, Ed25519 keypair lifecycle, rotation
-// goroutine.
-//
-// State transitions (driven by the rotation loop and bootstrap):
-//
-//	(empty)            -> mint two keys, mark first `current`, second `next`.
-//	current + next     -> on tick: previous = current; current = next;
-//	                      next = generate fresh.
-//	With previous      -> on tick: retire previous; promote as above.
-//
-// All three live states (current, next, previous) appear in /oauth/jwks
-// so verifiers can validate tokens minted under the prior key during the
-// rotation window. Retired keys are pruned after KeyRetention.
+// jwks.go is the JWKS state machine, the Ed25519 keypair lifecycle and the rotation goroutine. Keys
+// move from next to current to previous and then retire. All three live states appear in
+// /oauth/jwks so tokens minted under the prior key still verify during the rotation window; retired
+// keys are pruned after KeyRetention.
 
-// jwk is the JSON Web Key encoding for a public signing key: Ed25519
-// (RFC 8037), P-256 (RFC 7518 section 6.2) or RSA (RFC 7518 section 6.3).
+// jwk is the JSON Web Key encoding of a public signing key: Ed25519 (RFC 8037), P-256 (RFC 7518) or RSA.
 type jwk struct {
 	Kty string `json:"kty"`
 	Crv string `json:"crv,omitempty"`
@@ -53,17 +43,12 @@ type jwk struct {
 	Kid string `json:"kid"`
 }
 
-// jwksDoc is the public document served at /oauth/jwks.
 type jwksDoc struct {
 	Keys []jwk `json:"keys"`
 }
 
-// generateKeypair mints a fresh keypair for alg (EdDSA, ES256 or RS256),
-// encrypts the private half with the AS encryption key, and returns a
-// populated JWKSKey ready to be inserted in the given state.
-//
-// Ed25519 keys persist the 32-byte seed (the canonical RFC 8032 secret); the
-// other algorithms persist a PKCS#8 DER encoding.
+// generateKeypair mints a keypair for alg and encrypts the private half with the AS encryption key.
+// Ed25519 stores the 32-byte seed; the other algorithms store PKCS#8 DER.
 func (s *Service) generateKeypair(alg, state string) (models.JWKSKey, error) {
 	kid := ulid.New().String()
 	var (
@@ -156,7 +141,6 @@ func (s *Service) loadPrivateKey(k models.JWKSKey) (crypto.Signer, error) {
 	return signer, nil
 }
 
-// parsePublicJWK decodes the stored public JWK into a crypto.PublicKey.
 func parsePublicJWK(raw []byte) (string, crypto.PublicKey, bool) {
 	var j jwk
 	if err := json.Unmarshal(raw, &j); err != nil {
@@ -202,10 +186,8 @@ func parsePublicJWK(raw []byte) (string, crypto.PublicKey, bool) {
 	return "", nil, false
 }
 
-// bootstrapJWKS loads existing keys from storage, mints a fresh current +
-// next pair for the default signing algorithm when none exists, and
-// populates the in-memory snapshot. Keysets for other algorithms are minted
-// lazily the first time a client needs them (see SigningKeyFor).
+// bootstrapJWKS loads stored keys and mints a current and next pair for the default algorithm when
+// none exist. Other algorithms are minted lazily by SigningKeyFor.
 func (s *Service) bootstrapJWKS(ctx context.Context) error {
 	if s == nil {
 		return nil
@@ -220,7 +202,6 @@ func (s *Service) bootstrapJWKS(ctx context.Context) error {
 	return s.ensureKeysetLocked(ctx, s.defaultSigningAlg())
 }
 
-// defaultSigningAlg is the algorithm used for clients that do not name one.
 func (s *Service) defaultSigningAlg() string {
 	if s.Cfg.SigningAlg == "" {
 		return jwt.AlgEdDSA
@@ -228,7 +209,6 @@ func (s *Service) defaultSigningAlg() string {
 	return s.Cfg.SigningAlg
 }
 
-// hasCurrentKey reports whether the snapshot holds a current key for alg.
 func (s *Service) hasCurrentKey(alg string) bool {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -240,10 +220,8 @@ func (s *Service) hasCurrentKey(alg string) bool {
 	return false
 }
 
-// ensureKeysetLocked mints a current + next pair for alg when the snapshot has
-// no current key for it. The caller holds rotationMu. When another instance
-// wins the insert race the snapshot is reloaded and accepted if it now has a
-// current key for alg.
+// ensureKeysetLocked mints a current and next pair for alg when the snapshot lacks a current key.
+// The caller holds rotationMu. If another instance wins the insert race, the snapshot reloads.
 func (s *Service) ensureKeysetLocked(ctx context.Context, alg string) error {
 	if s.hasCurrentKey(alg) {
 		return nil
@@ -282,25 +260,13 @@ func (s *Service) adoptConcurrentKeyset(ctx context.Context, alg string, cause e
 	return cause
 }
 
-// refreshJWKSSnapshot rewrites the in-memory key snapshot under the AS
-// lock. The encrypted private half of every active key is decrypted ONCE and
-// stashed in s.privKeyByKID; signing serves out of that map so the hot path
-// never re-runs aes.NewCipher + cipher.NewGCM. Public keys are parsed once
-// into s.pubByKID for verification. Retired keys are kept in keyMap for the
-// KeyRetention window but their private halves are NOT cached because
-// retired keys are never used to sign.
-//
-// Cache invalidation contract: the maps are replaced wholesale here. Every
-// state transition (bootstrap, scheduled rotation, manual RotateSigningKey,
-// lazy keyset creation) routes through this function, so a rotated KID's
-// private key disappears from the cache the same moment its public form
-// changes state.
+// refreshJWKSSnapshot rebuilds the in-memory key snapshot. Private halves of active keys are
+// decrypted once and cached, so signing never re-runs the cipher setup. Every state transition
+// routes through here, so a rotated key leaves the cache at the same moment its state changes.
 func (s *Service) refreshJWKSSnapshot(keys []models.JWKSKey) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	// Order: current, next, previous, retired. Retired keys are not
-	// served in JWKS but are kept in the map briefly for verifier lookups
-	// during the KeyRetention window.
+	// Order is current, next, previous, then retired. Retired keys stay briefly for verifier lookups.
 	order := map[string]int{
 		models.JWKSStateCurrent:  0,
 		models.JWKSStateNext:     1,
@@ -324,9 +290,8 @@ func (s *Service) refreshJWKSSnapshot(keys []models.JWKSKey) {
 		}
 		priv, err := s.loadPrivateKey(k)
 		if err != nil {
-			// A single bad row should not poison the whole snapshot. Skip
-			// it; the signing path will surface the absence of a decrypted
-			// current key as a typed error to the caller.
+			// A bad row must not poison the snapshot. It is skipped, and signing surfaces the missing
+			// current key as a typed error.
 			slog.Warn("theauth: jwks key decrypt failed during snapshot refresh", "kid", k.KID, "err", err.Error())
 			continue
 		}
@@ -334,14 +299,12 @@ func (s *Service) refreshJWKSSnapshot(keys []models.JWKSKey) {
 	}
 }
 
-// verifyKey is a parsed public key together with the algorithm it signs with.
 type verifyKey struct {
 	alg string
 	pub crypto.PublicKey
 }
 
-// CurrentSigningKey returns the active (state = current) key for the default
-// signing algorithm and its private half.
+// CurrentSigningKey returns the current key for the default algorithm, with its private half.
 func (s *Service) CurrentSigningKey() (models.JWKSKey, crypto.Signer, error) {
 	if s == nil {
 		return models.JWKSKey{}, nil, errors.New("theauth: authorization server not configured")
@@ -349,9 +312,8 @@ func (s *Service) CurrentSigningKey() (models.JWKSKey, crypto.Signer, error) {
 	return s.currentKeyForAlg(s.defaultSigningAlg())
 }
 
-// currentKeyForAlg returns the current key for alg from the snapshot. The
-// private key is served from s.privKeyByKID, which refreshJWKSSnapshot
-// populates once per snapshot.
+// currentKeyForAlg returns the current key for alg from the snapshot, served from the per-snapshot
+// private key cache.
 func (s *Service) currentKeyForAlg(alg string) (models.JWKSKey, crypto.Signer, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -360,9 +322,7 @@ func (s *Service) currentKeyForAlg(alg string) (models.JWKSKey, crypto.Signer, e
 			if priv, ok := s.privKeyByKID[k.KID]; ok && priv != nil {
 				return k, priv, nil
 			}
-			// Defensive fallback: the cache should always carry the
-			// current key. If a bootstrap race or storage corruption
-			// leaves it empty, fall back to the slow decrypt path so the
+			// Defensive fallback for a cache miss, such as a bootstrap race: decrypt on the slow path so the
 			// request still succeeds.
 			fallback, err := s.loadPrivateKey(k)
 			if err != nil {
@@ -374,9 +334,8 @@ func (s *Service) currentKeyForAlg(alg string) (models.JWKSKey, crypto.Signer, e
 	return models.JWKSKey{}, nil, fmt.Errorf("theauth: no current JWKS key for alg %s", alg)
 }
 
-// SigningAlgEnabled reports whether tokens may be signed with alg. The
-// default algorithm is always enabled; others must be listed in
-// TokenPolicy.SigningAlgs.
+// SigningAlgEnabled reports whether tokens may be signed with alg. The default is always enabled;
+// others must be in TokenPolicy.SigningAlgs.
 func (s *Service) SigningAlgEnabled(alg string) bool {
 	if alg == s.defaultSigningAlg() {
 		return true
@@ -392,8 +351,7 @@ func (s *Service) SigningAlgEnabled(alg string) bool {
 	return false
 }
 
-// SigningKeyFor returns the current signing key for alg, minting the keyset
-// on first use. alg must be enabled (SigningAlgEnabled).
+// SigningKeyFor returns the current signing key for alg, minting the keyset on first use.
 func (s *Service) SigningKeyFor(ctx context.Context, alg string) (models.JWKSKey, crypto.Signer, error) {
 	if s == nil {
 		return models.JWKSKey{}, nil, errors.New("theauth: authorization server not configured")
@@ -413,9 +371,8 @@ func (s *Service) SigningKeyFor(ctx context.Context, alg string) (models.JWKSKey
 	return s.currentKeyForAlg(alg)
 }
 
-// PublicKeyByKID returns the Ed25519 public key for the supplied kid,
-// used at verify time. Returns false when the kid is unknown, retired or not
-// an Ed25519 key.
+// PublicKeyByKID returns the Ed25519 public key for kid, used at verify time. It is false for
+// unknown, retired or non-Ed25519 keys.
 func (s *Service) PublicKeyByKID(kid string) (ed25519.PublicKey, bool) {
 	if s == nil {
 		return nil, false
@@ -428,8 +385,8 @@ func (s *Service) PublicKeyByKID(kid string) (ed25519.PublicKey, bool) {
 	return k, ok
 }
 
-// VerificationKey resolves a kid to the algorithm and public key of a
-// non-retired signing key. It satisfies jwt.KeyResolver.
+// VerificationKey resolves a kid to its algorithm and public key for a non-retired key. It
+// satisfies jwt.KeyResolver.
 func (s *Service) VerificationKey(kid string) (string, crypto.PublicKey, bool) {
 	if s == nil {
 		return "", nil, false
@@ -447,8 +404,8 @@ func (s *Service) VerificationKey(kid string) (string, crypto.PublicKey, bool) {
 	return vk.alg, vk.pub, true
 }
 
-// RenderJWKSDoc serializes the current JWKS document. Current + next +
-// previous keys are exposed; retired keys are omitted.
+// RenderJWKSDoc serializes the JWKS document. Current, next and previous keys are included; retired
+// keys are omitted.
 func (s *Service) RenderJWKSDoc() ([]byte, error) {
 	if s == nil {
 		return nil, errors.New("theauth: authorization server not configured")
@@ -469,8 +426,7 @@ func (s *Service) RenderJWKSDoc() ([]byte, error) {
 	return json.Marshal(doc)
 }
 
-// jwksRotationLoop runs in the background and rotates the signing keys
-// at the configured cadence. Exits when rotationStop closes.
+// jwksRotationLoop rotates the signing keys at the configured cadence. It exits when rotationStop closes.
 func (s *Service) jwksRotationLoop() {
 	defer close(s.rotationDone)
 	period := s.Cfg.KeyRotationPeriod
@@ -491,23 +447,15 @@ func (s *Service) jwksRotationLoop() {
 	}
 }
 
-// RotateSigningKey advances the JWKS state machine one step for every
-// algorithm that has a keyset: previous (if any) is retired, current becomes
-// previous, next becomes current, and a fresh next is minted. Concurrent
-// callers are serialized via rotationMu so that two goroutines cannot both
-// read the same snapshot and independently issue conflicting state updates,
-// which could leave two rows with state = current for one algorithm.
-//
-// When the underlying Storage also implements JWKSAtomicRotator each
-// algorithm's state transition is issued as a single database transaction,
-// providing an additional DB-level guard against concurrent callers on
-// separate process instances.
+// RotateSigningKey advances the key state machine one step for every algorithm with a keyset.
+// rotationMu serializes in-process callers, so two goroutines cannot both produce a second current
+// row. A storage implementing JWKSAtomicRotator also makes each transition one database
+// transaction, which guards separate instances.
 func (s *Service) RotateSigningKey(ctx context.Context) error {
 	if s == nil {
 		return errors.New("theauth: authorization server not configured")
 	}
-	// Serialise concurrent callers at the process level so that two goroutines
-	// cannot both observe the same snapshot and produce two current rows.
+	// Serialise callers in this process so two cannot both see the same snapshot and produce two current rows.
 	s.rotationMu.Lock()
 	defer s.rotationMu.Unlock()
 
@@ -541,7 +489,6 @@ func (s *Service) RotateSigningKey(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("reload jwks: %w", err)
 	}
-	// Drop retired keys older than KeyRetention.
 	cutoff := now.Add(-s.Cfg.KeyRetention)
 	filtered := make([]models.JWKSKey, 0, len(updated))
 	for _, k := range updated {
@@ -554,7 +501,7 @@ func (s *Service) RotateSigningKey(ctx context.Context) error {
 	return errors.Join(errs...)
 }
 
-// rotateAlg advances one algorithm's keyset. keys are that algorithm's rows.
+// rotateAlg advances one algorithm's keyset. rows are that algorithm's stored keys.
 func (s *Service) rotateAlg(ctx context.Context, keys []models.JWKSKey, now time.Time) error {
 	var current, next models.JWKSKey
 	var retireKIDs []string
@@ -578,15 +525,13 @@ func (s *Service) rotateAlg(ctx context.Context, keys []models.JWKSKey, now time
 		return err
 	}
 	if ar, ok := s.Storage.(JWKSAtomicRotator); ok {
-		// Fast path: issue all state changes in a single transaction so no
-		// concurrent rotation can interleave and produce two current rows.
+		// Fast path: all state changes go in one transaction, so no concurrent rotation can interleave.
 		if err := ar.AtomicRotateJWKS(ctx, retireKIDs, current.KID, next.KID, fresh, now); err != nil {
 			return fmt.Errorf("atomic jwks rotate: %w", err)
 		}
 		return nil
 	}
-	// Fallback path for storage backends that do not implement
-	// JWKSAtomicRotator (e.g. in-memory store for unit tests).
+	// Fallback for stores without JWKSAtomicRotator (for example the in-memory store in unit tests).
 	for _, kid := range retireKIDs {
 		if err := s.Storage.UpdateJWKSKeyState(ctx, kid, models.JWKSStateRetired, now); err != nil {
 			return fmt.Errorf("retire previous: %w", err)

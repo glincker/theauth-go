@@ -6,15 +6,8 @@ import (
 	"github.com/glincker/theauth-go/v2"
 )
 
-// BenchmarkAuditRedactor measures DefaultRedactor on a representative
-// metadata map: three secret keys at top level plus one nested map. This
-// mirrors the payload emitted on a successful token grant (grant_type,
-// scope, resource at top level; refresh_token inside a nested "grants"
-// map). The EqualFold refactor (perf re-audit 2026-06-21 item 4) removed
-// the per-key ToLower heap allocation; this benchmark catches any
-// regression to the old path.
-//
-// gate:include
+// BenchmarkAuditRedactor measures DefaultRedactor on a payload shaped like a successful token
+// grant. It catches regressions to the per-key ToLower allocation that EqualFold removed.
 func BenchmarkAuditRedactor(b *testing.B) {
 	b.ReportAllocs()
 	b.ResetTimer()

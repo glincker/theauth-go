@@ -6,9 +6,8 @@ import (
 	"testing"
 )
 
-// Regression for pocket-id#1677: documents that list grant_types beyond
-// authorization_code (refresh_token, client_credentials, vendor URNs) must
-// be accepted and preserved, not rejected.
+// Regression for pocket-id#1677: documents listing grant types beyond authorization_code must be
+// accepted and preserved.
 func TestParseAndValidateGrantTypes(t *testing.T) {
 	const id = "https://app.example.com/client.json"
 	tests := []struct {

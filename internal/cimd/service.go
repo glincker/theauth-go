@@ -16,43 +16,32 @@ import (
 	"github.com/glincker/theauth-go/v2/kv"
 )
 
-// Default knobs applied when Config zero-values are passed in. The
-// values match the conservative defaults documented in the MCP CIMD
-// section: small fetch budget, short cache TTL so a publisher's policy
-// rotation propagates quickly, hard cap on document size to limit memory
-// blow-up from a malicious or buggy host.
+// Default knobs for a zero Config: a small fetch budget and a short cache TTL, so a publisher's
+// policy change propagates quickly.
 const (
 	// DefaultFetchTimeout caps one outbound CIMD fetch.
 	DefaultFetchTimeout = 5 * time.Second
 	// DefaultCacheTTL is how long a validated document stays usable
 	// before the next request triggers a re-fetch.
 	DefaultCacheTTL = 5 * time.Minute
-	// DefaultMaxDocumentBytes caps the size of a CIMD document body.
-	// 5 KiB follows the draft-ietf-oauth-client-id-metadata-document
-	// recommendation; real documents are far smaller. Raise
-	// Config.MaxDocumentBytes if a legitimate client needs more.
+	// DefaultMaxDocumentBytes caps a CIMD document body at 5 KiB, following the draft recommendation.
+	// Raise Config.MaxDocumentBytes if needed.
 	DefaultMaxDocumentBytes int64 = 5 * 1024
-	// DefaultNegativeCacheTTL is how long a failed fetch is remembered so a
-	// hostile or broken client_id cannot make the AS refetch on every
-	// request.
+	// DefaultNegativeCacheTTL remembers a failed fetch, so a broken or hostile client_id cannot force
+	// a refetch on every request.
 	DefaultNegativeCacheTTL = 30 * time.Second
 	// gcEvery is how often the cache GC sweep runs. 60s mirrors other
 	// in-tree GC loops (webauthn challenges, oauth state).
 	gcEvery = time.Minute
-	// MinCacheTTL is the floor applied when HonorCacheControl shortens a
-	// document's freshness window, so a max-age=0 publisher cannot force a
-	// network fetch on every request.
+	// MinCacheTTL floors the window that HonorCacheControl can shorten, so max-age=0 cannot force a
+	// fetch on every request.
 	MinCacheTTL = 10 * time.Second
 )
 
-// Config wires the CIMD service. Mirrors the root theauth.CIMDConfig
-// field set the Service actually consumes. All fields are optional;
-// missing values fall through to the package defaults.
+// Config wires the CIMD service. All fields are optional; missing values use the package defaults.
 type Config struct {
-	// TrustPolicy decides which https URLs the Service is allowed to
-	// fetch. Nil is interpreted as DenyAll (fail-closed); explicit
-	// AllowAnyHTTPS or AllowHTTPSHosts is required to enable CIMD in
-	// practice.
+	// TrustPolicy decides which https URLs may be fetched. Nil means DenyAll, so CIMD needs an
+	// explicit allow policy to work.
 	TrustPolicy TrustPolicy
 
 	// FetchTimeout caps one outbound HTTP fetch. Zero applies
@@ -63,55 +52,36 @@ type Config struct {
 	// re-fetch. Zero applies DefaultCacheTTL.
 	CacheTTL time.Duration
 
-	// MaxDocumentBytes caps the size of a CIMD document body. Zero
-	// applies DefaultMaxDocumentBytes; negative disables the cap (not
-	// recommended on a public-internet bind).
+	// MaxDocumentBytes caps a document body. Zero uses DefaultMaxDocumentBytes; negative disables the
+	// cap (not advised publicly).
 	MaxDocumentBytes int64
 
-	// NegativeCacheTTL is how long a failed fetch (transport error, bad
-	// status, oversize or invalid document) is cached. Zero applies
-	// DefaultNegativeCacheTTL; negative disables the negative cache.
+	// NegativeCacheTTL remembers failed fetches. Zero uses DefaultNegativeCacheTTL; negative disables
+	// the negative cache.
 	NegativeCacheTTL time.Duration
 
-	// HTTPClient is the http.Client used for outbound fetches. Nil
-	// constructs a default SSRF-guarded client (no redirects, no proxy,
-	// non-public addresses refused at dial time). A supplied client is
-	// used as-is, so it must provide equivalent protection. Tests inject a
-	// custom client backed by httptest.NewTLSServer.
+	// HTTPClient performs outbound fetches. Nil builds an SSRF-guarded client (no redirects,
+	// non-public addresses refused at dial). A supplied client is used as is, so it must give
+	// equivalent protection.
 	HTTPClient *http.Client
 
-	// AllowPrivateNetworks disables the dial-time block on loopback,
-	// private, link-local and other non-public addresses in the default
-	// client. Development only: it re-opens SSRF to internal hosts.
+	// AllowPrivateNetworks disables the dial-time block on non-public addresses. Development only: it
+	// re-opens SSRF.
 	AllowPrivateNetworks bool
 
-	// Cache, when set, is a second cache tier shared by every replica (see
-	// the kv package). Documents read from it are re-validated. Nil keeps
-	// the cache per process.
+	// Cache, when set, is a second tier shared by every replica. Documents read from it are still re-validated.
 	Cache kv.Cache
 
 	// DenyHost, when set, is consulted before any network IO; returning
 	// true rejects the URL's hostname. It runs in addition to TrustPolicy.
 	DenyHost func(host string) bool
 
-	// HonorCacheControl, when true, lets the publisher shorten how long a
-	// fetched document stays cached by sending Cache-Control max-age (or
-	// no-store / no-cache, which clamp to MinCacheTTL). The result is always
-	// within [MinCacheTTL, CacheTTL]: a publisher can never extend caching
-	// past CacheTTL. Off by default, which keeps the fixed CacheTTL.
+	// HonorCacheControl lets the publisher shorten caching with max-age, no-store or no-cache, clamped
+	// to [MinCacheTTL, CacheTTL]. A publisher can never extend caching past CacheTTL. Off by default.
 	HonorCacheControl bool
 
-	// AllowedRedirectSchemes lists extra private-use URI schemes a document
-	// may use in redirect_uris, beyond https, loopback http and reverse-DNS
-	// schemes (RFC 8252 section 7.1). It exists for clients such as Cursor
-	// that register a bare scheme like "cursor://anysphere.cursor-mcp/oauth".
-	// Entries must be lowercase and must not be http, https, javascript,
-	// data, file or another browser-executable scheme; Validate rejects
-	// them. Fragment and userinfo are still refused. Empty (the default)
-	// keeps the strict reverse-DNS rule. Listing a scheme trusts every
-	// document the TrustPolicy admits to claim it, and any app on the
-	// device can register the same scheme, so prefer PKCE-only public
-	// clients and a narrow TrustPolicy.
+	// AllowPrivateNetworks disables the dial-time block on non-public addresses. Development only: it
+	// re-opens SSRF.
 	AllowedRedirectSchemes []string
 }
 
@@ -143,23 +113,16 @@ func (c *Config) Validate() error {
 	return nil
 }
 
-// audit action names emitted by the Service. Named constants so the
-// future OTel adapter can map them to span attributes without string
-// matching the call sites.
+// audit action names emitted by the Service, as constants so an OTel adapter can map them to attributes.
 const (
 	AuditFetched         = "cimd.fetched"
 	AuditRejectedPolicy  = "cimd.rejected_by_policy"
 	AuditDocumentInvalid = "cimd.document_invalid"
 )
 
-// Service resolves an https client_id URL to an in-memory client
-// metadata document. Lifecycle mirrors the other internal services: New
-// constructs an inert Service, Start spawns the GC loop, Stop drains
-// it.
-//
-// Concurrency: every public method is safe for use from multiple
-// goroutines. The cache is a sync.Map; the GC loop only reads (it
-// deletes by key, which is safe under sync.Map.Delete).
+// Service resolves an https client_id to an in-memory metadata document. New builds it inert, Start
+// runs the GC loop and Stop drains it. Every public method is safe from many goroutines. The cache
+// is a sync.Map, and GC only deletes keys.
 type Service struct {
 	cfg     Config
 	client  *http.Client
@@ -198,13 +161,8 @@ type flight struct {
 	err  error
 }
 
-// NewService constructs an inert Service. The Service is safe to call
-// before Start because the cache + emitter paths do not depend on the GC
-// loop running; Start is only required to keep the cache from growing
-// without bound over long-lived processes.
-//
-// emitter MAY be nil; the Service substitutes audit.NoopEmitter so audit
-// emission never panics on a misconfigured deployment.
+// NewService builds an inert Service. Start only bounds cache growth over a long-lived process.
+// A nil emitter is replaced with audit.NoopEmitter, so a misconfigured deployment never panics on emit.
 func NewService(cfg Config, emitter audit.Emitter) *Service {
 	if cfg.TrustPolicy == nil {
 		cfg.TrustPolicy = DenyAll()
@@ -277,9 +235,7 @@ func (s *Service) Stop() {
 		select {
 		case <-done:
 		case <-time.After(5 * time.Second):
-			// Best effort: log via slog would create a cross-package
-			// dependency; the worst case is a single leaked goroutine
-			// that exits at process exit.
+			// A timed-out wait can leak one goroutine at worst, and it exits with the process.
 		}
 	}
 }
@@ -316,14 +272,8 @@ func (s *Service) Invalidate(rawURL string) {
 	s.sharedDelete(cacheKey(rawURL))
 }
 
-// LooksLikeCIMD reports whether a client_id string is shaped like a
-// CIMD URL. The AS calls this on every authorize / token request to
-// decide whether to route through Resolve or through the legacy
-// OAuthClientByClientID lookup.
-//
-// "Shaped like a CIMD URL" means: parses as an absolute URL, scheme is
-// "https", host is non-empty. The TrustPolicy is consulted later inside
-// Resolve; LooksLikeCIMD only answers "is this a URL at all".
+// LooksLikeCIMD reports whether a client_id is an absolute https URL with a host, so the AS knows
+// to route it through Resolve. TrustPolicy is consulted later, inside Resolve.
 func LooksLikeCIMD(clientID string) bool {
 	if clientID == "" {
 		return false
@@ -362,22 +312,13 @@ var ErrPolicyDenied = errors.New("cimd: trust policy denied URL")
 // error, non-2xx status, or oversized body.
 var ErrFetchFailed = errors.New("cimd: fetch failed")
 
-// ErrUnsupportedContentType is returned when the response Content-Type
-// is not application/json. The MCP CIMD spec requires JSON; HTML pages
-// served at the same URL are rejected to keep an open-redirect from
-// being misinterpreted as a metadata document.
+// ErrUnsupportedContentType is returned when the response is not application/json. HTML at the same
+// URL is refused, so an open redirect cannot be read as a metadata document.
 var ErrUnsupportedContentType = errors.New("cimd: unsupported content type")
 
-// Resolve fetches the CIMD document at rawURL, validates it, caches the
-// result, and synthesizes an OAuthClient row. The synthesized row never
-// touches storage; it lives in the calling request only.
-//
-// Returns ErrPolicyDenied / ErrFetchFailed / ErrUnsupportedContentType /
-// ErrInvalidDocument depending on which gate fired. All errors at the
-// OAuth wire collapse to invalid_client per the MCP CIMD section: an AS
-// MUST NOT leak whether a published URL exists, returns JSON, fails
-// validation, etc., because that exposes the publisher's posture to an
-// attacker enumerating client URLs.
+// Resolve fetches, validates and caches the document at rawURL, and synthesizes an in-memory client
+// row that never touches storage. Every failure collapses to invalid_client on the wire, so an
+// attacker cannot learn which published URLs exist.
 func (s *Service) Resolve(ctx context.Context, rawURL string) (*models.OAuthClient, error) {
 	if s == nil {
 		return nil, ErrPolicyDenied
@@ -442,11 +383,9 @@ func (s *Service) entryTTL(e *cacheEntry) time.Duration {
 	return s.cfg.CacheTTL
 }
 
-// fetchOnce runs fetch at most once per URL at a time. Followers wait for
-// the leader and share its result. The leader fetches with a context that
-// is detached from any single caller's cancellation (but keeps the fetch
-// timeout via the client) so one impatient caller cannot fail the rest.
-// Successes land in the positive cache; fetch failures in the negative one.
+// fetchOnce lets one fetch per URL run at a time. Followers share the leader's result, and the
+// fetch is detached from any single caller's cancellation, so one impatient caller cannot fail the
+// rest.
 func (s *Service) fetchOnce(ctx context.Context, key, rawURL string) (Document, error) {
 	s.inflightMu.Lock()
 	if f, ok := s.inflight[key]; ok {
@@ -475,10 +414,8 @@ func (s *Service) fetchOnce(ctx context.Context, key, rawURL string) (Document, 
 	return f.doc, f.err
 }
 
-// fetch issues the HTTP request, enforces the body cap and content-type
-// gate, then hands the bytes to parseAndValidate. Network and parse
-// failures are audited as cimd.document_invalid so operators can
-// distinguish a bad client from a denied policy.
+// fetch issues the request, enforces the body cap and content-type gate, then validates the bytes.
+// Failures are audited as cimd.document_invalid, which separates a bad client from a denied policy.
 func (s *Service) fetch(ctx context.Context, rawURL string) (Document, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
 	if err != nil {
@@ -536,9 +473,7 @@ func (s *Service) auditInvalid(ctx context.Context, rawURL, reason string) {
 		map[string]any{"url": rawURL, "reason": reason})
 }
 
-// isJSONContentType reports whether ct is an application/json content
-// type. Honors the RFC 7231 parameter form ("application/json;
-// charset=utf-8") by splitting on ';'.
+// isJSONContentType accepts application/json with parameters, such as charset.
 func isJSONContentType(ct string) bool {
 	if ct == "" {
 		return false
@@ -551,15 +486,8 @@ func isJSONContentType(ct string) bool {
 // or scheme casing variant does not produce a cache miss.
 func cacheKey(raw string) string { return canonicalURL(raw) }
 
-// synthesizeClient lifts a validated Document into the in-memory
-// OAuthClient row the AS handlers expect. The synthesized client never
-// touches storage (CreatedAt / UpdatedAt are zero, ID is zero); the AS
-// authorize + token paths read only the OAuth-relevant fields.
-//
-// TokenEndpointAuthMethod has already passed the allowlist in
-// parseAndValidate: "none" for public clients, or "private_key_jwt" with the
-// published jwks / jwks_uri copied onto the client so the AS can verify
-// client assertions. A client_secret_* method never reaches this point.
+// synthesizeClient turns a validated Document into the in-memory client row the AS reads. It never
+// touches storage.
 func synthesizeClient(doc Document) *models.OAuthClient {
 	return &models.OAuthClient{
 		ClientID:                doc.ClientID,

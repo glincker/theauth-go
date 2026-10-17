@@ -1,11 +1,5 @@
-// Package handlers exposes the SAML SP-flow endpoints
-// (/auth/saml/{connectionId}/login, /acs, /metadata).
-//
-// Extracted from root handlers_saml.go in PR E of the 2026-06
-// architecture reorg. The SP-flow lives here; the per-organization
-// connection CRUD endpoints (mounted under
-// /auth/orgs/{orgId}/saml/connections) stay in root because they
-// depend on the unextracted requireOrgRole helper.
+// Package handlers exposes the SAML SP-flow endpoints (/auth/saml/{connectionId}/login, /acs and /metadata).
+// Per-organization connection CRUD lives in crud.go.
 package handlers
 
 import (
@@ -50,7 +44,7 @@ type Handler struct {
 	postLoginRedirect string
 	allowedRelay      []string
 
-	// CRUD-side fields populated by AttachCRUD (PR F). Nil-valued when
+	// CRUD-side fields populated by AttachCRUD. Nil-valued when
 	// AttachCRUD was not invoked; MountCRUD must not be called in that
 	// case.
 	connSvc     ConnectionService

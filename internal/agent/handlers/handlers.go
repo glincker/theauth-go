@@ -1,12 +1,6 @@
-// Package handlers exposes the organization-scoped agent + delegation
-// administration endpoints mounted under
-// /admin/v1/organizations/{orgID}/agents and .../delegations.
-//
-// Extracted from root handlers_admin_agents.go in PR F of the 2026-06
-// architecture reorg. Permission gates: agents:admin and
-// delegations:admin per RBAC seed; the gates themselves are supplied
-// by the root *TheAuth at Mount time (via the requirePermission
-// middleware factory) so this package does not import root.
+// Package handlers serves the organization-scoped agent and delegation admin endpoints under
+// /admin/v1/organizations/{orgID}. Permission gates are supplied by root at Mount time, so this
+// package does not import root.
 package handlers
 
 import (
@@ -45,16 +39,13 @@ type DelegationService interface {
 	RevokeDelegation(ctx context.Context, grantID models.ULID, reason string) error
 }
 
-// OrganizationLookup verifies that the named user is a member of the
-// organization. Used to short-circuit cross-org delegation minting
-// (security audit H3, 2026-06-20).
+// OrganizationLookup verifies that a user is a member of the organization, so a delegation cannot
+// name a user outside it (security audit H3).
 type OrganizationLookup interface {
 	OrganizationMemberRole(ctx context.Context, orgID, userID models.ULID) (string, error)
 }
 
-// PermissionGate returns a middleware that rejects requests whose
-// session lacks the named permission. Supplied by root because the
-// permission machinery lives there.
+// PermissionGate returns middleware that rejects requests whose session lacks the named permission.
 type PermissionGate func(permission string) func(http.Handler) http.Handler
 
 // Handler owns the seven admin agent + delegation endpoints.
@@ -69,9 +60,8 @@ func New(agents AgentService, delegations DelegationService, orgs OrganizationLo
 	return &Handler{agents: agents, delegations: delegations, orgs: orgs}
 }
 
-// Mount registers the agent + delegation routes onto r. The router r
-// is expected to already be scoped under
-// /admin/v1/organizations/{orgID} so the chi URL params resolve.
+// Mount registers the agent and delegation routes on r. r must already be scoped under
+// /admin/v1/organizations/{orgID}.
 func (h *Handler) Mount(r chi.Router, requirePermission PermissionGate) {
 	r.With(requirePermission(models.PermissionAgentsAdmin)).Get("/agents", h.listAgents)
 	r.With(requirePermission(models.PermissionAgentsAdmin)).Post("/agents", h.createAgent)
@@ -270,10 +260,8 @@ func (h *Handler) createDelegation(w http.ResponseWriter, r *http.Request) {
 		admin.Write(w, http.StatusBadRequest, admin.CodeValidationInvalid, "invalid agentId", "")
 		return
 	}
-	// security audit H3 (2026-06-20): verify the named user is a member
-	// of the calling admin's org before persisting; reject with 403
-	// problem+json otherwise. Without this check an admin in any org
-	// could mint a delegation_grant naming any user in the system.
+	// Security audit H3: the named user must belong to the calling admin's organization, or the admin
+	// could mint a grant for any user.
 	if _, err := h.orgs.OrganizationMemberRole(r.Context(), orgID, userID); err != nil {
 		admin.Write(w, http.StatusForbidden, admin.CodeUserNotInOrg, "user is not a member of this organization", "")
 		return
@@ -327,10 +315,8 @@ func (h *Handler) revokeDelegation(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// ensureAgentInOrg returns an error when the supplied agent ID is not
-// owned by the supplied organization. Used by the patch + delete
-// paths so cross-org tampering returns 404 (no leak of agent
-// existence).
+// ensureAgentInOrg errors when the agent is not owned by the organization. Cross-org tampering
+// returns 404 without revealing existence.
 func (h *Handler) ensureAgentInOrg(ctx context.Context, agentID, orgID models.ULID) error {
 	ag, err := h.agents.AgentByID(ctx, agentID)
 	if err != nil {

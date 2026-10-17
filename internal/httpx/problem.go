@@ -2,28 +2,24 @@ package httpx
 
 import "net/http"
 
-// WriteProblemJSON emits a minimal RFC 7807 problem+json body. The admin
-// package owns the richer variant with type URIs; this in-package helper
-// keeps the middleware self-contained and avoids an import cycle.
+// WriteProblemJSON emits a minimal RFC 7807 body. It is kept here so the middleware needs no import
+// of the admin package.
 func WriteProblemJSON(w http.ResponseWriter, status int, code, detail, instance string) {
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(status)
 	_, _ = w.Write(problemBody(status, code, detail, instance))
 }
 
-// WriteUnauthenticated emits a 401 with both the RFC 7807 body and an
-// RFC 7235 WWW-Authenticate header. Session-cookie auth is the primary
-// scheme; consumers using bearer tokens against the OAuth AS / mcpresource
-// surface get the Bearer challenge from those packages instead.
+// WriteUnauthenticated emits a 401 with an RFC 7807 body and a WWW-Authenticate header. Bearer
+// clients get their challenge from the AS or mcpresource packages.
 func WriteUnauthenticated(w http.ResponseWriter, code, detail string) {
 	w.Header().Set("WWW-Authenticate", `Session realm="theauth", error="`+code+`"`)
 	WriteProblemJSON(w, http.StatusUnauthorized, code, detail, "")
 }
 
 func problemBody(status int, code, detail, instance string) []byte {
-	// Tiny hand-built JSON encoder so the middleware avoids encoding/json
-	// in the hot path. Six fields, two of which are optional. Numbers and
-	// strings only, no escaping concerns since values are library-owned.
+	// The body is built by hand, so the hot path skips encoding/json. Every value is library owned, so
+	// no escaping is needed.
 	b := []byte(`{"type":"https://theauth.dev/problems/`)
 	b = append(b, code...)
 	b = append(b, `","title":"`...)

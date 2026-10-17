@@ -1,6 +1,6 @@
 // Package oauth owns the user-facing OAuth 2.0 login state machine:
-// PKCE state generation at /start and code exchange at /callback. Extracted
-// from root service_oauth.go in PR H (2026-06-22). The root package exposes
+// PKCE state generation at /start and code exchange at /callback.
+// The root package exposes
 // type aliases for Provider, ProviderToken, and ProviderUser so the public
 // API surface is byte-stable.
 //
@@ -34,9 +34,8 @@ const defaultStateTTL = 10 * time.Minute
 // Provider is the contract every OAuth 2.0 / OIDC provider implements. Each
 // concrete provider lives in its own sub-package under provider/<name>/ so
 // consumers can pick what to import (avoids dragging in HTTP clients for
-// providers they will never use). Moved here from the root package in PR H
-// (2026-06-22); re-exported from root via a type alias so the v0.3+
-// stability surface is byte-stable.
+// providers they will never use).
+// Providers are re-exported from root via type aliases so the public surface stays stable.
 type Provider interface {
 	// Name returns the stable registry key, e.g. "github". Routes mount as
 	// /auth/providers/{name}/start and /auth/providers/{name}/callback, and

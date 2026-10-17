@@ -8,57 +8,38 @@ import (
 	"github.com/glincker/theauth-go/v2/internal/models"
 )
 
-// compat.go: opt-in client compatibility behaviors (Config.ClientCompat).
-//
-// Real MCP clients (Claude Desktop, Cursor, ChatGPT and similar) routinely
-// omit the RFC 8707 resource parameter, request scopes the server never
-// advertised, use an ephemeral loopback port, and address a sub-path of the
-// MCP server as the resource. Each flag below relaxes exactly one strict
-// check. Every flag defaults to false, which keeps the strict behavior.
+// compat.go holds the opt-in client compatibility behaviors (Config.ClientCompat). Real MCP clients
+// omit the resource parameter, request unadvertised scopes, use ephemeral loopback ports and
+// address sub-paths. Each flag relaxes exactly one strict check and defaults to strict.
 
-// ClientCompat is a set of independent switches that relax individual
-// strictness checks for real-world OAuth clients. The zero value is fully
-// strict. See docs/client-compat.md for the security tradeoffs.
+// ClientCompat is a set of independent switches that relax strictness checks. The zero value is
+// fully strict. See docs/client-compat.md for the tradeoffs.
 type ClientCompat struct {
-	// OptionalResource lets authorize, PAR, code and refresh token, and
-	// jwt-bearer requests omit the resource parameter. An absent resource
-	// defaults to the sole configured resource; with several configured
-	// resources an absent resource is still invalid_target.
+	// OptionalResource lets requests omit the resource parameter. An absent resource defaults to the
+	// sole configured resource; with several configured it stays invalid_target.
 	OptionalResource bool
 
-	// DropUnknownScopes drops requested scopes that are not in the client's
-	// registered scope set or the resource catalog instead of rejecting the
-	// request. The granted scope is returned in the token response scope
-	// field. When scopes were requested and none remain, the request fails
-	// with invalid_scope. On the refresh grant, scopes outside the original
-	// grant are dropped the same way (a refresh never widens).
+	// DropUnknownScopes drops requested scopes that the client or resource catalog does not know,
+	// instead of rejecting the request. It fails with invalid_scope only when nothing remains. On
+	// refresh it never widens the grant.
 	DropUnknownScopes bool
 
-	// LoopbackAnyPort matches a loopback redirect URI ignoring the port
-	// (RFC 8252 section 7.3). It applies only when the registered URI is
-	// http on 127.0.0.1 or [::1]; scheme, host, path and query must still
-	// match exactly. Applied at /authorize, PAR and /token.
+	// LoopbackAnyPort ignores the port of a loopback redirect URI (RFC 8252 section 7.3). Only http on
+	// 127.0.0.1 or [::1] qualifies; everything else must match exactly.
 	LoopbackAnyPort bool
 
-	// LoopbackAllowLocalhost additionally treats the host name "localhost"
-	// as loopback for LoopbackAnyPort. Off by default because RFC 8252
-	// section 8.3 discourages it (the name can resolve to a non-loopback
-	// address). Has no effect unless LoopbackAnyPort is true.
+	// LoopbackAllowLocalhost also treats "localhost" as loopback for LoopbackAnyPort. Off by default:
+	// RFC 8252 section 8.3 warns that the name may resolve off loopback.
 	LoopbackAllowLocalhost bool
 
-	// PathAudience lets a requested resource match a configured resource
-	// when it is equal modulo a trailing slash, or when it has the
-	// configured identifier as a path prefix on a "/" boundary. The issued
-	// token aud is the configured canonical identifier, never the requested
-	// sub-path.
+	// PathAudience lets a requested resource be a sub-path of a configured one, on a "/" boundary. The
+	// issued aud is always the configured identifier, never the sub-path.
 	PathAudience bool
 }
 
-// resolveResource maps the resource parameter of a request to a configured
-// resource and the audience to issue. An exact match (modulo one trailing
-// slash) keeps the caller's spelling as the audience, which is the
-// pre-existing behavior. A resource reached through OptionalResource or
-// PathAudience always yields the configured canonical identifier.
+// resolveResource maps a request's resource parameter to a configured resource and the audience to
+// issue. An exact match keeps the caller's spelling; OptionalResource and PathAudience always yield
+// the canonical identifier.
 func (s *Service) resolveResource(raw string) (models.ProtectedResource, string, error) {
 	if raw == "" {
 		if s.Cfg.ClientCompat.OptionalResource && len(s.Cfg.Resources) == 1 {
@@ -77,7 +58,6 @@ func (s *Service) resolveResource(raw string) (models.ProtectedResource, string,
 			if !isPathChild(r.Identifier, raw) {
 				continue
 			}
-			// Prefer the most specific (longest) configured prefix.
 			if !found || len(r.Identifier) > len(best.Identifier) {
 				best, found = r, true
 			}
@@ -89,10 +69,8 @@ func (s *Service) resolveResource(raw string) (models.ProtectedResource, string,
 	return models.ProtectedResource{}, "", models.ErrOAuthInvalidResource
 }
 
-// isPathChild reports whether requested names a path below configured: it
-// starts with the configured identifier followed by "/". Query, fragment,
-// userinfo, dot segments and percent-encoded dots or slashes are refused so
-// the prefix cannot be walked out of with traversal tricks.
+// isPathChild reports whether requested is a path below configured. Query, fragment, userinfo, dot
+// segments and encoded dots or slashes are refused, so traversal tricks cannot escape the prefix.
 func isPathChild(configured, requested string) bool {
 	base := strings.TrimRight(configured, "/")
 	if base == "" || !strings.HasPrefix(requested, base+"/") {
@@ -117,8 +95,8 @@ func isPathChild(configured, requested string) bool {
 	return true
 }
 
-// resourceMatchesGrant reports whether a resource parameter sent on the
-// refresh grant is compatible with the resource the grant was issued for.
+// resourceMatchesGrant reports whether a refresh grant's resource parameter matches the resource
+// the grant was issued for.
 func (s *Service) resourceMatchesGrant(requested, granted string) bool {
 	if requested == granted {
 		return true
@@ -133,10 +111,8 @@ func (s *Service) resourceMatchesGrant(requested, granted string) bool {
 	return strings.TrimRight(r.Identifier, "/") == strings.TrimRight(granted, "/")
 }
 
-// narrowScopes validates the requested scope against the resource catalog.
-// With DropUnknownScopes it instead drops scopes outside the catalog and
-// the client's registered scope set, failing with invalid_scope only when
-// nothing is left. client may be nil.
+// narrowScopes validates requested scopes against the resource catalog. With DropUnknownScopes it
+// drops unknown scopes instead, and fails only when none remain. client may be nil.
 func (s *Service) narrowScopes(requested []string, resource models.ProtectedResource, client *models.OAuthClient) ([]string, error) {
 	if s.OIDCEnabled() {
 		// openid, profile and email are never part of a resource catalog.
@@ -184,9 +160,8 @@ func (s *Service) narrowResourceScopes(requested []string, resource models.Prote
 	return out, nil
 }
 
-// narrowRefreshScopes returns the scope a refresh request is granted. A
-// request that asks for scopes outside the original grant is rejected, or
-// with DropUnknownScopes trimmed to the intersection.
+// narrowRefreshScopes returns the scope a refresh is granted. Scopes outside the original grant are
+// rejected, or dropped with DropUnknownScopes.
 func (s *Service) narrowRefreshScopes(requested, granted []string) ([]string, error) {
 	if len(requested) == 0 {
 		return granted, nil
@@ -210,8 +185,8 @@ func (s *Service) narrowRefreshScopes(requested, granted []string) ([]string, er
 	return out, nil
 }
 
-// scopeSet returns a set of the scopes, or nil when the slice is empty so
-// callers can tell "no restriction" from "restricted to nothing".
+// scopeSet returns a set of the scopes, or nil for an empty slice so "no restriction" differs from
+// "restricted to nothing".
 func scopeSet(scopes []string) map[string]struct{} {
 	if len(scopes) == 0 {
 		return nil
@@ -223,8 +198,8 @@ func scopeSet(scopes []string) map[string]struct{} {
 	return m
 }
 
-// redirectURIRegistered reports whether uri matches a registered redirect
-// URI: exactly, or under LoopbackAnyPort by the loopback port-agnostic rule.
+// redirectURIRegistered reports whether uri matches a registered redirect URI, exactly or
+// port-agnostically for loopback.
 func (s *Service) redirectURIRegistered(registered []string, uri string) bool {
 	if redirectURIRegistered(registered, uri) {
 		return true
@@ -240,9 +215,8 @@ func (s *Service) redirectURIRegistered(registered []string, uri string) bool {
 	return false
 }
 
-// loopbackEquivalent reports whether a and b are the same loopback http
-// redirect URI up to the port (RFC 8252 section 7.3). Both must be loopback,
-// and scheme, host, path and query must be identical.
+// loopbackEquivalent reports whether a and b are the same loopback http redirect URI up to the port
+// (RFC 8252 section 7.3).
 func (s *Service) loopbackEquivalent(a, b string) bool {
 	ua, ok := parseLoopback(a, s.Cfg.ClientCompat.LoopbackAllowLocalhost)
 	if !ok {
@@ -257,9 +231,8 @@ func (s *Service) loopbackEquivalent(a, b string) bool {
 		ua.RawQuery == ub.RawQuery
 }
 
-// parseLoopback parses raw and returns it when it is an http URI on a
-// loopback host with an absent or valid numeric port, no userinfo and no
-// fragment.
+// parseLoopback returns raw when it is an http URI on a loopback host with an optional valid port
+// and no userinfo or fragment.
 func parseLoopback(raw string, allowLocalhost bool) (*url.URL, bool) {
 	u, err := url.Parse(raw)
 	if err != nil || u.Scheme != "http" || u.User != nil || u.Fragment != "" || u.Opaque != "" {

@@ -1,12 +1,5 @@
-// Package scim holds the small SCIM parsing helpers that the root theauth
-// package uses internally but does not export. Phase 1 of the architecture
-// reorg (2026-06) moved the equality-only filter parser here so the parser
-// can be unit tested without dragging in the root theauth package surface.
-//
-// Scope of this package: text-level SCIM 2.0 helpers only. Resource shape,
-// wire formats, and PATCH application stay in the root package until a
-// later phase decides whether to expose them as a public subpackage or
-// keep them internal.
+// Package scim holds the SCIM parsing helpers the root package uses internally. The equality-only filter
+// parser is kept here so it can be tested without the root package surface.
 package scim
 
 import (

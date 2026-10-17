@@ -13,7 +13,6 @@ const asCodeCols = `code, client_id, user_id, organization_id, redirect_uri, sco
 	code_challenge, code_challenge_method, nonce, expires_at, created_at,
 	authorization_details, auth_time, acr, amr`
 
-// InsertAuthorizationCode implements theauth.OAuthServerStorage.
 func (s *Store) InsertAuthorizationCode(ctx context.Context, c theauth.AuthorizationCode) error {
 	scope, err := asEncodeList(c.Scope)
 	if err != nil {

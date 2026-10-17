@@ -12,9 +12,8 @@ import (
 	"github.com/glincker/theauth-go/v2/storage/memory"
 )
 
-// BenchmarkOAuthCallback measures the find-or-create plus token-encrypt
-// portion of an OAuth callback. The provider HTTP round trip is excluded;
-// we exercise the storage + crypto cost the library owns.
+// BenchmarkOAuthCallback measures the find-or-create and token encryption cost of an OAuth
+// callback, excluding the provider round trip.
 func BenchmarkOAuthCallback(b *testing.B) {
 	store := memory.New()
 	key := make([]byte, crypto.AESKeyLen)
@@ -25,9 +24,7 @@ func BenchmarkOAuthCallback(b *testing.B) {
 		Storage:       store,
 		BaseURL:       "http://localhost",
 		EncryptionKey: key,
-		// Providers list intentionally empty: this benchmark drives the
-		// post-token-exchange code path directly via storage so we
-		// measure the encrypt + upsert cost without HTTP noise.
+		// No providers are configured: the benchmark drives the post-exchange path directly through storage.
 		SecureCookie: false,
 	})
 	if err != nil {

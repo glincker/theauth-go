@@ -16,247 +16,171 @@ import (
 	"github.com/glincker/theauth-go/v2/kv"
 )
 
-// Config wires the OAuth 2.1 + MCP authorization server runtime. Mirror of
-// the root AuthorizationServerConfig; ferried in by *theauth.TheAuth.New
-// once at startup, then read-only for the life of the Service.
+// Config is the OAuth 2.1 and MCP authorization server configuration. It mirrors the root
+// AuthorizationServerConfig and is read-only once the Service exists.
 type Config struct {
-	// Issuer is the canonical https URL identifying this authorization
-	// server. Becomes the iss claim on every issued JWT. RFC 8414 mandates
-	// no query or fragment; trailing slash is stripped at validation.
+	// Issuer is the canonical https URL that becomes the iss claim on every JWT. Trailing slashes are
+	// stripped at validation.
 	Issuer string
 
-	// Resources lists the protected resources advertised by this AS. Every
-	// authorize and token request MUST carry a resource parameter that
-	// matches one of these identifiers; the resulting JWT's aud claim is
-	// set from the resource (RFC 8707 + RFC 9068).
+	// Resources lists the protected resources this AS advertises. Each authorize and token request
+	// must carry a resource parameter matching one of them (RFC 8707, RFC 9068).
 	Resources []models.ProtectedResource
 
-	// SigningAlg is the default JWS algorithm for access tokens: EdDSA
-	// (Ed25519, the default), ES256 or RS256. Individual clients may select
-	// another alg listed in TokenPolicy.SigningAlgs.
+	// SigningAlg is the default JWS algorithm for access tokens: EdDSA (default), ES256 or RS256.
+	// Clients may select an alg listed in TokenPolicy.SigningAlgs.
 	SigningAlg string
 
-	// TokenPolicy enables per-client access token policy: extra signing
-	// algorithms and opaque (reference) access tokens. Nil keeps every
-	// client on the default JWT/EdDSA behaviour.
+	// TokenPolicy enables per-client extra signing algorithms and opaque access tokens. Nil keeps
+	// every client on EdDSA JWTs.
 	TokenPolicy *TokenPolicyConfig
 
-	// RAR enables OAuth 2.0 Rich Authorization Requests (RFC 9396) when
-	// non-nil. Nil rejects any authorization_details parameter.
+	// RAR enables RFC 9396 authorization_details when non-nil. Nil rejects the parameter.
 	RAR *RARConfig
 
-	// IDJAG enables issuing Identity Assertion JWT Authorization Grants via
-	// token exchange and redeeming them at the jwt-bearer grant. Nil
-	// disables both.
+	// IDJAG enables Identity Assertion JWT Authorization Grants through token exchange, and their
+	// redemption at jwt-bearer.
 	IDJAG *IDJAGConfig
 
-	// KeyRotationPeriod defaults to 30 days. The rotation goroutine
-	// promotes next -> current -> previous and generates a fresh next at
-	// every cadence.
+	// KeyRotationPeriod is how often the rotation goroutine promotes next, current and previous keys
+	// (default 30 days).
 	KeyRotationPeriod time.Duration
 
-	// KeyRetention caps how long a retired key remains visible in
-	// /oauth/jwks. Defaults to 90 days.
+	// KeyRetention caps how long a retired key stays in /oauth/jwks (default 90 days).
 	KeyRetention time.Duration
 
-	// AccessTokenTTL caps the lifetime of issued access tokens. Defaults
-	// to 1 hour.
+	// AccessTokenTTL caps access token lifetime (default 1 hour).
 	AccessTokenTTL time.Duration
 
-	// RefreshTokenTTL caps the lifetime of refresh tokens. Defaults to 30
-	// days. Refresh tokens are rotated on every use; presenting an old
-	// token after rotation revokes the family (RFC 9700 section 4.14).
+	// RefreshTokenTTL caps refresh token lifetime (default 30 days). Reuse of a rotated token revokes
+	// the family (RFC 9700 section 4.14).
 	RefreshTokenTTL time.Duration
 
-	// AuthorizationCodeTTL caps the lifetime of authorization codes.
-	// Defaults to 60 seconds per OAuth 2.1 guidance.
+	// AuthorizationCodeTTL caps authorization code lifetime (default 60 seconds, per OAuth 2.1).
 	AuthorizationCodeTTL time.Duration
 
-	// RegistrationAccessTokenTTL caps the lifetime of registration access
-	// tokens minted on POST /oauth/register. Defaults to 365 days.
+	// RegistrationAccessTokenTTL caps registration access tokens minted by POST /oauth/register
+	// (default 365 days).
 	RegistrationAccessTokenTTL time.Duration
 
-	// AllowAnonymousRegistration permits POST /oauth/register without an
-	// initial access token. Off by default.
+	// AllowAnonymousRegistration permits POST /oauth/register without an initial access token. Off by default.
 	AllowAnonymousRegistration bool
 
-	// RegistrationTokens is the operator-supplied set of bearer initial
-	// access tokens that POST /oauth/register accepts when DCR is bearer
-	// gated. Pre-hashed at New time; the plaintext is dropped.
+	// RegistrationTokens are the bearer initial access tokens accepted when DCR is bearer-gated. They
+	// are hashed at New.
 	RegistrationTokens []string
 
-	// RegistrationRateLimitPerMinute caps POST /oauth/register at this
-	// many requests per source IP per minute.
+	// RegistrationRateLimitPerMinute caps POST /oauth/register per source IP.
 	RegistrationRateLimitPerMinute int
 
-	// IntrospectionCacheTTL is the Cache-Control max-age the introspection
-	// endpoint emits. Defaults to 60 seconds.
+	// IntrospectionCacheTTL is the Cache-Control max-age of introspection responses (default 60 seconds).
 	IntrospectionCacheTTL time.Duration
 
-	// SubjectActiveCacheTTL bounds how long a positive "subject is still
-	// active" answer (agent status, user disabled flag) is reused on the
-	// introspection cache-hit path, saving one storage read per request.
-	// Revocation stays immediate: agent suspend or revoke and the revocation
-	// bus (see Service.SubscribeRevocations) drop the entry at once. Zero
-	// means the 1s default, negative disables the cache, and values above
-	// 2s are clamped to 2s.
+	// SubjectActiveCacheTTL bounds reuse of a positive "subject still active" answer (agent status,
+	// disabled flag) on the introspection hit path. Revocation drops entries at once. Zero means the
+	// 1s default, negative disables, and values above 2s are clamped.
 	SubjectActiveCacheTTL time.Duration
 
-	// Clock is the time source used by the introspection cache and the
-	// chain-cache TTL. Defaults to a wrapper around time.Now when nil.
-	// Tests pass a fake clock to assert revocation propagation
-	// deterministically instead of sleeping past IntrospectionCacheTTL.
+	// Clock is the time source for the caches. Defaults to time.Now. Tests inject a fake clock to
+	// assert revocation deterministically.
 	Clock Clock
 
-	// ClockSkew is the tolerance applied when validating time claims
-	// (exp, nbf, iat) on every JWT this AS verifies: access tokens in
-	// introspection, revocation and token exchange, JAR request objects,
-	// client assertions and jwt-bearer assertions. It also widens the
-	// DPoP proof iat window. Zero (the default) means no tolerance, which
-	// is the pre-existing behavior. Negative values are treated as zero.
+	// ClockSkew is the tolerance for exp, nbf and iat checks on every JWT this AS verifies, and for
+	// the DPoP proof iat window. Zero means no tolerance; negative values are treated as zero.
 	ClockSkew time.Duration
 
-	// OnTokenIssued mirrors root LifecycleHooks.OnTokenIssued. Nil is a
-	// no-op. When set, it runs immediately before every access token JWT
-	// is signed (authorization_code, refresh_token, client_credentials,
-	// and RFC 8693 token exchange), receiving a map of the claims about to
-	// be signed and returning the map to actually sign. A non-nil error
-	// aborts issuance since the token has not yet been minted. Extra keys
-	// returned land in the JWT's non-registered (Extra) claim set;
-	// returning a key that collides with a registered claim (iss, sub,
-	// aud, exp, iat, jti, client_id, scope, typ) is silently dropped at
-	// marshal time, registered fields always win.
+	// OnTokenIssued mirrors the root hook. It runs before every access token is signed and returns the
+	// claims to sign. An error aborts issuance. Keys that collide with registered claims (iss, sub,
+	// aud, exp, iat, jti, client_id, scope, typ) are dropped at marshal time.
 	OnTokenIssued func(ctx context.Context, claims map[string]any) (map[string]any, error)
 
-	// ConsentHandler, when set, hands the consent decision to the host app:
-	// it runs after the user is authenticated and the request is valid, and
-	// may approve (optionally with narrowed scopes and a grant expiry), deny
-	// or send the user to the host's own consent page. Nil keeps the
-	// existing auto-approve behavior. See docs/oauth-consent.md.
+	// ConsentHandler hands the consent decision to the host app after authentication and request
+	// validation. It may approve (optionally narrowing scopes and setting an expiry), deny, or send
+	// the user to the host's own consent page. Nil keeps auto-approve. See docs/oauth-consent.md.
 	ConsentHandler ConsentHandler
 
-	// ConsentMaxGrantTTL caps how long a grant approved through the
-	// ConsentHandler may live (access and refresh tokens). Zero means no cap
-	// beyond the token TTLs.
+	// ConsentMaxGrantTTL caps the lifetime of a grant approved through ConsentHandler. Zero means no
+	// cap beyond token TTLs.
 	ConsentMaxGrantTTL time.Duration
 
-	// ConsentTicketTTL is how long a consent_ticket stays valid. Default 10m.
+	// ConsentTicketTTL is how long a consent_ticket stays valid (default 10m).
 	ConsentTicketTTL time.Duration
 
-	// LoginURL is the path on this origin where unauthenticated authorize
-	// requests are redirected. Defaults to "/auth/login".
+	// LoginURL is where unauthenticated authorize requests redirect (default "/auth/login").
 	LoginURL string
 
-	// DisableRotation skips the background JWKS rotation goroutine. Tests
-	// use this to assert key state from a known fixture; production must
-	// leave it false.
+	// DisableRotation skips the JWKS rotation goroutine. Tests use it to pin key state; production
+	// must leave it false.
 	DisableRotation bool
 
-	// CIMD wires the Client ID Metadata Documents resolver, per MCP
-	// authorization spec 2025-11-25. When non-nil, an incoming
-	// /oauth/authorize or /oauth/token request whose client_id parses as
-	// an https URL is resolved by fetching that URL and parsing the JSON
-	// metadata document, instead of consulting OAuthServerStorage. Nil
-	// disables CIMD entirely and the AS falls back to RFC 7591 DCR for
-	// every client_id.
+	// CIMD wires the Client ID Metadata Documents resolver. An https client_id is then
+	// resolved by fetching its metadata document. Nil falls back to RFC 7591 DCR for every client_id.
 	CIMD *cimd.Config
 
-	// DPoP, when non-nil, enables RFC 9449 sender-constrained access
-	// tokens. When DPoP is set the token endpoint inspects every request
-	// for a DPoP header, verifies the proof JWT, and embeds the RFC 7800
-	// cnf.jkt confirmation claim in the issued access token. Resource
-	// servers re-verify the same proof on every protected call. Leave
-	// nil to disable DPoP entirely (pre-PR behavior; bearer tokens are
-	// not sender constrained).
+	// DPoP, when non-nil, enables RFC 9449 sender-constrained tokens: the token endpoint binds cnf.jkt
+	// and resource servers re-verify the proof. Nil keeps plain Bearer tokens.
 	DPoP *dpop.Config
 
-	// RequireState, when true, causes StartAuthorize to reject any
-	// /oauth/authorize request that omits a non-empty state parameter,
-	// returning invalid_request. Default false preserves existing
-	// behavior. Operators deploying browser-based clients should enable
-	// this to enforce CSRF protection (security re-audit L5, 2026-06-22).
+	// RequireState makes StartAuthorize reject requests without a non-empty state (invalid_request).
+	// Browser clients should enable it for CSRF protection (security re-audit L5).
 	RequireState bool
 
-	// AccessTokenRevocation turns on the store-backed access-token jti
-	// denylist. When true (and the Storage implements
-	// AccessTokenDenylistStorage), RFC 7009 revocation of an access token,
-	// authorization-code replay, and token-exchange subject checks all
-	// consult it, and introspection reports revoked tokens inactive.
-	// Off by default: access tokens stay stateless JWTs. Resource servers
-	// that verify JWTs locally do not see the denylist; they must
-	// introspect to benefit from it.
+	// AccessTokenRevocation turns on the store-backed access-token jti denylist. Revocation, code
+	// replay and token-exchange checks consult it, and introspection reports revoked tokens inactive.
+	// Off by default: local JWT verifiers never see it.
 	AccessTokenRevocation bool
 
-	// PAR wires RFC 9126 Pushed Authorization Requests. When non-nil and
-	// the Storage backend implements PARStorage, POST /oauth/par is
-	// enabled and GET /oauth/authorize accepts request_uri. Nil (default)
-	// disables PAR entirely; existing deployments see no behavior change.
+	// PAR wires RFC 9126 pushed authorization requests when non-nil and the Storage implements
+	// PARStorage. Nil disables PAR.
 	PAR *PARConfig
 
-	// JAR wires RFC 9101 JWT-Secured Authorization Requests. When
-	// non-nil, /oauth/authorize and /oauth/par accept a "request"
-	// parameter containing a signed JWT. Nil (default) disables JAR.
+	// JAR wires RFC 9101 signed request objects on authorize and PAR. Nil disables JAR.
 	JAR *JARConfig
 
-	// JWTBearer, when non-nil, enables RFC 7523 client authentication and
-	// the jwt-bearer grant. Mirrored from root JWTBearerConfig.
+	// JWTBearer, when non-nil, enables RFC 7523 client authentication and the jwt-bearer grant.
 	JWTBearer *JWTBearerConfig
 
-	// CIBA (RFC 9509) enables the backchannel authentication endpoints when
-	// non-nil. When nil (default) the /oauth/bc-authorize endpoint is not
-	// mounted and the AS metadata does not advertise CIBA fields.
-	// Requires the Storage to also implement CIBAStorage; otherwise CIBA
-	// is silently disabled even if this field is non-nil.
+	// CIBA (RFC 9509) enables the backchannel endpoints when non-nil. It is silently disabled unless
+	// the Storage implements CIBAStorage.
 	CIBA *CIBAConfig
 
-	// RateLimits tunes per-IP and per-client request limits on the AS
-	// endpoints and the cap on concurrent client-secret verifications.
-	// Nil applies the defaults; see RateLimits.
+	// RateLimits tunes per-IP and per-client limits and the cap on concurrent client-secret
+	// verifications. Nil applies the defaults.
 	RateLimits *RateLimits
 
-	// Stores supplies the shared state backends (rate limiter, replay cache,
-	// cache). Nil fields fall back to one in-process kv.Memory.
+	// Stores supplies shared state backends (rate limiter, replay cache, caches). Nil fields use one
+	// in-process memory store.
 	Stores kv.Stores
 
-	// DeviceAuthorization (RFC 8628) enables POST /oauth/device_authorization
-	// and the device_code grant when non-nil. Requires the Storage to also
-	// implement DeviceAuthorizationStorage.
+	// DeviceAuthorization (RFC 8628) enables the device endpoint and grant when non-nil. Needs
+	// DeviceAuthorizationStorage.
 	DeviceAuthorization *DeviceConfig
 
-	// RegistrationTokenTTL is the default lifetime of an initial access
-	// token created through the admin API. Default 24h.
+	// RegistrationTokenTTL is the default lifetime of an initial access token created through the
+	// admin API (default 24h).
 	RegistrationTokenTTL time.Duration
 
-	// DeviceTokens enables constrained device enrollment and the RFC 7523
-	// device assertion grant when non-nil. Requires the Storage to also
-	// implement DeviceIdentityStorage.
+	// DeviceTokens enables constrained device enrollment and the device assertion grant when non-nil.
+	// Needs DeviceIdentityStorage.
 	DeviceTokens *DeviceTokensConfig
 
-	// OIDC turns the server into an OpenID Provider when non-nil: ID tokens,
-	// the userinfo and end_session endpoints, pairwise subjects and
-	// back-channel logout. Nil keeps the plain OAuth 2.1 behaviour.
+	// OIDC turns the server into an OpenID Provider when non-nil: ID tokens, userinfo, end_session and
+	// back-channel logout.
 	OIDC *OIDCConfig
 
-	// ClientCompat relaxes individual strictness checks for real-world
-	// clients. The zero value is fully strict. See ClientCompat.
+	// ClientCompat relaxes strictness checks for real-world clients. The zero value is fully strict.
 	ClientCompat ClientCompat
 
-	// ACRValues maps an authentication method set to the acr string emitted
-	// in access tokens and introspection responses. Keys are ACRMethodKey
-	// values: distinct amr methods sorted and joined with "+", for example
-	// "pwd", "otp+pwd" or "hwk". Method sets without an entry use the
-	// default (ACRSingleFactor, or ACRMultiFactor for "mfa" or two or more
-	// methods). When non-empty the configured values are advertised as
-	// acr_values_supported.
+	// ACRValues maps a sorted, "+"-joined amr method set (for example "pwd" or "otp+pwd") to the acr
+	// string. Missing entries use ACRSingleFactor, or ACRMultiFactor for "mfa" or two or more methods.
+	// A non-empty map is advertised as acr_values_supported.
 	ACRValues map[string]string
 
-	// SessionAMR reports a session's authentication methods; nil assumes
-	// ["pwd"].
+	// SessionAMR reports a session's authentication methods. Nil assumes ["pwd"].
 	SessionAMR func(ctx context.Context, sess *models.Session) []string
 }
 
-// JWTBearerConfig is the internal mirror of the root JWTBearerConfig.
-// Populated once at New time; read-only afterwards.
+// JWTBearerConfig is the internal mirror of the root JWTBearerConfig, populated once at New.
 type JWTBearerConfig struct {
 	TrustedJWTIssuers     []TrustedJWTIssuer
 	ClientAssertionMaxAge time.Duration
@@ -264,7 +188,6 @@ type JWTBearerConfig struct {
 	ReplayCacheTTL        time.Duration
 	MaxActorChainDepth    int
 
-	// JWKS fetching; see the root JWTBearerConfig for semantics.
 	JWKSCacheTTL             time.Duration
 	JWKSCacheMaxEntries      int
 	JWKSFetchTimeout         time.Duration
@@ -277,19 +200,15 @@ type TrustedJWTIssuer struct {
 	Issuer            string
 	JWKSURL           string
 	AllowedAlgorithms []string
-	// SubjectMapper resolves the "sub" (or other) claim to a local user ULID.
-	// The internal package holds it as a plain func to avoid a dependency on
-	// root interfaces.
-	SubjectMapper func(claims map[string]any) (models.ULID, error)
-	// RequiredClaims must all pass (AND) on the verified assertion.
+	// SubjectMapper resolves the sub claim (or another claim) to a local user ULID. It is a plain func
+	// so this package does not depend on root interfaces.
+	SubjectMapper  func(claims map[string]any) (models.ULID, error)
 	RequiredClaims []ClaimMatcher
-	// Audience, when non-empty, replaces the AS issuer URL as the expected aud.
-	Audience string
+	Audience       string
 }
 
-// Validate applies defaults and screens required fields. Mirror of the
-// root validateASConfig; mutates cfg in place so the on-disk Service ends
-// up with a fully populated config.
+// Validate applies defaults and screens required fields. It mutates cfg in place so the Service
+// keeps a fully populated config.
 func Validate(cfg *Config, encryptionKey []byte) error {
 	if cfg == nil {
 		return nil
@@ -357,11 +276,9 @@ func Validate(cfg *Config, encryptionKey []byte) error {
 	if cfg.LoginURL == "" {
 		cfg.LoginURL = pathprefix.Default + "/login"
 	}
-	// security audit H2 (2026-06-20): documented per-IP cap is now
-	// enforced. Defaults: 1 req/min/IP for the anonymous public-MCP
-	// profile, 5 req/min/IP for the bearer-gated profile. Operators that
-	// need different limits set RegistrationRateLimitPerMinute explicitly;
-	// a negative value disables the cap.
+	// Registration rate limit defaults: 1 request per minute per IP for the anonymous profile, 5 for
+	// the bearer-gated one. A negative RegistrationRateLimitPerMinute disables the cap (security audit
+	// H2).
 	if cfg.RegistrationRateLimitPerMinute == 0 {
 		if cfg.AllowAnonymousRegistration {
 			cfg.RegistrationRateLimitPerMinute = 1
@@ -422,7 +339,6 @@ func Validate(cfg *Config, encryptionKey []byte) error {
 		}
 		applyOIDCDefaults(cfg.OIDC, cfg.AccessTokenTTL)
 	}
-	// CIBA defaults.
 	if cfg.CIBA != nil {
 		if cfg.CIBA.AuthenticationDevice == nil {
 			return errors.New("theauth: CIBAConfig.AuthenticationDevice is required when CIBA is enabled")
@@ -432,10 +348,8 @@ func Validate(cfg *Config, encryptionKey []byte) error {
 	return nil
 }
 
-// AgentPolicy is the subset of root *AgentConfig that the AS needs to
-// enforce delegation policy at token-exchange time. Held on the Service
-// so the token-exchange path can read MaxChainDepth and the default TTL
-// without taking a dependency on the root package.
+// AgentPolicy is the subset of the root AgentConfig the AS needs for delegation policy at token
+// exchange: MaxChainDepth and the default TTL. It avoids a dependency on the root package.
 type AgentPolicy struct {
 	MaxChainDepth            int
 	DefaultDelegatedTokenTTL time.Duration

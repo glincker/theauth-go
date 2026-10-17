@@ -20,10 +20,9 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
-// CredentialChecker reports whether the upstream credential a session is tied
-// to is still valid. It must return ErrCredentialRevoked when the credential
-// is revoked, expired or unknown; any other error is treated as transient and
-// fails the session check closed.
+// CredentialChecker reports whether the upstream credential a session is tied to is still valid. It
+// must return ErrCredentialRevoked when the credential is revoked, expired or unknown; other errors
+// fail the session check closed.
 type CredentialChecker interface {
 	CheckCredential(ctx context.Context, credentialID string) error
 }
@@ -38,14 +37,12 @@ func (f CredentialCheckerFunc) CheckCredential(ctx context.Context, credentialID
 
 // SessionLinksConfig enables programmatic session links.
 type SessionLinksConfig struct {
-	// TTL is how long a minted link can be exchanged. Defaults to 2m.
 	TTL time.Duration
-	// CredentialChecker is consulted at mint, at exchange, and on every use
-	// of a session that carries a CredentialID. Required.
+	// CredentialChecker is consulted when a link is minted, when it is exchanged, and on every use of
+	// a session that carries a CredentialID. Required.
 	CredentialChecker CredentialChecker
 }
 
-// Step-up methods accepted by StepUp.
 const (
 	StepUpMethodPassword = "password"
 	StepUpMethodTOTP     = "totp"
@@ -63,9 +60,7 @@ type SessionInfo struct {
 	Current     bool      `json:"current"`
 }
 
-// StepUpInput carries the proof for StepUp. Password uses Password, TOTP uses
-// Code, passkey uses Challenge (from BeginStepUpPasskey) and Assertion (the
-// browser's JSON credential response).
+// StepUpInput carries the proof for StepUp: Password, TOTP Code, or a passkey Challenge and Assertion.
 type StepUpInput struct {
 	Method    string
 	Password  string
@@ -129,7 +124,6 @@ func newSessionExt(cfg *Config) (*sessionExt, error) {
 	return x, nil
 }
 
-// install wires the policy into the session service.
 func (x *sessionExt) install(svc *session.Service) {
 	p := session.Policy{IdleTimeout: x.idle}
 	if x.mgmt != nil && x.touch > 0 {
@@ -142,8 +136,8 @@ func (x *sessionExt) install(svc *session.Service) {
 	svc.SetPolicy(p)
 }
 
-// ListSessions returns the user's live sessions, marking currentID, newest
-// first. Pending-2FA sessions and idle-expired sessions are omitted.
+// ListSessions returns the user's live sessions, newest first, with currentID marked. Pending-2FA
+// and idle sessions are omitted.
 func (a *TheAuth) ListSessions(ctx context.Context, userID, currentID ULID) ([]SessionInfo, error) {
 	if a.sx.mgmt == nil {
 		return nil, missingCapability("SessionManagementStorage")
@@ -179,9 +173,8 @@ func (a *TheAuth) ListSessions(ctx context.Context, userID, currentID ULID) ([]S
 	return out, nil
 }
 
-// RevokeOwnedSession revokes one session after confirming it belongs to
-// userID. A session owned by someone else reports ErrStorageNotFound so ids
-// cannot be probed.
+// RevokeOwnedSession revokes one session after confirming it belongs to userID. Another user's
+// session returns ErrStorageNotFound, so ids cannot be probed.
 func (a *TheAuth) RevokeOwnedSession(ctx context.Context, userID, sessionID ULID) error {
 	s, err := a.storage.SessionByID(ctx, sessionID)
 	if err != nil {
@@ -197,8 +190,7 @@ func (a *TheAuth) RevokeOwnedSession(ctx context.Context, userID, sessionID ULID
 	return nil
 }
 
-// RevokeOtherSessions revokes every live session of userID except keep and
-// returns how many it revoked.
+// RevokeOtherSessions revokes every live session of userID except keep, and returns how many it revoked.
 func (a *TheAuth) RevokeOtherSessions(ctx context.Context, userID, keep ULID) (int, error) {
 	if a.sx.mgmt == nil {
 		return 0, missingCapability("SessionManagementStorage")
@@ -211,9 +203,8 @@ func (a *TheAuth) RevokeOtherSessions(ctx context.Context, userID, keep ULID) (i
 	return n, nil
 }
 
-// RevokeSessionsByCredential revokes every live session tied to credentialID.
-// Call it when the upstream credential is revoked to cut sessions at once;
-// sessions are also re-checked lazily on every use.
+// RevokeSessionsByCredential revokes every live session tied to credentialID, for cutting sessions
+// when an upstream credential is revoked. Sessions are also re-checked lazily on use.
 func (a *TheAuth) RevokeSessionsByCredential(ctx context.Context, credentialID string) (int, error) {
 	if a.sx.mgmt == nil {
 		return 0, missingCapability("SessionManagementStorage")
@@ -225,17 +216,15 @@ func (a *TheAuth) RevokeSessionsByCredential(ctx context.Context, credentialID s
 	return n, nil
 }
 
-// RotateSession issues a fresh token for the same user, UA and IP and revokes
-// old. Use it after a privilege change so a token an attacker may hold stops
-// working.
+// RotateSession issues a fresh token for the same user, UA and IP and revokes the old one. Use it
+// after a privilege change.
 func (a *TheAuth) RotateSession(ctx context.Context, old Session) (string, Session, error) {
 	user, err := a.storage.UserByID(ctx, old.UserID)
 	if err != nil {
 		return "", Session{}, fmt.Errorf("theauth: rotate session: load user: %w", err)
 	}
-	// Rotation replaces a session one for one, so it must not trip the
-	// concurrent session cap.
-	// The replacement keeps the old session's record and authentication time.
+	// Rotation replaces a session one for one, so it must not trip the concurrent session cap. The
+	// replacement keeps the old record and authentication time.
 	rctx := session.WithoutLimits(ctx)
 	if len(old.AuthMethods) > 0 {
 		rctx = models.WithAuthRecord(rctx, old.AuthTime, old.AuthMethods...)
@@ -251,8 +240,8 @@ func (a *TheAuth) RotateSession(ctx context.Context, old Session) (string, Sessi
 	return tok, ns, nil
 }
 
-// ChangePassword verifies the current password, sets the new one, revokes all
-// of the user's sessions and returns a fresh session token for the caller.
+// ChangePassword verifies the current password, sets the new one, revokes all sessions and returns
+// a fresh token.
 func (a *TheAuth) ChangePassword(ctx context.Context, cur Session, currentPassword, newPassword string) (string, error) {
 	hash, err := a.storage.UserPasswordHashByID(ctx, cur.UserID)
 	if err != nil {
@@ -294,8 +283,8 @@ func (a *TheAuth) ChangePassword(ctx context.Context, cur Session, currentPasswo
 	return tok, nil
 }
 
-// StepUp verifies a second proof of identity for the session's user and
-// elevates the session for Config.StepUpTTL, returning the elevation expiry.
+// StepUp verifies a second proof of identity for the session's user and elevates the session for
+// Config.StepUpTTL.
 func (a *TheAuth) StepUp(ctx context.Context, sess *Session, in StepUpInput) (time.Time, error) {
 	if a.sx.mgmt == nil {
 		return time.Time{}, missingCapability("SessionManagementStorage")
@@ -315,7 +304,6 @@ func (a *TheAuth) StepUp(ctx context.Context, sess *Session, in StepUpInput) (ti
 	return until, nil
 }
 
-// stepUpAMR maps a step-up method to the amr values it proves.
 func stepUpAMR(method string, probe []string) []string {
 	switch method {
 	case StepUpMethodTOTP:
@@ -330,12 +318,9 @@ func stepUpAMR(method string, probe []string) []string {
 	}
 }
 
-// recordStepUpMethods appends the completed step-up to the session record
-// and bumps AuthTime. A step-up that proves a factor the session had not
-// proved also records "mfa", but only when the session already carries a
-// record of an earlier factor: a session without a record (legacy, session
-// link) gets exactly what the step-up proved and nothing inferred. It updates
-// sess in place and does nothing when the storage cannot record methods.
+// recordStepUpMethods appends the completed step-up to the session record and bumps AuthTime. "mfa"
+// is added only when the session already has a record of an earlier factor; a legacy session with
+// no record gets exactly what was proved.
 func (a *TheAuth) recordStepUpMethods(ctx context.Context, sess *Session, method string, probe []string) error {
 	if _, ok := a.storage.(SessionAuthStorage); !ok {
 		return nil
@@ -353,12 +338,9 @@ func (a *TheAuth) recordStepUpMethods(ctx context.Context, sess *Session, method
 	return nil
 }
 
-// RecordSessionAuth appends authentication methods to the session's record
-// (RFC 8176 values, see the AMR constants) and advances its AuthTime to now,
-// atomically and without losing concurrent appends. Use it from a host owned
-// second factor or step-up so Session.AuthMethods and the authorization
-// server's amr, acr and auth_time stay truthful. It updates sess in place and
-// returns ErrStorageMissingCapability when the Storage lacks SessionAuthStorage.
+// RecordSessionAuth appends authentication methods (RFC 8176 values) to the session's record and
+// advances AuthTime to now, atomically. Use it from a host-owned second factor. It returns
+// ErrStorageMissingCapability without SessionAuthStorage.
 func (a *TheAuth) RecordSessionAuth(ctx context.Context, sess *Session, methods ...string) error {
 	if _, ok := a.storage.(SessionAuthStorage); !ok {
 		return missingCapability("SessionAuthStorage")
@@ -406,8 +388,6 @@ func (a *TheAuth) verifyStepUp(ctx context.Context, sess *Session, in StepUpInpu
 		if a.webauthnCfg == nil {
 			return nil, errStepUpMethod
 		}
-		// FinishLogin validates the assertion and bumps the sign count; the
-		// session it issues is discarded.
 		_, issued, err := a.webauthnSvc.FinishLogin(session.WithoutLimits(ctx), in.Challenge, bytes.NewReader(in.Assertion), sess.UserAgent, sess.IP)
 		if err != nil {
 			return nil, err
@@ -423,8 +403,8 @@ func (a *TheAuth) verifyStepUp(ctx context.Context, sess *Session, in StepUpInpu
 	return nil, errStepUpMethod
 }
 
-// lastAuthAt is when the session's user last proved identity: login time, or
-// the latest step-up. Sessions tied to a credential never count their creation.
+// lastAuthAt is when the session's user last proved identity. Sessions tied to a credential never
+// count their creation.
 func (a *TheAuth) lastAuthAt(s *Session) time.Time {
 	t := s.AuthTime
 	if s.CredentialID == "" && s.CreatedAt.After(t) {
@@ -438,8 +418,8 @@ func (a *TheAuth) lastAuthAt(s *Session) time.Time {
 	return t
 }
 
-// RequireRecentAuth rejects with 403 auth.recent_auth_required unless the
-// session logged in or stepped up within maxAge. It implies RequireAuth.
+// RequireRecentAuth rejects with 403 auth.recent_auth_required unless the session logged in or
+// stepped up within maxAge.
 func (a *TheAuth) RequireRecentAuth(maxAge time.Duration) func(http.Handler) http.Handler {
 	auth := a.RequireAuth()
 	return func(next http.Handler) http.Handler {
@@ -454,10 +434,9 @@ func (a *TheAuth) RequireRecentAuth(maxAge time.Duration) func(http.Handler) htt
 	}
 }
 
-// WatchSession re-validates sessionToken every interval and cancels the
-// returned context, with the reason as its cause, once it stops validating.
-// It fails closed on any error. Checks do not count as user activity. Call the
-// cancel func when the stream ends.
+// WatchSession re-validates sessionToken every interval and cancels the returned context, with the
+// reason as cause, once it stops validating. It fails closed on errors. Checks do not count as user
+// activity.
 func (a *TheAuth) WatchSession(ctx context.Context, sessionToken string, interval time.Duration) (context.Context, context.CancelCauseFunc) {
 	ctx, cancel := context.WithCancelCause(ctx)
 	if interval <= 0 {
@@ -482,9 +461,8 @@ func (a *TheAuth) WatchSession(ctx context.Context, sessionToken string, interva
 	return ctx, cancel
 }
 
-// WatchSessionMiddleware wraps a streaming handler so the request context is
-// cancelled when the caller's session stops validating (see WatchSession).
-// Place it after Authn or RequireAuth.
+// WatchSessionMiddleware wraps a streaming handler so the request context is cancelled when the
+// caller's session stops validating (see WatchSession).
 func (a *TheAuth) WatchSessionMiddleware(interval time.Duration) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -503,18 +481,15 @@ func (a *TheAuth) WatchSessionMiddleware(interval time.Duration) func(http.Handl
 // MintSessionLinkInput describes a session link to mint.
 type MintSessionLinkInput struct {
 	UserID ULID
-	// CredentialID ties the resulting session to an upstream credential that
-	// is re-checked on every use. Empty mints an unbound link.
+	// CredentialID binds the session to an upstream credential that is re-checked on every use. Empty
+	// mints an unbound link.
 	CredentialID string
-	// TTL overrides Config.SessionLinks.TTL when positive.
-	TTL time.Duration
-	// SessionTTL bounds the resulting session when positive.
-	SessionTTL time.Duration
+	TTL          time.Duration
+	SessionTTL   time.Duration
 }
 
-// MintSessionLink mints a single-use token that ConsumeSessionLink exchanges
-// for a session for in.UserID. The raw token is returned once; only its hash
-// is stored. The caller authorizes the mint.
+// MintSessionLink mints a single-use token that ConsumeSessionLink exchanges for a session. Only
+// its hash is stored.
 func (a *TheAuth) MintSessionLink(ctx context.Context, in MintSessionLinkInput) (string, SessionLink, error) {
 	if a.sx.linksCfg == nil {
 		return "", SessionLink{}, errors.New("theauth: session links are not enabled")
@@ -552,8 +527,7 @@ func (a *TheAuth) MintSessionLink(ctx context.Context, in MintSessionLinkInput) 
 	return tok, link, nil
 }
 
-// ConsumeSessionLink exchanges a link token for a session token. Every
-// failure mode returns ErrSessionLinkInvalid.
+// ConsumeSessionLink exchanges a link token for a session token. Every failure returns ErrSessionLinkInvalid.
 func (a *TheAuth) ConsumeSessionLink(ctx context.Context, token, userAgent, ip string) (string, Session, error) {
 	if a.sx.linksCfg == nil {
 		return "", Session{}, ErrSessionLinkInvalid
@@ -577,8 +551,7 @@ func (a *TheAuth) ConsumeSessionLink(ctx context.Context, token, userAgent, ip s
 	if err != nil {
 		return "", Session{}, ErrSessionLinkInvalid
 	}
-	// Session links are not interactive sign-ins: never record methods or an
-	// AuthTime, even if the caller context carries a record.
+	// Session links are not interactive sign-ins, so no auth record or AuthTime is written.
 	tok, sess, err := a.sessionSvc.IssueWith(models.WithAuthRecord(ctx, time.Time{}), *user, session.IssueOptions{
 		UserAgent: userAgent, IP: ip, CredentialID: link.CredentialID, TTL: link.SessionTTL,
 	})

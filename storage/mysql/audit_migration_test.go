@@ -5,9 +5,8 @@ import (
 	"testing"
 )
 
-// TestAuditAccountabilityMigrationSplits needs no database: it checks the
-// embedded 0027 migration splits into the four statements the migrator runs
-// one by one (ALTER, unique index, chain heads table, secrets table).
+// TestAuditAccountabilityMigrationSplits needs no database: it checks that embedded 0027 splits
+// into the four statements the migrator runs.
 func TestAuditAccountabilityMigrationSplits(t *testing.T) {
 	files, err := loadMigrationFiles()
 	if err != nil {

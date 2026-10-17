@@ -11,7 +11,6 @@ var (
 	_ theauth.UserCountStorage  = (*Store)(nil)
 )
 
-// AdvanceTOTPStep implements theauth.TOTPReplayStorage.
 func (s *Store) AdvanceTOTPStep(_ context.Context, userID theauth.ULID, step int64) (bool, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -22,7 +21,6 @@ func (s *Store) AdvanceTOTPStep(_ context.Context, userID theauth.ULID, step int
 	return true, nil
 }
 
-// CountUsers implements theauth.UserCountStorage.
 func (s *Store) CountUsers(_ context.Context) (int, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()

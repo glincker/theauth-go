@@ -6,11 +6,9 @@ import (
 	"time"
 )
 
-// sharedcache.go: optional second cache tier backed by kv.Cache so several
-// replicas reuse one fetched document instead of each hitting the publisher.
-// The in-process map stays the first tier. A document read back from the
-// shared tier is re-run through parseAndValidate, so a tampered or stale
-// entry can never skip validation.
+// sharedcache.go is an optional second cache tier backed by kv.Cache, so replicas reuse one fetched
+// document. A document read back from the shared tier is re-validated, so a tampered entry can
+// never skip validation.
 
 const sharedKeyPrefix = "cimd:doc:"
 

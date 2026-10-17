@@ -55,15 +55,13 @@ func (a *TheAuth) Mount(r chi.Router) {
 }
 
 func (a *TheAuth) mountRoutes(r chi.Router) {
-	// Build limiter middlewares once so the same buckets persist across all
-	// routes mounted at this point. Re-mounting builds a fresh set.
+	// Limiters are built once so every route mounted here shares the same buckets.
 	ipLimit := a.RateLimitByIP(a.rateLimitPerIP)
 	emailLimit := a.RateLimitByEmail(a.rateLimitPerEmail)
 
 	r.Route(a.pathPrefix, func(r chi.Router) {
-		// security re-audit L1 (2026-06-22): /auth/magic-link was unrate-limited,
-		// allowing enumeration of registered email addresses. Apply the same
-		// per-IP and per-email caps used by the password endpoints.
+		// magic-link requests are rate limited too, so registered addresses cannot be enumerated
+		// (security re-audit L1).
 		r.With(ipLimit, emailLimit).Post("/magic-link", a.handleMagicLinkRequest)
 		if a.bootstrap != nil {
 			r.Get("/bootstrap/status", a.handleBootstrapStatus)
@@ -74,30 +72,25 @@ func (a *TheAuth) mountRoutes(r chi.Router) {
 			a.mountPasswordHandlers(r, ipLimit, emailLimit)
 		})
 
-		// OAuth providers (v0.3). Only mounted when at least one provider
-		// is registered; the routes 404 cleanly otherwise.
+		// OAuth routes mount only when at least one provider is registered.
 		if a.oauthSvc != nil {
 			a.mountOAuth(r, ipLimit)
 		}
 
-		// WebAuthn passkeys (v0.5). Mounted only when Config.WebAuthn is set.
 		if a.webauthnCfg != nil {
 			a.mountWebAuthn(r, ipLimit)
 		}
 
-		// TOTP 2FA (v0.5). Mounted only when Config.TOTP is set.
 		if a.totpCfg != nil {
 			a.mountTOTP(r, ipLimit)
 		}
 
-		// Multi-tenancy (v0.7). Mounted only when Config.Organizations is
-		// set; the SAML connection CRUD and SCIM token CRUD subroutes hang
-		// off the org tree.
+		// Organization routes mount only when Config.Organizations is set. SAML and SCIM token subroutes
+		// hang off the org tree.
 		if a.orgsCfg != nil {
 			a.mountOrganizations(r)
 		}
-		// SAML flow endpoints (v0.7). Mounted only when Config.SAML is
-		// set; per-organization SAML connection CRUD lives under
+		// SAML flow endpoints mount only when Config.SAML is set. Connection CRUD lives under
 		// /auth/orgs/{orgId}/saml/connections.
 		if a.samlCfg != nil {
 			a.mountSAML(r)
@@ -116,28 +109,23 @@ func (a *TheAuth) mountRoutes(r chi.Router) {
 		r.With(a.RequireAuth()).Get("/me", a.handleMe)
 	})
 
-	// SCIM 2.0 resource endpoints (v0.7). Mounted at /scim/v2/ rather than
-	// under /auth so the standard SCIM URL prefix is preserved.
+	// SCIM 2.0 endpoints mount at /scim/v2/ so the standard prefix is kept.
 	if a.scimCfg != nil {
 		a.mountSCIM(r)
 	}
 
-	// Admin API (v1.0). Mounted at /admin/v1/* (or AdminConfig.PathPrefix)
-	// only when Config.Admin is non-nil. Requires RBAC (validated in New).
+	// Admin API mounts at /admin/v1/* (or AdminConfig.PathPrefix) when Config.Admin is set; it requires RBAC.
 	if a.adminCfg != nil {
 		a.mountAdmin(r)
 	}
 
-	// OAuth 2.1 authorization server (v2.0 phase 1 + 2). Mounted at
-	// /.well-known/* and /oauth/* only when Config.AuthorizationServer is
-	// non-nil. Phase 3 + 4 (agent identity, delegation, token exchange) land
-	// in subsequent PRs.
+	// OAuth 2.1 authorization server routes mount at /.well-known/* and /oauth/* when
+	// Config.AuthorizationServer is set.
 	if a.as != nil {
 		a.mountAS(r)
 	}
 
-	// End-user /account UX (v2.0 phase 6). Session-gated; mounted only when
-	// AccountUX is true (which already requires AgentIdentity at New time).
+	// End-user /account routes are session-gated and mount only when AccountUX is set.
 	if a.accountUX {
 		a.mountAccount(r)
 	}
@@ -225,8 +213,7 @@ func (a *TheAuth) handleSessionDelete(w http.ResponseWriter, r *http.Request) {
 }
 
 func errToHTTP(w http.ResponseWriter, err error) {
-	// Prefer the new TheAuthError code mapping when available, gives callers
-	// a stable Code field in the response body for programmatic handling.
+	// Prefer the TheAuthError code mapping, which gives callers a stable Code in the response body.
 	var te *TheAuthError
 	if errors.As(err, &te) {
 		switch te.Code {
@@ -246,8 +233,7 @@ func errToHTTP(w http.ResponseWriter, err error) {
 		case CodePasswordResetExpired, CodePasswordResetInvalid:
 			writeJSONError(w, http.StatusUnauthorized, te.Code, te.Message)
 		case CodeInvalidTOTP, CodeWebAuthn:
-			// 401 because the supplied factor is invalid; 400 would imply
-			// a malformed request, which we already screened for above.
+			// 401 because the supplied factor is invalid; a malformed request was already rejected above.
 			writeJSONError(w, http.StatusUnauthorized, te.Code, te.Message)
 		case CodeAlreadyEnrolled:
 			writeJSONError(w, http.StatusConflict, te.Code, te.Message)
@@ -275,7 +261,7 @@ func errToHTTP(w http.ResponseWriter, err error) {
 	}
 }
 
-// writeJSONError emits the v0.2+ error response shape: {"code":"...","message":"..."}.
+// writeJSONError writes the {"code":"...","message":"..."} error shape.
 func writeJSONError(w http.ResponseWriter, status int, code, message string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
@@ -285,11 +271,8 @@ func writeJSONError(w http.ResponseWriter, status int, code, message string) {
 	}{Code: code, Message: message})
 }
 
-// oauthServiceAdapter implements internal/oauth/handlers.Service on top
-// of the root *TheAuth, exposing only the three methods the extracted
-// handler needs. The OAuth service itself still lives in root
-// (service_oauth.go); a future PR can extract it into internal/oauth
-// like PR D did for password / totp / webauthn / saml.
+// oauthServiceAdapter exposes the three OAuth methods that the extracted internal/oauth/handlers
+// package needs.
 type oauthServiceAdapter struct{ a *TheAuth }
 
 // HasProvider reports whether the named provider is registered.
@@ -298,31 +281,25 @@ func (s oauthServiceAdapter) HasProvider(name string) bool {
 	return ok
 }
 
-// LookupProvider reports whether the named provider exists, consulting a
-// ProviderResolver when one is configured.
+// LookupProvider reports whether the named provider exists, consulting ProviderResolver when set.
 func (s oauthServiceAdapter) LookupProvider(ctx context.Context, name string) (bool, error) {
 	return s.a.oauthSvc.LookupProvider(ctx, name)
 }
 
-// Start delegates the /auth/providers/{name}/start flow to
-// *TheAuth.startOAuth.
+// Start delegates the /auth/providers/{name}/start flow to *TheAuth.startOAuth.
 func (s oauthServiceAdapter) Start(ctx context.Context, r *http.Request, providerName, returnTo string) (internaloauth.StartResult, error) {
 	return s.a.startOAuth(ctx, r, providerName, returnTo)
 }
 
-// Callback delegates the /auth/providers/{name}/callback flow to
-// *TheAuth.callbackOAuth, discarding the *User return (the handler
-// only needs the session token).
+// Callback delegates the /auth/providers/{name}/callback flow to *TheAuth.callbackOAuth, discarding
+// the *User return (the handler only needs the session token).
 func (s oauthServiceAdapter) Callback(ctx context.Context, providerName, code, state, binding, ua, ip string) (internaloauth.CallbackResult, error) {
 	res, _, err := s.a.callbackOAuth(ctx, providerName, code, state, binding, ua, ip)
 	return res, err
 }
 
-// passwordServiceAdapter implements internal/password/handlers.Service on
-// top of the root *TheAuth so Signup/Signin/Reset dispatch through the
-// hook-firing root forwarders (signupWithPassword, signinWithPassword,
-// resetPassword) instead of calling passwordSvc directly, which would
-// silently skip LifecycleHooks (OnSignup, OnSignin, OnPasswordChange).
+// passwordServiceAdapter routes Signup, Signin and Reset through the hook-firing root forwarders.
+// Calling passwordSvc directly would silently skip LifecycleHooks.
 type passwordServiceAdapter struct{ a *TheAuth }
 
 func (s passwordServiceAdapter) Signup(ctx context.Context, emailAddr, pw string) (*User, string, error) {
@@ -341,10 +318,7 @@ func (s passwordServiceAdapter) Reset(ctx context.Context, token, newPassword st
 	return s.a.resetPassword(ctx, token, newPassword)
 }
 
-// mountPasswordHandlers wires /email-password/* subroutes via the
-// extracted internal/password/handlers package. PR E architecture
-// reorg (2026-06-20) moved the four endpoints to that package; this
-// thin coordinator is what the root Mount calls.
+// mountPasswordHandlers mounts the /email-password/* routes via internal/password/handlers.
 func (a *TheAuth) mountPasswordHandlers(r chi.Router, ipLimit, emailLimit func(http.Handler) http.Handler) {
 	h := passwordhandlers.New(passwordServiceAdapter{a: a}, passwordhandlers.CookieConfig{
 		Name:             a.cookieName,
@@ -355,15 +329,8 @@ func (a *TheAuth) mountPasswordHandlers(r chi.Router, ipLimit, emailLimit func(h
 	h.Mount(r, ipLimit, emailLimit)
 }
 
-// mountTOTP wires /auth/totp/* under r via the extracted
-// internal/totp/handlers package. PR E architecture reorg
-// (2026-06-20) moved the five endpoints to that package; the root
-// keeps this thin coordinator so handlers.go is the single Mount
-// caller.
-// totpServiceAdapter implements internal/totp/handlers.Service on top of
-// the root *TheAuth so FinishEnrollment dispatches through the
-// hook-firing root forwarder (FinishTOTPEnrollment) instead of calling
-// totpSvc directly, which would silently skip LifecycleHooks.OnMFAEnabled.
+// mountTOTP mounts /auth/totp/* via internal/totp/handlers. totpServiceAdapter routes
+// FinishEnrollment through the hook-firing forwarder so OnMFAEnabled is never skipped.
 type totpServiceAdapter struct{ a *TheAuth }
 
 func (s totpServiceAdapter) BeginEnrollment(ctx context.Context, userID ULID, accountName string) (EnrollTOTPResult, error) {
@@ -390,11 +357,9 @@ func (s totpServiceAdapter) ConsumeRecoveryCode(ctx context.Context, pendingSess
 	return s.rotateAndFireSignin(ctx, sess)
 }
 
-// rotateAndFireSignin swaps the upgraded pending session for a fresh one
-// and fires OnSignin with the session the client will actually hold. The
-// public VerifyTOTP/ConsumeRecoveryCode forwarders fire for direct library
-// callers; this adapter bypasses them so the hook is not fired twice and
-// never sees the about-to-be-revoked pre-rotation session.
+// rotateAndFireSignin swaps the upgraded pending session for a fresh one and fires OnSignin with
+// the session the client will hold. It bypasses the public forwarders so the hook fires once and
+// never sees the revoked pre-rotation session.
 func (s totpServiceAdapter) rotateAndFireSignin(ctx context.Context, sess Session) (string, Session, error) {
 	tok, ns, err := s.a.RotateSession(ctx, sess)
 	if err != nil {
@@ -416,7 +381,6 @@ func (s totpServiceAdapter) Delete(ctx context.Context, userID ULID) error {
 	if err := s.a.totpSvc.Delete(ctx, userID); err != nil {
 		return err
 	}
-	// Trust granted under the old second factor does not outlive it.
 	if s.a.devices != nil {
 		if _, err := s.a.devices.RevokeAll(ctx, userID); err != nil {
 			slog.Warn("theauth: revoke trusted devices after totp removal failed", "user_id", userID.String(), "err", err.Error())
@@ -425,8 +389,7 @@ func (s totpServiceAdapter) Delete(ctx context.Context, userID ULID) error {
 	return nil
 }
 
-// RememberDevice implements totp handlers' optional DeviceRemember
-// capability.
+// RememberDevice implements the optional DeviceRemember capability of the TOTP handlers.
 func (s totpServiceAdapter) RememberDevice(ctx context.Context, userID ULID, userAgent, ip string) (string, time.Time, error) {
 	return s.a.rememberTrustedDevice(ctx, userID, userAgent, ip)
 }
@@ -447,16 +410,9 @@ func (a *TheAuth) mountTOTP(r chi.Router, ipLimit func(http.Handler) http.Handle
 	h.Mount(r, ipLimit, a.RequireAuth(), a.RequirePendingOrFull())
 }
 
-// mountWebAuthn wires /auth/webauthn/* under r via the extracted
-// internal/webauthn/handlers package. PR E architecture reorg
-// (2026-06-20) moved the six endpoints to that package; the root
-// keeps this thin coordinator so handlers.go is the single Mount
-// caller.
-// webauthnServiceAdapter implements internal/webauthn/handlers.Service on
-// top of the root *TheAuth so FinishRegistration dispatches through the
-// hook-firing root forwarder (FinishPasskeyRegistration) instead of
-// calling webauthnSvc directly, which would silently skip
-// LifecycleHooks.OnSignup on a user's first credential.
+// mountWebAuthn mounts /auth/webauthn/* via internal/webauthn/handlers. The adapter routes
+// FinishRegistration through the hook-firing forwarder so OnSignup fires on a user's first
+// credential.
 type webauthnServiceAdapter struct{ a *TheAuth }
 
 func (s webauthnServiceAdapter) BeginRegistration(ctx context.Context, userID ULID) (*protocol.CredentialCreation, string, error) {
@@ -507,10 +463,7 @@ func (a *TheAuth) mountWebAuthn(r chi.Router, ipLimit func(http.Handler) http.Ha
 	h.Mount(r, ipLimit, a.RequireAuth())
 }
 
-// mountOAuth wires /auth/providers/* under r via the extracted
-// internal/oauth/handlers package. PR E architecture reorg
-// (2026-06-20) moved the two endpoints to that package; the root keeps
-// this thin coordinator so handlers.go is the single Mount caller.
+// mountOAuth mounts /auth/providers/* via internal/oauth/handlers.
 func (a *TheAuth) mountOAuth(r chi.Router, ipLimit func(http.Handler) http.Handler) {
 	h := oauthhandlers.New(
 		oauthServiceAdapter{a: a},
@@ -524,11 +477,8 @@ func (a *TheAuth) mountOAuth(r chi.Router, ipLimit func(http.Handler) http.Handl
 	h.Mount(r, ipLimit)
 }
 
-// mountAS wires the OAuth 2.1 authorization server routes (.well-known
-// + /oauth/*) via the extracted internal/as/handlers package. Only
-// called when Config.AuthorizationServer is non-nil (and therefore a.as
-// is non-nil). PR F architecture reorg (2026-06-20) moved the AS HTTP
-// surface and the scopeSplit helper there.
+// mountAS mounts the OAuth 2.1 authorization server routes via internal/as/handlers. It runs only
+// when AuthorizationServer is set.
 func (a *TheAuth) mountAS(r chi.Router) {
 	if a.as == nil {
 		return
@@ -544,10 +494,8 @@ func (a *TheAuth) mountAS(r chi.Router) {
 	h.Mount(r, a.Authn(), registerLimit)
 }
 
-// asAuthContext reports how and when the request's session authenticated
-// for the authorization server: auth_time is the later of sign-in and the
-// latest step-up, amr comes from AuthorizationServerConfig.SessionAMR and
-// defaults to ["pwd"]. The second result is false without a session.
+// asAuthContext reports how the request's session authenticated, for auth_time, amr and acr. The
+// amr defaults to ["pwd"].
 func (a *TheAuth) asAuthContext(r *http.Request) (internalas.AuthContext, bool) {
 	sess, ok := SessionFromContext(r.Context())
 	if !ok || sess == nil {
@@ -565,8 +513,8 @@ func (a *TheAuth) asAuthContext(r *http.Request) (internalas.AuthContext, bool) 
 	return internalas.AuthContext{AuthTime: a.lastAuthAt(sess), AMR: amr, SessionID: sess.ID.String()}, true
 }
 
-// asEndSession revokes the request's session and clears its cookie. It is
-// the logout half of OIDC end_session.
+// asEndSession revokes the request's session and clears its cookie. It is the logout half of OIDC
+// end_session.
 func (a *TheAuth) asEndSession(w http.ResponseWriter, r *http.Request) {
 	if sess, ok := SessionFromContext(r.Context()); ok && sess != nil {
 		if err := a.storage.RevokeSession(r.Context(), sess.ID); err == nil {

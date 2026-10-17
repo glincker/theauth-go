@@ -236,8 +236,7 @@ RETURNING id, user_id, credential_id, session_ttl, created_at, expires_at, consu
 const sessionUserCols = `s.id, s.user_id, s.token_hash, s.user_agent, s.ip, s.created_at, s.expires_at, s.revoked_at,
 s.auth_level, s.active_organization_id, s.last_seen_at, s.elevated_until, s.credential_id, s.auth_methods, s.auth_time`
 
-// SessionAndUserByTokenHash returns a session and its user in one round trip,
-// instead of the two sequential queries SessionByTokenHash plus UserByID cost.
+// SessionAndUserByTokenHash returns a session and its user in one round trip.
 func (s *Store) SessionAndUserByTokenHash(ctx context.Context, hash []byte) (*theauth.Session, *theauth.User, error) {
 	var u sqlcgen.User
 	sess, err := scanSessionWith(s.pool.QueryRow(ctx, `SELECT `+sessionUserCols+`,
@@ -262,9 +261,8 @@ func methodsOrNil(m []string) []string {
 	return m
 }
 
-// AppendSessionAuthMethods adds methods to the session's auth_methods and
-// advances auth_time. The row is locked FOR UPDATE for the read-merge-write,
-// so concurrent appends serialize and none loses methods.
+// AppendSessionAuthMethods merges methods and advances auth_time under a FOR UPDATE row
+// lock, so concurrent appends never lose methods.
 func (s *Store) AppendSessionAuthMethods(ctx context.Context, id theauth.ULID, methods []string, at time.Time) ([]string, time.Time, error) {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {

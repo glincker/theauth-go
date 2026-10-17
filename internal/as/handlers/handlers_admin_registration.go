@@ -1,13 +1,7 @@
 package handlers
 
-// handlers_admin_registration.go: admin API for initial access tokens, mounted
-// inside the organization-scoped admin tree:
-//
-//	POST   /admin/v1/organizations/{orgID}/registration-tokens
-//	GET    /admin/v1/organizations/{orgID}/registration-tokens
-//	DELETE /admin/v1/organizations/{orgID}/registration-tokens/{tokenID}
-//
-// The plaintext token appears once, in the POST response.
+// handlers_admin_registration.go is the admin API for initial access tokens, under the org-scoped
+// admin tree. The plaintext token appears once, in the POST response.
 
 import (
 	"errors"
@@ -32,8 +26,7 @@ func NewAdmin(svc *internalas.Service, userFromCtx func(r *http.Request) (*model
 	return &AdminHandler{svc: svc, userFromCtx: userFromCtx}
 }
 
-// Mount attaches the routes to an org-scoped router. gate returns the
-// permission middleware (root passes RequirePermission).
+// Mount attaches the routes to an org-scoped router. gate supplies the permission middleware.
 func (a *AdminHandler) Mount(r chi.Router, gate func(permission string) func(http.Handler) http.Handler) {
 	perm := gate(models.PermissionAgentsAdmin)
 	a.mountDevices(r, perm)
@@ -45,8 +38,7 @@ func (a *AdminHandler) Mount(r chi.Router, gate func(permission string) func(htt
 	r.With(perm).Delete("/registration-tokens/{tokenID}", a.revoke)
 }
 
-// registrationTokenView is the wire form of a token. It never carries the
-// hash.
+// registrationTokenView is the wire form of a token. It never carries the hash.
 type registrationTokenView struct {
 	ID         string     `json:"id"`
 	Prefix     string     `json:"prefix"`

@@ -7,15 +7,8 @@ import (
 	"testing"
 )
 
-// BenchmarkMagicLinkConsume measures the request path: hand the handler
-// a freshly minted token via the request endpoint, scrape the cookie
-// after the verify path completes. Pre-seeded users are reused across
-// iterations so the create-user side effect does not dominate the cost.
-//
-// Note: this benchmark measures the request + verify pair rather than
-// verify alone because the noop sender does not surface the token; the
-// equivalent measurement is hand-rolled through the storage layer in a
-// future iteration if needed.
+// BenchmarkMagicLinkConsume measures the request and verify pair. The noop sender does not surface
+// the token, so the verify step is not isolated.
 func BenchmarkMagicLinkConsume(b *testing.B) {
 	_, h := newBenchRouter(b)
 

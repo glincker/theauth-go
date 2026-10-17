@@ -44,9 +44,8 @@ func buildBenchChain(b *testing.B, n int, secret []byte) []ChainRow {
 	return rows
 }
 
-// BenchmarkChainVerify measures a full walk of a 1000-row chain, the work a
-// backend does per VerifyAuditChain call once rows are scanned. Reported per
-// op is the whole walk, so divide by 1000 for a per-row cost.
+// BenchmarkChainVerify measures a full walk of a 1000-row chain. Divide the per-op time by 1000 for
+// a per-row cost.
 func BenchmarkChainVerify(b *testing.B) {
 	secret := []byte("0123456789abcdef0123456789abcdef")
 	rows := buildBenchChain(b, 1000, secret)

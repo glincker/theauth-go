@@ -17,7 +17,6 @@ import (
 // /oauth/bc-authorize endpoint is automatically enabled when this store is
 // used with Config.AuthorizationServer.CIBA != nil.
 
-// InsertBackchannelRequest satisfies CIBAStorage.
 func (s *Store) InsertBackchannelRequest(ctx context.Context, req theauth.BackchannelRequest) error {
 	const q = `
 INSERT INTO backchannel_requests (
@@ -53,7 +52,6 @@ INSERT INTO backchannel_requests (
 	return err
 }
 
-// BackchannelRequestByID satisfies CIBAStorage.
 func (s *Store) BackchannelRequestByID(ctx context.Context, authReqID string) (theauth.BackchannelRequest, error) {
 	const q = `
 SELECT
@@ -106,7 +104,6 @@ WHERE auth_req_id = $1`
 	return nil
 }
 
-// DeleteBackchannelRequest satisfies CIBAStorage.
 func (s *Store) DeleteBackchannelRequest(ctx context.Context, authReqID string) error {
 	const q = `DELETE FROM backchannel_requests WHERE auth_req_id = $1`
 	tag, err := s.pool.Exec(ctx, q, authReqID)

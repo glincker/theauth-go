@@ -16,40 +16,32 @@ import (
 	"github.com/glincker/theauth-go/v2/internal/ulid"
 )
 
-// oidc_logout.go: RP-Initiated Logout 1.0 and Back-Channel Logout 1.0.
-
-// backchannelLogoutEvent is the key of the events claim in a logout token.
 const backchannelLogoutEvent = "http://schemas.openid.net/event/backchannel-logout" // NOSONAR go:S5332 event identifier fixed by the spec, not a URL fetched
 
-// logoutTokenTTL is how long a delivered logout token stays valid.
 const logoutTokenTTL = 2 * time.Minute
 
 // ErrEndSessionInvalid wraps every end_session request the server refuses.
 var ErrEndSessionInvalid = errors.New("end_session: invalid request")
 
-// EndSessionRequest is the parsed end_session request plus the session the
-// browser presented, when any.
+// EndSessionRequest is the parsed end_session request plus the session the browser presented, if any.
 type EndSessionRequest struct {
 	IDTokenHint           string
 	ClientID              string
 	PostLogoutRedirectURI string
 	State                 string
 
-	// SessionID and UserID identify the session behind the request's
-	// cookie. Empty when the browser has none.
 	SessionID string
 	UserID    *models.ULID
 }
 
-// EndSessionResult tells the handler where to send the user agent. An empty
-// RedirectURL means render the signed-out page.
+// EndSessionResult tells the handler where to send the user agent. An empty RedirectURL means
+// render the signed-out page.
 type EndSessionResult struct {
 	RedirectURL string
 }
 
-// EndSession validates an RP-initiated logout request and notifies the
-// session's clients through back-channel logout. The caller ends the session
-// itself afterwards.
+// EndSession validates an RP-initiated logout and notifies the session's clients through
+// back-channel logout. The caller ends the session afterwards.
 func (s *Service) EndSession(ctx context.Context, req EndSessionRequest) (EndSessionResult, error) {
 	if !s.OIDCEnabled() {
 		return EndSessionResult{}, errOIDCDisabled
@@ -82,7 +74,6 @@ func (s *Service) EndSession(ctx context.Context, req EndSessionRequest) (EndSes
 	if req.PostLogoutRedirectURI != "" {
 		reg := ""
 		if client != nil {
-			// Use the registered string, never the request's copy.
 			for _, u := range client.PostLogoutRedirectURIs {
 				if u == req.PostLogoutRedirectURI {
 					reg = u
@@ -108,9 +99,8 @@ func (s *Service) EndSession(ctx context.Context, req EndSessionRequest) (EndSes
 	return EndSessionResult{RedirectURL: redirect}, nil
 }
 
-// NotifyLogout sends a back-channel logout token to every client that took
-// part in sessionID and forgets the session. Deliveries run in the
-// background; failures are logged and never block the caller.
+// NotifyLogout sends a back-channel logout token to every client that took part in sessionID, then
+// forgets the session. Deliveries run in the background and never block the caller.
 func (s *Service) NotifyLogout(ctx context.Context, userID models.ULID, sessionID string) {
 	if !s.OIDCEnabled() || sessionID == "" {
 		return

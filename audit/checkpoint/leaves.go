@@ -20,9 +20,8 @@ const (
 var (
 	FieldsV2 = []string{"id", "action", "resource", "parameters", "result", "reason", "durationMs", "tokensCost", "ip", "userAgent", "cacheHit", "timestamp", "policyVersion", "delegationChain", "inputProvenance", "idPseudonyms"}
 	FieldsV1 = []string{"id", "action", "resource", "parameters", "result", "reason", "durationMs", "tokensCost", "ip", "userAgent", "cacheHit", "timestamp", "agentId", "userId"}
-	// GoChainFields are the receipt fields of a Go chain row. The personal ids
-	// (actor user, session, subject, actor, approver) are left out: they are
-	// erasable, and the row hash still covers them.
+	// GoChainFields are the receipt fields of a Go chain row. Personal ids are left out because they
+	// are erasable; the row hash still covers them.
 	GoChainFields = []string{"id", "organizationId", "action", "targetType", "targetId", "metadata", "ip", "userAgent", "createdAtMicro", "policyVersion", "delegationChain", "inputProvenance", "chainSeq", "prevHash"}
 )
 

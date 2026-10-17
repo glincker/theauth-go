@@ -31,21 +31,18 @@ type MintAgentTokenInput struct {
 	// UserID is the human the agent acts for.
 	UserID    ULID
 	AgentName string
-	// AgentID is the registered agent the token is minted for. Set it whenever
-	// the agent is known: the agent suspend and revoke cascade then cuts the
-	// token by exact id instead of by name. Nil keeps the name-only record.
+	// AgentID is the registered agent the token is minted for. Set it whenever the agent is known, so
+	// suspend and revoke cut the token by exact id. Nil keeps a name-only record.
 	AgentID *ULID
-	// Abilities are the agent's allowed abilities. Each must be one the user
-	// holds now; at request time the token is further cut to what the user
-	// holds then.
+	// Abilities are the agent's allowed abilities. Each must be held by the user now, and the token is
+	// cut further to what the user holds at request time.
 	Abilities []string
 	// TTL defaults to Config.APITokens.AgentTTL.
 	TTL time.Duration
 }
 
-// MintAgentToken mints an API token with kind=agent acting for UserID. It
-// returns ErrAbilityNotHeld when Abilities exceeds what the user holds now.
-// Needs Config.APITokens.
+// MintAgentToken mints an agent-kind API token acting for UserID. It returns ErrAbilityNotHeld when
+// Abilities exceeds the user's.
 func (s *Service) MintAgentToken(ctx context.Context, in MintAgentTokenInput) (string, APIToken, error) {
 	user, err := s.users.UserByID(ctx, in.UserID)
 	if err != nil {
@@ -73,10 +70,8 @@ func (s *Service) MintAgentToken(ctx context.Context, in MintAgentTokenInput) (s
 	return raw, tok, nil
 }
 
-// DelegatedAbilities returns the intersection of an agent's allowed scopes
-// and what the user holds right now, for resource servers that authenticate
-// agents by another path (for example an OAuth access token) and want the same
-// per-request cut as agent API tokens. Needs Config.APITokens.
+// DelegatedAbilities returns the intersection of an agent's scopes and what the user holds now.
+// Resource servers that authenticate agents another way use it for the same per-request cut.
 func (s *Service) DelegatedAbilities(ctx context.Context, userID ULID, agentScopes []string) ([]string, error) {
 	user, err := s.users.UserByID(ctx, userID)
 	if err != nil {

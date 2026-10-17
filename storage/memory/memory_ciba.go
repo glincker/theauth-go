@@ -9,8 +9,7 @@ import (
 	"github.com/glincker/theauth-go/v2/storage"
 )
 
-// memory_ciba.go: in-memory CIBAStorage adapter for RFC 9509 backchannel
-// authentication. State lives in a sidecar struct to keep Store{} small.
+// memory_ciba.go: in-memory CIBAStorage for RFC 9509 backchannel authentication, in a sidecar struct.
 
 type cibaState struct {
 	mu       sync.RWMutex
@@ -26,7 +25,6 @@ func (s *Store) ensureCIBA() *cibaState {
 	return s.ciba
 }
 
-// InsertBackchannelRequest satisfies CIBAStorage.
 func (s *Store) InsertBackchannelRequest(_ context.Context, req theauth.BackchannelRequest) error {
 	c := s.ensureCIBA()
 	c.mu.Lock()
@@ -41,7 +39,6 @@ func (s *Store) InsertBackchannelRequest(_ context.Context, req theauth.Backchan
 	return nil
 }
 
-// BackchannelRequestByID satisfies CIBAStorage.
 func (s *Store) BackchannelRequestByID(_ context.Context, authReqID string) (theauth.BackchannelRequest, error) {
 	c := s.ensureCIBA()
 	c.mu.RLock()
@@ -53,7 +50,6 @@ func (s *Store) BackchannelRequestByID(_ context.Context, authReqID string) (the
 	return r, nil
 }
 
-// UpdateBackchannelRequest satisfies CIBAStorage.
 func (s *Store) UpdateBackchannelRequest(_ context.Context, req theauth.BackchannelRequest) error {
 	c := s.ensureCIBA()
 	c.mu.Lock()
@@ -68,7 +64,6 @@ func (s *Store) UpdateBackchannelRequest(_ context.Context, req theauth.Backchan
 	return nil
 }
 
-// DeleteBackchannelRequest satisfies CIBAStorage.
 func (s *Store) DeleteBackchannelRequest(_ context.Context, authReqID string) error {
 	c := s.ensureCIBA()
 	c.mu.Lock()
@@ -80,8 +75,7 @@ func (s *Store) DeleteBackchannelRequest(_ context.Context, authReqID string) er
 	return nil
 }
 
-// TouchBackchannelPoll satisfies CIBAStorage. It updates LastPollAt and
-// PollInterval atomically and returns the updated row.
+// TouchBackchannelPoll satisfies CIBAStorage; the poll time and interval update atomically.
 func (s *Store) TouchBackchannelPoll(_ context.Context, authReqID string, now time.Time, newInterval int) (theauth.BackchannelRequest, error) {
 	c := s.ensureCIBA()
 	c.mu.Lock()

@@ -1,13 +1,6 @@
-// Package magiclink owns the request / consume flow for email-delivered
-// magic-link sign-in tokens. Extracted from root service_magiclink.go in
-// PR A of the 2026-06 architecture reorg.
-//
-// On Request the package mints a fresh token, persists its hash with a
-// TTL, and emails the raw token to the user as a click-through link. On
-// Consume the package atomically marks the link used, finds-or-creates the
-// user, marks email verified, and issues a fresh session via the injected
-// session.Issuer (so this package does not need to depend on the session
-// package directly; tests inject a stub).
+// Package magiclink owns the request and consume flow for emailed magic-link sign-in tokens.
+// Request mints and emails a token; Consume atomically marks it used, finds or creates the user,
+// verifies the email and issues a session through the injected SessionIssuer.
 package magiclink
 
 import (
@@ -29,9 +22,8 @@ import (
 	"github.com/glincker/theauth-go/v2/internal/ulid"
 )
 
-// Storage is the minimal persistence subset this package needs. Declared
-// here (not imported from root) so internal/magiclink does not import the
-// root theauth package and the constructor cycle stays broken.
+// Storage is the minimal persistence subset this package needs. It is declared here to keep the
+// constructor cycle broken.
 type Storage interface {
 	CreateMagicLink(ctx context.Context, ml models.MagicLink) error
 	ConsumeMagicLink(ctx context.Context, tokenHash []byte) (*models.MagicLink, error)
@@ -40,9 +32,8 @@ type Storage interface {
 	MarkEmailVerified(ctx context.Context, userID models.ULID) error
 }
 
-// SessionIssuer abstracts the session.Issue call. Allows magiclink to mint
-// a session at consume time without importing internal/session (the root
-// constructor wires the concrete *session.Service in).
+// SessionIssuer mints a session at consume time. The root wires the concrete session service in, so
+// this package does not import it.
 type SessionIssuer interface {
 	Issue(ctx context.Context, user models.User, userAgent, ip string) (string, models.Session, error)
 }
@@ -91,9 +82,8 @@ func New(storage Storage, sender email.Sender, baseURL string, ttl time.Duration
 	}
 }
 
-// Request mints a magic-link token, persists its hash, and emails the raw
-// token to the user as a click-through verification link. Production code
-// calls this; the raw token only ever appears in the inbox.
+// Request mints a magic-link token, stores its hash and emails the raw token as a click-through
+// link. The raw token only reaches the inbox.
 func (s *Service) Request(ctx context.Context, emailAddr string) error {
 	_, err := s.RequestForTest(ctx, emailAddr)
 	return err
@@ -130,13 +120,9 @@ func (s *Service) RequestForTest(ctx context.Context, emailAddr string) (string,
 	return token, nil
 }
 
-// Consume atomically marks a magic-link as used, finds-or-creates the
-// corresponding user, marks their email verified, and issues a fresh
-// session. Returns models.ErrInvalidToken for unknown tokens and
-// models.ErrMagicLinkExpired when the link's TTL has elapsed. The
-// created return reports whether the user row was newly created during
-// this call (v2.5: lets the root forwarder distinguish OnSignup from
-// OnSignin dispatch).
+// Consume atomically marks a link used, finds or creates the user, verifies the email and issues a
+// session. Unknown tokens return ErrInvalidToken and expired links ErrMagicLinkExpired. created
+// reports whether the user row was new, so the root can pick OnSignup or OnSignin.
 func (s *Service) Consume(ctx context.Context, token string) (sessionToken string, user *models.User, created bool, err error) {
 	ml, err := s.storage.ConsumeMagicLink(ctx, crypto.HashToken(token))
 	if errors.Is(err, models.ErrStorageNotFound) {
@@ -191,10 +177,8 @@ func (s *Service) Consume(ctx context.Context, token string) (sessionToken strin
 	return sessToken, u, created, nil
 }
 
-// hashEmailForAudit returns sha256(lowercase(email)) hex-encoded. Inlined
-// here so the package does not need to depend on the root
-// theauth.HashEmailForAudit (which would form an import cycle). Identical
-// formula to the root helper; do not diverge.
+// hashEmailForAudit matches the root HashEmailForAudit formula. It is duplicated to avoid an import
+// cycle; keep the two identical.
 func hashEmailForAudit(email string) string {
 	sum := sha256.Sum256([]byte(strings.ToLower(strings.TrimSpace(email))))
 	return hex.EncodeToString(sum[:])

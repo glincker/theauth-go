@@ -1,18 +1,7 @@
-// Package delegation owns the v2.0 delegation_grants lifecycle: GrantDelegation,
-// ListDelegationsForUser, ListDelegationsForAgent, RevokeDelegation, and the
-// canonical Active + NarrowScope helpers consulted by the AS token-exchange
-// and introspection paths. Extracted from root service_delegation.go in PR C
-// of the 2026-06 architecture reorg.
-//
-// The package is a leaf in the internal dependency graph: it imports
-// internal/models, internal/audit, internal/chain, and internal/ulid only.
-// internal/as imports this package for Active + NarrowScope so the helpers
-// live in exactly one place; internal/agent imports this package indirectly
-// through the audit emitter only.
-//
-// RBAC: callers MUST gate the user_id parameter on the authenticated user
-// (or an organization admin acting in scope). The service surface itself
-// does not enforce that gate; handler-layer code does.
+// Package delegation owns the delegation grant lifecycle: grant, list, revoke, and the Active and
+// NarrowScope helpers the AS uses for token exchange and introspection, so those helpers live in
+// one place. It is a leaf package. Callers gate the user_id parameter themselves; the service does
+// not enforce authorization.
 package delegation
 
 import (
@@ -28,12 +17,8 @@ import (
 	"github.com/glincker/theauth-go/v2/internal/ulid"
 )
 
-// Storage is the minimal persistence subset this package needs. Declared
-// here (not imported from root) so internal/delegation does not import
-// github.com/glincker/theauth-go/v2, which would form an import cycle with the
-// root constructor. Any type satisfying these methods (notably the root
-// theauth.Storage when it also implements OAuthServerStorage) is a valid
-// argument to New.
+// Storage is the minimal persistence subset this package needs. It is declared here to keep the
+// constructor cycle broken.
 type Storage interface {
 	AgentByID(ctx context.Context, id models.ULID) (*models.Agent, error)
 	InsertDelegationGrant(ctx context.Context, g models.DelegationGrant) (models.DelegationGrant, error)
@@ -43,25 +28,19 @@ type Storage interface {
 	RevokeDelegationGrant(ctx context.Context, id models.ULID, at time.Time, reason string) error
 }
 
-// ResourceLookup resolves a protected-resource identifier into the configured
-// ProtectedResource. The AS service satisfies this naturally (it owns the
-// catalog); we depend on the interface so internal/delegation does not import
-// internal/as.
+// ResourceLookup resolves a protected-resource identifier to its configured ProtectedResource. The
+// AS satisfies it.
 type ResourceLookup interface {
 	ResourceByIdentifier(id string) (models.ProtectedResource, bool)
 }
 
-// Config bundles the validated agent-identity policy fields this package
-// needs at grant time. Mirrors the subset of root AgentConfig that gates
-// delegation issuance.
+// Config is the subset of AgentConfig that gates delegation issuance.
 type Config struct {
 	// MaxDelegationDuration caps any single delegation_grants.max_duration.
 	MaxDelegationDuration time.Duration
 }
 
-// Service holds the dependencies needed for delegation service methods.
-// Constructed once by root *theauth.TheAuth.New and reached via thin
-// forwarders so the v2.0 public API surface keeps its exact signatures.
+// Service holds the delegation dependencies. Root constructs it and reaches it through thin forwarders.
 type Service struct {
 	storage  Storage
 	cfg      *Config
@@ -70,10 +49,8 @@ type Service struct {
 	hooks    *obs.Hooks
 }
 
-// New constructs a delegation Service. cfg may be nil; in that case every
-// public method returns the same "agent identity not configured" sentinel
-// the legacy root code returned. em may be nil; the constructor swaps in
-// audit.NoopEmitter.
+// New constructs a delegation Service. A nil cfg makes every method return the "agent identity not
+// configured" sentinel. A nil emitter becomes audit.NoopEmitter.
 func New(storage Storage, cfg *Config, resource ResourceLookup, em audit.Emitter) *Service {
 	if em == nil {
 		em = audit.NoopEmitter{}
@@ -103,9 +80,7 @@ func (s *Service) emit(ctx context.Context, action string, target models.TargetR
 	s.auditEm.EmitAudit(ctx, action, target, md)
 }
 
-// SetHooks installs the consumer-supplied observability bundle. Idempotent.
-// Root *theauth.TheAuth wires this in New so every internal service shares
-// the same Tracer + Metrics adapters.
+// SetHooks installs the observability bundle. It is idempotent.
 func (s *Service) SetHooks(h *obs.Hooks) {
 	if s == nil {
 		return
@@ -116,19 +91,13 @@ func (s *Service) SetHooks(h *obs.Hooks) {
 	s.hooks = h
 }
 
-// errNotConfigured matches the legacy "theauth: agent identity not
-// configured" sentinel returned by the root forwarders when the agent
-// identity block is absent. Wrapped via fmt.Errorf so callers comparing
-// strings (legacy tests) keep working.
+// errNotConfigured is the legacy "agent identity not configured" sentinel. It is wrapped so string
+// comparisons keep working.
 var errNotConfigured = errors.New("theauth: agent identity not configured")
 
-// GrantDelegation persists a delegation_grants row. Scope MUST be a subset
-// of the configured ProtectedResource scopes; resource MUST match a known
-// ProtectedResource identifier; max_duration_seconds MUST be > 0 and <=
-// Config.MaxDelegationDuration. Returns models.ErrOAuthInvalidScope or
-// models.ErrOAuthInvalidResource for the corresponding validation failures.
-//
-// Audit emission: delegation.granted with redacted metadata.
+// GrantDelegation persists a delegation grant. Scope must be a subset of the ProtectedResource
+// scopes, resource must be a known identifier, and max_duration_seconds must be in (0,
+// MaxDelegationDuration].
 func (s *Service) GrantDelegation(ctx context.Context, in models.GrantDelegationInput) (grant models.DelegationGrant, err error) {
 	if !s.ready() {
 		return models.DelegationGrant{}, errNotConfigured
@@ -218,11 +187,8 @@ func (s *Service) ListDelegationsForAgent(ctx context.Context, agentID models.UL
 	return s.storage.DelegationGrantsByAgentID(ctx, agentID)
 }
 
-// RevokeDelegation marks a grant revoked. Cascade: every token already
-// minted under this grant becomes invalid on the next resource server
-// introspection refresh (worst case IntrospectionCacheTTL, default 60s).
-//
-// Audit emission: delegation.revoked.
+// RevokeDelegation revokes a grant. Tokens minted under it fail at the next introspection refresh,
+// within IntrospectionCacheTTL.
 func (s *Service) RevokeDelegation(ctx context.Context, grantID models.ULID, reason string) (err error) {
 	if !s.ready() {
 		return errNotConfigured
@@ -247,10 +213,8 @@ func (s *Service) RevokeDelegation(ctx context.Context, grantID models.ULID, rea
 		return nil
 	}
 	now := time.Now().UTC()
-	// The storage update is conditional on revoked_at IS NULL. If another
-	// caller revoked between our read and this write it reports not-found;
-	// re-read and treat an already-revoked grant as success so exactly one
-	// delegation.revoked event is emitted.
+	// The revoke is conditional on revoked_at being null. A lost race is treated as success, so
+	// exactly one revoked event is emitted.
 	if err := s.storage.RevokeDelegationGrant(ctx, grantID, now, reason); err != nil {
 		if errors.Is(err, models.ErrStorageNotFound) {
 			if again, gerr := s.storage.DelegationGrantByID(ctx, grantID); gerr == nil && again.RevokedAt != nil {
@@ -269,11 +233,8 @@ func (s *Service) RevokeDelegation(ctx context.Context, grantID models.ULID, rea
 	return nil
 }
 
-// GrantByID returns the persisted delegation grant. Exposed so handler-
-// layer code can perform ownership checks (the legacy implementation
-// reached through the root oauthStorage back-door; PR C removes that
-// back-door in favour of this lookup). The storage error is returned
-// unwrapped so callers can compare with models.ErrStorageNotFound.
+// GrantByID returns the persisted grant, for ownership checks in handler code. The storage error is
+// returned unwrapped.
 func (s *Service) GrantByID(ctx context.Context, grantID models.ULID) (*models.DelegationGrant, error) {
 	if s == nil || s.storage == nil {
 		return nil, errNotConfigured
@@ -325,7 +286,7 @@ func NarrowScope(requested, subjectScope, grantScope []string) ([]string, bool) 
 // supported scopes; returns error if requested contains any scope outside
 // the resource's catalog. Mirror of the root scope_helpers.go and the
 // internal/as helper (the AS copy stays because it is called from
-// non-delegation code paths; collapsing them is out of scope for PR C).
+// non-delegation code paths).
 func validateScopeAgainstResource(requested []string, resource models.ProtectedResource) ([]string, error) {
 	if len(requested) == 0 {
 		return nil, errors.New("scope required")

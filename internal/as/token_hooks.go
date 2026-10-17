@@ -6,15 +6,9 @@ import (
 	"github.com/glincker/theauth-go/v2/internal/jwt"
 )
 
-// applyOnTokenIssued runs Cfg.OnTokenIssued (when set) against the claims
-// about to be signed into an access token JWT, merging the returned map
-// into claims.Extra. Called from every access-token minting path
-// (authorization_code, refresh_token, client_credentials, RFC 8693 token
-// exchange) immediately before jwt.Sign.
-//
-// Unlike every other LifecycleHooks callback, a non-nil error here aborts
-// issuance: the token has not been minted yet, so there is nothing to roll
-// back and no reason to swallow the error.
+// applyOnTokenIssued runs Cfg.OnTokenIssued against the claims about to be signed and merges the
+// result into claims.Extra. It runs before every access token is signed. Unlike the other lifecycle
+// hooks, an error here aborts issuance, since no token exists yet.
 func (s *Service) applyOnTokenIssued(ctx context.Context, claims *jwt.Claims) error {
 	if s.Cfg.OnTokenIssued == nil {
 		return nil

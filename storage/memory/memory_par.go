@@ -16,8 +16,7 @@ type pushedRequest struct {
 	expiresAt time.Time
 }
 
-// parState holds the PAR storage sub-state. Kept separate so the
-// memory.Store literal stays compact.
+// parState is the PAR sub-state, kept out of memory.Store to keep its literal compact.
 type parState struct {
 	mu       sync.Mutex
 	requests map[string]pushedRequest // keyed by request_uri
@@ -33,7 +32,6 @@ func (s *Store) ensurePAR() *parState {
 	return s.par
 }
 
-// InsertPushedRequest implements as.PARStorage.
 func (s *Store) InsertPushedRequest(_ context.Context, requestURI string, payload []byte, expiresAt time.Time) error {
 	p := s.ensurePAR()
 	p.mu.Lock()

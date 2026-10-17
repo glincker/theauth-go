@@ -16,7 +16,7 @@ import (
 
 // countingStorage wraps a minimal in-memory SCIM storage and counts every
 // SCIMTokenByHash call so tests can assert that Authenticate only performs
-// one storage round-trip (perf re-audit 2026-06-21, item 1).
+// one storage round-trip.
 type countingStorage struct {
 	tokens     map[string]models.SCIMToken
 	hashLookup atomic.Int64
@@ -91,7 +91,7 @@ func seedToken(t *testing.T, st *countingStorage, orgID models.ULID) string {
 }
 
 // TestSCIMAuthSingleLookup verifies that one Authenticate call issues
-// SCIMTokenByHash exactly once (perf re-audit 2026-06-21, item 1).
+// SCIMTokenByHash exactly once.
 func TestSCIMAuthSingleLookup(t *testing.T) {
 	t.Parallel()
 	st := newCountingStorage()

@@ -38,7 +38,9 @@ If you write your own backend, run the matching suite from `storagetest` against
 | Agent id on API tokens | `APITokenAgentStorage` | Yes | Yes (0018) | Yes (0027) | Yes (0026) |
 | Device codes (API token device grant) | `DeviceCodeStorage`, `DeviceCodeLister` | Yes | Yes (0007) | Yes (0018) | Yes (0018) |
 | Device identity (join tokens, enrolled devices) | `DeviceIdentityStorage` | Yes | Yes (0011) | Yes (0024) | Yes (0024) |
+| Token vault credentials (`tokenvault` package) | `TokenVaultStorage` | Yes | No | No | No |
 | Agent tool approvals (single use, used by `toolguard.NewStorageApprovals`) | `ToolApprovalStorage` | Yes | Yes (0019) | Yes (0029) | Yes (0028) |
+| Approvals inbox (get, list, deny; used by the `approvals` package) | `ToolApprovalAdminStorage` | Yes | No | No | No |
 
 The audit hash chain is what `VerifyAuditChain` and the `audit/checkpoint` package read. The memory store returns an explicit unsupported result, never a pass.
 

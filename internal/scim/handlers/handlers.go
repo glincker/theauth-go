@@ -1,12 +1,5 @@
-// Package handlers exposes the /scim/v2/* SCIM 2.0 resource and
-// discovery endpoints, plus the per-organization SCIM token CRUD
-// endpoints mounted under /auth/orgs/{orgId}/scim/tokens.
-//
-// Extracted from root handlers_scim.go in PR F of the 2026-06
-// architecture reorg. The wire types (UserResource, GroupResource,
-// PatchOp, ListResponse, NewError, UserToSCIM, GroupToSCIM, etc.) and
-// the PATCH helpers (ApplyUserPatch, ApplyGroupPatch) moved into the
-// parent internal/scim package; this package wires them onto chi.
+// Package handlers exposes the /scim/v2/* SCIM 2.0 resource and discovery endpoints, plus the
+// per-organization SCIM token CRUD endpoints under /auth/orgs/{orgId}/scim/tokens.
 package handlers
 
 import (

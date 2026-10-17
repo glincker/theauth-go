@@ -1,32 +1,6 @@
-// Package audit's Service is the goroutine-backed implementation of
-// Emitter. PR D architecture reorg (2026-06-20) moved the buffered-channel
-// writer + drop-on-backpressure + single-drain-goroutine implementation out
-// of root service_audit.go into this package, alongside the existing
-// emitter.go Emitter interface.
-//
-// The Service satisfies Emitter, so internal service packages (rbac,
-// magiclink, agent, delegation, AS) continue to take a plain audit.Emitter
-// and never see the concrete *Service. The root *theauth.TheAuth holds a
-// *Service pointer and exposes EmitAudit / QueryAudit / Stats as thin
-// forwarders.
-//
-// Concurrency contract preserved verbatim from the v1.0 root implementation:
-//
-//   - EmitAudit is non-blocking. When the channel buffer is full the event
-//     is dropped and Dropped increments by 1.
-//   - One writer goroutine drains the channel, batches up to BatchSize
-//     events (or whichever flush comes first per FlushInterval), and issues
-//     one InsertAuditEvents call per batch.
-//   - Failures are logged at slog.Error and counted as Failed without
-//     retry per the v1.0 design tradeoff.
-//   - Stop() closes the stop channel and waits up to DrainTimeout for the
-//     writer to drain remaining events. If a storage write is still in
-//     flight at that point it keeps waiting, bounded by the flush timeout
-//     (30s), so shutdown does not return mid-write. Events still unwritten
-//     when Stop gives up are added to Dropped and logged. Idempotent.
-//   - Each sink has one worker goroutine fed by a bounded queue; a full
-//     queue drops that batch for that sink (counted in SinkFailed).
-//   - Race tests must pass -race -count=3.
+// Package audit's Service is the goroutine-backed Emitter. Emit never blocks: a full channel drops
+// the event. A single writer batches events, failed writes are counted without retry, and Stop
+// drains within DrainTimeout. Race tests must pass with -race -count=3.
 package audit
 
 import (
@@ -43,37 +17,26 @@ import (
 	"github.com/glincker/theauth-go/v2/internal/ulid"
 )
 
-// flushTimeout bounds one InsertAuditEvents call and therefore how long Stop
-// will wait on an in-flight flush after DrainTimeout. sinkQueueSize bounds the
-// batches queued per sink. Variables so tests can shrink them.
+// flushTimeout bounds one InsertAuditEvents call, and sinkQueueSize bounds the batches queued per
+// sink. Variables so tests can shrink them.
 var (
 	flushTimeout  = 30 * time.Second
 	sinkQueueSize = 16
 )
 
-// Storage is the minimal persistence subset the audit writer needs.
-// Declared here (not imported from root) so internal/audit does not import
-// the root theauth package and the constructor cycle stays broken. Any
-// type satisfying these two methods (notably the root theauth.Storage
-// interface) is a valid argument to NewService.
+// Storage is the minimal persistence subset the writer needs. It is declared here to keep the
+// constructor cycle broken.
 type Storage interface {
 	InsertAuditEvents(ctx context.Context, events []models.AuditEvent) error
 	QueryAuditEvents(ctx context.Context, q models.AuditQuery) (events []models.AuditEvent, nextCursor string, err error)
 }
 
-// Redactor optionally transforms metadata before storage. See
-// DefaultRedactor in the root package for the seeded blocklist; a custom
-// redactor receives the raw metadata first and is followed unconditionally
-// by the default redactor so a custom redactor cannot re-introduce
-// secret-flavored keys.
+// Redactor transforms metadata before storage. The default redactor always runs after a custom one,
+// so a custom redactor cannot reintroduce secret keys.
 type Redactor func(metadata map[string]any) map[string]any
 
-// Sink mirrors the root AuditSink interface. Declared here so
-// internal/audit can accept sinks without importing the root package
-// (which would recreate the constructor cycle). The root AuditSink and
-// internal Sink have identical method sets; the root wiring converts
-// []theauth.AuditSink into []Sink via a type assertion that always
-// succeeds because theauth.AuditSink is a strict superset.
+// Sink mirrors the root AuditSink interface, which has the same method set, so sinks cross the
+// package boundary without an import.
 type Sink interface {
 	Stream(ctx context.Context, batch []models.AuditEvent) error
 	Name() string
@@ -97,25 +60,20 @@ type Config struct {
 	// CustomRedactor runs before DefaultRedactor at emit time. May be nil.
 	CustomRedactor Redactor
 
-	// DefaultRedactor is unconditionally applied after CustomRedactor.
-	// The root package's DefaultRedactor is wired here at construction
-	// time so this package does not duplicate the seeded blocklist.
+	// DefaultRedactor is applied unconditionally after CustomRedactor. The root wires it in, so this
+	// package does not duplicate the blocklist.
 	DefaultRedactor Redactor
 
 	// DrainTimeout caps how long Stop waits for the writer goroutine to
 	// drain remaining events. Defaults to 5 seconds.
 	DrainTimeout time.Duration
 
-	// Sinks is the list of external streaming sinks. After each successful
-	// InsertAuditEvents call the writer fans out to each sink in a
-	// separate goroutine. Failures are logged and counted in sinkFailed;
-	// they never block the canonical storage write or the next batch.
+	// Sinks are external streaming sinks. After each successful write, the writer fans out to every
+	// sink in its own goroutine. Sink failures are counted and never block the canonical write.
 	Sinks []Sink
 
-	// FailClosed makes EmitDecision return ErrAuditUnavailable instead of
-	// silently dropping when a decision-class event cannot be queued. Off by
-	// default: request paths are never blocked or failed by audit pressure
-	// unless a deployment opts in. Emit and EmitAudit are unaffected.
+	// FailClosed makes EmitDecision return ErrAuditUnavailable when a decision event cannot be queued.
+	// Off by default, so audit pressure never fails request paths unless a deployment opts in.
 	FailClosed bool
 
 	// DecisionActionPrefixes lists the action prefixes treated as
@@ -123,8 +81,7 @@ type Config struct {
 	DecisionActionPrefixes []string
 }
 
-// DefaultDecisionPrefixes are the action prefixes treated as decision-class
-// events (authorization, policy, approval, delegation) when
+// DefaultDecisionPrefixes are the action prefixes treated as decision-class events when
 // Config.DecisionActionPrefixes is empty.
 var DefaultDecisionPrefixes = []string{"policy.", "authz.", "approval.", "delegation.", "agent.authorize"}
 
@@ -139,10 +96,8 @@ const GapMarkerAction = "audit.events_dropped"
 // MetricAuditGapMarkersTotal counts gap markers written to storage.
 const MetricAuditGapMarkersTotal = "theauth_audit_gap_markers_total"
 
-// AuditMetadata is the optional bundle a caller may attach to a context to
-// override the auto-derived actor / org / IP / UA. Useful in tests and in
-// background jobs that do not pass through the HTTP middleware. Re-exported
-// from the root package via a type alias so the public surface is unchanged.
+// AuditMetadata is an optional bundle attached to a context to override the actor, org, IP and UA.
+// Background jobs use it.
 type AuditMetadata struct {
 	OrganizationID *models.ULID
 	ActorUserID    *models.ULID
@@ -162,9 +117,8 @@ type ctxKeyAuditMetadataT struct{}
 
 var ctxKeyAuditMetadata ctxKeyAuditMetadataT
 
-// WithAuditMetadata attaches an AuditMetadata to ctx; Service.Emit reads it.
-// Overrides values derived from the supplied actor / session when the
-// corresponding field is non-zero.
+// WithAuditMetadata attaches an AuditMetadata to ctx. Non-zero fields override the values derived
+// from the request.
 func WithAuditMetadata(ctx context.Context, md AuditMetadata) context.Context {
 	return context.WithValue(ctx, ctxKeyAuditMetadata, md)
 }
@@ -176,11 +130,8 @@ func MetadataFromContext(ctx context.Context) (AuditMetadata, bool) {
 	return md, ok
 }
 
-// Service is the goroutine-backed Emitter. Construct one in theauth.New;
-// call Start to spawn the writer goroutine; call Stop to drain on shutdown.
-//
-// Service satisfies Emitter so internal packages can take a plain
-// audit.Emitter without depending on the concrete type.
+// Service is the goroutine-backed Emitter. Construct it in theauth.New, call Start to run the
+// writer, and Stop to drain it on shutdown.
 type Service struct {
 	storage Storage
 	cfg     Config
@@ -217,16 +168,14 @@ type Service struct {
 	sinkQueue  int
 	sinkWG     sync.WaitGroup
 
-	// gapCount is the number of events dropped since the last gap marker was
-	// written; gapFirst and gapLast bound them (unix nanoseconds). The writer
-	// goroutine turns a non-zero gapCount into a marker event at flush time.
+	// gapCount counts events dropped since the last gap marker. gapFirst and gapLast bound them. The
+	// writer turns a non-zero count into a marker event.
 	gapCount atomic.Uint64
 	gapFirst atomic.Int64
 	gapLast  atomic.Int64
 
-	// hooks routes audit drops + queue depth into the consumer-supplied
-	// metrics adapter. Installed via SetHooks; defaults to a no-op bundle
-	// so the service is usable without observability wiring.
+	// hooks routes drop and queue depth metrics. It defaults to a no-op bundle, so the service works
+	// without observability wiring.
 	hooks         *obs.Hooks
 	mDroppedTotal obs.Counter
 	mQueueDepth   obs.Gauge
@@ -259,12 +208,7 @@ func NewService(storage Storage, cfg Config) *Service {
 	return s
 }
 
-// SetHooks installs the consumer-supplied observability bundle. MUST be
-// called before Start so the metrics instruments are bound to the live
-// adapter (not the no-op default the constructor wires). Calling after
-// Start is allowed and rebinds the instruments; per-instrument adapters
-// like Prometheus that cache by (name, label set) will return the same
-// underlying child instrument on the second bind.
+// SetHooks installs the observability bundle. Call it before Start so instruments bind to the live adapter.
 func (s *Service) SetHooks(h *obs.Hooks) {
 	if s == nil {
 		return
@@ -288,9 +232,8 @@ func (s *Service) Start() error {
 	return nil
 }
 
-// Stop closes the stop channel and waits up to DrainTimeout for the writer
-// goroutine to drain remaining events. Idempotent: a second call is a
-// no-op. Safe to call before Start (treated as a no-op).
+// Stop closes the stop channel and waits up to DrainTimeout for the writer to drain. It is
+// idempotent and a no-op before Start.
 func (s *Service) Stop() {
 	if !s.started.Load() {
 		return
@@ -320,9 +263,8 @@ func (s *Service) Stop() {
 		return
 	case <-timer.C:
 	}
-	// DrainTimeout elapsed. A storage write may still be in flight (up to
-	// flushTimeout); returning now would let the process exit mid-write and
-	// lose the batch, so keep waiting for it, bounded.
+	// DrainTimeout elapsed while a write may still be in flight. Returning now could exit mid-write
+	// and lose the batch, so keep waiting, bounded.
 	if s.inflight.Load() > 0 {
 		grace := time.NewTimer(s.flushLimit + time.Second)
 		defer grace.Stop()
@@ -342,37 +284,21 @@ func (s *Service) Stop() {
 	)
 }
 
-// EmitAudit satisfies the Emitter interface. Equivalent to Emit with a
-// nil actor / session / org / ip / ua override; Emit pulls those from
-// MetadataFromContext when present.
+// EmitAudit satisfies Emitter. It is Emit with no overrides; Emit reads them from the context when present.
 func (s *Service) EmitAudit(ctx context.Context, action string, target models.TargetRef, metadata map[string]any) {
 	s.Emit(ctx, action, target, metadata, nil, nil)
 }
 
-// Emit enqueues an audit event for asynchronous batched write. Non-
-// blocking: when the writer channel is full the event is dropped and
-// Dropped increments by 1.
-//
-// actorUser and actorSession let the caller (the root EmitAudit forwarder)
-// attach values pulled from the request context. The MetadataFromContext
-// helper overrides them when present.
-//
-// EmitAudit may be called from any goroutine. The metadata map is mutated
-// in place by the redactors; callers must not retain references after the
-// call (or, equivalently, must defensively copy before passing in).
-//
-// When the Service is not Started, or has been Stopped, Emit is a silent
-// no-op (the writer goroutine has drained and the channel is closed;
-// pushing would panic).
+// Emit enqueues an audit event for batched async write. It never blocks and drops on overflow. The
+// metadata map is mutated by the redactors, so callers must not keep references. Emit is a silent
+// no-op before Start or after Stop.
 func (s *Service) Emit(ctx context.Context, action string, target models.TargetRef, metadata map[string]any, actorUser *models.ULID, actorSession *models.Session) {
 	_ = s.emit(ctx, action, target, metadata, actorUser, actorSession)
 }
 
-// EmitDecision is Emit for decision-class events (authorization, policy,
-// approval, delegation). With Config.FailClosed set, it returns
-// ErrAuditUnavailable when such an event could not be queued, so the caller
-// can deny the action instead of proceeding unrecorded. Otherwise it behaves
-// exactly like Emit and returns nil. It never blocks.
+// EmitDecision is Emit for decision-class events. With FailClosed set it returns
+// ErrAuditUnavailable when the event cannot be queued, so the caller can deny the action. Otherwise
+// it returns nil. It never blocks.
 func (s *Service) EmitDecision(ctx context.Context, action string, target models.TargetRef, metadata map[string]any, actorUser *models.ULID, actorSession *models.Session) error {
 	err := s.emit(ctx, action, target, metadata, actorUser, actorSession)
 	if err != nil && s.cfg.FailClosed && s.isDecision(action) {
@@ -425,10 +351,7 @@ func (s *Service) emit(ctx context.Context, action string, target models.TargetR
 		Metadata:   metadata,
 		CreatedAt:  time.Now(),
 	}
-	// Apply redactors at emit time. The custom redactor (if any) sees the
-	// raw metadata first; the default redactor is applied unconditionally
-	// afterwards so a custom redactor cannot accidentally re-introduce
-	// secret-flavored keys.
+	// The custom redactor sees the raw metadata first. The default redactor runs afterwards unconditionally.
 	if s.cfg.CustomRedactor != nil {
 		evt.Metadata = s.cfg.CustomRedactor(evt.Metadata)
 	}
@@ -449,9 +372,7 @@ func (s *Service) emit(ctx context.Context, action string, target models.TargetR
 			evt.OrganizationID = &oid
 		}
 	}
-	// MetadataFromContext overrides anything supplied above (root callers
-	// rely on this for SCIM, SAML, and password flows that attach a custom
-	// actor / org / ip / ua bundle to ctx).
+	// MetadataFromContext overrides the values supplied above. Root flows such as SCIM and SAML rely on this.
 	if md, ok := MetadataFromContext(ctx); ok {
 		if md.OrganizationID != nil {
 			oid := *md.OrganizationID
@@ -498,9 +419,8 @@ func (s *Service) emit(ctx context.Context, action string, target models.TargetR
 	}
 }
 
-// Query returns up to q.Limit events plus an opaque cursor for the next
-// page. Caller is responsible for permission-checking; this method does no
-// auth.
+// Query returns up to q.Limit events and a cursor for the next page. The caller checks permissions;
+// this method does no auth.
 func (s *Service) Query(ctx context.Context, q models.AuditQuery) ([]models.AuditEvent, string, error) {
 	if q.Limit <= 0 {
 		q.Limit = 50
@@ -532,9 +452,8 @@ func (s *Service) Counters() Counters {
 	}
 }
 
-// writerLoop is the single goroutine that drains s.ch, batches up to
-// BatchSize events or FlushInterval, and issues one InsertAuditEvents per
-// batch. Failures are logged and counted in Failed without retry.
+// writerLoop is the single goroutine that drains the channel, batches events by BatchSize or
+// FlushInterval, and writes one batch at a time.
 func (s *Service) writerLoop() {
 	defer close(s.done)
 	batchSize := s.cfg.BatchSize
@@ -661,9 +580,8 @@ func (s *Service) gapMarker(n uint64) models.AuditEvent {
 	}
 }
 
-// startSinkWorkers starts one worker per sink, each draining a bounded queue,
-// so sink goroutines are capped at len(Sinks) instead of one per batch.
-// Failures are best-effort: logged, counted, discarded.
+// startSinkWorkers starts one worker per sink, so sink goroutines are capped at len(Sinks). Sink
+// failures are logged and dropped.
 func (s *Service) startSinkWorkers() []chan []models.AuditEvent {
 	queues := make([]chan []models.AuditEvent, len(s.cfg.Sinks))
 	for i, sink := range s.cfg.Sinks {

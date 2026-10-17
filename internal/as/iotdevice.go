@@ -1,10 +1,9 @@
 package as
 
-// iotdevice.go: constrained device identity. An admin mints a single-use join
-// token; the device presents it with its public key and proves possession by
-// signing a server challenge; the server registers a Device. Registered
-// devices then authenticate to the token endpoint with an RFC 7523 assertion
-// (see iotdevice_grant.go). Attestation is pluggable through Attestor.
+// iotdevice.go is constrained device identity. An admin mints a single-use join token; the device
+// proves possession of its key by signing a server challenge; the server registers the Device.
+// Enrolled devices then authenticate with an RFC 7523 assertion (iotdevice_grant.go). Attestation
+// is pluggable through Attestor.
 
 import (
 	"context"
@@ -25,8 +24,7 @@ import (
 
 const (
 	joinTokenPrefix = "dj_"
-	// challengeTyp and proofTyp are the JOSE typ values of the server
-	// challenge and the device's proof of possession.
+	// challengeTyp and proofTyp are the JOSE typ values of the server challenge and the device's proof.
 	challengeTyp = "device-challenge+jwt"
 	proofTyp     = "device-enroll+jwt"
 
@@ -42,23 +40,17 @@ const (
 
 // DeviceTokensConfig enables device enrollment and the device assertion grant.
 type DeviceTokensConfig struct {
-	// AccessTokenTTL is the lifetime of device access tokens. Default 10m.
-	// Devices get no refresh token; they re-assert when the token expires.
-	AccessTokenTTL time.Duration
-	// JoinTokenTTL is the default join token lifetime. Default 1h.
-	JoinTokenTTL time.Duration
-	// ChallengeTTL bounds the enrollment challenge. Default 2m.
-	ChallengeTTL time.Duration
-	// AssertionMaxLifetime caps exp minus iat on assertions. Default 5m.
+	// AccessTokenTTL is the lifetime of device access tokens (default 10m). Devices get no refresh token.
+	AccessTokenTTL       time.Duration
+	JoinTokenTTL         time.Duration
+	ChallengeTTL         time.Duration
 	AssertionMaxLifetime time.Duration
-	// EnrollPerMinute caps challenge and enroll requests per join token per
-	// minute. Counted only for join tokens that exist and are usable, so a
-	// stranger cannot exhaust someone else's token. Default 10, negative
-	// turns it off.
+	// EnrollPerMinute caps challenge and enroll requests per join token per minute. Only usable join
+	// tokens are counted, so a stranger cannot exhaust someone else's token. Negative disables it
+	// (default 10).
 	EnrollPerMinute int
-	// TokenPerMinute caps assertion grants per device per minute. Counted
-	// only after the assertion signature verified. Default 60, negative
-	// turns it off.
+	// TokenPerMinute caps assertion grants per device per minute, counted only after the signature
+	// verified. Negative disables (default 60).
 	TokenPerMinute int
 }
 
@@ -83,7 +75,6 @@ func applyDeviceTokenDefaults(c *DeviceTokensConfig) {
 	}
 }
 
-// Default per device request budgets.
 const (
 	DefaultDeviceEnrollPerMinute = 10
 	DefaultDeviceTokenPerMinute  = 60
@@ -96,8 +87,8 @@ type RateLimitedError struct {
 
 func (e *RateLimitedError) Error() string { return "theauth: device rate limit exceeded" }
 
-// deviceLimit spends one unit of the per minute budget for id under rule. It
-// fails open when the limiter backend errors, like the HTTP limits.
+// deviceLimit spends one unit of the per-minute budget for id. It fails open on a limiter error,
+// like the HTTP limits.
 func (s *Service) deviceLimit(ctx context.Context, rule, id string, limit int) error {
 	if limit <= 0 || s.Limiter == nil {
 		return nil
@@ -122,8 +113,8 @@ type DeviceEvidence struct {
 	Thumbprint   string
 }
 
-// DeviceAttestation is the identity an Attestor grants. The enrolling device
-// receives exactly this identity; it cannot choose its own.
+// DeviceAttestation is the identity an Attestor grants. The device receives exactly this identity
+// and cannot choose its own.
 type DeviceAttestation struct {
 	Kind           string
 	Subject        string
@@ -133,17 +124,15 @@ type DeviceAttestation struct {
 	Scopes         []string
 }
 
-// Attestor decides whether evidence entitles a device to an identity. The
-// join token attestor is built in; x509 proof of possession or TPM attestors
-// implement the same interface.
+// Attestor decides whether evidence entitles a device to an identity. The join token attestor is
+// built in; x509 or TPM attestors implement the same interface.
 type Attestor interface {
 	Kind() string
 	// Attest validates evidence without consuming it.
 	Attest(ctx context.Context, ev DeviceEvidence) (DeviceAttestation, error)
-	// Consume spends single-use evidence for deviceID. It must fail when the
-	// evidence was already spent.
+	// Consume spends single-use evidence for deviceID. It must fail when the evidence was already spent.
 	Consume(ctx context.Context, a DeviceAttestation, deviceID models.ULID) error
-	// Release undoes Consume when registration failed afterwards.
+	// Release undoes Consume when registration fails afterwards.
 	Release(ctx context.Context, a DeviceAttestation) error
 }
 
@@ -205,8 +194,7 @@ func (s *Service) identityStore() (DeviceIdentityStorage, bool) {
 	return st, ok
 }
 
-// DeviceTokensEnabled reports whether device tokens are configured and the
-// storage can hold devices.
+// DeviceTokensEnabled reports whether device tokens are configured and the storage can hold devices.
 func (s *Service) DeviceTokensEnabled() bool {
 	_, ok := s.identityStore()
 	return ok
@@ -222,18 +210,15 @@ func (s *Service) attestor(store DeviceIdentityStorage, kind string) (Attestor, 
 // CreateDeviceJoinTokenInput describes a join token to mint.
 type CreateDeviceJoinTokenInput struct {
 	OrganizationID *models.ULID
-	// Name and SPIFFEID are the identity the enrolling device receives.
-	Name     string
-	SPIFFEID string
-	// Scopes caps the scopes the device's tokens may carry. Required.
-	Scopes []string
-	// TTL defaults to DeviceTokensConfig.JoinTokenTTL.
-	TTL       time.Duration
-	CreatedBy *models.ULID
+	Name           string
+	SPIFFEID       string
+	Scopes         []string
+	TTL            time.Duration
+	CreatedBy      *models.ULID
 }
 
-// CreateDeviceJoinToken mints a single-use join token and returns the stored
-// record plus the plaintext, which is not recoverable afterwards.
+// CreateDeviceJoinToken mints a single-use join token. The plaintext is returned once and is not
+// recoverable afterwards.
 func (s *Service) CreateDeviceJoinToken(ctx context.Context, in CreateDeviceJoinTokenInput) (models.DeviceJoinToken, string, error) {
 	store, ok := s.identityStore()
 	if !ok {
@@ -266,8 +251,7 @@ func (s *Service) CreateDeviceJoinToken(ctx context.Context, in CreateDeviceJoin
 	return t, raw, nil
 }
 
-// DeviceEnrollRequest carries the enrollment fields. Challenge and Proof are
-// empty on the challenge step.
+// DeviceEnrollRequest carries the enrollment fields. Challenge and Proof are empty on the challenge step.
 type DeviceEnrollRequest struct {
 	Kind      string
 	JoinToken string
@@ -283,15 +267,13 @@ type DeviceChallenge struct {
 	ExpiresIn int    `json:"expires_in"`
 }
 
-// deviceKey is a validated device public key.
 type deviceKey struct {
 	jwk        json.RawMessage // canonical public JWK
 	thumbprint string
 	entry      jwksEntry
 }
 
-// parseDeviceKey accepts EC P-256, EC P-384 and OKP Ed25519 public keys and
-// rejects private key members.
+// parseDeviceKey accepts EC P-256, EC P-384 and OKP Ed25519 public keys, and rejects private key members.
 func parseDeviceKey(raw []byte) (deviceKey, error) {
 	var j dpop.JWK
 	if err := json.Unmarshal(raw, &j); err != nil {
@@ -335,8 +317,8 @@ func parseDeviceKey(raw []byte) (deviceKey, error) {
 	return deviceKey{jwk: cj, thumbprint: tp, entry: entries[0]}, nil
 }
 
-// DeviceEnrollChallenge validates the evidence and returns a server nonce
-// bound to the evidence and the device key. It consumes nothing.
+// DeviceEnrollChallenge validates the evidence and returns a server nonce bound to the evidence and
+// device key. It spends nothing.
 func (s *Service) DeviceEnrollChallenge(ctx context.Context, req DeviceEnrollRequest) (DeviceChallenge, error) {
 	store, ok := s.identityStore()
 	if !ok {
@@ -380,8 +362,8 @@ func (s *Service) attestDevice(ctx context.Context, store DeviceIdentityStorage,
 	return a.Attest(ctx, DeviceEvidence{Kind: a.Kind(), Token: req.JoinToken, PublicKeyJWK: key.jwk, Thumbprint: key.thumbprint})
 }
 
-// EnrollDevice completes enrollment: it verifies the challenge and the
-// device's proof of possession, spends the evidence and registers the device.
+// EnrollDevice verifies the challenge and the proof of possession, spends the evidence and
+// registers the device.
 func (s *Service) EnrollDevice(ctx context.Context, req DeviceEnrollRequest) (models.Device, error) {
 	store, ok := s.identityStore()
 	if !ok {
@@ -436,7 +418,6 @@ func (s *Service) EnrollDevice(ctx context.Context, req DeviceEnrollRequest) (mo
 	return d, nil
 }
 
-// verifyEnrollProof checks the device's signature over the challenge nonce.
 func (s *Service) verifyEnrollProof(proof string, key deviceKey, nonce string, now time.Time) bool {
 	header, claims, signingInput, sig, err := parseGenericJWT(proof)
 	if err != nil || header.Typ != proofTyp || header.Alg != key.entry.Alg {
@@ -455,7 +436,7 @@ func (s *Service) verifyEnrollProof(proof string, key deviceKey, nonce string, n
 	return verifyWithJWKS([]jwksEntry{key.entry}, header, []byte(signingInput), sig)
 }
 
-// ListDevices lists registered devices, newest first. A nil orgID lists all.
+// ListDevices lists registered devices, newest first.
 func (s *Service) ListDevices(ctx context.Context, orgID *models.ULID) ([]models.Device, error) {
 	store, ok := s.identityStore()
 	if !ok {
@@ -464,9 +445,8 @@ func (s *Service) ListDevices(ctx context.Context, orgID *models.ULID) ([]models
 	return store.ListDevices(ctx, orgID)
 }
 
-// RevokeDevice revokes a device. When orgID is non-nil the device must belong
-// to that organization, otherwise ErrStorageNotFound is returned. Revoking an
-// already revoked device is a no-op.
+// RevokeDevice revokes a device. A non-nil orgID must own the device, else ErrStorageNotFound.
+// Revoking twice is a no-op.
 func (s *Service) RevokeDevice(ctx context.Context, id models.ULID, orgID *models.ULID, actor *models.ULID) error {
 	store, ok := s.identityStore()
 	if !ok {
@@ -510,8 +490,7 @@ func (s *Service) RevokeDeviceJoinToken(ctx context.Context, id models.ULID, org
 	return err
 }
 
-// deviceActive reports whether the device exists and is not revoked. It fails
-// closed when the storage cannot answer.
+// deviceActive reports whether the device exists and is not revoked. It fails closed on storage errors.
 func (s *Service) deviceActive(ctx context.Context, id string) bool {
 	store, ok := s.identityStore()
 	if !ok {

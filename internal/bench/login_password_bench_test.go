@@ -1,7 +1,5 @@
-// Package bench holds micro-benchmarks for theauth-go hot paths. The
-// package lives under internal/ so it does not bloat the public test
-// binary or surface as importable. Baselines are documented in
-// BASELINES.md.
+// Package bench holds micro-benchmarks for the hot paths. It lives under internal/ so the public
+// test binary stays clean. Baselines are in BASELINES.md.
 package bench
 
 import (
@@ -50,10 +48,8 @@ func newBenchRouter(b *testing.B) (*theauth.TheAuth, http.Handler) {
 
 func bodyJSON(s string) *bytes.Reader { return bytes.NewReader([]byte(s)) }
 
-// BenchmarkLoginPassword measures the full password sign in path through
-// the public HTTP handler: parse JSON body, lookup user, verify Argon2id
-// hash, create session, return token. The Argon2id verify dominates the
-// cost (~100 ms by design); the rest is in the noise.
+// BenchmarkLoginPassword measures the password sign-in path through the HTTP handler. Argon2id
+// verification dominates the cost by design.
 func BenchmarkLoginPassword(b *testing.B) {
 	_, h := newBenchRouter(b)
 

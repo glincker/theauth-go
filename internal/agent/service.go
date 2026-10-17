@@ -1,14 +1,6 @@
-// Package agent owns the v2.0 agent identity lifecycle: CreateAgent,
-// MintAgentCredential, RotateAgentSecret, ListAgentsByOwner, GetAgent,
-// SuspendAgent, ResumeAgent, RevokeAgent, and the agentBySubjectClaim
-// resolver consulted by internal/as. Extracted from root service_agent.go
-// in PR C of the 2026-06 architecture reorg.
-//
-// Dependency direction: internal/agent is a leaf with respect to internal/as
-// and internal/delegation. internal/as reaches back through the AgentLookup
-// interface (set after construction so the wiring stays acyclic). The cache
-// invalidation hook is a function-typed dependency so the agent package
-// does not import internal/as.
+// Package agent owns the agent identity lifecycle. It is a leaf: internal/as reaches it through
+// AgentLookup, and cache invalidation is passed in as a function so this package never imports
+// internal/as.
 package agent
 
 import (
@@ -26,14 +18,11 @@ import (
 	oklogulid "github.com/oklog/ulid/v2"
 )
 
-// ChainDepthCeiling is the v2.0 hard cap on the actor chain length. The
-// spec explicitly forbids raising this above 3 in v2.0. Kept exported so
-// root validation can refer to the same constant.
+// ChainDepthCeiling is the v2.0 hard cap on the actor chain length. The spec forbids raising it above 3.
 const ChainDepthCeiling = 3
 
-// Storage is the minimal persistence subset this package needs. Declared
-// here (not imported from root) so internal/agent does not import
-// github.com/glincker/theauth-go/v2.
+// Storage is the minimal persistence subset this package needs. It is declared here so the package
+// does not import root.
 type Storage interface {
 	InsertOAuthClient(ctx context.Context, c models.OAuthClient) (models.OAuthClient, error)
 	OAuthClientByClientID(ctx context.Context, clientID string) (*models.OAuthClient, error)
@@ -50,22 +39,15 @@ type Storage interface {
 	RevokeAgentCredential(ctx context.Context, id models.ULID, at time.Time) error
 }
 
-// CacheInvalidator drops cached Argon2-verified entries for the supplied
-// client_id. Used after the OAuthClient secret hash is rotated or after a
-// failed insert so the next /oauth/token call sees the fresh state.
-// Function-typed so the agent package never imports internal/as.
+// CacheInvalidator drops cached verified client entries for client_id, after a secret rotates or an
+// insert fails.
 type CacheInvalidator func(clientID string)
 
-// ChainCacheInvalidator drops the per-agent introspection chain-walk cache
-// entry for the supplied agent ID string. Called from changeAgentStatus on
-// suspend/revoke so the next introspection re-walks the chain instead of
-// serving a stale "active" result (perf re-audit 2026-06-21, item 3).
-// Function-typed so the agent package never imports internal/as.
+// ChainCacheInvalidator drops the introspection chain-walk cache entry for an agent. It runs on
+// suspend and revoke, so a stale active result is never served.
 type ChainCacheInvalidator func(agentID string)
 
-// Config bundles the validated agent-identity policy fields this package
-// needs at lifecycle time. Mirrors the subset of root AgentConfig the
-// agent service actually consults.
+// Config is the subset of AgentConfig the lifecycle code consults.
 type Config struct {
 	MaxChainDepth            int
 	MaxDelegationDuration    time.Duration
@@ -73,9 +55,8 @@ type Config struct {
 	AgentSecretLength        int
 }
 
-// Service holds the dependencies needed for agent lifecycle methods.
-// Constructed once by root *theauth.TheAuth.New and reached via thin
-// forwarders so the v2.0 public API surface keeps its exact signatures.
+// Service holds the dependencies of the agent lifecycle methods. Root constructs it and reaches it
+// through thin forwarders.
 type Service struct {
 	storage         Storage
 	cfg             *Config
@@ -85,12 +66,9 @@ type Service struct {
 	hooks           *obs.Hooks
 }
 
-// New constructs an agent Service. cfg may be nil; in that case every
-// public method returns the same "agent identity not configured" sentinel
-// the legacy root code returned. em may be nil; the constructor swaps in
-// audit.NoopEmitter. invalidate may be nil; the constructor swaps in a
-// no-op so callers do not need to branch. invalidateChain may be nil;
-// the constructor swaps in a no-op.
+// New constructs an agent Service. Nil cfg makes every method return the "agent identity not
+// configured" sentinel. Nil collaborators are replaced with no-ops, so callers never need to
+// branch.
 func New(storage Storage, cfg *Config, em audit.Emitter, invalidate CacheInvalidator) *Service {
 	if em == nil {
 		em = audit.NoopEmitter{}
@@ -108,10 +86,8 @@ func New(storage Storage, cfg *Config, em audit.Emitter, invalidate CacheInvalid
 	}
 }
 
-// SetChainCacheInvalidator wires the chain-walk cache invalidator. Must
-// be called before any SuspendAgent / RevokeAgent call to ensure the AS
-// chain cache does not serve stale results after a status change
-// (perf re-audit 2026-06-21, item 3). Safe to call multiple times.
+// SetChainCacheInvalidator wires the chain-walk cache invalidator. It must run before any suspend
+// or revoke, so a status change never leaves a stale cached result. Safe to call more than once.
 func (s *Service) SetChainCacheInvalidator(fn ChainCacheInvalidator) {
 	if s == nil || fn == nil {
 		return
@@ -119,10 +95,7 @@ func (s *Service) SetChainCacheInvalidator(fn ChainCacheInvalidator) {
 	s.invalidateChain = fn
 }
 
-// SetHooks installs the consumer-supplied observability bundle. Idempotent;
-// safe to call before the first lifecycle method. Root *theauth.TheAuth
-// calls this in New after the agent Service is constructed so the same
-// bundle reaches every internal service.
+// SetHooks installs the observability bundle. It is idempotent and reaches every internal service this way.
 func (s *Service) SetHooks(h *obs.Hooks) {
 	if s == nil {
 		return
@@ -133,9 +106,8 @@ func (s *Service) SetHooks(h *obs.Hooks) {
 	s.hooks = h
 }
 
-// instrument wraps an agent-lifecycle entry in a span + status attribute
-// triple. Returns a deferred function the caller invokes via defer to
-// close the span with the function's named-return err.
+// instrument wraps an agent lifecycle entry in a span and status attribute. Callers defer the
+// returned func to close the span with the named error.
 func (s *Service) instrument(ctx context.Context, name string) (context.Context, obs.Span, func(err error)) {
 	if s == nil {
 		return ctx, obs.NoopSpan{}, func(error) {}
@@ -153,16 +125,12 @@ func (s *Service) instrument(ctx context.Context, name string) (context.Context,
 	return ctx, span, finish
 }
 
-// errNotConfigured matches the legacy "theauth: agent identity not
-// configured" sentinel returned by the root forwarders when the agent
-// identity block is absent.
+// errNotConfigured is the sentinel for an absent agent identity block.
 var errNotConfigured = errors.New("theauth: agent identity not configured")
 
-// CreateAgent persists a fresh agent owned by the supplied user or
-// organization, mints a backing OAuthClient + client secret, records the
-// secret on an agent_credentials row, and returns both the Agent record and
-// the one-shot AgentSecret. Audit emission: agent.created (without secret
-// material) plus agent_credential.minted.
+// CreateAgent persists an agent owned by a user or organization, mints its OAuth client and secret,
+// and returns the agent and the one-shot secret. It emits agent.created (no secret material) and
+// agent_credential.minted.
 func (s *Service) CreateAgent(ctx context.Context, in models.CreateAgentInput) (agentRow models.Agent, agentSecret models.AgentSecret, err error) {
 	if s == nil || s.cfg == nil {
 		return models.Agent{}, models.AgentSecret{}, errNotConfigured
@@ -219,15 +187,11 @@ func (s *Service) CreateAgent(ctx context.Context, in models.CreateAgentInput) (
 	}
 	stored, err := s.storage.InsertAgent(ctx, agent)
 	if err != nil {
-		// Best-effort cleanup of the orphan oauth_clients row; failing
-		// silently is acceptable because the unique client_id prevents a
-		// retry from colliding and the operator can sweep stragglers via
-		// the admin API in a later phase.
+		// Best-effort cleanup of the orphan client row. Failure is tolerated, since the unique client_id
+		// blocks collisions.
 		_ = s.storage.DeleteOAuthClient(ctx, clientID)
-		// Cache invalidation contract (clientauthcache): the row was just
-		// inserted and then deleted, so any in-flight authenticate call
-		// could still have cached a verified snapshot. Drop it explicitly
-		// so a future re-registration of the same client_id starts clean.
+		// The client row was inserted and then deleted, so an in-flight authenticate may have cached it.
+		// Drop the entry explicitly.
 		s.invalidate(clientID)
 		return models.Agent{}, models.AgentSecret{}, fmt.Errorf("persist agent: %w", err)
 	}
@@ -260,11 +224,9 @@ func (s *Service) CreateAgent(ctx context.Context, in models.CreateAgentInput) (
 	}, nil
 }
 
-// MintAgentCredential mints a fresh credential of the requested kind on an
-// existing agent. Only kind = AgentCredentialKindSecret is implemented in
-// phase 3; X.509 and JWK kinds return ErrNotImplemented so callers see a
-// typed error rather than silent success. Audit emission:
-// agent_credential.minted on success.
+// MintAgentCredential mints a credential of the requested kind on an existing agent. Only the
+// secret kind is implemented; x509 and jwk return ErrNotImplemented. It emits
+// agent_credential.minted.
 func (s *Service) MintAgentCredential(ctx context.Context, agentID models.ULID, kind string) (models.AgentSecret, error) {
 	if s == nil || s.cfg == nil {
 		return models.AgentSecret{}, errNotConfigured
@@ -311,12 +273,8 @@ func (s *Service) MintAgentCredential(ctx context.Context, agentID models.ULID, 
 	if _, err := s.storage.UpdateOAuthClient(ctx, *client); err != nil {
 		return models.AgentSecret{}, fmt.Errorf("update agent oauth client: %w", err)
 	}
-	// Cache invalidation contract (clientauthcache): the verified-client
-	// LRU is keyed by client_id and stores the prior secret's sha256
-	// digest. Without this Invalidate, a hot client would continue to
-	// authenticate with the OLD secret until the entry expired naturally.
-	// RotateAgentSecret depends on the new secret taking effect on the
-	// next /oauth/token call; that contract requires this line.
+	// The verified-client cache is keyed by client_id, so a rotated secret must drop the entry or the
+	// old secret keeps working until it expires.
 	s.invalidate(agent.ClientID)
 	s.emitAgentEvent(ctx, "agent_credential.minted", *agent, map[string]any{
 		"agent_id":      agent.ID.String(),
@@ -331,10 +289,8 @@ func (s *Service) MintAgentCredential(ctx context.Context, agentID models.ULID, 
 	}, nil
 }
 
-// RotateAgentSecret is an alias for MintAgentCredential(kind="secret") that
-// also revokes every prior unrevoked credential. Use this on suspected
-// compromise; use MintAgentCredential when overlapping live credentials are
-// the desired migration shape.
+// RotateAgentSecret mints a fresh secret and revokes every prior credential. Use it on suspected
+// compromise; use MintAgentCredential for overlapping credentials.
 func (s *Service) RotateAgentSecret(ctx context.Context, agentID models.ULID) (models.AgentSecret, error) {
 	if s == nil || s.cfg == nil {
 		return models.AgentSecret{}, errNotConfigured
@@ -394,9 +350,8 @@ func (s *Service) GetAgent(ctx context.Context, agentID models.ULID) (*models.Ag
 	return ag, nil
 }
 
-// SuspendAgent flips status to suspended. Cascades: every existing access
-// token mentioning this agent in its actor chain becomes inactive on the
-// next introspection refresh.
+// SuspendAgent sets status to suspended. Tokens with this agent in their actor chain go inactive on
+// the next introspection.
 func (s *Service) SuspendAgent(ctx context.Context, agentID models.ULID, reason string) (err error) {
 	ctx, _, finish := s.instrument(ctx, obs.SpanAgentSuspend)
 	defer func() { finish(err) }()
@@ -417,9 +372,7 @@ func (s *Service) ResumeAgent(ctx context.Context, agentID models.ULID) error {
 	return s.changeAgentStatus(ctx, agentID, models.AgentStatusActive, "agent.resumed", "")
 }
 
-// RevokeAgent flips status to revoked. Terminal: a revoked agent cannot be
-// resumed (operators create a fresh agent instead). Cascades to every token
-// in flight via introspection on next refresh.
+// RevokeAgent sets status to revoked. It is terminal: operators create a fresh agent instead of resuming.
 func (s *Service) RevokeAgent(ctx context.Context, agentID models.ULID, reason string) (err error) {
 	ctx, _, finish := s.instrument(ctx, obs.SpanAgentRevoke)
 	defer func() { finish(err) }()
@@ -439,12 +392,8 @@ func (s *Service) changeAgentStatus(ctx context.Context, agentID models.ULID, st
 	if err := s.storage.UpdateAgentStatus(ctx, agentID, status, now); err != nil {
 		return fmt.Errorf("update agent status: %w", err)
 	}
-	// Cache invalidation contract (clientauthcache + chain cache): a
-	// suspended or revoked agent must not authenticate via a cached
-	// Argon2-verified snapshot, and must not appear "active" in any cached
-	// chain-walk result. Drop both entries so the next /oauth/token and
-	// the next introspection see the fresh status (perf re-audit
-	// 2026-06-21, item 3).
+	// A suspended or revoked agent must not authenticate from the verified-client cache, nor show
+	// active in a chain-walk result.
 	if status != models.AgentStatusActive {
 		s.invalidate(cur.ClientID)
 		s.invalidateChain(cur.ID.String())
@@ -462,20 +411,14 @@ func (s *Service) changeAgentStatus(ctx context.Context, agentID models.ULID, st
 	return nil
 }
 
-// AgentByID returns the persisted agent row. Exposed so handler-layer code
-// can perform ownership checks (the legacy implementation reached through
-// the root oauthStorage back-door; PR C removes that back-door in favour
-// of this lookup). The storage error is returned unwrapped so callers can
-// compare with models.ErrStorageNotFound.
+// AgentByID returns the persisted agent row, for ownership checks in handler code. The storage
+// error is returned unwrapped.
 func (s *Service) AgentByID(ctx context.Context, id models.ULID) (*models.Agent, error) {
 	return s.storage.AgentByID(ctx, id)
 }
 
-// AgentBySubjectClaim parses a sub or act.sub of the form "agent:<id>"
-// and returns the corresponding agent row. Returns (nil, nil) when the
-// claim does not name an agent so callers can branch cleanly. Satisfies
-// internal/as.AgentLookup so the AS introspection / token-exchange paths
-// can validate chain actors without importing this package directly.
+// AgentBySubjectClaim resolves "agent:<id>" to its agent row. It returns (nil, nil) when the claim
+// names no agent. It satisfies internal/as.AgentLookup.
 func (s *Service) AgentBySubjectClaim(ctx context.Context, sub string) (*models.Agent, error) {
 	if s == nil {
 		return nil, nil
@@ -491,10 +434,8 @@ func (s *Service) AgentBySubjectClaim(ctx context.Context, sub string) (*models.
 	return s.storage.AgentByID(ctx, id)
 }
 
-// emitAgentEvent is a thin EmitAudit wrapper that stamps the target as
-// agent:<id> and surfaces the agent's owner kind in metadata for downstream
-// filtering. EmitAudit handles the audit-disabled, audit-closed, and
-// channel-full cases on its own.
+// emitAgentEvent emits an agent audit event with the target set to agent:<id>, and the owner kind
+// in metadata for filtering.
 func (s *Service) emitAgentEvent(ctx context.Context, action string, ag models.Agent, meta map[string]any) {
 	s.auditEm.EmitAudit(ctx, action, models.TargetRef{Type: "agent", ID: ag.ID.String()}, meta)
 }

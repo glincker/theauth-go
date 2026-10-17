@@ -6,18 +6,15 @@ import (
 	"github.com/glincker/theauth-go/v2/internal/models"
 )
 
-// ChainVerifier is implemented by storage backends that keep a tamper-evident
-// audit hash chain (sqlite, postgres, mysql). Backends without a chain either do
-// not implement it or report ChainSupported() == false.
+// ChainVerifier is implemented by backends that keep a tamper-evident audit hash chain (sqlite,
+// postgres, mysql).
 type ChainVerifier interface {
 	ChainSupported() bool
 	VerifyAuditChain(ctx context.Context) (models.AuditChainResult, error)
 }
 
-// VerifyChain verifies the audit hash chain held by st. When the backend has no
-// chain it returns an explicit unsupported result (Supported and OK both
-// false) together with models.ErrAuditChainUnsupported. It never reports a
-// pass for a backend it could not check.
+// VerifyChain verifies the chain held by st. A backend without a chain gets Supported and OK both false with
+// ErrAuditChainUnsupported, so an unchecked log is never reported as verified.
 func VerifyChain(ctx context.Context, st Storage) (models.AuditChainResult, error) {
 	if v, ok := st.(ChainVerifier); ok && v.ChainSupported() {
 		return v.VerifyAuditChain(ctx)

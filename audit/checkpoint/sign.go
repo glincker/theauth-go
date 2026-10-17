@@ -100,10 +100,8 @@ func wellFormed(c Checkpoint) bool {
 		validTime(c.Since) && validTime(c.Until)
 }
 
-// VerifyCheckpoint verifies a checkpoint signature. It rejects any algorithm
-// other than Ed25519 and any keyId that none of the supplied keys carries, so a
-// checkpoint cannot pick the key or the algorithm it is checked with. Pass
-// several keys to cover key rotation.
+// VerifyCheckpoint verifies a checkpoint signature. It rejects any algorithm other than Ed25519 and
+// any keyId no supplied key carries, so a checkpoint cannot choose its own key or algorithm.
 func VerifyCheckpoint(c Checkpoint, keys ...PublicKey) Outcome {
 	if !wellFormed(c) {
 		return fail(ReasonMalformed)

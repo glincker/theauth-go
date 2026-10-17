@@ -20,16 +20,16 @@ type Store struct {
 	resetTokens    map[theauth.ULID]theauth.PasswordResetToken
 	oauthAccounts  map[theauth.ULID]theauth.OAuthAccount
 	// sessionLinks backs SessionLinkStorage; see memory_sessions.go.
-	sessionLinks map[theauth.ULID]theauth.SessionLink
-	// v0.5
+	sessionLinks  map[theauth.ULID]theauth.SessionLink
 	webauthnCreds map[theauth.ULID]theauth.WebAuthnCredential
 	totpSecrets   map[theauth.ULID]theauth.TOTPSecret
 	recoveryCodes map[theauth.ULID]theauth.RecoveryCode
 	totpSteps     map[theauth.ULID]int64
 	// toolApprovals backs ToolApprovalStorage; see memory_toolapprovals.go.
 	toolApprovals map[string]theauth.ToolApproval
-	// v0.7 multi-tenancy + SAML + SCIM. Held in a sidecar so the existing
-	// New() literal stays compact; see memory_v07.go for details.
+	// vault backs TokenVaultStorage; see memory_tokenvault.go.
+	vault map[string]theauth.VaultCredential
+	// v0.7 multi-tenancy, SAML and SCIM state; see memory_v07.go.
 	v07 *v07State
 	// v1.0 RBAC + audit. See memory_v10.go.
 	v10 *v10State
@@ -49,8 +49,7 @@ type Store struct {
 	devauth devAuthState
 	iotdev  iotDeviceState
 	opaque  opaqueState
-	// account lifecycle: forced password change, disable, trusted devices.
-	// See memory_lifecycle.go.
+	// Account lifecycle state; see memory_lifecycle.go.
 	acctState map[theauth.ULID]theauth.AccountState
 	trusted   map[theauth.ULID]theauth.TrustedDevice
 }
@@ -116,8 +115,7 @@ func (s *Store) CreateSession(_ context.Context, sess theauth.Session) (theauth.
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if sess.AuthLevel == "" {
-		// Mirror the Postgres DDL default so callers that pre-date v0.5
-		// see "full" without having to set the field explicitly.
+		// Mirror the Postgres DDL default.
 		sess.AuthLevel = theauth.AuthLevelFull
 	}
 	s.sessions[sess.ID] = sess
@@ -195,8 +193,6 @@ func (s *Store) ConsumeMagicLink(_ context.Context, hash []byte) (*theauth.Magic
 	return nil, storage.ErrNotFound
 }
 
-// Password credentials (v0.2)
-
 func (s *Store) SetUserPassword(_ context.Context, userID theauth.ULID, passwordHash string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -244,12 +240,8 @@ func (s *Store) ConsumePasswordResetToken(_ context.Context, hash []byte) (*thea
 	return nil, storage.ErrNotFound
 }
 
-// OAuth accounts (v0.3)
-
-// UpsertOAuthAccount mirrors the Postgres ON CONFLICT (provider, provider_user_id)
-// DO UPDATE behavior: if a row with the same (provider, provider_user_id)
-// already exists, its mutable fields are refreshed in place (keeping the
-// original ID + CreatedAt). Otherwise the supplied row is inserted as-is.
+// UpsertOAuthAccount mirrors the Postgres ON CONFLICT upsert: an existing
+// (provider, provider_user_id) row keeps its ID and CreatedAt.
 func (s *Store) UpsertOAuthAccount(_ context.Context, a theauth.OAuthAccount) (theauth.OAuthAccount, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -364,9 +356,8 @@ func (s *Store) MoveWebAuthnCredentials(_ context.Context, primaryID, secondaryI
 	return nil
 }
 
-// MoveTOTPSecret reassigns the TOTP secret from secondaryID to primaryID.
-// If primaryID already has a confirmed TOTP secret, the secondary secret is
-// dropped to avoid clobbering an active factor.
+// MoveTOTPSecret reassigns the TOTP secret. A confirmed primary secret wins,
+// so the secondary is dropped rather than clobbering an active factor.
 func (s *Store) MoveTOTPSecret(_ context.Context, primaryID, secondaryID theauth.ULID) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -382,11 +373,8 @@ func (s *Store) MoveTOTPSecret(_ context.Context, primaryID, secondaryID theauth
 	return nil
 }
 
-// Sessions (v0.5 step-up)
-
-// CreateSessionWithAuthLevel is identical to CreateSession but honors the
-// AuthLevel field explicitly (defaulting to AuthLevelFull when blank for
-// safety). Service code uses this path when minting a pending_2fa session.
+// CreateSessionWithAuthLevel is CreateSession with an explicit AuthLevel
+// (blank defaults to full).
 func (s *Store) CreateSessionWithAuthLevel(_ context.Context, sess theauth.Session) (theauth.Session, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -397,8 +385,8 @@ func (s *Store) CreateSessionWithAuthLevel(_ context.Context, sess theauth.Sessi
 	return sess, nil
 }
 
-// UpdateSessionAuthLevel rewrites the AuthLevel column on the named session.
-// Used to promote pending_2fa to full after a successful TOTP verify.
+// UpdateSessionAuthLevel rewrites the AuthLevel column, e.g. to promote a
+// pending_2fa session after a successful TOTP verify.
 func (s *Store) UpdateSessionAuthLevel(_ context.Context, id theauth.ULID, level string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -411,14 +399,10 @@ func (s *Store) UpdateSessionAuthLevel(_ context.Context, id theauth.ULID, level
 	return nil
 }
 
-// WebAuthn credentials (v0.5)
-
 func (s *Store) InsertWebAuthnCredential(_ context.Context, c theauth.WebAuthnCredential) (theauth.WebAuthnCredential, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	// Enforce credential_id uniqueness across all users to mirror the
-	// Postgres UNIQUE constraint; a stolen credential cannot be re-pinned
-	// to a different account.
+	// Credential IDs are globally unique, mirroring the Postgres UNIQUE constraint.
 	for _, existing := range s.webauthnCreds {
 		if bytes.Equal(existing.CredentialID, c.CredentialID) {
 			return theauth.WebAuthnCredential{}, storage.ErrNotFound
@@ -459,10 +443,7 @@ func (s *Store) UpdateWebAuthnSignCount(_ context.Context, credentialID []byte, 
 		if !bytes.Equal(c.CredentialID, credentialID) {
 			continue
 		}
-		// Strictly-greater guard. Authenticators that do not implement
-		// counters always send 0; the service layer recognises that
-		// special case and either skips this update entirely or compares
-		// only when both sides are > 0.
+		// Authenticators without a signature counter send 0; the service layer handles that case.
 		if newCount <= c.SignCount {
 			return theauth.ErrReplayDetected
 		}
@@ -475,10 +456,8 @@ func (s *Store) UpdateWebAuthnSignCount(_ context.Context, credentialID []byte, 
 	return storage.ErrNotFound
 }
 
-// UpdateWebAuthnBackupFlags records the BE / BS flags for a stored credential
-// (trust-on-first-use reconciliation for legacy synced passkeys). A missing
-// credential is a no-op returning nil, mirroring the Postgres adapter: the
-// caller treats reconciliation as best-effort.
+// UpdateWebAuthnBackupFlags records BE/BS flags for trust-on-first-use
+// reconciliation of legacy synced passkeys. A missing credential is a no-op.
 func (s *Store) UpdateWebAuthnBackupFlags(_ context.Context, credentialID []byte, backupEligible, backupState bool) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -506,7 +485,6 @@ func (s *Store) DeleteWebAuthnCredential(_ context.Context, id theauth.ULID, use
 	return nil
 }
 
-// RenameWebAuthnCredential implements theauth.WebAuthnRenameStorage.
 func (s *Store) RenameWebAuthnCredential(_ context.Context, id, userID theauth.ULID, name string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -518,8 +496,6 @@ func (s *Store) RenameWebAuthnCredential(_ context.Context, id, userID theauth.U
 	s.webauthnCreds[id] = c
 	return nil
 }
-
-// TOTP secrets (v0.5)
 
 func (s *Store) UpsertPendingTOTPSecret(_ context.Context, sec theauth.TOTPSecret) error {
 	s.mu.Lock()
@@ -575,8 +551,6 @@ func (s *Store) DeleteTOTPSecret(_ context.Context, userID theauth.ULID) error {
 	return nil
 }
 
-// Recovery codes (v0.5)
-
 func (s *Store) InsertRecoveryCodes(_ context.Context, codes []theauth.RecoveryCode) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -586,7 +560,6 @@ func (s *Store) InsertRecoveryCodes(_ context.Context, codes []theauth.RecoveryC
 	return nil
 }
 
-// CountUnusedRecoveryCodes implements theauth.RecoveryCodeStorage.
 func (s *Store) CountUnusedRecoveryCodes(_ context.Context, userID theauth.ULID) (int, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -599,7 +572,6 @@ func (s *Store) CountUnusedRecoveryCodes(_ context.Context, userID theauth.ULID)
 	return n, nil
 }
 
-// ReplaceRecoveryCodes implements theauth.RecoveryCodeStorage.
 func (s *Store) ReplaceRecoveryCodes(_ context.Context, userID theauth.ULID, codes []theauth.RecoveryCode) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -614,11 +586,8 @@ func (s *Store) ReplaceRecoveryCodes(_ context.Context, userID theauth.ULID, cod
 	return nil
 }
 
-// ConsumeRecoveryCode walks the user's unused codes and constant-time-checks
-// each against the supplied plaintext. The first hit is marked used and
-// returns nil. No match returns ErrNotFound. Matches the Postgres
-// semantics (linear scan over the per-user slice is fine because N is
-// bounded by RecoveryCodeCount, defaulting to 10).
+// ConsumeRecoveryCode marks the first unused code that matches in constant time
+// as used, returning ErrNotFound when none match.
 func (s *Store) ConsumeRecoveryCode(_ context.Context, userID theauth.ULID, code string, at time.Time) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()

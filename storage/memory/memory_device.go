@@ -10,9 +10,8 @@ import (
 	"github.com/glincker/theauth-go/v2"
 )
 
-// memory_device.go: in-memory DeviceAuthorizationStorage (RFC 8628 device
-// grant) and RegistrationTokenStorage (initial access tokens). State sits in a
-// sidecar with its own mutex so these paths never contend with the core store.
+// memory_device.go: in-memory device grant (RFC 8628) and initial access token state, held
+// in a sidecar with its own mutex.
 
 type devAuthState struct {
 	mu      sync.Mutex
@@ -34,7 +33,6 @@ func cloneDevAuth(d theauth.DeviceAuthorization) theauth.DeviceAuthorization {
 	return d
 }
 
-// InsertDeviceAuthorization satisfies DeviceAuthorizationStorage.
 func (s *Store) InsertDeviceAuthorization(_ context.Context, in theauth.DeviceAuthorization) error {
 	st := &s.devauth
 	st.mu.Lock()
@@ -68,7 +66,6 @@ func (s *Store) deviceBy(match func(theauth.DeviceAuthorization) bool) (*theauth
 	return nil, theauth.ErrStorageNotFound
 }
 
-// DeviceAuthorizationByDeviceCodeHash satisfies DeviceAuthorizationStorage.
 func (s *Store) DeviceAuthorizationByDeviceCodeHash(_ context.Context, hash []byte) (*theauth.DeviceAuthorization, error) {
 	return s.deviceBy(func(d theauth.DeviceAuthorization) bool { return bytes.Equal(d.DeviceCodeHash, hash) })
 }
@@ -96,7 +93,6 @@ func (s *Store) DeviceAuthorizationByUserCodeHash(_ context.Context, hash []byte
 	return best, nil
 }
 
-// DecideDeviceAuthorization satisfies DeviceAuthorizationStorage.
 func (s *Store) DecideDeviceAuthorization(_ context.Context, id theauth.ULID, status string, userID theauth.ULID, now time.Time) (bool, error) {
 	st := &s.devauth
 	st.mu.Lock()
@@ -112,7 +108,6 @@ func (s *Store) DecideDeviceAuthorization(_ context.Context, id theauth.ULID, st
 	return true, nil
 }
 
-// RecordDeviceAuthorizationPoll satisfies DeviceAuthorizationStorage.
 func (s *Store) RecordDeviceAuthorizationPoll(_ context.Context, id theauth.ULID, polledAt time.Time, intervalSeconds int) error {
 	st := &s.devauth
 	st.mu.Lock()
@@ -128,7 +123,6 @@ func (s *Store) RecordDeviceAuthorizationPoll(_ context.Context, id theauth.ULID
 	return nil
 }
 
-// ConsumeDeviceAuthorization satisfies DeviceAuthorizationStorage.
 func (s *Store) ConsumeDeviceAuthorization(_ context.Context, id theauth.ULID, now time.Time) (bool, error) {
 	st := &s.devauth
 	st.mu.Lock()
@@ -143,7 +137,6 @@ func (s *Store) ConsumeDeviceAuthorization(_ context.Context, id theauth.ULID, n
 	return true, nil
 }
 
-// DeleteExpiredDeviceAuthorizations satisfies DeviceAuthorizationStorage.
 func (s *Store) DeleteExpiredDeviceAuthorizations(_ context.Context, before time.Time) (int64, error) {
 	st := &s.devauth
 	st.mu.Lock()
@@ -166,7 +159,6 @@ func cloneReg(t theauth.RegistrationToken) theauth.RegistrationToken {
 	return t
 }
 
-// InsertRegistrationToken satisfies RegistrationTokenStorage.
 func (s *Store) InsertRegistrationToken(_ context.Context, t theauth.RegistrationToken) error {
 	st := &s.devauth
 	st.mu.Lock()
@@ -176,7 +168,6 @@ func (s *Store) InsertRegistrationToken(_ context.Context, t theauth.Registratio
 	return nil
 }
 
-// RegistrationTokenByHash satisfies RegistrationTokenStorage.
 func (s *Store) RegistrationTokenByHash(_ context.Context, hash []byte) (*theauth.RegistrationToken, error) {
 	st := &s.devauth
 	st.mu.Lock()
@@ -191,7 +182,6 @@ func (s *Store) RegistrationTokenByHash(_ context.Context, hash []byte) (*theaut
 	return nil, theauth.ErrStorageNotFound
 }
 
-// RegistrationTokenByID satisfies RegistrationTokenStorage.
 func (s *Store) RegistrationTokenByID(_ context.Context, id theauth.ULID) (*theauth.RegistrationToken, error) {
 	st := &s.devauth
 	st.mu.Lock()
@@ -205,7 +195,6 @@ func (s *Store) RegistrationTokenByID(_ context.Context, id theauth.ULID) (*thea
 	return &cp, nil
 }
 
-// ListRegistrationTokens satisfies RegistrationTokenStorage.
 func (s *Store) ListRegistrationTokens(_ context.Context, orgID *theauth.ULID) ([]theauth.RegistrationToken, error) {
 	st := &s.devauth
 	st.mu.Lock()
@@ -227,7 +216,6 @@ func (s *Store) ListRegistrationTokens(_ context.Context, orgID *theauth.ULID) (
 	return out, nil
 }
 
-// RevokeRegistrationToken satisfies RegistrationTokenStorage.
 func (s *Store) RevokeRegistrationToken(_ context.Context, id theauth.ULID, at time.Time) (bool, error) {
 	st := &s.devauth
 	st.mu.Lock()
@@ -243,7 +231,6 @@ func (s *Store) RevokeRegistrationToken(_ context.Context, id theauth.ULID, at t
 	return true, nil
 }
 
-// RedeemRegistrationToken satisfies RegistrationTokenStorage.
 func (s *Store) RedeemRegistrationToken(_ context.Context, id theauth.ULID, now time.Time) (bool, error) {
 	st := &s.devauth
 	st.mu.Lock()
@@ -260,7 +247,6 @@ func (s *Store) RedeemRegistrationToken(_ context.Context, id theauth.ULID, now 
 	return true, nil
 }
 
-// RefundRegistrationToken satisfies RegistrationTokenStorage.
 func (s *Store) RefundRegistrationToken(_ context.Context, id theauth.ULID) error {
 	st := &s.devauth
 	st.mu.Lock()

@@ -9,25 +9,15 @@ import (
 	"github.com/glincker/theauth-go/v2/internal/models"
 )
 
-// dpop.go: glue between the AS token endpoint and the RFC 9449 verifier.
-// Lives in this package (not in handlers) so the grant implementations
-// can call it without taking a dependency on the HTTP layer.
+// dpop.go is the glue between the token endpoint and the RFC 9449 verifier. It lives here so grants
+// can call it without depending on the HTTP layer.
 
-// dpopThumbprintForRequest extracts and verifies the DPoP proof from req. Returns:
-//
-// ("", nil) when DPoP is disabled OR the client did not present a proof AND is not on the RequireDPoPForClients list.
-// (jkt, nil) on a valid proof; jkt is the RFC 7638 SHA-256 thumbprint of the proof key.
-// ("", ErrDPoPRequired) when the client is on the required list but no proof was supplied.
-// ("", ErrDPoPNonceRequired) when nonce mode is on and the proof lacked a nonce (handlers map this to 400 + DPoP-Nonce response header).
-// ("", ErrDPoPInvalid) on any other verification failure (signature, htm, htu, iat, jti replay, malformed proof, unsupported alg).
-//
-// The grant implementations call this helper exactly once and pass the resulting jkt through to mintAccessAndRefresh.
+// dpopThumbprintForRequest verifies the DPoP proof on req. It returns ("", nil) when DPoP is off or
+// the client sent no proof and is not required to; (jkt, nil) for a valid proof; ErrDPoPRequired,
+// ErrDPoPNonceRequired (400 plus a DPoP-Nonce header) or ErrDPoPInvalid otherwise.
 func (s *Service) dpopThumbprintForRequest(req TokenRequest) (string, error) {
 	if s == nil || s.dpopSvc == nil {
-		// DPoP disabled. A client presenting a proof to a DPoP-unaware
-		// AS gets a Bearer token (no cnf claim); this is the
-		// pre-PR behavior and matches the deployment opt-in
-		// model laid out in Cfg.DPoP.
+		// With DPoP disabled a proof is ignored and the token is a plain Bearer token (no cnf claim).
 		return "", nil
 	}
 	if req.DPoPProof == "" {
@@ -52,9 +42,7 @@ func (s *Service) dpopThumbprintForRequest(req TokenRequest) (string, error) {
 	return proof.Thumbprint, nil
 }
 
-// IssueDPoPNonce mints a fresh DPoP-Nonce string when DPoP is enabled.
-// Returns "" when DPoP is disabled so handlers can branch with a single
-// nil check.
+// IssueDPoPNonce mints a DPoP-Nonce value, or "" when DPoP is disabled.
 func (s *Service) IssueDPoPNonce() string {
 	if s == nil || s.dpopSvc == nil {
 		return ""
@@ -62,9 +50,8 @@ func (s *Service) IssueDPoPNonce() string {
 	return s.dpopSvc.IssueNonce(time.Now().UTC())
 }
 
-// DPoPProofMaxAge surfaces the configured proof acceptance window so the
-// handler can emit it as a hint on the DPoP-Nonce error response. Returns
-// 0 when DPoP is disabled.
+// DPoPProofMaxAge is the proof acceptance window, surfaced as a hint on DPoP-Nonce errors. It is 0
+// when DPoP is disabled.
 func (s *Service) DPoPProofMaxAge() time.Duration {
 	if s == nil || s.dpopSvc == nil {
 		return 0
@@ -72,26 +59,18 @@ func (s *Service) DPoPProofMaxAge() time.Duration {
 	return s.dpopSvc.ProofMaxAge()
 }
 
-// Sentinel errors the handler layer maps onto wire responses. Kept in
-// this package so handlers (in internal/as/handlers) and any future
-// non-HTTP caller share the same vocabulary.
+// Sentinel errors that handlers map onto wire responses.
 var (
-	// ErrDPoPRequired is returned when the AS is configured to require
-	// a DPoP proof for the given client and the request did not include
-	// one. Maps to HTTP 400 invalid_dpop_proof.
+	// ErrDPoPRequired is returned when the client must present a proof and did not. Maps to 400
+	// invalid_dpop_proof.
 	ErrDPoPRequired = errors.New("theauth: DPoP proof required")
 
-	// ErrDPoPNonceRequired is returned when the proof lacks a server-
-	// issued nonce that the server has demanded. Maps to HTTP 400
-	// use_dpop_nonce + DPoP-Nonce response header.
+	// ErrDPoPNonceRequired is returned when the proof lacks the server-issued nonce. Maps to 400 use_dpop_nonce.
 	ErrDPoPNonceRequired = errors.New("theauth: DPoP nonce required")
 
-	// ErrDPoPInvalid wraps every other proof verification failure.
-	// Maps to HTTP 400 invalid_dpop_proof.
+	// ErrDPoPInvalid wraps every other proof verification failure. Maps to 400 invalid_dpop_proof.
 	ErrDPoPInvalid = errors.New("theauth: DPoP proof invalid")
 )
 
-// Compile-time guard that ErrDPoPRequired and friends are sentinels the
-// models package does not also export. Avoids accidental shadowing by a
-// later models constant of the same name.
+// Compile-time guard: these sentinels must not be shadowed by a same-named models constant.
 var _ = models.ErrOAuthInvalidRequest

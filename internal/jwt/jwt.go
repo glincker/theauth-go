@@ -1,12 +1,6 @@
-// Package jwt implements the minimum JWT surface required by the v2.0
-// authorization server: Ed25519 (EdDSA) sign and verify for access tokens
-// shaped per RFC 9068 (typ = "at+jwt"). Header carries alg + kid + typ; the
-// payload is encoded application-specific Claims plus required RFC 7519
-// registered claims.
-//
-// This package is deliberately small and dependency free; it does not import
-// any third-party JWT library. Algorithm confusion attacks are mitigated by
-// rejecting any alg other than EdDSA at parse time.
+// Package jwt implements the JWT surface the authorization server needs: Ed25519 (EdDSA) signing
+// and verification of RFC 9068 access tokens (typ "at+jwt"), plus the RFC 7519 registered claims.
+// It has no third-party dependency, and any alg other than EdDSA is rejected at parse time.
 package jwt
 
 import (
@@ -34,10 +28,8 @@ type Header struct {
 	Kid string `json:"kid"`
 }
 
-// Claims captures the RFC 7519 registered claims plus the OAuth 2.0
-// application-specific fields used by the v2.0 AS. The aud claim accepts a
-// string for compatibility; resource servers compare against the configured
-// resource identifier.
+// Claims holds the RFC 7519 registered claims and the OAuth fields the AS uses. aud accepts a
+// string; resource servers compare it against their identifier.
 type Claims struct {
 	Iss      string `json:"iss"`
 	Sub      string `json:"sub"`
@@ -49,9 +41,8 @@ type Claims struct {
 	ClientID string `json:"client_id"`
 	Scope    string `json:"scope"`
 	Typ      string `json:"typ,omitempty"`
-	// Extra carries non-registered claims. Marshalled at top level via the
-	// custom MarshalJSON below. Phase 3+ uses this for the act chain and
-	// delegation_grant_id.
+	// Extra holds non-registered claims. They are marshalled at top level by MarshalJSON, and carry
+	// the act chain and delegation_grant_id.
 	Extra map[string]any `json:"-"`
 }
 
@@ -125,9 +116,8 @@ func Sign(claims Claims, kid string, priv ed25519.PrivateKey) (string, error) {
 // tokens (OpenID Connect Back-Channel Logout 1.0 section 2.4).
 const TypeLogoutToken = "logout+jwt"
 
-// SignPayload signs an arbitrary JSON payload with an explicit typ header.
-// The back-channel logout token uses it because its claim set (events, sid)
-// does not fit Claims.
+// SignPayload signs an arbitrary JSON payload with an explicit typ. The back-channel logout token
+// uses it, since its claims do not fit Claims.
 func SignPayload(payload map[string]any, typ, kid string, priv ed25519.PrivateKey) (string, error) {
 	if len(priv) != ed25519.PrivateKeySize {
 		return "", errors.New("jwt: ed25519 private key has wrong length")
@@ -152,40 +142,25 @@ func signPayload(payload any, typ, kid string, priv ed25519.PrivateKey) (string,
 	return signingInput + "." + base64.RawURLEncoding.EncodeToString(sig), nil
 }
 
-// ResolveKey is the verifier-side callback that returns the public key matching
-// the kid embedded in a token header. Implementations typically consult the
-// JWKS snapshot.
+// ResolveKey returns the public key for a kid from the token header. Implementations usually
+// consult the JWKS snapshot.
 type ResolveKey func(kid string) (ed25519.PublicKey, bool)
 
-// Verify parses and authenticates a compact JWT. Returns the parsed claims
-// on success; returns an error for any of:
-//   - malformed encoding (not three segments, bad base64);
-//   - unsupported alg or typ in the header;
-//   - unknown kid (ResolveKey returns false);
-//   - signature mismatch;
-//   - expired token (exp <= now);
-//   - not-yet-valid token (nbf > now when present).
-//
-// The expectedAud parameter is optional: when non-empty, a mismatch returns
-// an error. Resource servers should always pass their configured identifier.
-//
-// The JOSE header typ MUST be "at+jwt" (RFC 9068); a missing typ is rejected
-// so other JWTs signed with the same key cannot be passed off as access
-// tokens. Use VerifyOpts with AllowMissingTyp for the tolerant mode.
+// Verify parses and authenticates a compact JWT. It fails on malformed input, an unsupported alg or
+// typ, an unknown kid, a bad signature, an expired token or a token not yet valid. A non-empty
+// expectedAud must match. The typ must be "at+jwt" (RFC 9068), so other JWTs signed by the same key
+// cannot pass as access tokens. VerifyOpts with AllowMissingTyp is the tolerant mode.
 func Verify(token string, resolve ResolveKey, expectedAud string, now time.Time) (Claims, error) {
 	return VerifyOpts(token, resolve, expectedAud, now, VerifyOptions{})
 }
 
 // VerifyOptions tunes VerifyOpts.
 type VerifyOptions struct {
-	// AllowMissingTyp accepts tokens whose header has no typ (tolerant
-	// mode for tokens minted before typ was always set). A present but
+	// AllowMissingTyp accepts a header with no typ, for tokens minted before typ was always set. A
 	// different typ is still rejected.
 	AllowMissingTyp bool
-	// Skew is the clock-skew tolerance applied to exp and nbf. A token is
-	// treated as expired only once now exceeds exp+Skew, and as not yet
-	// valid only while now is earlier than nbf-Skew. Zero means no
-	// tolerance.
+	// Skew is the clock tolerance on exp and nbf. A token counts as expired only after exp+Skew, and
+	// not yet valid before nbf-Skew.
 	Skew time.Duration
 	// IgnoreExpiry skips the exp check. Only VerifyWith honours it; used for
 	// id_token_hint, which RPs may legitimately present after expiry.
@@ -253,9 +228,8 @@ func VerifyOpts(token string, resolve ResolveKey, expectedAud string, now time.T
 	return c, nil
 }
 
-// PeekHeader parses just the header segment without verifying the signature.
-// Used by the introspection cache to extract kid + jti for cache keys without
-// running a full Verify.
+// PeekHeader parses the header without verifying the signature. The introspection cache uses it to
+// read kid and jti for keys.
 func PeekHeader(token string) (Header, error) {
 	parts := strings.Split(token, ".")
 	if len(parts) != 3 {

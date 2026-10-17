@@ -1,10 +1,4 @@
-// Package handlers exposes the /auth/email-password/* HTTP endpoints
-// for password signup, signin, forgot, and reset.
-//
-// Extracted from root handlers_password.go in PR E of the 2026-06
-// architecture reorg. The root *theauth.TheAuth constructs a Handler
-// here and forwards Mount to it from the package-level Mount function
-// so the public surface and route shapes are unchanged.
+// Package handlers exposes the /auth/email-password/* endpoints for signup, signin, forgot and reset.
 package handlers
 
 import (
@@ -65,8 +59,7 @@ func New(svc Service, cookie CookieConfig) *Handler {
 
 // Mount registers the /email-password/* subroutes onto r. The caller
 // supplies ipLimit + emailLimit middlewares so the bucket state stays
-// owned by the root middleware layer (PR E does not extract the
-// middleware).
+// owned by the root middleware layer.
 func (h *Handler) Mount(r chi.Router, ipLimit, emailLimit func(http.Handler) http.Handler) {
 	r.With(ipLimit).Post("/signup", h.handleSignup)
 	r.With(ipLimit, emailLimit).Post("/signin", h.handleSignin)

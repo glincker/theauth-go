@@ -14,43 +14,33 @@ import (
 	oklogulid "github.com/oklog/ulid/v2"
 )
 
-// SharedSignalsConfig enables the OpenID Shared Signals Framework 1.0
-// transmitter (with CAEP and RISC events) and, optionally, a receiver. See
-// docs/shared-signals.md. Nil keeps the feature off and adds no routes, no
-// goroutines and no per-event work.
+// SharedSignalsConfig enables the OpenID Shared Signals Framework 1.0 transmitter (CAEP and RISC
+// events) and optionally a receiver. See docs/shared-signals.md. Nil adds no routes, goroutines or
+// per-event work.
 type SharedSignalsConfig struct {
-	// Authenticate resolves the calling receiver of the stream management
-	// and poll endpoints, typically by validating an access token. It
-	// returns a stable receiver id that owns the streams it creates.
-	// Required. signals.StaticBearerAuth covers simple setups.
+	// Authenticate resolves the calling receiver of the stream management and poll endpoints,
+	// typically from an access token. It returns a stable receiver id that owns the streams it
+	// creates.
 	Authenticate func(r *http.Request) (receiverID string, ok bool)
 
-	// Issuer is the SET issuer. Default: AuthorizationServer.Issuer, which
-	// the feature requires (SETs are signed with the AS keys and the JWKS
-	// served at /oauth/jwks verifies them).
+	// Issuer is the SET issuer (default AuthorizationServer.Issuer). SETs are signed with the AS keys.
 	Issuer string
-	// BaseURL is the public URL the handler is mounted at, used for
-	// endpoint URLs in the metadata document. Default: Issuer.
+	// BaseURL is the public URL the handler is mounted at, used in the metadata document (default Issuer).
 	BaseURL string
-	// Store holds streams and the delivery queue. Default: in memory, which
-	// loses queued events on restart; use the sqlite or postgres
-	// SignalsStore for production.
+	// Store holds streams and the delivery queue. The default is in memory and loses queued events on
+	// restart; use the sqlite or postgres SignalsStore in production.
 	Store signals.Store
 
-	// EmitFromAudit emits SSF events from the library's own audit actions
-	// (session revoke, sessions revoke, password change, passkey and TOTP
-	// changes, account disable and enable). Off by default.
+	// EmitFromAudit emits SSF events from the library's own audit actions (session revoke, password
+	// change, passkey and TOTP changes, account disable).
 	EmitFromAudit bool
-	// SubjectFor builds the subject identifier of a local user. Default is
-	// an iss_sub subject with the issuer and the user id.
+	// SubjectFor builds the subject identifier of a local user (default: an iss_sub subject).
 	SubjectFor signals.SubjectFunc
 
-	// AllowPrivateNetworks and AllowInsecureHTTP relax push URL validation.
-	// Leave both false in production.
+	// AllowPrivateNetworks and AllowInsecureHTTP relax push URL validation. Leave both false in production.
 	AllowPrivateNetworks bool
 	AllowInsecureHTTP    bool
-	// MaxAttempts, BackoffBase and BackoffMax tune push retry. Defaults 8,
-	// 2s and 15m.
+	// MaxAttempts, BackoffBase and BackoffMax tune push retries (defaults 8, 2s and 15m).
 	MaxAttempts int
 	BackoffBase time.Duration
 	BackoffMax  time.Duration
@@ -61,19 +51,14 @@ type SharedSignalsConfig struct {
 
 // SharedSignalsReceiverConfig configures the receiver half.
 type SharedSignalsReceiverConfig struct {
-	// Audience is this receiver's identifier, matched against SET aud.
-	Audience string
-	// Issuers lists trusted transmitters: iss value to optional jwks_uri.
-	Issuers map[string]string
-	// Authenticate approves push requests. Strongly recommended.
+	Audience     string
+	Issuers      map[string]string
 	Authenticate func(r *http.Request) bool
-	// ResolveUser maps a subject to a local user id for the default
-	// session revocation handler. Default: email subjects are looked up by
-	// address; other formats are ignored.
+	// ResolveUser maps a subject to a local user id for the default revocation handler. Only email
+	// subjects are resolved by default.
 	ResolveUser func(ctx context.Context, sub signals.Subject) (userID ULID, ok bool, err error)
-	// Handlers run after the default revocation handler.
-	Handlers []signals.Handler
-	// DisableDefaultRevocation turns the default handler off.
+	Handlers    []signals.Handler
+	// DisableDefaultRevocation turns off the default revocation handler.
 	DisableDefaultRevocation bool
 
 	AllowPrivateNetworks bool
@@ -88,8 +73,7 @@ type sharedSignals struct {
 	cancel   context.CancelFunc
 }
 
-// via marker that keeps received revocations from being re-emitted, which
-// would otherwise ping-pong between two peers.
+// sharedSignalsVia marks received revocations so they are not re-emitted and ping-ponged between peers.
 const sharedSignalsVia = "shared_signals"
 
 func (a *TheAuth) setupSharedSignals(cfg *Config) error {
@@ -191,9 +175,8 @@ func (a *TheAuth) resolveSignalUser(ctx context.Context, r *SharedSignalsReceive
 	return u.ID, true, nil
 }
 
-// SharedSignalsHandler returns the SSF transmitter routes
-// (/.well-known/ssf-configuration and /ssf/*), or nil when
-// Config.SharedSignals is unset. Mount it at the issuer origin root.
+// SharedSignalsHandler returns the transmitter routes (/.well-known/ssf-configuration and /ssf/*),
+// or nil when unset. Mount it at the issuer origin root.
 func (a *TheAuth) SharedSignalsHandler() http.Handler {
 	if a.signalsSvc == nil {
 		return nil
@@ -201,9 +184,8 @@ func (a *TheAuth) SharedSignalsHandler() http.Handler {
 	return a.signalsSvc.tx.Handler()
 }
 
-// SharedSignalsTransmitter exposes the transmitter for host code that wants
-// to emit custom events (device-compliance-change, assurance-level-change,
-// credential-compromise, token-claims-change) with Emit. Nil when off.
+// SharedSignalsTransmitter returns the transmitter, so host code can emit custom events with Emit.
+// Nil when off.
 func (a *TheAuth) SharedSignalsTransmitter() *signals.Transmitter {
 	if a.signalsSvc == nil {
 		return nil
@@ -211,8 +193,7 @@ func (a *TheAuth) SharedSignalsTransmitter() *signals.Transmitter {
 	return a.signalsSvc.tx
 }
 
-// SharedSignalsReceiverHandler returns the RFC 8935 push endpoint of the
-// receiver, or nil when no receiver is configured.
+// SharedSignalsReceiverHandler returns the RFC 8935 push endpoint, or nil when no receiver is configured.
 func (a *TheAuth) SharedSignalsReceiverHandler() http.Handler {
 	if a.signalsSvc == nil || a.signalsSvc.rx == nil {
 		return nil
@@ -220,8 +201,8 @@ func (a *TheAuth) SharedSignalsReceiverHandler() http.Handler {
 	return a.signalsSvc.rx
 }
 
-// sharedSignalsTap is called from EmitAudit. Emission runs off the request
-// goroutine so a slow store never delays a sign-out.
+// sharedSignalsTap runs from EmitAudit. Emission happens off the request goroutine so a slow store
+// never delays sign-out.
 func (a *TheAuth) sharedSignalsTap(ctx context.Context, action string, target TargetRef, metadata map[string]any) {
 	ss := a.signalsSvc
 	if ss == nil || !ss.emit {

@@ -6,9 +6,8 @@ import (
 	"slices"
 )
 
-// CreateReceipt builds a receipt for one row against a checkpoint that already
-// covers it. reveal names the fields to disclose; every other field stays a
-// salted commitment.
+// CreateReceipt builds a receipt for one row against a checkpoint that covers it. reveal names the
+// fields to disclose; the rest stay salted commitments.
 func CreateReceipt(ctx context.Context, lg Log, rowID string, cp Checkpoint, reveal []string) (Receipt, error) {
 	ls, err := lg.leavesMatching(ctx, cp)
 	if err != nil {
@@ -49,9 +48,8 @@ func CreateReceipt(ctx context.Context, lg Log, rowID string, cp Checkpoint, rev
 	}, nil
 }
 
-// VerifyReceipt verifies a receipt offline: the checkpoint signature, that the
-// revealed values match their commitments, and that the resulting leaf is in
-// the checkpoint tree.
+// VerifyReceipt verifies a receipt offline: the checkpoint signature, the revealed values against
+// their commitments, and the leaf's inclusion.
 func VerifyReceipt(r Receipt, keys ...PublicKey) Outcome {
 	d := r.Decision
 	if r.Version != 1 || d.Revealed == nil || d.Commitments == nil || d.RowID != r.Proof.RowID {

@@ -7,9 +7,8 @@ import (
 	"github.com/glincker/theauth-go/v2/storage/memory"
 )
 
-// openStorage returns an internal.Storage implementation for the chosen
-// backend. Currently "memory" is supported for testing. "postgres" emits
-// a clear error directing the operator to supply a DSN.
+// openStorage returns the storage for the chosen backend. Only "memory" is supported here;
+// "postgres" needs a DSN.
 func openStorage(backend, dsn string) (internal.Storage, error) {
 	switch backend {
 	case "memory":
@@ -18,11 +17,8 @@ func openStorage(backend, dsn string) (internal.Storage, error) {
 		if dsn == "" {
 			return nil, fmt.Errorf("--dsn is required for --storage postgres")
 		}
-		// Postgres support requires importing storage/postgres, which pulls
-		// in pgx. The CLI binary does not link pgx today to keep the binary
-		// lightweight. Operators who want apply-to-postgres should call
-		// internal.ApplyBundle directly from their own Go code with a
-		// *postgres.Store, or wait for a future build-tag opt-in.
+		// Postgres is not linked into this binary, to keep it lightweight. Apply to Postgres from Go code
+		// with a *postgres.Store.
 		return nil, fmt.Errorf(
 			"postgres storage is not linked in this build, run the export step " +
 				"first and wire internal.ApplyBundle with a postgres.Store from " +

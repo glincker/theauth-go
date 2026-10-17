@@ -11,12 +11,8 @@ import (
 	"github.com/glincker/theauth-go/v2/storage"
 )
 
-// v0.7: multi-tenancy + SAML + SCIM additive state. Kept in a separate
-// file from memory.go to keep that adapter under the 500-LOC budget.
-//
-// All maps live under the Store struct via the v07 init in New(); we hang
-// them off a sidecar map initialised lazily so the existing Store{} literal
-// in tests does not need a code change.
+// v0.7 multi-tenancy, SAML and SCIM state, kept in a separate file to stay under the 500-LOC
+// budget. It is held in a lazily initialised sidecar so the Store{} literal in tests is unchanged.
 
 type v07State struct {
 	orgs            map[theauth.ULID]theauth.Organization
@@ -49,8 +45,6 @@ func (s *Store) ensureV07() *v07State {
 	}
 	return s.v07
 }
-
-// Organizations
 
 func (s *Store) InsertOrganization(_ context.Context, o theauth.Organization) (theauth.Organization, error) {
 	s.mu.Lock()
@@ -261,8 +255,6 @@ func (s *Store) SetSessionActiveOrganization(_ context.Context, sessionID theaut
 	return nil
 }
 
-// SAML
-
 func (s *Store) InsertSAMLConnection(_ context.Context, c theauth.SAMLConnection) (theauth.SAMLConnection, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -380,8 +372,6 @@ func (s *Store) TouchSAMLIdentityLastLogin(_ context.Context, id theauth.ULID, a
 	return nil
 }
 
-// SCIM tokens
-
 func (s *Store) InsertSCIMToken(_ context.Context, t theauth.SCIMToken) (theauth.SCIMToken, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -455,8 +445,6 @@ func (s *Store) TouchSCIMTokenLastUsed(_ context.Context, id theauth.ULID, at ti
 	v.scimTokens[id] = t
 	return nil
 }
-
-// SCIM scoped reads + user update
 
 func (s *Store) ListUsersByOrganization(_ context.Context, orgID theauth.ULID, offset, limit int, filter theauth.SCIMUserFilter) ([]theauth.User, int, error) {
 	s.mu.RLock()
@@ -564,8 +552,6 @@ func (s *Store) UpdateUserSCIM(_ context.Context, u theauth.User) error {
 	s.users[u.ID] = existing
 	return nil
 }
-
-// Groups
 
 func (s *Store) InsertGroup(_ context.Context, g theauth.Group) (theauth.Group, error) {
 	s.mu.Lock()

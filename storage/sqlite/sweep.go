@@ -16,12 +16,9 @@ type SweepResult struct {
 	DeviceJoinTokens    int64
 }
 
-// SweepExpired deletes expired rows whose expiry is at or before now: sessions, magic links, reset tokens,
-// trusted devices, session links, device codes and device join tokens.
-//
-// Call it from a host ticker; consumed tokens are removed once they expire so
-// replay detection is not weakened early. Tables from migrations the host has
-// not applied yet are skipped.
+// SweepExpired deletes expired rows (sessions, magic links, reset tokens, trusted devices,
+// session links, device codes, join tokens). Consumed tokens go only once expired, so replay
+// detection is not weakened early. Tables from migrations the host has not applied are skipped.
 func (s *Store) SweepExpired(ctx context.Context, now time.Time) (SweepResult, error) {
 	var res SweepResult
 	cutoff := toMicro(now)

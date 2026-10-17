@@ -12,62 +12,48 @@ import (
 	"github.com/glincker/theauth-go/v2/internal/models"
 )
 
-// ciba.go: CIBA (RFC 9509) backchannel authentication service logic.
-// Endpoints: POST /oauth/bc-authorize, plus the CIBA grant arm of
-// POST /oauth/token. User decision paths (approve/deny) are exported
-// as TheAuth methods in service_ciba.go at the root level.
+// ciba.go holds the CIBA (RFC 9509) backchannel authentication service logic. The user approve and
+// deny paths are exposed at the root.
 
 // BackchannelAuthRequest is the parsed form body of POST /oauth/bc-authorize.
 type BackchannelAuthRequest struct {
-	// ClientID + ClientSecret authenticate the requesting client.
 	ClientID     string
 	ClientSecret string
 
-	// One of LoginHint, LoginHintToken, or IDTokenHint MUST be present.
+	// Exactly one of LoginHint, LoginHintToken or IDTokenHint must be present.
 	LoginHint      string
 	LoginHintToken string
 	IDTokenHint    string
 
-	// Scope is the requested scope list (space-separated on the wire).
 	Scope []string
 
-	// BindingMessage is an optional short string shown on the AD.
 	BindingMessage string
 
-	// ClientNotificationToken is the bearer token for Ping mode callbacks.
-	// Empty for Poll mode.
+	// ClientNotificationToken is the bearer token for ping-mode callbacks. Empty in poll mode.
 	ClientNotificationToken string
 
-	// RequestedExpiry, when > 0, overrides the server default (capped at
-	// CIBAConfig.MaxRequestedExpiry).
+	// RequestedExpiry, when positive, overrides the default expiry, capped at CIBAConfig.MaxRequestedExpiry.
 	RequestedExpiry int
 }
 
-// BackchannelAuthResponse is returned from POST /oauth/bc-authorize on
-// success.
+// BackchannelAuthResponse is returned by POST /oauth/bc-authorize on success.
 type BackchannelAuthResponse struct {
 	AuthReqID string `json:"auth_req_id"`
 	ExpiresIn int    `json:"expires_in"`
 	Interval  int    `json:"interval"`
 }
 
-// CIBATokenRequest is the CIBA arm of TokenRequest: grant_type =
-// urn:openid:params:grant-type:ciba plus the auth_req_id polling handle.
+// CIBATokenRequest is the CIBA arm of TokenRequest, polling with an auth_req_id.
 type CIBATokenRequest struct {
 	ClientID     string
 	ClientSecret string
 	AuthReqID    string
 }
 
-// BackchannelAuthenticate processes POST /oauth/bc-authorize. It:
-//  1. Authenticates the client.
-//  2. Validates that exactly one hint is present.
-//  3. Generates a 256-bit auth_req_id.
-//  4. Persists the BackchannelRequest row.
-//  5. Calls AuthenticationDevice.Notify to alert the user's device.
-//
-// Returns ErrCIBADisabled when CIBA is not configured or the storage does not
-// implement CIBAStorage.
+// BackchannelAuthenticate handles POST /oauth/bc-authorize: it authenticates the client, requires
+// exactly one hint, mints a 256-bit auth_req_id, persists the request and notifies the user's
+// authentication device. It returns ErrCIBADisabled when CIBA is not configured or the storage
+// lacks CIBAStorage.
 func (s *Service) BackchannelAuthenticate(ctx context.Context, req BackchannelAuthRequest) (BackchannelAuthResponse, error) {
 	if s == nil || s.Cfg.CIBA == nil {
 		return BackchannelAuthResponse{}, models.ErrCIBADisabled
@@ -77,13 +63,11 @@ func (s *Service) BackchannelAuthenticate(ctx context.Context, req BackchannelAu
 		return BackchannelAuthResponse{}, models.ErrCIBADisabled
 	}
 
-	// Authenticate the client.
 	_, err := s.AuthenticateClient(ctx, req.ClientID, req.ClientSecret)
 	if err != nil {
 		return BackchannelAuthResponse{}, err
 	}
 
-	// Exactly one hint MUST be present (RFC 9509 section 7.1).
 	hintCount := 0
 	if req.LoginHint != "" {
 		hintCount++
@@ -98,12 +82,10 @@ func (s *Service) BackchannelAuthenticate(ctx context.Context, req BackchannelAu
 		return BackchannelAuthResponse{}, models.ErrCIBAInvalidRequest
 	}
 
-	// Scope is required.
 	if len(req.Scope) == 0 {
 		return BackchannelAuthResponse{}, models.ErrCIBAInvalidRequest
 	}
 
-	// Resolve expiry.
 	cfg := s.Cfg.CIBA
 	expiry := cfg.DefaultExpiry
 	if req.RequestedExpiry > 0 {
@@ -116,7 +98,6 @@ func (s *Service) BackchannelAuthenticate(ctx context.Context, req BackchannelAu
 		}
 	}
 
-	// Generate auth_req_id: 32 bytes = 256 bits, base64url-encoded.
 	authReqID, err := generateAuthReqID()
 	if err != nil {
 		return BackchannelAuthResponse{}, err
@@ -142,8 +123,7 @@ func (s *Service) BackchannelAuthenticate(ctx context.Context, req BackchannelAu
 		return BackchannelAuthResponse{}, err
 	}
 
-	// Notify the Authentication Device. The hint that identifies the user
-	// is forwarded so the operator can resolve it to an actual user identity.
+	// The login hint is forwarded so the operator can resolve it to a user.
 	userHint := req.LoginHint
 	if userHint == "" {
 		userHint = req.LoginHintToken
@@ -161,8 +141,7 @@ func (s *Service) BackchannelAuthenticate(ctx context.Context, req BackchannelAu
 		ExpiresAt:      row.ExpiresAt,
 	}
 	if err := cfg.AuthenticationDevice.Notify(ctx, note); err != nil {
-		// Notify failure is non-fatal at the storage level; the row is
-		// already persisted. Return a service unavailable signal so the
+		// A Notify failure does not undo the stored row. It returns a service-unavailable signal so the
 		// client knows the push failed.
 		return BackchannelAuthResponse{}, &cibaNotifyError{inner: err}
 	}
@@ -174,12 +153,9 @@ func (s *Service) BackchannelAuthenticate(ctx context.Context, req BackchannelAu
 	}, nil
 }
 
-// PollBackchannelToken handles the CIBA arm of POST /oauth/token. It:
-//  1. Authenticates the client.
-//  2. Loads the BackchannelRequest row.
-//  3. Checks expiry, status, and poll rate.
-//  4. Returns the token response when approved, or the appropriate pending
-//     error.
+// PollBackchannelToken handles the CIBA grant on POST /oauth/token. It authenticates the client,
+// checks expiry, status and poll rate, and returns tokens once approved, or the pending error
+// otherwise.
 func (s *Service) PollBackchannelToken(ctx context.Context, req CIBATokenRequest) (TokenResponse, error) {
 	if s == nil || s.Cfg.CIBA == nil {
 		return TokenResponse{}, models.ErrOAuthUnsupportedGrantType
@@ -189,7 +165,6 @@ func (s *Service) PollBackchannelToken(ctx context.Context, req CIBATokenRequest
 		return TokenResponse{}, models.ErrOAuthUnsupportedGrantType
 	}
 
-	// Authenticate the client.
 	client, err := s.AuthenticateClient(ctx, req.ClientID, req.ClientSecret)
 	if err != nil {
 		return TokenResponse{}, err
@@ -201,34 +176,26 @@ func (s *Service) PollBackchannelToken(ctx context.Context, req CIBATokenRequest
 
 	now := time.Now()
 
-	// Touch poll timestamp and enforce slow_down before reading status.
 	cfg := s.Cfg.CIBA
 	row, err := cibaStore.BackchannelRequestByID(ctx, req.AuthReqID)
 	if err != nil {
-		// Missing row is an invalid_grant (auth_req_id unknown or already
-		// cleaned up).
+		// An unknown or already cleaned-up auth_req_id is invalid_grant.
 		return TokenResponse{}, models.ErrOAuthInvalidGrant
 	}
 
-	// Verify the polling client owns this request.
 	if row.ClientID != client.ClientID {
 		return TokenResponse{}, models.ErrOAuthInvalidGrant
 	}
 
-	// Check expiry first.
 	if !now.Before(row.ExpiresAt) {
 		return TokenResponse{}, models.ErrCIBAExpiredToken
 	}
 
-	// Enforce minimum poll interval (slow_down check).
-	// MinPollInterval is the absolute server-side floor; PollInterval is the
-	// recommendation advertised to the client. slow_down fires only when the
-	// client polls faster than the absolute floor.
+	// slow_down fires only when the client polls faster than the absolute MinPollInterval floor.
 	if row.LastPollAt != nil {
 		elapsed := now.Sub(*row.LastPollAt)
 		if elapsed < cfg.MinPollInterval {
-			// Double the interval (capped at MaxRequestedExpiry to avoid
-			// pathological growth) and record the new interval.
+			// The interval doubles on each slow_down, capped at MaxRequestedExpiry.
 			newInterval := row.PollInterval * 2
 			maxSeconds := int(cfg.MaxRequestedExpiry.Seconds())
 			if newInterval > maxSeconds {
@@ -242,28 +209,24 @@ func (s *Service) PollBackchannelToken(ctx context.Context, req CIBATokenRequest
 		}
 	}
 
-	// Record the poll time.
 	row, err = cibaStore.TouchBackchannelPoll(ctx, req.AuthReqID, now, row.PollInterval)
 	if err != nil {
 		return TokenResponse{}, err
 	}
 
-	// Dispatch on status.
 	switch row.Status {
 	case models.BackchannelStatusPending:
 		return TokenResponse{}, models.ErrCIBAAuthorizationPending
 	case models.BackchannelStatusDenied:
 		return TokenResponse{}, models.ErrCIBAAccessDenied
 	case cibaStatusConsumed:
-		// Tokens were already delivered once; an auth_req_id is single use.
+		// Tokens are delivered once; an auth_req_id is single use.
 		return TokenResponse{}, models.ErrOAuthInvalidGrant
 	case models.BackchannelStatusApproved:
 		if row.AccessToken == "" {
-			// Approved row should always have a token; storage inconsistency.
 			return TokenResponse{}, models.ErrCIBAAuthorizationPending
 		}
-		// Atomically claim the tokens. Only the single winner of the
-		// approved -> consumed transition is served; every other poll,
+		// Only the winner of the approved to consumed transition gets tokens. Every other poll,
 		// concurrent or later, gets invalid_grant.
 		won, ok, err := redeemBackchannel(ctx, cibaStore, req.AuthReqID, now)
 		if err != nil {
@@ -284,14 +247,8 @@ func (s *Service) PollBackchannelToken(ctx context.Context, req CIBATokenRequest
 	}
 }
 
-// ApproveBackchannelRequest is the service-layer operation called when the
-// operator's AD callback confirms user approval. It:
-//  1. Loads the pending request.
-//  2. Verifies userID matches the login_hint when a userID was set.
-//  3. Mints access + refresh tokens.
-//  4. Persists status = approved with the token strings.
-//
-// This method is exposed to operators via TheAuth.ApproveBackchannelAuth.
+// ApproveBackchannelRequest runs when the operator's device callback confirms approval. It verifies
+// the user matches any resolved hint, mints the tokens and persists status approved.
 func (s *Service) ApproveBackchannelRequest(ctx context.Context, authReqID string, userID models.ULID) error {
 	if s == nil || s.Cfg.CIBA == nil {
 		return models.ErrCIBADisabled
@@ -312,23 +269,16 @@ func (s *Service) ApproveBackchannelRequest(ctx context.Context, authReqID strin
 		return models.ErrCIBAExpiredToken
 	}
 
-	// If the request already had a resolved UserID, verify it matches.
 	if row.UserID != nil && *row.UserID != userID {
 		return models.ErrCIBAUserMismatch
 	}
 
-	// Mint a plain access token string (opaque; the actual JWT minting
-	// follows the same pattern as the authorization_code grant but uses
-	// the stored scope and the approving user's ID).
-	//
-	// We reuse MintCIBATokens which lives in token_ciba.go to keep this
-	// function readable.
+	// Tokens come from MintCIBATokens (token_ciba.go), which follows the authorization_code pattern.
 	accessToken, refreshToken, err := s.MintCIBATokens(ctx, row, userID)
 	if err != nil {
 		return err
 	}
 
-	// Persist approval.
 	uid := userID
 	row.UserID = &uid
 	row.Status = models.BackchannelStatusApproved
@@ -337,8 +287,7 @@ func (s *Service) ApproveBackchannelRequest(ctx context.Context, authReqID strin
 	return cibaStore.UpdateBackchannelRequest(ctx, row)
 }
 
-// DenyBackchannelRequest is the service-layer operation called when the
-// operator's AD callback records user denial.
+// DenyBackchannelRequest runs when the operator's device callback records a denial.
 func (s *Service) DenyBackchannelRequest(ctx context.Context, authReqID string, userID models.ULID) error {
 	if s == nil || s.Cfg.CIBA == nil {
 		return models.ErrCIBADisabled
@@ -365,8 +314,7 @@ func (s *Service) DenyBackchannelRequest(ctx context.Context, authReqID string, 
 	return cibaStore.UpdateBackchannelRequest(ctx, row)
 }
 
-// generateAuthReqID produces a cryptographically random 256-bit string
-// encoded as base64url (no padding).
+// generateAuthReqID returns 256 random bits, base64url encoded without padding.
 func generateAuthReqID() (string, error) {
 	b := make([]byte, 32)
 	if _, err := rand.Read(b); err != nil {
@@ -375,8 +323,7 @@ func generateAuthReqID() (string, error) {
 	return base64.RawURLEncoding.EncodeToString(b), nil
 }
 
-// cibaNotifyError wraps an AuthenticationDevice.Notify failure so handlers
-// can map it to 503 without an import cycle.
+// cibaNotifyError wraps an AuthenticationDevice.Notify failure so handlers can map it to 503.
 type cibaNotifyError struct {
 	inner error
 }
@@ -390,15 +337,14 @@ func (e *cibaNotifyError) Error() string {
 
 func (e *cibaNotifyError) Unwrap() error { return e.inner }
 
-// IsCIBANotifyError reports whether err is a CIBANotifyError.
+// IsCIBANotifyError reports whether err is a cibaNotifyError.
 func IsCIBANotifyError(err error) bool {
 	_, ok := err.(*cibaNotifyError)
 	return ok
 }
 
-// IsCIBAEnabled reports whether CIBA is active on this Service instance: the
-// config must have a non-nil CIBAConfig AND the Storage must implement
-// CIBAStorage.
+// IsCIBAEnabled reports whether CIBA is active on this Service instance: the config must have a
+// non-nil CIBAConfig AND the Storage must implement CIBAStorage.
 func (s *Service) IsCIBAEnabled() bool {
 	if s == nil || s.Cfg.CIBA == nil {
 		return false

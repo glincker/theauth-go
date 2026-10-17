@@ -45,7 +45,6 @@ func asScanJWKS(r scanner) (theauth.JWKSKey, error) {
 	return k, nil
 }
 
-// JWKSKeyByKID implements theauth.OAuthServerStorage.
 func (s *Store) JWKSKeyByKID(ctx context.Context, kid string) (*theauth.JWKSKey, error) {
 	k, err := asScanJWKS(s.db.QueryRowContext(ctx, s.q(
 		`SELECT `+asJWKSCols+` FROM theauth_jwks_keys WHERE kid = ?`), kid))
@@ -74,9 +73,8 @@ func (s *Store) JWKSKeysAll(ctx context.Context) ([]theauth.JWKSKey, error) {
 	return out, wrap("list jwks keys", rows.Err())
 }
 
-// UpdateJWKSKeyState implements theauth.OAuthServerStorage. Moving to current
-// stamps promoted_at and to retired stamps retired_at. An unknown kid is
-// ErrStorageNotFound (the shared contract requires it).
+// UpdateJWKSKeyState implements theauth.OAuthServerStorage, stamping promoted_at or retired_at on
+// transition. An unknown kid is ErrStorageNotFound.
 func (s *Store) UpdateJWKSKeyState(ctx context.Context, kid, state string, at time.Time) error {
 	var (
 		res sql.Result
@@ -98,12 +96,9 @@ func (s *Store) UpdateJWKSKeyState(ctx context.Context, kid, state string, at ti
 	return requireRows("update jwks key state", res)
 }
 
-// AtomicRotateJWKS implements the internal as.JWKSAtomicRotator. The whole
-// transition runs in one transaction that starts with a write, so it takes the
-// database write lock up front and concurrent rotations serialize. Order
-// matters for the one-current-per-algorithm index: retire, demote, promote,
-// then insert the fresh next key. An unknown demote or promote kid aborts and
-// rolls the transaction back.
+// AtomicRotateJWKS implements as.JWKSAtomicRotator in one write-first transaction, so concurrent
+// rotations serialize. Order matters for the one-current-per-algorithm index: retire, demote,
+// promote, then insert. Unknown kids roll back.
 func (s *Store) AtomicRotateJWKS(ctx context.Context, retireKIDs []string, demoteKID, promoteKID string, freshKey theauth.JWKSKey, now time.Time) error {
 	return s.inTx(ctx, "rotate jwks", func(tx DBTX) error {
 		at := toMicro(now)

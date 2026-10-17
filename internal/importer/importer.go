@@ -26,7 +26,8 @@ type (
 	WebAuthnCredential = models.WebAuthnCredential
 )
 
-// ErrImportDuplicate is returned by the Import helpers when the record already exists; callers may treat it as already imported.
+// ErrImportDuplicate is returned by the Import helpers when the record already exists; callers may
+// treat it as already imported.
 var ErrImportDuplicate = models.ErrImportDuplicate
 
 // ErrStorageNotFound is the storage miss sentinel.
@@ -70,13 +71,13 @@ type ImportedUser struct {
 	EmailVerifiedAt *time.Time
 	Name            string
 	AvatarURL       string
-	// PasswordHash is an Argon2id PHC string, or a bcrypt hash when Config.PasswordPolicy.AllowLegacyBcrypt is set.
+	// PasswordHash is an Argon2id PHC string, or a bcrypt hash when
+	// Config.PasswordPolicy.AllowLegacyBcrypt is set.
 	PasswordHash string
 	CreatedAt    time.Time
-	// MustChangePassword flags the account so its first sign-in is refused
-	// with CodePasswordChangeRequired until the user completes a password
-	// reset. Use it for hashes that must not stay in use. The storage must
-	// implement MustChangeStore and the host must enable Config.AccountState.
+	// MustChangePassword flags the account so its first sign-in is refused until the user resets the
+	// password. Use it for hashes that must not stay in use. The storage must implement
+	// MustChangeStore, and Config.AccountState must be on.
 	MustChangePassword bool
 }
 
@@ -135,10 +136,8 @@ func ImportUserTo(ctx context.Context, store UserStore, in ImportedUser) (User, 
 	return u, nil
 }
 
-// ImportedTOTP is an existing, already-enrolled TOTP secret.
-//
-// Recovery codes are deliberately not importable: their hashes are salted by
-// this library, so affected users must regenerate them after the import.
+// ImportedTOTP is an already-enrolled TOTP secret. Recovery codes cannot be imported, since their
+// hashes are salted per installation, so affected users regenerate them after the import.
 type ImportedTOTP struct {
 	UserID ULID
 	// Secret is the plaintext base32 shared secret exactly as the authenticator app holds it.
@@ -147,7 +146,8 @@ type ImportedTOTP struct {
 	CreatedAt   time.Time
 }
 
-// ImportTOTPSecretTo encrypts the plaintext secret with encryptionKey and stores it as confirmed, with no TheAuth instance.
+// ImportTOTPSecretTo encrypts the plaintext secret with encryptionKey and stores it as confirmed,
+// with no TheAuth instance.
 func ImportTOTPSecretTo(ctx context.Context, store TOTPStore, encryptionKey []byte, in ImportedTOTP) error {
 	if store == nil {
 		return ErrNilStorage
@@ -190,7 +190,8 @@ func ImportTOTPSecretTo(ctx context.Context, store TOTPStore, encryptionKey []by
 	return nil
 }
 
-// ImportedWebAuthnCredential is an existing passkey or security key. The attestation type is not persisted by this library, so it is not accepted.
+// ImportedWebAuthnCredential is an existing passkey or security key. The attestation type is not
+// persisted by this library, so it is not accepted.
 type ImportedWebAuthnCredential struct {
 	// ID is optional; a new one is generated when zero.
 	ID     ULID

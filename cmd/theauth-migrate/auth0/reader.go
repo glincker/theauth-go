@@ -1,24 +1,6 @@
-// Package auth0 reads Auth0 user-pool exports and converts them to the
-// migration Bundle format.
-//
-// Two input formats are supported:
-//
-//  1. Auth0 Management API user export JSON - the array of user objects from
-//     GET /api/v2/users, or the output from the Export Users extension.
-//
-//  2. Auth0 connection export - an identities array nested inside the user
-//     object (the "identities" field from the Management API).
-//
-// Auth0 bcrypt password hashes ARE exported for database connections. They
-// are preserved in the Bundle's Passwords slice with algo="bcrypt". The
-// theauth-go library will verify them via the legacy-bcrypt fallback (enabled
-// with Config.PasswordPolicy.AllowLegacyBcrypt=true) and transparently
-// re-hash with Argon2id on first successful login.
-//
-// TOTP (Guardian MFA) secrets cannot be exported from Auth0; users with MFA
-// are flagged requires_mfa_reenroll=true.
-//
-// Auth0 rules and hooks are out of scope; a note is added to the bundle.
+// Package auth0 reads Auth0 user exports into the migration Bundle. bcrypt hashes are kept and
+// verified through the legacy fallback. TOTP secrets cannot be exported, so MFA users must
+// re-enroll.
 package auth0
 
 import (
@@ -73,10 +55,8 @@ type Auth0Identity struct {
 	ProfileData map[string]interface{} `json:"profileData,omitempty"`
 }
 
-// ReadJSON reads an Auth0 user export from r. The input may be:
-//   - A JSON array of Auth0User objects.
-//   - A single Auth0User object (AdminGetUser style).
-//   - A JSON object with a "users" key (Management API list response).
+// ReadJSON reads an Auth0 user export. The input may be a JSON array, a single user object, or an
+// object with a "users" key.
 func ReadJSON(r io.Reader, forcePasswordReset bool) (*internal.Bundle, error) {
 	data, err := io.ReadAll(r)
 	if err != nil {

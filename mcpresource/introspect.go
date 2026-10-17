@@ -61,7 +61,7 @@ type actorClaim struct {
 // for a busy MCP resource server) can read in parallel across cores. The
 // insert path (cache miss) and the Invalidate path take the write lock.
 // Switching from sync.Mutex eliminates the serialisation bottleneck the
-// 2026-06-20 perf audit flagged (section 4.4 / 5.5): with N parallel
+// With N parallel
 // readers the hit path now scales with cores instead of queueing behind
 // a single mutex.
 type introspectCache struct {

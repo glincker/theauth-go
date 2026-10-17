@@ -1,14 +1,6 @@
-// Package audit defines the audit-emission interface that internal service
-// packages depend on. Phase A of the architecture reorg (2026-06) introduced
-// this seam so service packages (session, magiclink, organizations, rbac,
-// scim) can record audit events without importing the root theauth package
-// (which would create a cycle: root imports internal/X for the constructor,
-// internal/X would have to import root for EmitAudit).
-//
-// The root *theauth.TheAuth satisfies Emitter naturally because its
-// EmitAudit method already has this exact signature. Each internal service
-// is constructed with an Emitter, and tests can inject a no-op or recording
-// emitter without spinning up a full TheAuth.
+// Package audit defines the Emitter seam that internal service packages depend on. It exists so
+// they can record audit events without importing root, which would form a cycle. *theauth.TheAuth
+// satisfies Emitter naturally.
 package audit
 
 import (
@@ -17,13 +9,8 @@ import (
 	"github.com/glincker/theauth-go/v2/internal/models"
 )
 
-// Emitter is the audit-emission seam shared by every internal service
-// package. The shape mirrors the existing EmitAudit method on *TheAuth so
-// the root type satisfies the interface without a wrapper.
-//
-// Implementations MUST NOT block the caller: the canonical implementation
-// enqueues onto a buffered channel and drops on overflow. Implementations
-// MUST be safe to call from any goroutine.
+// Emitter is the audit emission seam shared by the internal service packages. Implementations must
+// never block the caller and must be safe from any goroutine.
 type Emitter interface {
 	EmitAudit(ctx context.Context, action string, target models.TargetRef, metadata map[string]any)
 }

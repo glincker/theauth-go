@@ -18,15 +18,10 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
-// mounts.go: thin forwarder around the extracted
-// internal/admin/handlers package. PR F architecture reorg
-// (2026-06-20) moved the 12 /admin/v1 endpoints plus the
-// requireOrgMatch middleware there. The agent + delegation admin
-// subtree (PR F's other extraction at internal/agent/handlers) is
-// wired in via the MountAgents callback supplied below.
+// mounts.go wires the admin and agent admin routes through the extracted internal/admin and
+// internal/agent handler packages.
 
-// adminRBACAdapter implements adminhandlers.RBACService on top of
-// root *TheAuth.
+// adminRBACAdapter adapts root *TheAuth to adminhandlers.RBACService.
 type adminRBACAdapter struct{ a *TheAuth }
 
 func (s adminRBACAdapter) GrantRole(ctx context.Context, actorID, userID, roleID models.ULID) error {
@@ -49,8 +44,7 @@ func (s adminRBACAdapter) DeleteRole(ctx context.Context, roleID models.ULID) er
 	return s.a.DeleteRole(ctx, roleID)
 }
 
-// adminAuditAdapter implements adminhandlers.AuditService on top of
-// root *TheAuth.
+// adminAuditAdapter adapts root *TheAuth to adminhandlers.AuditService.
 type adminAuditAdapter struct{ a *TheAuth }
 
 func (s adminAuditAdapter) QueryAudit(ctx context.Context, q models.AuditQuery) ([]models.AuditEvent, string, error) {
@@ -65,8 +59,7 @@ func (s adminAuditAdapter) HashEmailForAudit(email string) string {
 	return HashEmailForAudit(email)
 }
 
-// adminLifecycleAdapter implements adminhandlers.Lifecycle on top of root
-// *TheAuth.
+// adminLifecycleAdapter adapts root *TheAuth to adminhandlers.Lifecycle.
 type adminLifecycleAdapter struct{ a *TheAuth }
 
 func (s adminLifecycleAdapter) SetMustChangePassword(ctx context.Context, userID models.ULID, required bool) error {
@@ -85,9 +78,7 @@ func (s adminLifecycleAdapter) DeleteUser(ctx context.Context, userID models.ULI
 	return s.a.DeleteUser(ctx, userID)
 }
 
-// mountAdmin wires the /admin/v1 routes via the extracted
-// internal/admin/handlers package. Called from Mount when
-// Config.Admin is non-nil.
+// mountAdmin wires the /admin/v1 routes. It is called from Mount when Config.Admin is set.
 func (a *TheAuth) mountAdmin(r chi.Router) {
 	pathPrefix := ""
 	if a.adminCfg != nil {
@@ -115,13 +106,9 @@ func (a *TheAuth) mountAdmin(r chi.Router) {
 	)
 }
 
-// handlers_admin_agents.go: thin forwarder around the extracted
-// internal/agent/handlers package. PR F architecture reorg
-// (2026-06-20) moved the seven /admin/v1/.../{agents,delegations}
-// endpoints there.
+// The agent and delegation admin endpoints are wired through the MountAgents callback above.
 
-// adminAgentAdapter implements agenthandlers.AgentService on top of
-// root *TheAuth.
+// adminAgentAdapter adapts root *TheAuth to agenthandlers.AgentService.
 type adminAgentAdapter struct{ a *TheAuth }
 
 func (s adminAgentAdapter) ListAgentsByOwner(ctx context.Context, owner models.AgentOwner) ([]models.Agent, error) {
@@ -152,8 +139,7 @@ func (s adminAgentAdapter) RevokeAgent(ctx context.Context, agentID models.ULID,
 	return s.a.RevokeAgent(ctx, agentID, reason)
 }
 
-// adminDelegationAdapter implements
-// agenthandlers.DelegationService on top of root *TheAuth.
+// adminDelegationAdapter adapts root *TheAuth to agenthandlers.DelegationService.
 type adminDelegationAdapter struct{ a *TheAuth }
 
 func (s adminDelegationAdapter) ListDelegationsForUser(ctx context.Context, userID models.ULID) ([]models.DelegationGrant, error) {
@@ -176,16 +162,15 @@ func (s adminDelegationAdapter) RevokeDelegation(ctx context.Context, grantID mo
 	return s.a.RevokeDelegation(ctx, grantID, reason)
 }
 
-// adminOrgAdapter implements agenthandlers.OrganizationLookup on top
-// of the root storage.
+// adminOrgAdapter implements agenthandlers.OrganizationLookup over the root storage.
 type adminOrgAdapter struct{ a *TheAuth }
 
 func (s adminOrgAdapter) OrganizationMemberRole(ctx context.Context, orgID, userID models.ULID) (string, error) {
 	return s.a.storage.OrganizationMemberRole(ctx, orgID, userID)
 }
 
-// mountAdminRegistrationTokens wires the initial access token routes under the
-// org-scoped admin tree when the AS is on and the storage can hold them.
+// mountAdminRegistrationTokens wires initial access token routes under the org-scoped admin tree
+// when the AS is on and storage can hold them.
 func (a *TheAuth) mountAdminRegistrationTokens(r chi.Router) {
 	if a.as == nil {
 		return
@@ -195,9 +180,8 @@ func (a *TheAuth) mountAdminRegistrationTokens(r chi.Router) {
 	})
 }
 
-// mountAdminAgents wires the agent + delegation routes via the
-// extracted internal/agent/handlers package. Called from mountAdmin
-// when the agent identity service is configured.
+// mountAdminAgents wires the agent and delegation routes. It runs from mountAdmin when agent
+// identity is configured.
 func (a *TheAuth) mountAdminAgents(r chi.Router) {
 	if a.agentCfg == nil || a.as == nil {
 		return
@@ -212,15 +196,14 @@ func (a *TheAuth) mountAdminAgents(r chi.Router) {
 	})
 }
 
-// adminSessionStorage layers the optional session list onto the full Storage,
-// which assembled storages would otherwise hide from a type assertion.
+// adminSessionStorage adds the optional session list to the full Storage, which assembled storages
+// would hide from a type assertion.
 type adminSessionStorage struct {
 	Storage
 	mgmt SessionManagementStorage
 }
 
-// ListUserSessions returns the user's live sessions, or nil when the storage
-// has no SessionManagementStorage.
+// ListUserSessions returns the user's live sessions, or nil when storage lacks SessionManagementStorage.
 func (s adminSessionStorage) ListUserSessions(ctx context.Context, userID models.ULID) ([]models.Session, error) {
 	if s.mgmt == nil {
 		return nil, nil
@@ -228,20 +211,8 @@ func (s adminSessionStorage) ListUserSessions(ctx context.Context, userID models
 	return s.mgmt.ListUserSessions(ctx, userID)
 }
 
-// /account end-user self-service
-
-// handlers_account.go: thin forwarder around the extracted
-// internal/account/handlers package. PR F architecture reorg
-// (2026-06-20) moved the six /account/* end-user self-service
-// endpoints there; this file keeps the mountAccount entrypoint and
-// the two small adapters that bridge the *TheAuth surface to the
-// handler-side service interfaces.
-
-// accountAgentAdapter implements accounthandlers.AgentService on top
-// of root *TheAuth. AgentByID forwards to the agentSvc field directly
-// because the public *TheAuth surface does not expose an AgentByID
-// method (only the wider GetAgent, which the handler uses on the
-// admin path).
+// accountAgentAdapter implements accounthandlers.AgentService. AgentByID reads agentSvc directly
+// because the public surface only exposes GetAgent.
 type accountAgentAdapter struct{ a *TheAuth }
 
 func (s accountAgentAdapter) ListAgentsByOwner(ctx context.Context, owner models.AgentOwner) ([]models.Agent, error) {
@@ -260,8 +231,7 @@ func (s accountAgentAdapter) RevokeAgent(ctx context.Context, agentID models.ULI
 	return s.a.RevokeAgent(ctx, agentID, reason)
 }
 
-// accountDelegationAdapter implements
-// accounthandlers.DelegationService on top of root *TheAuth.
+// accountDelegationAdapter implements accounthandlers.DelegationService over root *TheAuth.
 type accountDelegationAdapter struct{ a *TheAuth }
 
 func (s accountDelegationAdapter) ListDelegationsForUser(ctx context.Context, userID models.ULID) ([]models.DelegationGrant, error) {
@@ -280,9 +250,8 @@ func (s accountDelegationAdapter) RevokeDelegation(ctx context.Context, grantID 
 	return s.a.RevokeDelegation(ctx, grantID, reason)
 }
 
-// accountIdentityLinkAdapter wraps *TheAuth to satisfy the
-// accounthandlers.IdentityLinkService interface without importing root from
-// an internal package.
+// accountIdentityLinkAdapter satisfies accounthandlers.IdentityLinkService without importing root
+// from an internal package.
 type accountIdentityLinkAdapter struct{ a *TheAuth }
 
 func (s accountIdentityLinkAdapter) LinkOAuthToCurrentUser(
@@ -310,9 +279,7 @@ func (s accountIdentityLinkAdapter) UnlinkOAuthProvider(ctx context.Context, ses
 	return s.a.identityLinkSvc.UnlinkOAuthProvider(ctx, sessionToken, provider)
 }
 
-// sessionTokenFromRequest extracts the raw session token from the request
-// cookie. Passed to the identity-link handler so it can call the service
-// methods with the caller's session token.
+// sessionTokenFromRequest returns the raw session token from the cookie, for identity-link handlers.
 func (a *TheAuth) sessionTokenFromRequest(r *http.Request) (string, bool) {
 	cookie, err := r.Cookie(a.cookieName)
 	if err != nil || cookie.Value == "" {
@@ -321,17 +288,10 @@ func (a *TheAuth) sessionTokenFromRequest(r *http.Request) (string, bool) {
 	return cookie.Value, true
 }
 
-// mountAccount wires the /account routes via the extracted
-// internal/account/handlers package. Idempotent guard matches the
-// legacy root: only fires when AccountUX, AgentIdentity, and the AS
-// are all configured.
-//
-// Identity-linking routes (/account/identities/*) are also mounted here
-// whenever identityLinkSvc is non-nil (always true after wireServices).
+// mountAccount wires the /account routes. It mounts only when AccountUX, AgentIdentity and the AS
+// are all configured. Identity-linking routes mount whenever identityLinkSvc is set.
 func (a *TheAuth) mountAccount(r chi.Router) {
 	if !a.accountUX || a.agentCfg == nil || a.as == nil {
-		// Still mount identity-linking routes independently of AccountUX if
-		// the service was constructed (which it always is after New).
 		if a.identityLinkSvc != nil {
 			h := accounthandlers.New(nil, nil, userFromRequest)
 			a.withSelfDelete(h)
@@ -360,18 +320,8 @@ func (a *TheAuth) mountAccount(r chi.Router) {
 	h.Mount(r, a.RequireAuth())
 }
 
-// /auth/orgs multi-tenancy
-
-// handlers_organizations.go: thin forwarder around the extracted
-// internal/organizations/handlers package. PR F architecture reorg
-// (2026-06-20) moved the seven /auth/orgs/* endpoints there. SAML
-// connection CRUD and SCIM token CRUD subroutes mount through the
-// same /auth/orgs tree via the mountSub callback below; both call
-// into their own extracted internal handler packages.
-
-// organizationsServiceAdapter implements orghandlers.Service on top of
-// the root *TheAuth, forwarding to the existing public methods so the
-// extracted package does not import root.
+// organizationsServiceAdapter implements orghandlers.Service over root *TheAuth so the extracted
+// package does not import root.
 type organizationsServiceAdapter struct{ a *TheAuth }
 
 func (s organizationsServiceAdapter) Create(ctx context.Context, name, slug string, ownerUserID ULID) (Organization, error) {
@@ -398,12 +348,9 @@ func (s organizationsServiceAdapter) SetActive(ctx context.Context, sessionID UL
 	return s.a.SetActiveOrganization(ctx, sessionID, orgID)
 }
 
-// mountOrganizations wires the /auth/orgs routes via the extracted
-// internal/organizations/handlers package. Only called by Mount when
-// Config.Organizations is non-nil. SAML connection CRUD and SCIM token
-// CRUD subroutes are mounted via the mountSub callback so their root
-// handlers (which still depend on root-only services) share the same
-// chi tree.
+// mountOrganizations wires the /auth/orgs routes. It runs only when Config.Organizations is set.
+// SAML and SCIM token subroutes mount through the mountSub callback so they share the same chi
+// tree.
 func (a *TheAuth) mountOrganizations(r chi.Router) {
 	h := orghandlers.New(
 		organizationsServiceAdapter{a: a},
@@ -429,16 +376,14 @@ func (a *TheAuth) mountOrganizations(r chi.Router) {
 	h.Mount(r, requireAuth, mountSub)
 }
 
-// requireOrgRoleHTTP adapts the *TheAuth role-check helper to the
-// signature the extracted handler package expects. The body forwards
-// to the legacy root requireOrgRole verbatim.
+// requireOrgRoleHTTP adapts the root requireOrgRole helper to the signature the extracted handler
+// package expects.
 func (a *TheAuth) requireOrgRoleHTTP(w http.ResponseWriter, r *http.Request, orgID, userID ULID, roles ...string) bool {
 	return a.requireOrgRole(w, r, orgID, userID, roles...)
 }
 
-// userFromRequest is the context shim handed to extracted handler
-// packages so they can pull the authenticated user without importing
-// the root ctxKey type.
+// userFromRequest hands the authenticated user to extracted handler packages without importing the
+// root ctxKey type.
 func userFromRequest(r *http.Request) (*models.User, bool) {
 	return UserFromContext(r.Context())
 }
@@ -448,10 +393,7 @@ func sessionFromRequest(r *http.Request) (*models.Session, bool) {
 	return SessionFromContext(r.Context())
 }
 
-// requireOrgRole retains the legacy signature used by handlers still
-// owning their own logic in root (SAML connection CRUD, SCIM token
-// CRUD). When those handlers move into their own packages, the helper
-// goes with them.
+// requireOrgRole is the legacy helper still used by root-owned handlers.
 func (a *TheAuth) requireOrgRole(w http.ResponseWriter, r *http.Request, orgID, userID ULID, roles ...string) bool {
 	role, err := a.storage.OrganizationMemberRole(r.Context(), orgID, userID)
 	if err != nil {
@@ -467,19 +409,8 @@ func (a *TheAuth) requireOrgRole(w http.ResponseWriter, r *http.Request, orgID, 
 	return false
 }
 
-// SAML SP-flow + connection CRUD
-
-// handlers_saml.go: thin forwarders around the extracted
-// internal/saml/handlers package. PR E moved the SP-flow endpoints
-// (/auth/saml/{connectionId}/{login,acs,metadata}) there; PR F moved
-// the per-organization connection CRUD endpoints into the same
-// package (crud.go) so root no longer owns any SAML handler bodies.
-
-// samlServiceAdapter implements internal/saml/handlers.Service on top
-// of the root *TheAuth, exposing the three SP-flow methods the
-// extracted handler needs (BeginLogin, FinishLogin, MetadataXML).
-// FinishLogin discards the second return (Session) because the
-// handler only writes the cookie.
+// samlServiceAdapter implements the SP-flow service of internal/saml/handlers. FinishLogin drops
+// the Session return because the handler only writes the cookie.
 type samlServiceAdapter struct{ a *TheAuth }
 
 func (s samlServiceAdapter) BeginLogin(ctx context.Context, id models.ULID, relayState string) (string, error) {
@@ -495,10 +426,8 @@ func (s samlServiceAdapter) MetadataXML(ctx context.Context, id models.ULID) ([]
 	return s.a.SAMLMetadataXML(ctx, id)
 }
 
-// samlConnectionServiceAdapter implements
-// internal/saml/handlers.ConnectionService on top of the root
-// *TheAuth, projecting the handler-side input type into the root
-// SAMLConnectionInput so the extracted package does not import root.
+// samlConnectionServiceAdapter projects handler-side input onto SAMLConnectionInput so the
+// extracted package does not import root.
 type samlConnectionServiceAdapter struct{ a *TheAuth }
 
 func (s samlConnectionServiceAdapter) Create(ctx context.Context, in samlhandlers.SAMLConnectionInput) (models.SAMLConnection, error) {
@@ -533,9 +462,7 @@ func samlConnectionFromHandlers(in samlhandlers.SAMLConnectionInput) SAMLConnect
 	}
 }
 
-// newSAMLHandler builds the extracted Handler with both the SP-flow
-// and the CRUD-side dependencies attached. Used by both mountSAML
-// (SP-flow) and the org-tree subroute (CRUD).
+// newSAMLHandler builds the extracted SAML handler with SP-flow and CRUD dependencies.
 func (a *TheAuth) newSAMLHandler() *samlhandlers.Handler {
 	h := samlhandlers.New(
 		samlServiceAdapter{a: a},
@@ -553,34 +480,18 @@ func (a *TheAuth) newSAMLHandler() *samlhandlers.Handler {
 	return h
 }
 
-// mountSAML wires the public-facing SAML SP-flow endpoints (login,
-// ACS, metadata) via the extracted internal/saml/handlers package.
+// mountSAML wires the public SAML SP-flow endpoints (login, ACS, metadata).
 func (a *TheAuth) mountSAML(r chi.Router) {
 	a.newSAMLHandler().Mount(r)
 }
 
-// mountSAMLConnectionCRUD mounts the five per-org connection CRUD
-// endpoints. Called from mountOrganizations' mountSub callback when
-// Config.SAML is non-nil so the route still resolves under
+// mountSAMLConnectionCRUD mounts the per-org connection CRUD endpoints under
 // /auth/orgs/{orgId}/saml/connections.
 func (a *TheAuth) mountSAMLConnectionCRUD(r chi.Router) {
 	a.newSAMLHandler().MountCRUD(r)
 }
 
-// SCIM 2.0 resource + token CRUD
-
-// handlers_scim.go: thin forwarder around the extracted
-// internal/scim/handlers package. PR F architecture reorg
-// (2026-06-20) moved the 15 SCIM resource endpoints and the 3 token
-// CRUD endpoints out of root; the wire helpers and PATCH logic now
-// live in internal/scim (wire.go, patch.go). Root keeps a tiny
-// service adapter, the audit-emit shim, and a constructor that wires
-// everything onto chi via mountSCIM (called by Mount) and
-// mountSCIMTokenCRUD (called from mountOrganizations' mountSub).
-
-// scimTokenServiceAdapter implements scimhandlers.TokenService on top
-// of the root *TheAuth. The adapter exists so the extracted package
-// does not import root.
+// scimTokenServiceAdapter implements scimhandlers.TokenService over root *TheAuth.
 type scimTokenServiceAdapter struct{ a *TheAuth }
 
 func (s scimTokenServiceAdapter) CreateToken(ctx context.Context, orgID models.ULID, name string) (string, models.SCIMToken, error) {
@@ -595,8 +506,7 @@ func (s scimTokenServiceAdapter) ListTokens(ctx context.Context, orgID models.UL
 	return s.a.ListSCIMTokens(ctx, orgID)
 }
 
-// newSCIMHandler builds the extracted Handler with both the resource
-// and token-CRUD-side dependencies wired.
+// newSCIMHandler builds the extracted SCIM handler with resource and token dependencies.
 func (a *TheAuth) newSCIMHandler() *scimhandlers.Handler {
 	maxPage := 0
 	if a.scimCfg != nil {
@@ -619,26 +529,20 @@ func (a *TheAuth) newSCIMHandler() *scimhandlers.Handler {
 	)
 }
 
-// mountSCIM wires the /scim/v2/* resource and discovery endpoints via
-// the extracted handler. The scimAuth middleware stays on root because
-// it owns the SCIMConfig.RequireHTTPS state and the token lookup;
-// passing it in keeps the import direction one-way.
+// mountSCIM wires the /scim/v2 endpoints. The auth middleware stays in root because it owns
+// RequireHTTPS and token lookup.
 func (a *TheAuth) mountSCIM(r chi.Router) {
 	a.newSCIMHandler().Mount(r, a.scimAuth())
 }
 
-// mountSCIMTokenCRUD mounts the three /auth/orgs/{orgId}/scim/tokens
-// endpoints. Called from mountOrganizations' mountSub callback when
-// Config.SCIM is non-nil so the route still resolves under the org
-// tree.
+// mountSCIMTokenCRUD mounts the org-scoped SCIM token endpoints. It runs from the mountSub callback
+// when Config.SCIM is set.
 func (a *TheAuth) mountSCIMTokenCRUD(r chi.Router) {
 	a.newSCIMHandler().MountTokenCRUD(r)
 }
 
-// emitSCIMAuditExternal adapts the in-package emitSCIMAudit signature
-// to the AuditEmitter callback shape the extracted handler expects:
-// it attaches the organization to the audit metadata, sets the
-// SCIM-token actor, and forwards to the existing async writer.
+// emitSCIMAuditExternal adapts emitSCIMAudit to the AuditEmitter callback shape the extracted
+// handler expects.
 func (a *TheAuth) emitSCIMAuditExternal(ctx context.Context, action string, orgID, resourceID, scimTokenID models.ULID, detail string) {
 	md := AuditMetadata{OrganizationID: &orgID}
 	ctx = WithAuditMetadata(ctx, md)

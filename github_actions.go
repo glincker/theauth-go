@@ -9,49 +9,28 @@ import (
 const (
 	// GitHubActionsIssuerURL is the iss value of GitHub Actions OIDC tokens.
 	GitHubActionsIssuerURL = "https://token.actions.githubusercontent.com"
-	// GitHubActionsJWKSURL is the jwks_uri from GitHub's OIDC discovery
-	// document at GitHubActionsIssuerURL/.well-known/openid-configuration.
+	// GitHubActionsJWKSURL is the jwks_uri from GitHub's OIDC discovery document.
 	GitHubActionsJWKSURL = GitHubActionsIssuerURL + "/.well-known/jwks"
 )
 
-// ErrGitHubActionsUnrestricted is returned by GitHubActionsIssuer when
-// neither Repository nor RepositoryOwner is set.
+// ErrGitHubActionsUnrestricted is returned by GitHubActionsIssuer when neither Repository nor
+// RepositoryOwner is set.
 var ErrGitHubActionsUnrestricted = errors.New("theauth: GitHubActionsIssuer needs Repository or RepositoryOwner: an unrestricted GitHub issuer lets any GitHub repository mint tokens")
 
 // GitHubActionsOptions configures GitHubActionsIssuer.
 type GitHubActionsOptions struct {
-	// Repository is the exact "owner/name" the workflow must run in (the
-	// repository claim). Matching is case sensitive.
-	Repository string
-	// RepositoryOwner is the exact organization or user (the
-	// repository_owner claim).
+	Repository      string
 	RepositoryOwner string
-	// Refs restricts the ref claim. A single entry may contain "*"
-	// (for example "refs/heads/release/*"); several entries must all be
-	// exact. Empty means any ref.
-	Refs []string
-	// Environment restricts the environment claim to this exact name.
-	// Empty means any (or no) environment.
-	Environment string
-	// Audience is the aud the workflow must request (the audience query
-	// parameter of the token request). Empty means the authorization server
-	// issuer URL.
-	Audience string
-	// SubjectMapper resolves the verified claims to a local user. GitHub's
-	// sub is not a ULID, so supply a mapper that looks the workflow up, for
-	// example by repository. Required to complete an exchange.
-	SubjectMapper SubjectMapper
+	Refs            []string
+	Environment     string
+	Audience        string
+	SubjectMapper   SubjectMapper
 }
 
-// GitHubActionsIssuer returns a TrustedJWTIssuer for GitHub Actions OIDC
-// tokens (RS256, issuer and JWKS URL as published by GitHub) with required
-// claim matchers built from opts. It returns ErrGitHubActionsUnrestricted
-// unless Repository or RepositoryOwner is set: GitHub signs tokens for every
-// repository on github.com with the same key, so an issuer without such a
-// matcher accepts a token from any public repository.
-//
-// Append further matchers (job_workflow_ref, repository_id, ...) to the
-// result's RequiredClaims.
+// GitHubActionsIssuer returns a TrustedJWTIssuer for GitHub Actions OIDC tokens, with claim
+// matchers built from opts. It returns ErrGitHubActionsUnrestricted unless Repository or
+// RepositoryOwner is set, because GitHub signs tokens for every repository with one key. Append
+// further matchers such as job_workflow_ref to RequiredClaims.
 func GitHubActionsIssuer(opts GitHubActionsOptions) (TrustedJWTIssuer, error) {
 	if opts.Repository == "" && opts.RepositoryOwner == "" {
 		return TrustedJWTIssuer{}, ErrGitHubActionsUnrestricted

@@ -574,7 +574,6 @@ type AuditQuery struct {
 // are monotonically non-decreasing; reads are atomic snapshots. AuditFailed
 // counts batches whose INSERT returned an error; the writer goroutine logs
 // the error and does not retry (the v1.0 tradeoff documented in
-// docs/2026-06-20-theauth-go-v1.0-design.md section 4.4).
 // AuditSinkFailed counts individual sink Stream errors across all registered
 // sinks; incremented once per failing sink per batch (not per event).
 type Stats struct {

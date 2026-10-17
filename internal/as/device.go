@@ -18,35 +18,21 @@ import (
 	"github.com/glincker/theauth-go/v2/internal/ulid"
 )
 
-// device.go: RFC 8628 device authorization grant.
-//
-// Endpoints: POST /oauth/device_authorization, the user-code verification
-// page (GET/POST /oauth/device) and the device_code arm of POST /oauth/token.
-//
-// Security properties:
-//   - device_code is 256 random bits; user_code is short and typed by a human.
-//     Both are stored only as HMAC-SHA256 under a key derived from the
-//     server encryption key, so a database leak does not expose live codes
-//     and the low-entropy user code cannot be brute-forced offline.
-//   - A device_code redeems once: approved to consumed is a conditional
-//     update, so two racing polls cannot both receive tokens.
-//   - The verification page needs a signed-in user, rate limits attempts per
-//     subject, and answers every bad code with the same error.
-//   - Polling faster than the interval returns slow_down and widens the
-//     interval by five seconds (RFC 8628 section 3.5).
+// device.go implements the RFC 8628 device grant: device authorization, the user-code verification
+// page, and the device_code arm of the token endpoint. device_code and user_code are stored only as
+// keyed HMACs, so a database leak exposes no live codes. A device_code redeems once (conditional
+// approved to consumed update), the verification page needs a signed-in user and rate limits
+// attempts, and polling too fast returns slow_down (RFC 8628 section 3.5).
 
 const (
 	// DefaultDeviceExpiry is the device_code lifetime.
 	DefaultDeviceExpiry = 10 * time.Minute
 	// DefaultDeviceInterval is the minimum polling interval.
 	DefaultDeviceInterval = 5 * time.Second
-	// DefaultUserCodeAlphabet omits vowels and look-alike characters
-	// (RFC 8628 section 6.1), 20 symbols.
+	// DefaultUserCodeAlphabet omits vowels and look-alike characters (RFC 8628 section 6.1).
 	DefaultUserCodeAlphabet = "BCDFGHJKLMNPQRSTVWXZ"
 	// DefaultUserCodeLength is the number of symbols, ~34.5 bits.
-	DefaultUserCodeLength = 8
-	// DefaultDeviceVerifyAttempts is the user-code attempts allowed per
-	// subject per window.
+	DefaultUserCodeLength       = 8
 	DefaultDeviceVerifyAttempts = 10
 	// DefaultDeviceVerifyWindow is that window.
 	DefaultDeviceVerifyWindow = 15 * time.Minute
@@ -55,36 +41,30 @@ const (
 	deviceMaxInsertTry = 5
 )
 
-// DeviceConfig enables and tunes the device grant. Zero fields take the
-// defaults above.
+// DeviceConfig enables and tunes the device grant. Zero fields take the defaults above.
 type DeviceConfig struct {
-	// VerificationURI is the page users open. Defaults to
-	// Issuer + "/oauth/device". Set it to a short vanity URL if you proxy
-	// it to the real handler.
+	// VerificationURI is the page users open (default Issuer plus /oauth/device). Set it to a vanity
+	// URL if you proxy the page.
 	VerificationURI string
 
-	// ExpiresIn is the device_code and user_code lifetime.
 	ExpiresIn time.Duration
 
-	// Interval is the minimum polling interval advertised to clients.
 	Interval time.Duration
 
-	// UserCodeLength and UserCodeAlphabet shape the typed code. Changing the
-	// alphabet below 16 symbols or the length below 6 is rejected.
+	// UserCodeLength and UserCodeAlphabet shape the typed code. Alphabets under 16 symbols or lengths
+	// under 6 are rejected.
 	UserCodeLength   int
 	UserCodeAlphabet string
 
-	// MaxVerifyAttempts caps user-code submissions per subject (signed-in
-	// user, else client IP) per VerifyAttemptWindow.
+	// MaxVerifyAttempts caps user-code submissions per subject (signed-in user, else client IP) per
+	// VerifyAttemptWindow.
 	MaxVerifyAttempts   int
 	VerifyAttemptWindow time.Duration
 
-	// Page, when set, renders the verification page instead of the built-in
-	// minimal HTML. It receives the view model and writes the response.
+	// Page, when set, renders the verification page instead of the built-in HTML.
 	Page func(w http.ResponseWriter, r *http.Request, p DevicePage)
 
-	// CSS is appended to the built-in page inside a <style> element. It is
-	// trusted operator input and is not escaped.
+	// CSS is appended to the built-in page. It is trusted operator input and is not escaped.
 	CSS string
 }
 
@@ -127,14 +107,13 @@ type DeviceAuthResponse struct {
 	Interval                int    `json:"interval"`
 }
 
-// DeviceTokenRequest is the device_code arm of POST /oauth/token. The
-// embedded TokenRequest carries client credentials and the DPoP proof.
+// DeviceTokenRequest is the device_code arm of POST /oauth/token. TokenRequest carries the client
+// credentials and DPoP proof.
 type DeviceTokenRequest struct {
 	TokenRequest
 	DeviceCode string
 }
 
-// Device page states.
 const (
 	DevicePageEnter   = "enter"
 	DevicePageConfirm = "confirm"
@@ -144,24 +123,16 @@ const (
 
 // DevicePage is the view model for the verification page.
 type DevicePage struct {
-	// State is one of the DevicePage* constants.
-	State string
-	// UserCode is the code being confirmed, formatted for display.
+	State    string
 	UserCode string
-	// Pending describes the request on the confirm state.
-	Pending *DevicePending
-	// Approved is true on the done state when the user approved.
+	Pending  *DevicePending
 	Approved bool
-	// Error is a short message for the enter and error states.
-	Error string
-	// Action is the URL the forms post to.
-	Action string
-	// CSS is DeviceConfig.CSS.
-	CSS string
+	Error    string
+	Action   string
+	CSS      string
 }
 
-// DevicePending describes a pending authorization to the signed-in user so
-// they can confirm what they are approving.
+// DevicePending describes a pending authorization to the signed-in user, so they can see what they approve.
 type DevicePending struct {
 	ClientID   string
 	ClientName string
@@ -177,8 +148,7 @@ func (s *Service) deviceStore() (DeviceAuthorizationStorage, bool) {
 	return st, ok
 }
 
-// IsDeviceEnabled reports whether the device grant is configured and the
-// storage supports it.
+// IsDeviceEnabled reports whether the device grant is configured and the storage supports it.
 func (s *Service) IsDeviceEnabled() bool {
 	_, ok := s.deviceStore()
 	return ok
@@ -192,8 +162,7 @@ func (s *Service) DeviceVerificationURI() string {
 	return s.Cfg.Issuer + "/oauth/device"
 }
 
-// codeHash returns the keyed hash stored for a device or user code. The label
-// separates the two code spaces.
+// codeHash returns the keyed hash stored for a device or user code. The label separates the two code spaces.
 func (s *Service) codeHash(label, code string) []byte {
 	sub := hmac.New(sha256.New, s.encryptionKey)
 	sub.Write([]byte("theauth/device-authorization/v1"))
@@ -204,8 +173,7 @@ func (s *Service) codeHash(label, code string) []byte {
 	return mac.Sum(nil)
 }
 
-// normalizeUserCode upper-cases the input and drops separators and anything
-// outside the alphabet, so "bcdf-ghjk" and "BCDF GHJK" match.
+// normalizeUserCode upper-cases the input and drops separators and characters outside the alphabet.
 func normalizeUserCode(in, alphabet string) string {
 	var b strings.Builder
 	for _, r := range strings.ToUpper(in) {
@@ -216,7 +184,6 @@ func normalizeUserCode(in, alphabet string) string {
 	return b.String()
 }
 
-// formatUserCode inserts a hyphen in the middle for readability.
 func formatUserCode(code string) string {
 	if len(code) < 4 {
 		return code
@@ -332,8 +299,8 @@ func sepFor(u string) string {
 	return "?"
 }
 
-// deviceResource resolves the requested audience. An empty request resolves to
-// the only configured resource; with several configured it is required.
+// deviceResource resolves the requested audience. An empty request maps to the only configured
+// resource, and is required when several are configured.
 func (s *Service) deviceResource(id string) (models.ProtectedResource, error) {
 	if id == "" {
 		if len(s.Cfg.Resources) == 1 {
@@ -348,13 +315,11 @@ func (s *Service) deviceResource(id string) (models.ProtectedResource, error) {
 	return r, nil
 }
 
-// attemptAllowed consumes one verification attempt for subject.
 func (s *Service) attemptAllowed(ctx context.Context, subject string) error {
 	cfg := s.Cfg.DeviceAuthorization
 	d, err := s.Limiter.Allow(ctx, "device:verify:"+subject, cfg.MaxVerifyAttempts, cfg.VerifyAttemptWindow)
 	if err != nil {
-		// A broken limiter backend must not turn the page into an open
-		// guessing oracle: fail closed.
+		// A broken limiter must not become an open guessing oracle, so it fails closed.
 		return fmt.Errorf("theauth: device attempt limiter: %w", err)
 	}
 	if !d.Allowed {
@@ -363,7 +328,6 @@ func (s *Service) attemptAllowed(ctx context.Context, subject string) error {
 	return nil
 }
 
-// lookupPending finds the live, undecided record for a typed code.
 func (s *Service) lookupPending(ctx context.Context, store DeviceAuthorizationStorage, userCode string) (*models.DeviceAuthorization, error) {
 	cfg := s.Cfg.DeviceAuthorization
 	norm := normalizeUserCode(userCode, cfg.UserCodeAlphabet)
@@ -383,8 +347,7 @@ func (s *Service) lookupPending(ctx context.Context, store DeviceAuthorizationSt
 	return row, nil
 }
 
-// LookupDeviceUserCode resolves a typed user code to what the signed-in user
-// is about to approve. subject keys the attempt limiter.
+// LookupDeviceUserCode resolves a typed user code to the request the signed-in user is about to approve.
 func (s *Service) LookupDeviceUserCode(ctx context.Context, subject, userCode string) (DevicePending, error) {
 	store, ok := s.deviceStore()
 	if !ok {
@@ -462,7 +425,6 @@ func (s *Service) PollDeviceToken(ctx context.Context, req DeviceTokenRequest) (
 		return TokenResponse{}, models.ErrDeviceExpiredToken
 	}
 
-	// slow_down accounting applies to every poll, whatever the status.
 	interval := row.IntervalSeconds
 	tooFast := row.LastPollAt != nil && now.Sub(*row.LastPollAt) < time.Duration(interval)*time.Second
 	if tooFast {
@@ -481,15 +443,14 @@ func (s *Service) PollDeviceToken(ctx context.Context, req DeviceTokenRequest) (
 	case models.DeviceAuthDenied:
 		return TokenResponse{}, models.ErrDeviceAccessDenied
 	case models.DeviceAuthApproved:
-		// fall through to issuance
 	default:
 		return TokenResponse{}, models.ErrOAuthInvalidGrant
 	}
 	if row.UserID == nil {
 		return TokenResponse{}, models.ErrOAuthInvalidGrant
 	}
-	// Verify the DPoP proof before spending the single-use record, so a bad
-	// proof does not burn an approval the real client could still redeem.
+	// The DPoP proof is verified before the single-use record is spent, so a bad proof does not burn
+	// an approval.
 	jkt, err := s.dpopThumbprintForRequest(req.TokenRequest)
 	if err != nil {
 		return TokenResponse{}, err

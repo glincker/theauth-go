@@ -18,7 +18,6 @@ func nullableTime(t time.Time) pgtype.Timestamptz {
 	return pgtype.Timestamptz{Time: t.UTC(), Valid: true}
 }
 
-// OpenToolApproval implements theauth.ToolApprovalStorage.
 func (s *Store) OpenToolApproval(ctx context.Context, a theauth.ToolApproval) error {
 	_, err := s.pool.Exec(ctx, `
 INSERT INTO theauth_tool_approvals (id, agent_id, action, resource, requirement, tier, reason, created_at, expires_at)
@@ -31,7 +30,6 @@ VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
 	return nil
 }
 
-// ApproveToolApproval implements theauth.ToolApprovalStorage.
 func (s *Store) ApproveToolApproval(ctx context.Context, id, approver string, now time.Time) (bool, error) {
 	tag, err := s.pool.Exec(ctx, `
 UPDATE theauth_tool_approvals SET approved_at = $1, approver = $2

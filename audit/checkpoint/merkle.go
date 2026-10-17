@@ -90,9 +90,8 @@ func subProof(m int, leaves [][]byte, complete bool) [][]byte {
 	return append(subProof(m-k, leaves[k:], false), MerkleRoot(leaves[:k]))
 }
 
-// ConsistencyPath is the proof between the tree of the first oldSize leaves and
-// the tree of all leaves (RFC 6962 PROOF). Empty when oldSize is 0 or equals
-// the full size.
+// ConsistencyPath is the RFC 6962 proof between the trees of the first oldSize leaves and all
+// leaves. It is empty when oldSize is 0 or the full size.
 func ConsistencyPath(leaves [][]byte, oldSize int) ([][]byte, error) {
 	n := len(leaves)
 	if oldSize < 0 || oldSize > n {
@@ -180,9 +179,8 @@ func consistencyTrivial(oldSize, newSize int64, oldRoot, newRoot []byte, path []
 	return false, false
 }
 
-// VerifyConsistencyPath reports whether path proves the tree of newSize leaves
-// (root newRoot) extends the tree of oldSize leaves (root oldRoot) without
-// changing any old leaf (RFC 9162 section 2.1.4.2).
+// VerifyConsistencyPath reports whether path proves the tree of newSize leaves extends the tree of
+// oldSize leaves without changing an old leaf (RFC 9162 section 2.1.4.2).
 func VerifyConsistencyPath(oldSize, newSize int64, oldRoot, newRoot []byte, path [][]byte) bool {
 	if result, decided := consistencyTrivial(oldSize, newSize, oldRoot, newRoot, path); decided {
 		return result
@@ -199,9 +197,8 @@ func VerifyConsistencyPath(oldSize, newSize int64, oldRoot, newRoot []byte, path
 	return ok && sn == 0 && eq(fr, oldRoot) && eq(sr, newRoot)
 }
 
-// foldConsistency runs the RFC 9162 iterative fold over nodes and returns the
-// reconstructed old and new roots plus the final sn cursor. ok is false when
-// the path has more nodes than the tree shape allows.
+// foldConsistency runs the RFC 9162 iterative fold and returns the reconstructed old and new roots.
+// ok is false when the path is longer than the tree allows.
 func foldConsistency(fn, sn int64, nodes [][]byte) (fr, sr []byte, snOut int64, ok bool) {
 	for fn&1 == 1 {
 		fn >>= 1

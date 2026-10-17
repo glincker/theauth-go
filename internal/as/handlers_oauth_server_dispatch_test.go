@@ -22,8 +22,6 @@ import (
 // handleRevoke. Service-layer tests cover the business logic; this file
 // drives the live chi router over httptest so the form parser, client
 // credential extractor, dispatch switch, and error formatter are exercised.
-// Audit reference: 2026-06-20 reliability audit, section 2 (OAuth AS token
-// endpoint) and section 5 item 4.
 
 // tokenDispatchFixture builds a fully wired AS via httptest.NewServer, seeds
 // a user + confidential client, and returns the live PKCE verifier so callers
@@ -107,8 +105,7 @@ func postTokenForm(t *testing.T, srv *httptest.Server, path string, form url.Val
 // urn:ietf:params:oauth:grant-type:token-exchange) plus every documented
 // error path (malformed form, missing grant_type, unsupported grant type,
 // bad client auth, malformed inputs). handleToken itself was the single
-// largest 0%-coverage function in the v2.0 surface per the 2026-06-20
-// reliability audit; this table closes it.
+// largest function with no test coverage on the token endpoint.
 func TestHandleTokenDispatch(t *testing.T) {
 	t.Run("authorization_code_happy_path", func(t *testing.T) {
 		fx := newTokenDispatchFixture(t)

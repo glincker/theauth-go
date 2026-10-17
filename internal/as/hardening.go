@@ -10,21 +10,18 @@ import (
 	"github.com/glincker/theauth-go/v2/internal/models"
 )
 
-// hardening.go: shared helpers for the 2026-10 AS security pass:
-// authorization-code hashing at rest, replay revocation, the opt-in
-// access-token denylist and DPoP key-binding comparisons.
+// hardening.go holds shared helpers for the AS security pass: code hashing at rest, replay
+// revocation, the opt-in access-token denylist and DPoP key-binding comparisons.
 
-// codeStorageKey maps a presented authorization code to the value the
-// storage layer keeps. Codes are 256-bit random tokens, so a plain SHA-256
-// is enough: a database read yields nothing redeemable.
+// codeStorageKey maps a presented authorization code to the value storage keeps. Codes are 256-bit
+// random, so plain SHA-256 suffices.
 func codeStorageKey(code string) string {
 	return hex.EncodeToString(crypto.HashToken(code))
 }
 
-// handleCodeReplay runs when a code cannot be consumed. If tokens were
-// already issued from it, the whole family is revoked (RFC 6749 section
-// 4.1.2) and, with the denylist on, the matching access tokens too. A code
-// that never existed is a no-op.
+// handleCodeReplay runs when a code cannot be consumed. If tokens were already issued from it, the
+// family is revoked (RFC 6749 section 4.1.2), and matching access tokens too when the denylist is
+// on.
 func (s *Service) handleCodeReplay(ctx context.Context, codeKey string) {
 	rs, ok := s.Storage.(AuthCodeReplayStorage)
 	if !ok {
@@ -42,8 +39,6 @@ func (s *Service) handleCodeReplay(ctx context.Context, codeKey string) {
 		map[string]any{"tokens_revoked": len(jtis)})
 }
 
-// denylist returns the denylist backend when the feature is enabled and
-// supported by the storage adapter.
 func (s *Service) denylist() AccessTokenDenylistStorage {
 	if s == nil || !s.Cfg.AccessTokenRevocation {
 		return nil
@@ -64,9 +59,8 @@ func (s *Service) denyAccessJTI(ctx context.Context, jti string, exp time.Time) 
 	return err
 }
 
-// accessJTIRevoked reports whether jti is denied. Storage errors fail
-// closed (treated as revoked) so an outage cannot resurrect a revoked
-// token.
+// accessJTIRevoked reports whether jti is denied. Storage errors fail closed, so an outage cannot
+// resurrect a revoked token.
 func (s *Service) accessJTIRevoked(ctx context.Context, jti string) bool {
 	d := s.denylist()
 	if d == nil || jti == "" {

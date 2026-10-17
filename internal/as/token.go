@@ -14,15 +14,10 @@ import (
 	"github.com/glincker/theauth-go/v2/internal/ulid"
 )
 
-// token.go: the OAuth 2.1 token endpoint multiplexer plus the
-// authorization_code and refresh_token grant implementations. Per phase
-// 1 + 2 scope, client_credentials and
-// urn:ietf:params:oauth:grant-type:token-exchange live in token_v34.go
-// alongside the agent identity hooks.
+// token.go holds the token endpoint multiplexer and the authorization_code and refresh_token
+// grants. The client_credentials and token-exchange grants live in token_v34.go.
 
-// TokenRequest is the parsed form-encoded body of a POST /oauth/token
-// call, plus the authenticated client extracted from the request line /
-// headers.
+// TokenRequest is the parsed form body of POST /oauth/token plus the authenticated client.
 type TokenRequest struct {
 	GrantType    string
 	ClientID     string
@@ -34,38 +29,30 @@ type TokenRequest struct {
 	Resource     string
 	Scope        []string
 
-	// AuthorizationDetails is the raw RFC 9396 parameter. On the code and
-	// refresh grants it may narrow what the grant carries.
+	// AuthorizationDetails is the raw RFC 9396 parameter. On the code and refresh grants it may narrow
+	// what is carried.
 	AuthorizationDetails string
 
-	// DPoPProof, when non-empty, is the raw value of the request's DPoP
-	// header. When populated and the AS has DPoP enabled, the token
-	// endpoint verifies the proof and binds the issued access token to
-	// the proof key via cnf.jkt (RFC 7800 + RFC 9449).
+	// DPoPProof is the raw DPoP request header. When DPoP is enabled the token endpoint verifies it
+	// and binds the access token to the proof key via cnf.jkt (RFC 7800, RFC 9449).
 	DPoPProof string
 
-	// HTTPMethod + HTTPURL are the request method + canonical URL
-	// passed through to the DPoP verifier so it can check htm / htu.
-	// The handler populates these from the incoming http.Request; tests
-	// supply them directly.
+	// HTTPMethod and HTTPURL are passed to the DPoP verifier to check htm and htu. The handler fills
+	// them from the request.
 	HTTPMethod string
 	HTTPURL    string
 
-	// ClientAssertionType and ClientAssertion carry the RFC 7523 section 2.2
-	// parameters. When ClientAssertionType ==
-	// models.ClientAssertionTypeJWTBearer, AuthenticateClient delegates to
-	// AuthenticateClientJWT rather than checking a client_secret.
+	// ClientAssertionType and ClientAssertion carry the RFC 7523 section 2.2 parameters. A JWT bearer
+	// type routes to AuthenticateClientJWT instead of the client_secret check.
 	ClientAssertionType string
 	ClientAssertion     string
 
-	// Assertion is the external JWT for the
-	// urn:ietf:params:oauth:grant-type:jwt-bearer grant (RFC 7523 section 2.1).
+	// Assertion is the external JWT for the jwt-bearer grant (RFC 7523 section 2.1).
 	Assertion string
 }
 
-// TokenResponse is the JSON body emitted by /oauth/token on success.
-// IssuedTokenType is populated by the RFC 8693 token-exchange grant
-// (phase 4) per RFC 8693 section 2.2.1; omitted on other grants.
+// TokenResponse is the JSON body returned by /oauth/token. IssuedTokenType is set only for RFC 8693
+// exchanges.
 type TokenResponse struct {
 	AccessToken     string `json:"access_token"`
 	TokenType       string `json:"token_type"`
@@ -74,17 +61,14 @@ type TokenResponse struct {
 	Scope           string `json:"scope"`
 	IssuedTokenType string `json:"issued_token_type,omitempty"`
 
-	// AuthorizationDetails echoes the RFC 9396 details the token carries.
 	AuthorizationDetails json.RawMessage `json:"authorization_details,omitempty"`
 
-	// IDToken is the OpenID Connect ID token, present when the grant carries
-	// the openid scope and the server is an OpenID Provider.
+	// IDToken is the OpenID Connect ID token, present when the grant carries the openid scope.
 	IDToken string `json:"id_token,omitempty"`
 }
 
-// ExchangeAuthorizationCode redeems a one-time authorization code for an
-// access token + refresh token pair. Enforces PKCE S256, redirect_uri
-// equality, audience binding (RFC 8707), and client authentication.
+// ExchangeAuthorizationCode redeems a one-time code for an access and refresh token pair. It
+// enforces PKCE S256, redirect_uri equality, audience binding (RFC 8707) and client authentication.
 func (s *Service) ExchangeAuthorizationCode(ctx context.Context, req TokenRequest) (resp TokenResponse, err error) {
 	if s == nil {
 		return TokenResponse{}, errors.New("theauth: authorization server not configured")
@@ -105,8 +89,8 @@ func (s *Service) ExchangeAuthorizationCode(ctx context.Context, req TokenReques
 	codeKey := codeStorageKey(req.Code)
 	codeRow, err := s.Storage.ConsumeAuthorizationCode(ctx, codeKey)
 	if err != nil {
-		// A code that cannot be consumed may be a replay: revoke whatever
-		// was already issued from it (RFC 6749 section 4.1.2).
+		// A code that cannot be consumed may be a replay: revoke what was already issued from it (RFC
+		// 6749 section 4.1.2).
 		s.handleCodeReplay(ctx, codeKey)
 		return TokenResponse{}, models.ErrOAuthInvalidGrant
 	}
@@ -124,8 +108,7 @@ func (s *Service) ExchangeAuthorizationCode(ctx context.Context, req TokenReques
 	if codeRow.CodeChallengeMethod != "S256" {
 		return TokenResponse{}, models.ErrOAuthInvalidGrant
 	}
-	// security re-audit L2 (2026-06-22): use constant-time compare to
-	// prevent timing oracle on the code_challenge comparison.
+	// The challenge comparison is constant time, so timing cannot act as an oracle (security re-audit L2).
 	computed := crypto.CodeChallenge(req.CodeVerifier)
 	if subtle.ConstantTimeCompare([]byte(computed), []byte(codeRow.CodeChallenge)) != 1 {
 		return TokenResponse{}, models.ErrOAuthPKCEMismatch
@@ -150,21 +133,18 @@ func (s *Service) ExchangeAuthorizationCode(ctx context.Context, req TokenReques
 		Resource:             audience,
 		DPoPJKT:              jkt,
 		AuthorizationDetails: details,
-		// AuthCodeHash lets a later replay of this code revoke the family.
-		AuthCodeHash: codeKey,
-		GrantExpiry:  splitGrantExpiry(req.Code),
-		AuthTime:     codeRow.AuthTime,
-		ACR:          codeRow.ACR,
-		AMR:          codeRow.AMR,
-		Nonce:        codeRow.Nonce,
-		SessionID:    s.codeSession(ctx, codeKey),
+		AuthCodeHash:         codeKey,
+		GrantExpiry:          splitGrantExpiry(req.Code),
+		AuthTime:             codeRow.AuthTime,
+		ACR:                  codeRow.ACR,
+		AMR:                  codeRow.AMR,
+		Nonce:                codeRow.Nonce,
+		SessionID:            s.codeSession(ctx, codeKey),
 	})
 }
 
-// RefreshAccessToken rotates a refresh token, returning a new access
-// token + refresh token pair. The old refresh token is revoked;
-// presenting it again triggers family-wide revocation per RFC 9700
-// section 4.14.
+// RefreshAccessToken rotates a refresh token and returns a new pair. Presenting an already-rotated
+// token revokes the whole family (RFC 9700 section 4.14).
 func (s *Service) RefreshAccessToken(ctx context.Context, req TokenRequest) (resp TokenResponse, err error) {
 	if s == nil {
 		return TokenResponse{}, errors.New("theauth: authorization server not configured")
@@ -188,8 +168,7 @@ func (s *Service) RefreshAccessToken(ctx context.Context, req TokenRequest) (res
 		return TokenResponse{}, models.ErrOAuthInvalidGrant
 	}
 	if rt.RevokedAt != nil {
-		// Re-use detection: prior revoked token presented. Revoke the
-		// entire rotation family (RFC 9700 section 4.14) and reject.
+		// Reuse of a rotated token revokes the entire rotation family (RFC 9700 section 4.14) and is refused.
 		_ = s.Storage.RevokeRefreshTokenFamily(ctx, rt.FamilyID, "reuse detected")
 		return TokenResponse{}, models.ErrOAuthInvalidGrant
 	}
@@ -200,16 +179,15 @@ func (s *Service) RefreshAccessToken(ctx context.Context, req TokenRequest) (res
 	if req.Resource != "" && !s.resourceMatchesGrant(req.Resource, resource) {
 		return TokenResponse{}, models.ErrOAuthInvalidResource
 	}
-	// Narrowing: requested scope (if any) must be a subset of the
-	// existing refresh token's scope. Empty means "same scope" per RFC
-	// 6749 section 6.
+	// Requested scope must be a subset of the refresh token's scope. Empty means the same scope (RFC
+	// 6749 section 6).
 	scope, err := s.narrowRefreshScopes(req.Scope, rt.Scope)
 	if err != nil {
 		return TokenResponse{}, err
 	}
-	// RFC 9449 section 8: a refresh token issued to a DPoP-bound grant is
-	// bound to the same key. Verify the proof before burning the token so
-	// a failed proof does not consume it, and never downgrade to Bearer.
+	// RFC 9449 section 8: a refresh token of a DPoP-bound grant stays bound to its key. The proof is
+	// verified before the token is consumed, so a bad proof does not burn it, and the token is never
+	// downgraded to Bearer.
 	jkt, err := s.dpopThumbprintForRequest(req)
 	if err != nil {
 		return TokenResponse{}, err
@@ -226,10 +204,8 @@ func (s *Service) RefreshAccessToken(ctx context.Context, req TokenRequest) (res
 	if err != nil {
 		return TokenResponse{}, err
 	}
-	// Revoke the old refresh token before issuing the new pair, so a
-	// crash mid-mint cannot leave both alive (the new mint is idempotent
-	// on its fresh family ID). The revoke is conditional: if a concurrent
-	// request already rotated this token we treat it as reuse.
+	// The old refresh token is revoked before the new pair is issued, so a crash mid-mint cannot leave
+	// both alive. A lost race on the revoke counts as reuse.
 	if err := s.Storage.RevokeRefreshToken(ctx, hash, "rotated"); err != nil {
 		if errors.Is(err, models.ErrStorageNotFound) {
 			_ = s.Storage.RevokeRefreshTokenFamily(ctx, rt.FamilyID, "reuse detected")
@@ -246,8 +222,7 @@ func (s *Service) RefreshAccessToken(ctx context.Context, req TokenRequest) (res
 		GrantExpiry:          splitGrantExpiry(req.RefreshToken),
 		DPoPJKT:              jkt,
 		AuthorizationDetails: details,
-		// The authentication context is carried forward unchanged: a
-		// refresh never advances auth_time.
+		// The authentication context carries forward unchanged: a refresh never advances auth_time.
 		AuthTime:  rt.AuthTime,
 		ACR:       rt.ACR,
 		AMR:       rt.AMR,
@@ -255,42 +230,33 @@ func (s *Service) RefreshAccessToken(ctx context.Context, req TokenRequest) (res
 	})
 }
 
-// mintInput bundles the parameters for an access + refresh token
-// issuance.
+// mintInput bundles the parameters for one access and refresh token issuance.
 type mintInput struct {
 	ClientID string
 	UserID   *models.ULID
 	Scope    []string
 	Resource string
 	FamilyID *models.ULID // non-nil when continuing a rotation family
-	// DPoPJKT, when non-empty, embeds an RFC 7800 cnf.jkt confirmation
-	// claim in the access token, binding the token to the DPoP proof
-	// key. Resource servers MUST then require an inbound DPoP proof
-	// signed by the matching key on every protected call.
-	DPoPJKT string
-	// AuthCodeHash is the storage key of the authorization code the
-	// family was issued from; empty on refresh and other grants.
+	// DPoPJKT, when set, embeds an RFC 7800 cnf.jkt claim in the access token. Resource servers then
+	// require a proof signed by that key.
+	DPoPJKT      string
 	AuthCodeHash string
-	// GrantExpiry, when non-zero, caps the access and refresh token expiry
-	// (host-owned consent). It is carried inside the code and refresh token.
-	GrantExpiry time.Time
-	// AuthorizationDetails is the RFC 9396 JSON the tokens carry. It becomes
-	// the authorization_details claim and is kept on the refresh token.
+	// GrantExpiry, when non-zero, caps access and refresh token expiry (host-owned consent). It rides
+	// in the code and refresh token.
+	GrantExpiry          time.Time
 	AuthorizationDetails []byte
-	// AuthTime, ACR and AMR are the authentication context of the grant.
-	// They become the auth_time, acr and amr claims (each only when set) and
-	// are stored on the refresh token for carry-forward.
+	// AuthTime, ACR and AMR are the grant's authentication context. They become the auth_time, acr and
+	// amr claims when set, and are stored on the refresh token for carry-forward.
 	AuthTime time.Time
 	ACR      string
 	AMR      []string
-	// Nonce and SessionID feed the ID token: the authorize request nonce
-	// and the browser session the grant came from.
+	// Nonce and SessionID feed the ID token: the authorize nonce and the browser session the grant came from.
 	Nonce     string
 	SessionID string
 }
 
-// mintAccessAndRefresh signs a fresh access token JWT and stores a fresh
-// hashed refresh token in the same rotation family.
+// mintAccessAndRefresh signs a fresh access token and stores a hashed refresh token in the same
+// rotation family.
 func (s *Service) mintAccessAndRefresh(ctx context.Context, in mintInput) (TokenResponse, error) {
 	now := time.Now().UTC()
 	accessExp := now.Add(s.Cfg.AccessTokenTTL)
@@ -318,16 +284,13 @@ func (s *Service) mintAccessAndRefresh(ctx context.Context, in mintInput) (Token
 	}
 	tokenType := "Bearer"
 	if in.DPoPJKT != "" {
-		// RFC 7800 confirmation claim: resource servers compare the
-		// thumbprint of the inbound DPoP proof key against this value
-		// before authorizing the call.
+		// Resource servers compare the thumbprint of the inbound DPoP proof key with this cnf.jkt before
+		// authorizing the call.
 		if claims.Extra == nil {
 			claims.Extra = map[string]any{}
 		}
 		claims.Extra["cnf"] = map[string]string{"jkt": in.DPoPJKT}
-		// RFC 9449 section 5: the token_type emitted alongside a
-		// DPoP-bound access token MUST be "DPoP", not "Bearer". The
-		// resource server keys its dispatching logic off of this.
+		// RFC 9449 section 5: a DPoP-bound access token MUST carry token_type "DPoP", not "Bearer".
 		tokenType = "DPoP"
 	}
 	detailsClaim, err := authorizationDetailsClaim(in.AuthorizationDetails)
@@ -411,20 +374,11 @@ func (s *Service) mintAccessAndRefresh(ctx context.Context, in mintInput) (Token
 	return resp, nil
 }
 
-// AuthenticateClient verifies client credentials. Confidential clients
-// (token_endpoint_auth_method = client_secret_basic | client_secret_post)
-// MUST supply a non-empty secret matching the stored Argon2id hash.
-// Public clients (token_endpoint_auth_method = none) authenticate by
-// client_id alone and rely on PKCE for proof of possession.
-//
-// Hot-path optimization: a successful Argon2id verify is cached on
-// s.clientAuthCache, keyed by client_id and bound to the sha256 of the
-// presented secret. The cache is bounded (DefaultMaxEntries) and entries
-// expire after DefaultTTL. Every code path that rotates or removes the
-// stored client_secret_hash MUST invalidate via
-// Service.InvalidateClientAuthCache. The public-client path
-// (ClientAuthNone) does not pay Argon2id at all and is therefore not
-// cached.
+// AuthenticateClient verifies client credentials. Confidential clients must present a secret
+// matching the stored Argon2id hash. Public clients (method none) authenticate by client_id alone
+// and rely on PKCE. Successful confidential verifies are cached by client_id, bound to the sha256
+// of the secret. Every path that rotates or removes a secret must call InvalidateClientAuthCache.
+// Public clients never reach the cache.
 func (s *Service) AuthenticateClient(ctx context.Context, clientID, clientSecret string) (*models.OAuthClient, error) {
 	if s == nil {
 		return nil, errors.New("theauth: authorization server not configured")
@@ -432,12 +386,8 @@ func (s *Service) AuthenticateClient(ctx context.Context, clientID, clientSecret
 	if clientID == "" {
 		return nil, models.ErrOAuthInvalidClient
 	}
-	// Fast path: cache hit returns the verified client snapshot without
-	// the storage round trip and without the Argon2id verify. The cache
-	// only stores successful confidential-client verifications; a public
-	// client (ClientAuthNone) is never inserted, so a hit here implies
-	// we have a confidential client and the presented secret matches
-	// the digest we stored at insert.
+	// A cache hit skips both the storage read and the Argon2id verify. Only confidential clients are
+	// ever inserted.
 	if clientSecret != "" {
 		if cached, ok := s.clientAuthCache.Get(clientID, clientSecret); ok && cached != nil {
 			s.observeCacheHit("oauth_client")
@@ -464,34 +414,24 @@ func (s *Service) AuthenticateClient(ctx context.Context, clientID, clientSecret
 			return nil, err
 		}
 		if err != nil || !ok {
-			// Failures are never cached: an attacker presenting a wrong
-			// secret must keep paying Argon2id on every attempt so the
-			// rate limiter can throttle them, and a legitimate client
-			// whose secret was just rotated cannot have a wrong-secret
-			// entry poisoning the cache.
+			// Failures are never cached. Wrong secrets keep paying Argon2id, so the rate limiter can
+			// throttle them, and a rotated secret cannot be poisoned by an old entry.
 			return nil, models.ErrOAuthInvalidClient
 		}
 		s.clientAuthCache.Put(clientID, clientSecret, client)
 		s.updateCacheSizeGauge()
 		return client, nil
 	case models.ClientAuthPrivateKeyJWT, models.ClientAuthClientSecretJWT:
-		// JWT client authentication is handled by AuthenticateClientJWT;
-		// callers that reach this switch branch via the legacy
-		// AuthenticateClient(ctx, id, secret) API do not carry an assertion
-		// and therefore fail. The handler layer calls AuthenticateClientJWT
-		// directly when client_assertion_type is present.
+		// JWT client authentication goes through AuthenticateClientJWT. This legacy path carries no
+		// assertion, so it fails.
 		return nil, models.ErrOAuthInvalidClient
 	default:
 		return nil, models.ErrOAuthInvalidClient
 	}
 }
 
-// AuthenticateClientFromRequest authenticates a client from a TokenRequest.
-// When the request carries a client_assertion_type, this delegates to
-// AuthenticateClientJWT. Otherwise it calls AuthenticateClient.
-//
-// tokenEndpointURL is the full canonical URL of the token endpoint (used as
-// the expected aud in client assertions).
+// AuthenticateClientFromRequest routes to AuthenticateClientJWT when the request carries a
+// client_assertion_type, and to AuthenticateClient otherwise.
 func (s *Service) AuthenticateClientFromRequest(ctx context.Context, req TokenRequest, tokenEndpointURL string) (*models.OAuthClient, error) {
 	if req.ClientAssertionType == models.ClientAssertionTypeJWTBearer && req.ClientAssertion != "" {
 		return s.AuthenticateClientJWT(ctx, req.ClientID, req.ClientAssertion, tokenEndpointURL)

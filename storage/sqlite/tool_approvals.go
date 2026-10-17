@@ -9,7 +9,6 @@ import (
 
 var _ theauth.ToolApprovalStorage = (*Store)(nil)
 
-// OpenToolApproval implements theauth.ToolApprovalStorage.
 func (s *Store) OpenToolApproval(ctx context.Context, a theauth.ToolApproval) error {
 	_, err := s.db.ExecContext(ctx, s.q(`
 INSERT INTO theauth_tool_approvals (id, agent_id, action, resource, requirement, tier, reason, created_at, expires_at)
@@ -19,7 +18,6 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`),
 	return wrap("open tool approval", err)
 }
 
-// ApproveToolApproval implements theauth.ToolApprovalStorage.
 func (s *Store) ApproveToolApproval(ctx context.Context, id, approver string, now time.Time) (bool, error) {
 	res, err := s.db.ExecContext(ctx, s.q(`
 UPDATE theauth_tool_approvals SET approved_at = ?, approver = ?

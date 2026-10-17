@@ -10,9 +10,8 @@ import (
 	"github.com/glincker/theauth-go/v2/internal/safehttp"
 )
 
-// ErrBlockedAddress is returned when a fetch would connect to a
-// non-public address (loopback, private, link-local, CGNAT, metadata).
-// It is the same value as safehttp.ErrBlockedAddress.
+// ErrBlockedAddress is returned when a fetch would connect to a non-public address. It is the same
+// value as safehttp.ErrBlockedAddress.
 var ErrBlockedAddress = safehttp.ErrBlockedAddress
 
 // IsBlockedIP reports whether ip must never be the target of a CIMD fetch.

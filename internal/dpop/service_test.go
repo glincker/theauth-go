@@ -19,15 +19,10 @@ import (
 	"github.com/glincker/theauth-go/v2/internal/dpop"
 )
 
-// service_test.go: every numbered check from RFC 9449 section 4.3 lands
-// here with a positive + negative case. The signer helpers build proof
-// JWTs at the byte level so a test can mutate any field without going
-// through the (one-shot, internal) signing surface a future client SDK
-// would expose.
+// service_test.go checks each numbered RFC 9449 section 4.3 step with a positive and a negative
+// case. Proofs are built at the byte level.
 
-// signedProof builds a valid DPoP proof JWT for the supplied claims and
-// the ES256 key, returning the compact serialization plus the JWK that
-// was embedded in the header.
+// signedProof builds a valid ES256 proof JWT for the claims and returns it with the embedded JWK.
 func signedProofES256(t *testing.T, claims dpop.ProofClaims, mutateHeader func(*dpop.ProofHeader)) (string, *dpop.JWK, *ecdsa.PrivateKey) {
 	t.Helper()
 	priv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)

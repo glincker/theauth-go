@@ -8,27 +8,21 @@ import (
 	"github.com/glincker/theauth-go/v2/internal/models"
 )
 
-// metadata.go: RFC 8414 authorization server metadata document.
-
-// ASMetadata is the JSON document served at
-// /.well-known/oauth-authorization-server. Field names and shape follow
-// RFC 8414 section 2. Optional fields are omitted when empty so consumers
-// parsing the document with a strict library stay happy.
+// ASMetadata is the RFC 8414 document served at /.well-known/oauth-authorization-server. Optional
+// fields are omitted when empty.
 type ASMetadata struct {
 	Issuer                string `json:"issuer"`
 	AuthorizationEndpoint string `json:"authorization_endpoint"`
 	TokenEndpoint         string `json:"token_endpoint"`
-	// RegistrationEndpoint (RFC 7591 Dynamic Client Registration) is
-	// legacy per MCP spec 2026-07-28 and is only advertised when the
-	// operator opted in via RegistrationTokens or AllowAnonymousRegistration.
+	// RegistrationEndpoint is advertised only when the operator opted in to DCR (RegistrationTokens or
+	// AllowAnonymousRegistration).
 	RegistrationEndpoint string `json:"registration_endpoint,omitempty"`
 
-	// ClientIDMetadataDocumentSupported advertises CIMD support (MCP
-	// authorization spec, client registration).
+	// ClientIDMetadataDocumentSupported advertises CIMD support.
 	ClientIDMetadataDocumentSupported bool `json:"client_id_metadata_document_supported,omitempty"`
 
-	// AuthorizationResponseIssParameterSupported advertises that
-	// authorization responses carry the RFC 9207 iss parameter.
+	// AuthorizationResponseIssParameterSupported advertises the RFC 9207 iss parameter on
+	// authorization responses.
 	AuthorizationResponseIssParameterSupported bool     `json:"authorization_response_iss_parameter_supported,omitempty"`
 	IntrospectionEndpoint                      string   `json:"introspection_endpoint"`
 	RevocationEndpoint                         string   `json:"revocation_endpoint"`
@@ -36,43 +30,38 @@ type ASMetadata struct {
 	ResponseTypesSupported                     []string `json:"response_types_supported"`
 	GrantTypesSupported                        []string `json:"grant_types_supported"`
 	TokenEndpointAuthMethodsSupported          []string `json:"token_endpoint_auth_methods_supported"`
-	// TokenEndpointAuthSigningAlgValuesSupported lists the JWS signing
-	// algorithms supported for private_key_jwt and client_secret_jwt
-	// client authentication. Omitted when JWT client auth is disabled.
+	// TokenEndpointAuthSigningAlgValuesSupported lists the JWS algorithms for private_key_jwt client
+	// auth. Omitted when JWT client auth is off.
 	TokenEndpointAuthSigningAlgValuesSupported []string `json:"token_endpoint_auth_signing_alg_values_supported,omitempty"`
 	CodeChallengeMethodsSupported              []string `json:"code_challenge_methods_supported"`
 	ScopesSupported                            []string `json:"scopes_supported,omitempty"`
 	ACRValuesSupported                         []string `json:"acr_values_supported,omitempty"`
 	ServiceDocumentation                       string   `json:"service_documentation,omitempty"`
 	UILocalesSupported                         []string `json:"ui_locales_supported,omitempty"`
-	// DPoPSigningAlgValuesSupported is the RFC 9449 section 5.1 metadata
-	// field advertising the proof-JWT signing algorithms this AS
-	// accepts. Omitted when DPoP is disabled.
+	// DPoPSigningAlgValuesSupported is the RFC 9449 section 5.1 list of accepted proof algorithms.
+	// Omitted when DPoP is off.
 	DPoPSigningAlgValuesSupported []string `json:"dpop_signing_alg_values_supported,omitempty"`
 
-	// PAR (RFC 9126) fields. Both are omitted when PAR is disabled.
+	// PAR fields are omitted when PAR is disabled.
 	PushedAuthorizationRequestEndpoint string `json:"pushed_authorization_request_endpoint,omitempty"`
 	RequirePushedAuthorizationRequests bool   `json:"require_pushed_authorization_requests,omitempty"`
 
-	// JAR (RFC 9101) fields. Omitted when JAR is disabled.
+	// JAR fields are omitted when JAR is disabled.
 	RequestParameterSupported              bool     `json:"request_parameter_supported,omitempty"`
 	RequestObjectSigningAlgValuesSupported []string `json:"request_object_signing_alg_values_supported,omitempty"`
 
-	// CIBA fields (RFC 9509). Omitted when CIBA is disabled.
+	// CIBA fields (RFC 9509) are omitted when CIBA is disabled.
 	BackchannelAuthenticationEndpoint      string   `json:"backchannel_authentication_endpoint,omitempty"`
 	BackchannelTokenDeliveryModesSupported []string `json:"backchannel_token_delivery_modes_supported,omitempty"`
 	BackchannelUserCodeParameterSupported  bool     `json:"backchannel_user_code_parameter_supported,omitempty"`
 
-	// DeviceAuthorizationEndpoint (RFC 8628 section 4). Omitted when the
-	// device grant is disabled.
+	// DeviceAuthorizationEndpoint (RFC 8628 section 4) is omitted when the device grant is off.
 	DeviceAuthorizationEndpoint string `json:"device_authorization_endpoint,omitempty"`
 
-	// AuthorizationDetailsTypesSupported (RFC 9396 section 10). Omitted
-	// when RAR is not enabled.
+	// AuthorizationDetailsTypesSupported (RFC 9396 section 10) is omitted when RAR is off.
 	AuthorizationDetailsTypesSupported []string `json:"authorization_details_types_supported,omitempty"`
 
-	// OpenID Provider fields (OIDC Discovery 1.0 section 3). Omitted unless
-	// Config.OIDC is set.
+	// OpenID Provider fields (OIDC Discovery 1.0 section 3) are omitted unless Config.OIDC is set.
 	UserinfoEndpoint                  string   `json:"userinfo_endpoint,omitempty"`
 	EndSessionEndpoint                string   `json:"end_session_endpoint,omitempty"`
 	SubjectTypesSupported             []string `json:"subject_types_supported,omitempty"`
@@ -82,8 +71,7 @@ type ASMetadata struct {
 	BackchannelLogoutSessionSupported bool     `json:"backchannel_logout_session_supported,omitempty"`
 }
 
-// ASMetadataDoc builds the metadata document. The result is
-// deterministic across calls so handler caching is trivial.
+// ASMetadataDoc builds the metadata document. It is deterministic, so handler caching is trivial.
 func (s *Service) ASMetadataDoc() (ASMetadata, error) {
 	if s == nil {
 		return ASMetadata{}, errors.New("theauth: authorization server not configured")
@@ -100,15 +88,14 @@ func (s *Service) ASMetadataDoc() (ASMetadata, error) {
 	}
 	var dpopAlgs []string
 	if s.dpopSvc != nil && s.Cfg.DPoP != nil {
-		// Surface the operator-configured allow list verbatim so the
-		// metadata document and the actual verifier never disagree.
+		// The metadata advertises the operator's allow list verbatim, so the document and the verifier
+		// never disagree.
 		if len(s.Cfg.DPoP.AllowedSignAlgs) == 0 {
 			dpopAlgs = append([]string(nil), defaultDPoPAdvertisedAlgs...)
 		} else {
 			dpopAlgs = append([]string(nil), s.Cfg.DPoP.AllowedSignAlgs...)
 		}
 	}
-	// Build PAR fields.
 	var parEndpoint string
 	var requirePAR bool
 	if s.IsPAREnabled() {
@@ -116,7 +103,6 @@ func (s *Service) ASMetadataDoc() (ASMetadata, error) {
 		requirePAR = s.Cfg.PAR.RequirePAR
 	}
 
-	// Build JAR fields.
 	var requestParamSupported bool
 	var jarAlgs []string
 	if s.IsJAREnabled() {
@@ -162,7 +148,6 @@ func (s *Service) ASMetadataDoc() (ASMetadata, error) {
 		meta.RegistrationEndpoint = s.Cfg.Issuer + "/oauth/register"
 	}
 
-	// Advertise CIBA when enabled and the storage supports it.
 	if s.Cfg.CIBA != nil {
 		if _, ok := s.Storage.(CIBAStorage); ok {
 			meta.BackchannelAuthenticationEndpoint = s.Cfg.Issuer + "/oauth/bc-authorize"
@@ -175,7 +160,6 @@ func (s *Service) ASMetadataDoc() (ASMetadata, error) {
 		}
 	}
 
-	// Advertise the RFC 8628 device grant when enabled.
 	if s.IsDeviceEnabled() {
 		meta.DeviceAuthorizationEndpoint = s.Cfg.Issuer + "/oauth/device_authorization"
 	}
@@ -189,17 +173,13 @@ func (s *Service) ASMetadataDoc() (ASMetadata, error) {
 	return meta, nil
 }
 
-// defaultDPoPAdvertisedAlgs mirrors dpop.DefaultAllowedAlgs. Duplicated
-// here so the metadata document does not need to import the dpop
-// package (avoids an import cycle in tests that fixture only this
-// helper).
+// defaultDPoPAdvertisedAlgs mirrors dpop.DefaultAllowedAlgs. It is duplicated here to avoid
+// importing the dpop package.
 var defaultDPoPAdvertisedAlgs = []string{"ES256", "ES384", "RS256", "PS256", "EdDSA"}
 
-// grantTypesAdvertised returns the grant types this AS supports. Phase
-// 1+2 supports authorization_code and refresh_token unconditionally;
-// phase 3+4 adds client_credentials and the RFC 8693 token-exchange URN
-// when the AgentPolicy is configured; RFC 7523 adds the jwt-bearer URN
-// when JWTBearer is configured. CIBA adds its own URN when enabled.
+// grantTypesAdvertised returns the supported grant types. Authorization code and refresh are always
+// on; client_credentials and token exchange need AgentPolicy; jwt-bearer needs JWTBearer; CIBA and
+// device add their own when enabled.
 func (s *Service) grantTypesAdvertised() []string {
 	out := []string{models.GrantTypeAuthorizationCode, models.GrantTypeRefreshToken}
 	if s.AgentPolicy != nil {
@@ -221,7 +201,6 @@ func (s *Service) grantTypesAdvertised() []string {
 	return out
 }
 
-// addOIDCMetadata fills the OpenID Provider discovery fields.
 func (s *Service) addOIDCMetadata(meta *ASMetadata) {
 	meta.UserinfoEndpoint = s.Cfg.Issuer + "/oauth/userinfo"
 	meta.EndSessionEndpoint = s.Cfg.Issuer + "/oauth/end_session"

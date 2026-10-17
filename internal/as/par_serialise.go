@@ -4,9 +4,7 @@ import (
 	"encoding/json"
 )
 
-// par_serialise.go: JSON serialisation helpers for pushed authorization
-// request payloads. Using encoding/json keeps the payload human-readable
-// in storage and avoids a dependency on any binary format.
+// par_serialise.go holds JSON serialization for pushed request payloads, kept human readable in storage.
 
 type serializedAuthorizeRequest struct {
 	ClientID            string   `json:"client_id"`

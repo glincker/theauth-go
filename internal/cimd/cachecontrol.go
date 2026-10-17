@@ -9,10 +9,9 @@ import (
 // cachecontrol.go: optional HTTP Cache-Control handling for fetched
 // documents (Config.HonorCacheControl).
 
-// cacheControlTTL derives a freshness window from a Cache-Control header
-// value. It returns zero (use cfg.CacheTTL) when the header carries no usable
-// directive. The result is clamped to [MinCacheTTL, cfg.CacheTTL]: the
-// publisher can only shorten the window, never extend it.
+// cacheControlTTL derives a freshness window from a Cache-Control header. It returns zero when the
+// header has no usable directive. The publisher can shorten the window but never extend it past
+// cfg.CacheTTL.
 func (s *Service) cacheControlTTL(header string) time.Duration {
 	if header == "" {
 		return 0

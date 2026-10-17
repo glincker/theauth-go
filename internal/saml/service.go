@@ -1,10 +1,6 @@
-// Package saml's Service owns the v0.7 SAML SP surface: connection CRUD, SP-initiated login (BeginLogin), the ACS endpoint backend (FinishLogin), the per-connection SP metadata serializer (MetadataXML), the in-memory AuthnRequest tracker for replay protection, and the GC goroutine that sweeps expired AuthnRequest IDs.
-//
-// Extracted from root service_saml.go in PR D of the 2026-06 architecture reorg. The root *theauth.TheAuth holds a *Service and exposes CreateSAMLConnection / UpdateSAMLConnection / DeleteSAMLConnection / SAMLConnectionByID / ListSAMLConnections / BeginSAMLLogin / FinishSAMLLogin / SAMLMetadataXML as thin forwarders.
-//
-// The crewjam/saml ServiceProvider is rebuilt per call (cheap; a few struct copies and an IdP cert parse) so IdP cert rotation flows through the saml_connections row without a server restart. The per-connection IdP metadata cache is scoped to one *saml.ServiceProvider; cached internally but not kept alive across calls.
-//
-// The AuthnRequest in-flight map lives on the Service. The GC goroutine starts in Start and stops in Stop; every 'go ...' in this package has a matching stop path so there is no goroutine leak.
+// Package saml owns the SAML service provider surface: connection CRUD, SP-initiated login, the ACS backend,
+// per-connection SP metadata, and the AuthnRequest tracker that blocks replay. The crewjam/saml provider is
+// rebuilt per call, so IdP certificate rotation applies without a restart.
 package saml
 
 import (

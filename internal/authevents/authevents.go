@@ -53,9 +53,8 @@ type Event struct {
 	Reason string
 }
 
-// Sink receives every Event synchronously on the emitting
-// goroutine. Implementations must return quickly and must not block; a
-// panic is recovered and logged.
+// Sink receives every Event synchronously on the emitting goroutine. It must return quickly and
+// must not block; panics are recovered.
 type Sink func(ctx context.Context, e Event)
 
 // ChannelSink returns a Sink that forwards events to ch

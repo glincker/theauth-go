@@ -15,7 +15,6 @@ const asRefreshCols = `id, hash, family_id, client_id, user_id, agent_id, scope,
 	parent_jti, issued_at, expires_at, revoked_at, revocation_note,
 	dpop_jkt, auth_code_hash, authorization_details, auth_time, acr, amr`
 
-// InsertRefreshToken implements theauth.OAuthServerStorage.
 func (s *Store) InsertRefreshToken(ctx context.Context, t theauth.RefreshToken) error {
 	scope, err := asEncodeList(t.Scope)
 	if err != nil {
@@ -33,7 +32,6 @@ INSERT INTO theauth_oauth_refresh_tokens (
 	return wrap("insert refresh token", err)
 }
 
-// RefreshTokenByHash implements theauth.OAuthServerStorage.
 func (s *Store) RefreshTokenByHash(ctx context.Context, hash []byte) (*theauth.RefreshToken, error) {
 	var (
 		id, familyID, clientID, scope, resource, parentJTI, note string
@@ -75,9 +73,8 @@ func (s *Store) RefreshTokenByHash(ctx context.Context, hash []byte) (*theauth.R
 	return &out, nil
 }
 
-// RevokeRefreshToken implements theauth.OAuthServerStorage. It is the
-// rotation gate: the conditional UPDATE succeeds for exactly one caller per
-// token, and a loser (a replay or a concurrent refresh) gets ErrStorageNotFound.
+// RevokeRefreshToken implements theauth.OAuthServerStorage. It is the rotation gate: exactly
+// one caller wins per token; a replay or concurrent refresh gets ErrStorageNotFound.
 func (s *Store) RevokeRefreshToken(ctx context.Context, hash []byte, reason string) error {
 	res, err := s.db.ExecContext(ctx, s.q(`
 UPDATE theauth_oauth_refresh_tokens SET revoked_at = ?, revocation_note = ?
@@ -97,11 +94,8 @@ WHERE family_id = ? AND revoked_at IS NULL`), toMicro(time.Now()), reason, idStr
 	return wrap("revoke refresh token family", err)
 }
 
-// RevokeRefreshTokensByAuthCode revokes every live token in the rotation
-// families first issued from the code stored under codeHash (RFC 6749 section
-// 4.1.2 code replay) and returns the access token jtis of the tokens it
-// revoked. It runs as one statement, so it is atomic against concurrent
-// rotations.
+// RevokeRefreshTokensByAuthCode revokes every live token issued from the code stored under
+// codeHash (RFC 6749 4.1.2 code replay) and returns their access token jtis, in one statement.
 func (s *Store) RevokeRefreshTokensByAuthCode(ctx context.Context, codeHash, reason string) ([]string, error) {
 	if codeHash == "" {
 		return nil, nil

@@ -16,15 +16,10 @@ import (
 	"github.com/glincker/theauth-go/v2/internal/throttle"
 )
 
-// Config closes public signup and gates creation of the first user
-// behind a one-time setup token. The storage must implement UserCountStorage.
-//
-// While no user exists, password signup requires the token in the
-// X-Setup-Token header or a "setupToken" body field. After the first user
-// exists, signup is refused with CodeSignupClosed unless
-// OpenSignupAfterFirstUser is set. Magic-link account creation follows the
-// same rule but can never present a token, so the first admin must sign up
-// with a password. Granting the new user an admin role is left to OnFirstUser.
+// Config closes public signup and gates creation of the first user behind a one-time setup token
+// (the storage must implement UserCountStorage). Password signup needs the token while no user
+// exists. Magic-link signup cannot present a token, so the first admin signs up with a password.
+// OnFirstUser grants the admin role.
 type Config struct {
 	// SetupToken is the operator-supplied token. When empty a random one is
 	// generated at startup (if no user exists yet) and logged once.

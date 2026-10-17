@@ -12,8 +12,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-// postgres_device.go: DeviceAuthorizationStorage (RFC 8628 device grant) and
-// RegistrationTokenStorage (initial access tokens) over migration 0019.
+// postgres_device.go: device grant and initial access token storage over migration 0019.
 
 var (
 	_ theauth.DeviceAuthorizationStorage = (*Store)(nil)
@@ -26,7 +25,6 @@ interval_seconds, last_poll_at, created_at, expires_at, decided_at`
 const regTokenCols = `id, token_hash, token_prefix, label, organization_id, scopes, grant_types, max_uses, uses,
 created_by, created_at, expires_at, last_used_at, revoked_at`
 
-// InsertDeviceAuthorization satisfies DeviceAuthorizationStorage.
 func (s *Store) InsertDeviceAuthorization(ctx context.Context, d theauth.DeviceAuthorization) error {
 	scope, err := encodeList(d.Scope)
 	if err != nil {
@@ -82,7 +80,6 @@ func scanDevAuth(r pgx.Row) (theauth.DeviceAuthorization, error) {
 	}, nil
 }
 
-// DeviceAuthorizationByDeviceCodeHash satisfies DeviceAuthorizationStorage.
 func (s *Store) DeviceAuthorizationByDeviceCodeHash(ctx context.Context, hash []byte) (*theauth.DeviceAuthorization, error) {
 	d, err := scanDevAuth(s.pool.QueryRow(ctx,
 		`SELECT `+devAuthCols+` FROM device_authorizations WHERE device_code_hash = $1`, hash))
@@ -92,7 +89,6 @@ func (s *Store) DeviceAuthorizationByDeviceCodeHash(ctx context.Context, hash []
 	return &d, nil
 }
 
-// DeviceAuthorizationByUserCodeHash satisfies DeviceAuthorizationStorage.
 func (s *Store) DeviceAuthorizationByUserCodeHash(ctx context.Context, hash []byte) (*theauth.DeviceAuthorization, error) {
 	d, err := scanDevAuth(s.pool.QueryRow(ctx,
 		`SELECT `+devAuthCols+` FROM device_authorizations WHERE user_code_hash = $1`, hash))
@@ -102,7 +98,6 @@ func (s *Store) DeviceAuthorizationByUserCodeHash(ctx context.Context, hash []by
 	return &d, nil
 }
 
-// DecideDeviceAuthorization satisfies DeviceAuthorizationStorage.
 func (s *Store) DecideDeviceAuthorization(ctx context.Context, id theauth.ULID, status string, userID theauth.ULID, now time.Time) (bool, error) {
 	tag, err := s.pool.Exec(ctx, `UPDATE device_authorizations
 SET status = $2, user_id = $3, decided_at = $4
@@ -113,7 +108,6 @@ WHERE id = $1 AND status = 'pending' AND expires_at > $4`, ulidToPgUUID(id), sta
 	return tag.RowsAffected() == 1, nil
 }
 
-// RecordDeviceAuthorizationPoll satisfies DeviceAuthorizationStorage.
 func (s *Store) RecordDeviceAuthorizationPoll(ctx context.Context, id theauth.ULID, polledAt time.Time, intervalSeconds int) error {
 	tag, err := s.pool.Exec(ctx,
 		`UPDATE device_authorizations SET last_poll_at = $2, interval_seconds = $3 WHERE id = $1`,
@@ -127,7 +121,6 @@ func (s *Store) RecordDeviceAuthorizationPoll(ctx context.Context, id theauth.UL
 	return nil
 }
 
-// ConsumeDeviceAuthorization satisfies DeviceAuthorizationStorage.
 func (s *Store) ConsumeDeviceAuthorization(ctx context.Context, id theauth.ULID, now time.Time) (bool, error) {
 	tag, err := s.pool.Exec(ctx, `UPDATE device_authorizations SET status = 'consumed'
 WHERE id = $1 AND status = 'approved' AND expires_at > $2`, ulidToPgUUID(id), now)
@@ -137,7 +130,6 @@ WHERE id = $1 AND status = 'approved' AND expires_at > $2`, ulidToPgUUID(id), no
 	return tag.RowsAffected() == 1, nil
 }
 
-// DeleteExpiredDeviceAuthorizations satisfies DeviceAuthorizationStorage.
 func (s *Store) DeleteExpiredDeviceAuthorizations(ctx context.Context, before time.Time) (int64, error) {
 	tag, err := s.pool.Exec(ctx, `DELETE FROM device_authorizations WHERE expires_at < $1`, before)
 	if err != nil {
@@ -146,7 +138,6 @@ func (s *Store) DeleteExpiredDeviceAuthorizations(ctx context.Context, before ti
 	return tag.RowsAffected(), nil
 }
 
-// InsertRegistrationToken satisfies RegistrationTokenStorage.
 func (s *Store) InsertRegistrationToken(ctx context.Context, t theauth.RegistrationToken) error {
 	scopes, err := encodeList(t.Scopes)
 	if err != nil {
@@ -199,7 +190,6 @@ func scanRegToken(r pgx.Row) (theauth.RegistrationToken, error) {
 	}, nil
 }
 
-// RegistrationTokenByHash satisfies RegistrationTokenStorage.
 func (s *Store) RegistrationTokenByHash(ctx context.Context, hash []byte) (*theauth.RegistrationToken, error) {
 	t, err := scanRegToken(s.pool.QueryRow(ctx, `SELECT `+regTokenCols+` FROM registration_tokens WHERE token_hash = $1`, hash))
 	if err != nil {
@@ -208,7 +198,6 @@ func (s *Store) RegistrationTokenByHash(ctx context.Context, hash []byte) (*thea
 	return &t, nil
 }
 
-// RegistrationTokenByID satisfies RegistrationTokenStorage.
 func (s *Store) RegistrationTokenByID(ctx context.Context, id theauth.ULID) (*theauth.RegistrationToken, error) {
 	t, err := scanRegToken(s.pool.QueryRow(ctx, `SELECT `+regTokenCols+` FROM registration_tokens WHERE id = $1`, ulidToPgUUID(id)))
 	if err != nil {
@@ -217,7 +206,6 @@ func (s *Store) RegistrationTokenByID(ctx context.Context, id theauth.ULID) (*th
 	return &t, nil
 }
 
-// ListRegistrationTokens satisfies RegistrationTokenStorage.
 func (s *Store) ListRegistrationTokens(ctx context.Context, orgID *theauth.ULID) ([]theauth.RegistrationToken, error) {
 	q := `SELECT ` + regTokenCols + ` FROM registration_tokens`
 	args := []any{}
@@ -242,7 +230,6 @@ func (s *Store) ListRegistrationTokens(ctx context.Context, orgID *theauth.ULID)
 	return out, rows.Err()
 }
 
-// RevokeRegistrationToken satisfies RegistrationTokenStorage.
 func (s *Store) RevokeRegistrationToken(ctx context.Context, id theauth.ULID, at time.Time) (bool, error) {
 	tag, err := s.pool.Exec(ctx,
 		`UPDATE registration_tokens SET revoked_at = $2 WHERE id = $1 AND revoked_at IS NULL`, ulidToPgUUID(id), at)
@@ -252,7 +239,6 @@ func (s *Store) RevokeRegistrationToken(ctx context.Context, id theauth.ULID, at
 	return tag.RowsAffected() == 1, nil
 }
 
-// RedeemRegistrationToken satisfies RegistrationTokenStorage.
 func (s *Store) RedeemRegistrationToken(ctx context.Context, id theauth.ULID, now time.Time) (bool, error) {
 	tag, err := s.pool.Exec(ctx, `UPDATE registration_tokens SET uses = uses + 1, last_used_at = $2
 WHERE id = $1 AND revoked_at IS NULL AND expires_at > $2 AND uses < max_uses`, ulidToPgUUID(id), now)
@@ -262,7 +248,6 @@ WHERE id = $1 AND revoked_at IS NULL AND expires_at > $2 AND uses < max_uses`, u
 	return tag.RowsAffected() == 1, nil
 }
 
-// RefundRegistrationToken satisfies RegistrationTokenStorage.
 func (s *Store) RefundRegistrationToken(ctx context.Context, id theauth.ULID) error {
 	if _, err := s.pool.Exec(ctx,
 		`UPDATE registration_tokens SET uses = uses - 1 WHERE id = $1 AND uses > 0`, ulidToPgUUID(id)); err != nil {

@@ -14,12 +14,10 @@ import (
 	"github.com/glincker/theauth-go/v2/internal/ulid"
 )
 
-// token_v34.go: v2.0 phase 3 + 4 grants. Adds the OAuth 2.0
-// client_credentials grant (phase 3) and the RFC 8693 token-exchange
-// grant (phase 4) to the existing /oauth/token multiplexer.
+// token_v34.go implements the phase 3 and 4 grants: client_credentials for agents and RFC 8693
+// token exchange, on the same /oauth/token endpoint.
 
-// TokenExchangeRequest is the parsed form-encoded body of a
-// token-exchange call. Field names map 1:1 onto the RFC 8693 wire form.
+// TokenExchangeRequest is the parsed form body of a token exchange call, with RFC 8693 field names.
 type TokenExchangeRequest struct {
 	ClientID           string
 	ClientSecret       string
@@ -32,22 +30,17 @@ type TokenExchangeRequest struct {
 	Audience           string
 	Scope              []string
 
-	// DPoPProof, HTTPMethod and HTTPURL carry the request's DPoP header and
-	// the method/URL it must be bound to. Required when the subject token is
-	// DPoP-bound (cnf.jkt), and used to bind the new token otherwise.
+	// DPoPProof, HTTPMethod and HTTPURL carry the DPoP header and the method and URL it must bind to.
+	// They are required when the subject token is DPoP bound.
 	DPoPProof  string
 	HTTPMethod string
 	HTTPURL    string
 }
 
-// ClientCredentialsToken mints a self-token for the authenticated agent
-// client. The token's sub is "agent:<id>"; aud is bound to the resource
-// parameter (RFC 8707); scope is intersected with both the agent's
-// registered scope set and the resource catalog. Suspended / revoked
-// agents fail with ErrAgentInactive (mapped to access_denied at the
-// wire).
-//
-// Audit emission: agent.token_minted on success.
+// ClientCredentialsToken mints a self-token for an authenticated agent client. sub is "agent:<id>",
+// aud is bound to the resource (RFC 8707), and scope is the intersection of the agent's scopes and
+// the resource catalog. Suspended or revoked agents fail with ErrAgentInactive (access_denied on
+// the wire). It emits agent.token_minted on success.
 func (s *Service) ClientCredentialsToken(ctx context.Context, req TokenRequest) (resp TokenResponse, err error) {
 	if s == nil {
 		return TokenResponse{}, errors.New("theauth: authorization server not configured")
@@ -69,16 +62,14 @@ func (s *Service) ClientCredentialsToken(ctx context.Context, req TokenRequest) 
 	if agent.Status != models.AgentStatusActive {
 		return TokenResponse{}, models.ErrAgentInactive
 	}
-	// ClientCompat: OptionalResource and PathAudience apply here exactly as
-	// on the authorization code grant. audience is the canonical identifier
-	// whenever a compat switch resolved the request.
+	// OptionalResource and PathAudience apply here as on the authorization code grant. audience is the
+	// canonical identifier.
 	resource, audience, rerr := s.resolveResource(req.Resource)
 	if rerr != nil {
 		return TokenResponse{}, rerr
 	}
-	// Scope narrowing: request must be a subset of the agent's
-	// permitted scope set AND the resource catalog. Empty request means
-	// "issue the intersection".
+	// The requested scope must be a subset of the agent's permitted scopes and the resource catalog.
+	// An empty request means the intersection.
 	registered := scopeSplit(client.Scope)
 	if len(registered) == 0 {
 		registered = agent.Scope
@@ -144,20 +135,10 @@ func (s *Service) ClientCredentialsToken(ctx context.Context, req TokenRequest) 
 	}, nil
 }
 
-// ExchangeToken implements RFC 8693 token exchange. The authenticated
-// client (an agent's OAuth client) presents:
-//   - subject_token: a JWT issued by this AS naming the principal the
-//     mint is acting on behalf of. The principal may be a user or
-//     another agent (sub-delegation). Required.
-//   - actor_token: the agent's own self-token (issued via the
-//     client_credentials grant). Optional but recommended; when present
-//     its sub MUST match "agent:<id>" of the authenticated client.
-//   - resource: the RFC 8707 binding. MUST match the subject token's aud.
-//   - scope: optional narrowing. Default to the intersection of
-//     (subject_scope, delegation.scope_grant).
-//
-// The eleven step validation in spec section 7 is enforced; see the
-// individual sub-helpers below.
+// ExchangeToken implements RFC 8693 token exchange. The authenticated agent client presents a
+// subject_token (a JWT this AS issued, naming the principal acted for; required), an optional
+// actor_token that must name this agent, the resource (which must match the subject aud), and an
+// optional narrowed scope. The validation steps of spec section 7 run in order.
 func (s *Service) ExchangeToken(ctx context.Context, req TokenExchangeRequest) (resp TokenResponse, err error) {
 	if s == nil {
 		return TokenResponse{}, errors.New("theauth: authorization server not configured")
@@ -170,9 +151,8 @@ func (s *Service) ExchangeToken(ctx context.Context, req TokenExchangeRequest) (
 	}
 	ctx, span, timer := s.startTokenSpan(ctx, "token-exchange")
 	defer func() { s.finishTokenSpan(span, timer, "token-exchange", err) }()
-	// Step 1: authenticate the requesting client (the agent).
-	// Token exchange does not use JWT client assertions in the current spec;
-	// it uses the existing client_secret path. AuthenticateClient suffices.
+	// Step 1: authenticate the requesting agent. Token exchange uses the client_secret path, not JWT
+	// client assertions.
 	var client *models.OAuthClient
 	client, err = s.AuthenticateClient(ctx, req.ClientID, req.ClientSecret)
 	if err != nil {
@@ -185,7 +165,7 @@ func (s *Service) ExchangeToken(ctx context.Context, req TokenExchangeRequest) (
 	if requestingAgent.Status != models.AgentStatusActive {
 		return TokenResponse{}, models.ErrAgentInactive
 	}
-	// Steps 2 + 3: parse + verify subject token, extract claims.
+	// Steps 2 and 3: parse and verify the subject token, then extract its claims.
 	if req.SubjectToken == "" {
 		return TokenResponse{}, models.ErrOAuthInvalidRequest
 	}
@@ -200,14 +180,12 @@ func (s *Service) ExchangeToken(ctx context.Context, req TokenExchangeRequest) (
 	if subjectClaims.Iss != s.Cfg.Issuer {
 		return TokenResponse{}, models.ErrSubjectTokenInvalid
 	}
-	// A subject token revoked via /oauth/revoke (opt-in denylist) cannot be
-	// exchanged for a fresh one.
+	// A subject token revoked through /oauth/revoke cannot be exchanged for a fresh one.
 	if s.accessJTIRevoked(ctx, subjectClaims.Jti) {
 		return TokenResponse{}, models.ErrSubjectTokenInvalid
 	}
-	// RFC 9449: a DPoP-bound subject token may only be exchanged by the
-	// holder of the bound key. The new token inherits the binding, so the
-	// exchange can never launder a sender-constrained token into a bearer.
+	// RFC 9449: a DPoP-bound subject token may only be exchanged by the key holder. The new token
+	// keeps the binding, so an exchange can never turn a sender-constrained token into a bearer token.
 	subjectJKT := cnfJKT(subjectClaims.Extra)
 	proofJKT, perr := s.dpopThumbprintForRequest(TokenRequest{
 		ClientID:   client.ClientID,
@@ -221,9 +199,8 @@ func (s *Service) ExchangeToken(ctx context.Context, req TokenExchangeRequest) (
 	if subjectJKT != "" && (proofJKT == "" || !jktEqual(proofJKT, subjectJKT)) {
 		return TokenResponse{}, fmt.Errorf("%w: subject token is DPoP-bound, matching proof required", ErrDPoPInvalid)
 	}
-	// Step 4: validate optional actor_token; when supplied, must name
-	// this agent (defence-in-depth against a stolen client credential
-	// being used in a different agent context).
+	// Step 4: an actor_token must name this agent. This blocks a stolen client credential from being
+	// used in another agent's context.
 	if req.ActorToken != "" {
 		if req.ActorTokenType != "" && req.ActorTokenType != models.TokenTypeAccessToken {
 			return TokenResponse{}, models.ErrOAuthInvalidRequest
@@ -237,12 +214,9 @@ func (s *Service) ExchangeToken(ctx context.Context, req TokenExchangeRequest) (
 			return TokenResponse{}, models.ErrActorTokenInvalid
 		}
 	}
-	// Step 5: resource binding. RFC 8707 + 8693 require the resource
-	// parameter to equal the subject token's aud so audience confusion
-	// is impossible across exchange.
-	// ClientCompat.PathAudience lets the caller name a sub-path of the
-	// configured resource; it is compared to the subject token aud by its
-	// canonical identifier. Exact matches keep the pre-existing behavior.
+	// Step 5: the resource must equal the subject token aud (RFC 8707 and 8693), which prevents
+	// audience confusion. PathAudience compares canonical identifiers; exact matches keep the old
+	// behavior.
 	resourceID := req.Resource
 	if resourceID == "" {
 		resourceID = subjectClaims.Aud
@@ -255,25 +229,21 @@ func (s *Service) ExchangeToken(ctx context.Context, req TokenExchangeRequest) (
 		return TokenResponse{}, models.ErrOAuthInvalidResource
 	}
 	resourceID = resolvedAud
-	// Step 5b (RFC 8693 section 2.1): when the caller specifies an
-	// audience parameter, it must name a known resource. This prevents
-	// audience-confusion attacks where the caller requests a token for a
-	// resource the AS does not manage.
+	// Step 5b (RFC 8693 section 2.1): a requested audience must name a configured resource, so callers
+	// cannot get tokens for unmanaged resources.
 	if req.Audience != "" {
 		if _, _, aerr := s.resolveResource(req.Audience); aerr != nil {
 			return TokenResponse{}, models.ErrOAuthInvalidResource
 		}
 	}
-	// Step 6: resolve the principal (root subject of the chain) and
-	// walk the existing actor chain to verify each link is still
-	// active.
+	// Step 6: resolve the root principal and walk the existing actor chain to confirm every link is
+	// still active.
 	root, existingChain, err := s.resolveSubjectPrincipal(ctx, subjectClaims)
 	if err != nil {
 		return TokenResponse{}, err
 	}
 	// Step 7: chain depth. The new chain prepends the requesting agent.
-	// MaxActorChainDepth from JWTBearerConfig takes precedence when set;
-	// otherwise fall back to AgentPolicy.MaxChainDepth.
+	// JWTBearerConfig.MaxActorChainDepth wins when set.
 	maxDepth := s.AgentPolicy.MaxChainDepth
 	if s.Cfg.JWTBearer != nil && s.Cfg.JWTBearer.MaxActorChainDepth > 0 {
 		maxDepth = s.Cfg.JWTBearer.MaxActorChainDepth
@@ -282,9 +252,8 @@ func (s *Service) ExchangeToken(ctx context.Context, req TokenExchangeRequest) (
 	if newDepth > maxDepth {
 		return TokenResponse{}, models.ErrChainDepthExceeded
 	}
-	// Step 8: locate delegation_grants for (root_user, requesting_agent,
-	// resource). Sub-delegation (subject is itself an agent token) still
-	// requires the requesting agent to hold a grant from the root user.
+	// Step 8: find the delegation grant for (root user, requesting agent, resource). Sub-delegation
+	// still needs such a grant.
 	grant, err := s.Storage.DelegationGrantByUserAgentResource(ctx, root, requestingAgent.ID, resourceID)
 	if err != nil {
 		return TokenResponse{}, models.ErrDelegationNotFound
@@ -292,8 +261,7 @@ func (s *Service) ExchangeToken(ctx context.Context, req TokenExchangeRequest) (
 	if !delegation.Active(grant, now) {
 		return TokenResponse{}, models.ErrDelegationRevoked
 	}
-	// Step 9: scope narrowing. Requested must be subset of subject's
-	// scope AND the delegation's scope_grant.
+	// Step 9: scope narrowing. The request must be a subset of the subject scope and the delegation scope grant.
 	subjectScope := scopeSplit(subjectClaims.Scope)
 	finalScope, ok := delegation.NarrowScope(req.Scope, subjectScope, grant.Scope)
 	if !ok || len(finalScope) == 0 {
@@ -304,8 +272,7 @@ func (s *Service) ExchangeToken(ctx context.Context, req TokenExchangeRequest) (
 		return TokenResponse{}, gerr
 	}
 	finalScope = gated.Scopes
-	// Step 10: duration tightening. exp = strict-min of every policy
-	// bound.
+	// Step 10: duration tightening. exp is the earliest of every policy bound.
 	subjectExp := time.Unix(subjectClaims.Exp, 0)
 	policyExp := chain.TightenDuration(
 		subjectExp,
@@ -368,25 +335,15 @@ func (s *Service) ExchangeToken(ctx context.Context, req TokenExchangeRequest) (
 	}, nil
 }
 
-// resolveSubjectPrincipal walks the subject token's claims and returns
-// the root user ULID plus the existing actor chain (innermost-first).
-// The subject token's sub is either a user ULID (direct user
-// delegation) or "agent:<id>" (sub-delegation: an agent presenting
-// another agent's token, which the spec forbids because the root
-// subject MUST be a user). Returns ErrSubjectTokenInvalid if the chain
-// has no user at the root.
-//
-// Every existing actor in the chain MUST currently be active; a
-// suspended or revoked agent in the chain rejects the exchange
-// immediately.
+// resolveSubjectPrincipal walks the subject token's claims and returns the root user and the
+// existing actor chain, innermost first. The root must be a user, since no user authority stands
+// behind an agent-rooted token. Every actor in the chain must be active.
 func (s *Service) resolveSubjectPrincipal(ctx context.Context, subjectClaims jwt.Claims) (models.ULID, *chain.Actor, error) {
 	if subjectClaims.Sub == "" {
 		return models.ULID{}, nil, models.ErrSubjectTokenInvalid
 	}
 	if strings.HasPrefix(subjectClaims.Sub, models.AgentSubjectPrefix) {
-		// Root subject must be a user; agent-rooted tokens cannot seed
-		// a delegation chain because there is no user authority behind
-		// them.
+		// An agent-rooted token cannot seed a delegation chain, because no user authority stands behind it.
 		return models.ULID{}, nil, models.ErrSubjectTokenInvalid
 	}
 	root, err := parseULID(subjectClaims.Sub)
@@ -401,9 +358,7 @@ func (s *Service) resolveSubjectPrincipal(ctx context.Context, subjectClaims jwt
 			return models.ULID{}, nil, models.ErrSubjectTokenInvalid
 		}
 		if ag == nil {
-			// Non-agent actor: only "agent:<id>" actors are emitted by
-			// this AS; anything else means a forged or non-AS-issued
-			// token.
+			// Only "agent:<id>" actors are emitted by this AS. Anything else means a forged or foreign token.
 			return models.ULID{}, nil, models.ErrSubjectTokenInvalid
 		}
 		if ag.Status != models.AgentStatusActive {
@@ -413,15 +368,8 @@ func (s *Service) resolveSubjectPrincipal(ctx context.Context, subjectClaims jwt
 	return root, existing, nil
 }
 
-// narrowDelegatedScope + delegationActive previously lived here as
-// duplicates of the root service_delegation.go helpers. PR C of the
-// 2026-06 architecture reorg consolidated both into
-// internal/delegation; this file now imports delegation.NarrowScope and
-// delegation.Active so the helpers exist in exactly one place.
-
-// actorFromClaims reads the "act" extra claim from a JWT and returns
-// the chain.Actor pointer (nil if not present or malformed). The
-// on-the-wire shape is the RFC 8693 {sub, act?} nesting.
+// actorFromClaims reads the act claim from a JWT and returns the chain actor, or nil when absent or
+// malformed.
 func actorFromClaims(c jwt.Claims) *chain.Actor {
 	raw, ok := c.Extra["act"]
 	if !ok || raw == nil {
@@ -446,8 +394,7 @@ func actorFromAny(raw any) *chain.Actor {
 	return out
 }
 
-// actorClaimToMap renders an Actor chain as the {sub, act?} JSON shape
-// the JWT marshaller expects in Claims.Extra.
+// actorClaimToMap renders an actor chain as the {sub, act} shape the JWT marshaller expects.
 func actorClaimToMap(a *chain.Actor) map[string]any {
 	if a == nil {
 		return nil

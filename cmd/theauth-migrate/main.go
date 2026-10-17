@@ -1,15 +1,4 @@
-// theauth-migrate is a CLI tool that converts AWS Cognito and Auth0 user
-// exports to theauth-go storage rows.
-//
-// Usage:
-//
-//	theauth-migrate cognito  --export PATH [--output PATH]
-//	theauth-migrate cognito  --input PATH --apply --storage [memory|postgres] [--dsn DSN] [--dry-run]
-//	theauth-migrate auth0    --export PATH [--output PATH] [--force-password-reset]
-//	theauth-migrate auth0    --input PATH --apply --storage [memory|postgres] [--dsn DSN] [--dry-run]
-//	theauth-migrate keycloak --export PATH [--output PATH] [--force-password-reset]
-//	theauth-migrate keycloak --input PATH --apply --storage [memory|postgres] [--dsn DSN] [--dry-run]
-//	theauth-migrate validate --input PATH
+// Command theauth-migrate converts AWS Cognito, Auth0 and Keycloak user exports into theauth-go storage rows.
 package main
 
 import (

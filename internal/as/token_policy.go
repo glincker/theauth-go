@@ -13,39 +13,29 @@ import (
 	"github.com/glincker/theauth-go/v2/internal/ulid"
 )
 
-// token_policy.go: per-client access token policy. A client can pick the JWS
-// algorithm its JWT access tokens are signed with (so its resource servers
-// can verify them with whatever their stack supports) and can ask for opaque
-// reference tokens instead of JWTs. Both are opt-in: with no TokenPolicy
-// configured every client keeps getting EdDSA JWTs.
+// token_policy.go holds the per-client access token policy: a client can pick the JWS algorithm of
+// its JWT access tokens, or ask for opaque reference tokens. Both are opt-in; without a TokenPolicy
+// every client gets EdDSA JWTs.
 
 // TokenPolicyConfig enables the per-client token policy.
 type TokenPolicyConfig struct {
-	// SigningAlgs lists the algorithms, beyond Config.SigningAlg, a client
-	// may select with access_token_signed_response_alg (ES256, RS256 or
-	// EdDSA). Keys for an algorithm are minted the first time a client
-	// needs them.
+	// SigningAlgs lists the algorithms beyond Config.SigningAlg that a client may select (ES256, RS256
+	// or EdDSA). Keys are minted on first use.
 	SigningAlgs []string
 
-	// DefaultAccessTokenFormat is the format used for clients that do not
-	// choose one: models.AccessTokenFormatJWT (default) or
-	// models.AccessTokenFormatOpaque. Opaque needs a storage that
-	// implements OpaqueTokenStorage.
+	// DefaultAccessTokenFormat is the format for clients that do not choose one: JWT (default) or
+	// opaque. Opaque needs OpaqueTokenStorage.
 	DefaultAccessTokenFormat string
 }
 
-// OpaqueTokenStorage is the optional persistence extension behind opaque
-// access tokens. Only SHA-256 hashes of the tokens are stored.
+// OpaqueTokenStorage is the optional persistence behind opaque access tokens. Only SHA-256 hashes are stored.
 type OpaqueTokenStorage interface {
-	// InsertOpaqueAccessToken stores a newly issued token record.
 	InsertOpaqueAccessToken(ctx context.Context, t models.OpaqueAccessToken) error
 
-	// OpaqueAccessTokenByHash looks a record up by token hash. It returns
-	// models.ErrStorageNotFound on a miss.
+	// OpaqueAccessTokenByHash returns ErrStorageNotFound on a miss.
 	OpaqueAccessTokenByHash(ctx context.Context, hash []byte) (*models.OpaqueAccessToken, error)
 
-	// RevokeOpaqueAccessToken marks the record revoked. Revoking an unknown
-	// or already revoked token is not an error.
+	// RevokeOpaqueAccessToken marks the record revoked. Revoking an unknown or revoked token is not an error.
 	RevokeOpaqueAccessToken(ctx context.Context, hash []byte) error
 }
 
@@ -69,14 +59,12 @@ func validateTokenPolicy(cfg *Config) error {
 	return nil
 }
 
-// opaqueStore returns the opaque token storage when the backend has it.
 func (s *Service) opaqueStore() (OpaqueTokenStorage, bool) {
 	st, ok := s.Storage.(OpaqueTokenStorage)
 	return st, ok
 }
 
-// OpaqueTokensAvailable reports whether the policy is on and the storage can
-// back reference tokens.
+// OpaqueTokensAvailable reports whether the policy is on and the storage can back reference tokens.
 func (s *Service) OpaqueTokensAvailable() bool {
 	if s == nil || s.Cfg.TokenPolicy == nil {
 		return false

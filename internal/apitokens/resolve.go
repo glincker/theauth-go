@@ -4,10 +4,8 @@ import (
 	"net/http"
 )
 
-// AuthenticatePrincipal resolves the request's session or API bearer token
-// into a Principal with its current abilities, writing the 401 or 500
-// response itself when it cannot. The returned request carries the Principal
-// and user in its context. Needs Config.APITokens.
+// AuthenticatePrincipal resolves the session or bearer token into a Principal with current
+// abilities. It writes the 401 or 500 itself on failure.
 func (s *Service) AuthenticatePrincipal(w http.ResponseWriter, r *http.Request) (*http.Request, *Principal, bool) {
 	p, ok := s.principalFromRequest(w, r)
 	if !ok {

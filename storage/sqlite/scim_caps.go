@@ -9,8 +9,7 @@ import (
 	"github.com/glincker/theauth-go/v2"
 )
 
-// scim_caps.go: SCIMStorage over migration 0015. Tokens are stored as the
-// caller's sha256 hash only; the adapter never sees the plaintext.
+// scim_caps.go: SCIMStorage over migration 0015. Only the caller's sha256 token hash is stored.
 
 var _ theauth.SCIMStorage = (*Store)(nil)
 

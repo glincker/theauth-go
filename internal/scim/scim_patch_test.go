@@ -12,7 +12,7 @@ import (
 )
 
 // scim_patch_test.go closes the SCIM PATCH branch matrix called out in the
-// 2026-06-20 reliability audit (section 2: SCIM PATCH operations). The
+// scim_patch_test.go covers the SCIM PATCH branch matrix. The
 // happy-path test in handlers_scim_test.go exercises one attribute path; this
 // file enumerates every attribute path supported by applyUserSet /
 // applyUserRemove and every branch of applySCIMGroupPatch. The unexported

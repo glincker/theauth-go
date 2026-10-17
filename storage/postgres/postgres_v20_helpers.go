@@ -7,18 +7,14 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-// postgres_v20_helpers.go: scan helpers + small adapters extracted from
-// postgres_v20.go to keep that file under the 500 LOC budget. No logic
-// belongs here that touches a pool; this file is pure mapping.
+// postgres_v20_helpers.go: scan helpers and pure mapping extracted from postgres_v20.go for the LOC budget.
 
 // pgRowScanner is the subset of pgx.Row / pgx.Rows used by the scan helpers.
 type pgRowScanner interface {
 	Scan(dest ...any) error
 }
 
-// nilToDefault returns def when s is empty, otherwise s. Used at INSERT time
-// so a zero-valued field still satisfies the migration's NOT NULL DEFAULT
-// constraint when the caller omits it.
+// nilToDefault returns def when s is empty, so the NOT NULL DEFAULT column is satisfied on INSERT.
 func nilToDefault(s, def string) string {
 	if s == "" {
 		return def
@@ -26,8 +22,7 @@ func nilToDefault(s, def string) string {
 	return s
 }
 
-// nullableBytes returns nil for an empty slice so pgx encodes NULL rather
-// than an empty bytea. Caller passes the result as an any argument.
+// nullableBytes returns nil for an empty slice so pgx writes NULL rather than an empty bytea.
 func nullableBytes(b []byte) any {
 	if len(b) == 0 {
 		return nil
@@ -35,11 +30,8 @@ func nullableBytes(b []byte) any {
 	return b
 }
 
-// emptyIfNilStrings returns an empty slice when s is nil so pgx encodes an
-// empty text[] rather than SQL NULL. Used at INSERT/UPDATE time for columns
-// declared text[] NOT NULL with a column default of '{}'. A nil Go slice
-// passes through pgx as SQL NULL and violates the NOT NULL constraint even
-// when a column default is present, because explicit NULL overrides defaults.
+// emptyIfNilStrings returns an empty slice for nil so pgx writes '{}' rather than SQL NULL, which
+// would violate NOT NULL even with a column default.
 func emptyIfNilStrings(s []string) []string {
 	if s == nil {
 		return []string{}
@@ -47,10 +39,8 @@ func emptyIfNilStrings(s []string) []string {
 	return s
 }
 
-// clientOwnerKindFor derives the owner_kind column value from the owner
-// pointer triplet plus the anonymous flag. Falls back to "anonymous" when
-// no owner is set; bearer-gated DCR clients without an explicit owner land
-// in this bucket so the migration's CHECK constraint is satisfied.
+// clientOwnerKindFor derives owner_kind from the owner fields. Clients with no owner fall into
+// "anonymous" to satisfy the CHECK constraint.
 func clientOwnerKindFor(c theauth.OAuthClient) string {
 	if c.AnonymousRegistered {
 		return theauth.ClientOwnerKindAnonymous
@@ -150,8 +140,7 @@ func scanJWKSKey(row pgRowScanner) (theauth.JWKSKey, error) {
 	}, nil
 }
 
-// authTimeToTs maps the zero time to SQL NULL: a grant that recorded no
-// authentication time stores none.
+// authTimeToTs maps the zero time to SQL NULL (no authentication time recorded).
 func authTimeToTs(t time.Time) pgtype.Timestamptz {
 	if t.IsZero() {
 		return pgtype.Timestamptz{}

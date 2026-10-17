@@ -12,22 +12,7 @@ import (
 	internalscim "github.com/glincker/theauth-go/v2/internal/scim"
 )
 
-// Enterprise forwarders (SCIM tokens, orgs, RBAC, delegations)
-
-// PR G (2026-06-21) merged the previous
-// service_scim.go, service_organizations.go, service_rbac.go, and
-// service_delegation.go files here. Every method below is a one-line
-// thunk over the matching internal/<flow>.Service; the substantive
-// implementations live in those packages. No behaviour change;
-// signatures are byte-stable with the v2.0 release.
-
-// SCIM tokens
-
-// CreateSCIMToken mints a fresh 256-bit token, stores its sha256 hash,
-// and returns the plaintext to the caller. The plaintext is the only
-// point at which it leaves the library; subsequent reads only ever see
-// the hash. Forwards to scimSvc.CreateToken, mapping
-// internalscim.ErrSCIMDisabled to the legacy root error string.
+// CreateSCIMToken mints a 256-bit token and returns the plaintext once. Only its sha256 hash is stored.
 func (a *TheAuth) CreateSCIMToken(ctx context.Context, orgID ULID, name string) (string, SCIMToken, error) {
 	token, rec, err := a.scimSvc.CreateToken(ctx, orgID, name)
 	if errors.Is(err, internalscim.ErrSCIMDisabled) {
@@ -36,32 +21,26 @@ func (a *TheAuth) CreateSCIMToken(ctx context.Context, orgID ULID, name string) 
 	return token, rec, err
 }
 
-// RevokeSCIMToken marks the named token as revoked. Revoked tokens still
-// resolve via SCIMTokenByHash but the middleware refuses them. Forwards
-// to scimSvc.RevokeToken.
+// RevokeSCIMToken marks the token revoked. Revoked tokens still resolve by hash, but the middleware
+// refuses them.
 func (a *TheAuth) RevokeSCIMToken(ctx context.Context, id ULID) error {
 	return a.scimSvc.RevokeToken(ctx, id)
 }
 
-// ListSCIMTokens returns every token (revoked or not) for the supplied
-// org. Forwards to scimSvc.ListTokens.
+// ListSCIMTokens returns every token for the org, revoked or not.
 func (a *TheAuth) ListSCIMTokens(ctx context.Context, orgID ULID) ([]SCIMToken, error) {
 	return a.scimSvc.ListTokens(ctx, orgID)
 }
 
-// SCIMAuthResult is the value returned by AuthenticateSCIMToken. Bundling
-// OrgID and TokenID avoids the second SCIMTokenByHash storage call the
-// middleware previously performed after a successful authentication
-// (perf re-audit 2026-06-21, item 1).
+// SCIMAuthResult is returned by AuthenticateSCIMToken. Bundling OrgID and TokenID avoids a second
+// storage lookup.
 type SCIMAuthResult struct {
 	OrgID   ULID
 	TokenID ULID
 }
 
-// AuthenticateSCIMToken is the entry point invoked by the SCIM bearer
-// middleware on every request. Returns OrgID + TokenID in a single
-// storage round-trip, or an error on failure. Touches last_used_at
-// asynchronously on success. Forwards to scimSvc.Authenticate.
+// AuthenticateSCIMToken is the entry point of the SCIM bearer middleware, run on every request. It
+// resolves the org and token in one storage round trip and touches last_used_at asynchronously.
 func (a *TheAuth) AuthenticateSCIMToken(ctx context.Context, presented string) (SCIMAuthResult, error) {
 	res, err := a.scimSvc.Authenticate(ctx, presented)
 	if err != nil {
@@ -70,13 +49,8 @@ func (a *TheAuth) AuthenticateSCIMToken(ctx context.Context, presented string) (
 	return SCIMAuthResult{OrgID: res.OrganizationID, TokenID: res.TokenID}, nil
 }
 
-// Organizations + membership
-
-// CreateOrganization writes a new org row and adds the supplied user as
-// its owner. Slug is lowercased and validated against the slug rules in
-// the internal package; the storage layer enforces uniqueness. Forwards
-// to orgsSvc.Create, mapping organizations.ErrOrganizationsDisabled to
-// the legacy root error string.
+// CreateOrganization writes a new org and makes the user its owner. The slug is lowercased and
+// validated; storage enforces uniqueness.
 func (a *TheAuth) CreateOrganization(ctx context.Context, name, slug string, ownerUserID ULID) (Organization, error) {
 	org, err := a.orgsSvc.Create(ctx, name, slug, ownerUserID)
 	if errors.Is(err, organizations.ErrOrganizationsDisabled) {
@@ -85,54 +59,40 @@ func (a *TheAuth) CreateOrganization(ctx context.Context, name, slug string, own
 	return org, err
 }
 
-// OrganizationBySlug looks up an organization by URL-safe slug. Forwards
-// to orgsSvc.BySlug.
+// OrganizationBySlug looks up an organization by URL-safe slug.
 func (a *TheAuth) OrganizationBySlug(ctx context.Context, slug string) (*Organization, error) {
 	return a.orgsSvc.BySlug(ctx, slug)
 }
 
-// OrganizationByID looks up an organization by ULID. Forwards to
-// orgsSvc.ByID.
+// OrganizationByID looks up an organization by ULID.
 func (a *TheAuth) OrganizationByID(ctx context.Context, id ULID) (*Organization, error) {
 	return a.orgsSvc.ByID(ctx, id)
 }
 
-// AddOrganizationMember adds (or updates the role of) a user inside an
-// organization. Roles must be one of "owner", "admin", "member".
-//
-// security audit M2 (2026-06-20): when the upsert would demote the last
-// remaining owner (role != owner on a user who is currently the sole
-// owner), the call is rejected with ErrLastOwner. Forwards to
-// orgsSvc.AddMember.
+// AddOrganizationMember adds a user to an organization or updates their role ("owner", "admin" or
+// "member"). It refuses to demote the last owner (ErrLastOwner).
 func (a *TheAuth) AddOrganizationMember(ctx context.Context, orgID, userID ULID, role string) error {
 	return a.orgsSvc.AddMember(ctx, orgID, userID, role)
 }
 
-// RemoveOrganizationMember removes a user from an organization. Refuses
-// to remove the last remaining owner (returns ErrLastOwner). Forwards to
-// orgsSvc.RemoveMember.
+// RemoveOrganizationMember removes a user. It refuses to remove the last owner (ErrLastOwner).
 func (a *TheAuth) RemoveOrganizationMember(ctx context.Context, orgID, userID ULID) error {
 	return a.orgsSvc.RemoveMember(ctx, orgID, userID)
 }
 
-// ListOrganizationMembers returns every member of the supplied
-// organization. Forwards to orgsSvc.ListMembers.
+// ListOrganizationMembers returns every member of the organization.
 func (a *TheAuth) ListOrganizationMembers(ctx context.Context, orgID ULID) ([]OrganizationMember, error) {
 	return a.orgsSvc.ListMembers(ctx, orgID)
 }
 
-// ListUserOrganizations returns every organization the user is a member
-// of. Forwards to orgsSvc.ListUserOrganizations.
+// ListUserOrganizations returns every organization the user belongs to.
 func (a *TheAuth) ListUserOrganizations(ctx context.Context, userID ULID) ([]Organization, error) {
 	return a.orgsSvc.ListUserOrganizations(ctx, userID)
 }
 
-// SetActiveOrganization sets (or clears, when orgID is nil) the active
-// organization on a session. The caller is responsible for verifying
-// that the session's user is a member of orgID before calling. Forwards
-// to orgsSvc.SetActive, then fires OnOrgSwitch on success. orgID being
-// nil (clearing the active org) still fires the hook with an empty
-// string so consumers can observe both directions.
+// SetActiveOrganization sets (or with a nil orgID clears) the session's active organization. The
+// caller must verify membership first. OnOrgSwitch fires on success in both directions, with an
+// empty string when clearing.
 func (a *TheAuth) SetActiveOrganization(ctx context.Context, sessionID ULID, orgID *ULID) error {
 	if err := a.orgsSvc.SetActive(ctx, sessionID, orgID); err != nil {
 		return err
@@ -149,14 +109,9 @@ func (a *TheAuth) SetActiveOrganization(ctx context.Context, sessionID ULID, org
 	return nil
 }
 
-// autoProvisionPersonalOrg is the v2.5 tenancy auto-provisioner. Called by
-// the signup forwarders when the user row is freshly created. Creates a
-// personal organization, adds the user as owner (CreateOrganization
-// already does that internally), and sets it as the session's active org.
-// Silent no-op when Tenancy is nil, Tenancy.AutoCreatePersonalOrg is
-// false, Organizations is not enabled, or any required service is nil.
-// Errors are logged but do NOT fail the surrounding signup; the user has
-// already been created and a missing personal org is recoverable.
+// autoProvisionPersonalOrg creates a personal organization for a freshly created user and makes it
+// active. It is a silent no-op unless Tenancy.AutoCreatePersonalOrg and Organizations are enabled.
+// Errors are logged, never returned, since the user already exists.
 func (a *TheAuth) autoProvisionPersonalOrg(ctx context.Context, user *User, sessionToken string) {
 	if a.tenancyCfg == nil || !a.tenancyCfg.AutoCreatePersonalOrg || a.orgsSvc == nil || user == nil {
 		return
@@ -190,126 +145,84 @@ func (a *TheAuth) autoProvisionPersonalOrg(ctx context.Context, user *User, sess
 	}
 }
 
-// RBAC
-
-// SeedPermissions ensures every seeded + consumer-extended permission
-// row exists in storage. Idempotent on the permissions.name unique
-// index. Returns the canonical permission rows (with their persisted
-// IDs) so the caller can reuse them for role assignments.
-//
-// SeedPermissions runs lazily on first SeedOrganizationRoles /
-// CreateRole invocation; consumers wanting eager seeding at app start
-// may call it directly from their bootstrap. Forwards to
-// rbacSvc.SeedPermissions.
+// SeedPermissions ensures every seeded and consumer-extended permission row exists. It is
+// idempotent and runs lazily on the first role seeding, so apps may call it eagerly at startup.
 func (a *TheAuth) SeedPermissions(ctx context.Context) ([]Permission, error) {
 	return a.rbacSvc.SeedPermissions(ctx)
 }
 
-// SeedOrganizationRoles creates the three default roles (or whatever
-// the consumer configured) for one organization. Idempotent on
-// (organization_id, name); existing roles keep their IDs and have their
-// permission set reconciled against the seed. Forwards to
-// rbacSvc.SeedOrgRoles.
+// SeedOrganizationRoles creates the default roles for one organization. It is idempotent on
+// (organization_id, name) and reconciles existing roles' permissions against the seed.
 func (a *TheAuth) SeedOrganizationRoles(ctx context.Context, orgID ULID) error {
 	return a.rbacSvc.SeedOrgRoles(ctx, orgID)
 }
 
-// PermissionsForUser returns the user's permission set scoped to orgID
-// (nil orgID returns only system-role permissions, i.e. super_admin).
-// Sorted alphabetically for deterministic output. Forwards to
-// rbacSvc.PermissionsForUser.
+// PermissionsForUser returns the user's permissions in orgID, sorted. A nil orgID returns
+// system-role permissions only.
 func (a *TheAuth) PermissionsForUser(ctx context.Context, userID ULID, orgID *ULID) ([]string, error) {
 	return a.rbacSvc.PermissionsForUser(ctx, userID, orgID)
 }
 
-// HasPermission returns true when the user holds the named permission
-// in the given organization, OR when the user holds the system
-// super_admin role (which bypasses every check). orgID may be nil to
-// ask only about system permissions. Forwards to rbacSvc.HasPermission.
+// HasPermission reports whether the user holds perm in orgID, or is a super_admin (which bypasses
+// every check).
 func (a *TheAuth) HasPermission(ctx context.Context, userID ULID, orgID *ULID, perm string) (bool, error) {
 	return a.rbacSvc.HasPermission(ctx, userID, orgID, perm)
 }
 
-// GrantRole assigns roleID to the target user. The actor must already
-// have permission to grant; callers should run the RequirePermission
-// middleware upstream of this method. Idempotent on (user_id, role_id).
-// Emits action "role.granted" with role_id and role_name in metadata.
-// Forwards to rbacSvc.GrantRole.
+// GrantRole assigns roleID to target. The actor must already be allowed to grant; run
+// RequirePermission upstream. It is idempotent and emits role.granted.
 func (a *TheAuth) GrantRole(ctx context.Context, actor, target, roleID ULID) error {
 	return a.rbacSvc.GrantRole(ctx, actor, target, roleID)
 }
 
-// RevokeRole removes roleID from the target user. Emits "role.revoked".
-// Forwards to rbacSvc.RevokeRole.
+// RevokeRole removes roleID from target and emits role.revoked.
 func (a *TheAuth) RevokeRole(ctx context.Context, actor, target, roleID ULID) error {
 	return a.rbacSvc.RevokeRole(ctx, actor, target, roleID)
 }
 
-// CreateRole adds a new role to orgID with the listed permissions.
-// Names are unique per org; returns the storage error (typically a
-// unique-violation translation) on collision. Emits "role.created".
-// Forwards to rbacSvc.CreateRole.
+// CreateRole adds a role with the listed permissions. Names are unique per organization and emit
+// role.created.
 func (a *TheAuth) CreateRole(ctx context.Context, orgID ULID, name, description string, perms []string) (Role, error) {
 	return a.rbacSvc.CreateRole(ctx, orgID, name, description, perms)
 }
 
-// UpdateRole rewrites name / description / permissions on an existing
-// role. nil-valued fields are not touched (caller passes the current
-// value). Emits "role.updated". Forwards to rbacSvc.UpdateRole.
+// UpdateRole rewrites a role's name, description and permissions. Emits role.updated.
 func (a *TheAuth) UpdateRole(ctx context.Context, roleID ULID, name, description string, perms []string) (Role, error) {
 	return a.rbacSvc.UpdateRole(ctx, roleID, name, description, perms)
 }
 
-// DeleteRole removes a role. Returns ErrRoleInUse when the role is the
-// sole grantor of users:admin in its organization (lockout protection).
-// Emits "role.deleted". Forwards to rbacSvc.DeleteRole.
+// DeleteRole removes a role. It returns ErrRoleInUse when the role is the sole grantor of
+// users:admin in its organization.
 func (a *TheAuth) DeleteRole(ctx context.Context, roleID ULID) error {
 	return a.rbacSvc.DeleteRole(ctx, roleID)
 }
 
-// Delegation
-
-// GrantDelegation persists a delegation_grants row. Scope MUST be a
-// subset of the configured ProtectedResource scopes; resource MUST
-// match a known ProtectedResource identifier; max_duration_seconds MUST
-// be > 0 and <= AgentConfig.MaxDelegationDuration. Forwards to
-// delegationSvc.GrantDelegation.
+// GrantDelegation persists a delegation grant. Scope must be a subset of the resource's scopes,
+// resource must be a known ProtectedResource, and max_duration_seconds must be within
+// AgentConfig.MaxDelegationDuration.
 func (a *TheAuth) GrantDelegation(ctx context.Context, in GrantDelegationInput) (DelegationGrant, error) {
 	return a.delegationSvc.GrantDelegation(ctx, in)
 }
 
-// ListDelegationsForUser returns every grant the user has issued,
-// including revoked ones (for audit / display). Forwards to
-// delegationSvc.ListDelegationsForUser.
+// ListDelegationsForUser returns every grant the user issued, including revoked ones.
 func (a *TheAuth) ListDelegationsForUser(ctx context.Context, userID ULID) ([]DelegationGrant, error) {
 	return a.delegationSvc.ListDelegationsForUser(ctx, userID)
 }
 
-// ListDelegationsForAgent returns every grant naming the supplied
-// agent. Forwards to delegationSvc.ListDelegationsForAgent.
+// ListDelegationsForAgent returns every grant naming the agent.
 func (a *TheAuth) ListDelegationsForAgent(ctx context.Context, agentID ULID) ([]DelegationGrant, error) {
 	return a.delegationSvc.ListDelegationsForAgent(ctx, agentID)
 }
 
-// RevokeDelegation marks a grant revoked. Cascade: every token already
-// minted under this grant becomes invalid on the next resource server
-// introspection refresh (worst case IntrospectionCacheTTL, default 60s).
-// Forwards to delegationSvc.RevokeDelegation.
+// RevokeDelegation marks a grant revoked. Tokens minted under it become invalid at the next
+// introspection refresh (worst case IntrospectionCacheTTL).
 func (a *TheAuth) RevokeDelegation(ctx context.Context, grantID ULID, reason string) error {
 	return a.delegationSvc.RevokeDelegation(ctx, grantID, reason)
 }
 
-// RBAC permission catalog, validation, and per-request cache
-
-// Seeded permission catalog. Every consumer's permission set extends (never
-// shrinks) this list; New returns an error if a custom Permission name
-// duplicates a seeded one with a different description (defensive against
-// silent overrides).
-//
-// The catalog values live in internal/models so storage adapters can
-// reference the same string literals without importing the root package.
-// The list is intentionally finite and small. Wildcards and ABAC are
-// deferred to v1.x per the v1.0 design document.
+// The seeded permission catalog. Consumers extend it and never shrink it. New fails if a custom
+// permission duplicates a seeded name with a different description. The list is intentionally
+// finite; wildcards and ABAC are not supported.
 const (
 	PermissionBillingRead    = models.PermissionBillingRead
 	PermissionBillingWrite   = models.PermissionBillingWrite
@@ -324,28 +237,23 @@ const (
 	PermissionSCIMAdmin      = models.PermissionSCIMAdmin
 	PermissionSessionsRevoke = models.PermissionSessionsRevoke
 
-	// v2.0 phase 6 additions. agents:admin grants organization-scoped
-	// agent CRUD via /admin/v1/.../agents; delegations:admin grants
-	// delegation CRUD via /admin/v1/.../delegations. Seeded into every
-	// organization's "owner" and "admin" default roles.
+	// agents:admin and delegations:admin grant agent and delegation CRUD under /admin/v1 (seeded into
+	// owner and admin roles).
 	PermissionAgentsAdmin      = models.PermissionAgentsAdmin
 	PermissionDelegationsAdmin = models.PermissionDelegationsAdmin
 
-	// v2.3 identity-linking permissions. Both are user-scoped (caller can
-	// only link/merge their own account); admin override paths go through
-	// the /admin/v1 surface.
+	// PermissionAccountLink and its siblings are user-scoped; admin overrides go through /admin/v1.
 	PermissionAccountLink  = models.PermissionAccountLink
 	PermissionAccountMerge = models.PermissionAccountMerge
 )
 
-// SeededPermissions returns the v1.0 canonical permission catalog. The
-// slice is returned by value (callers may not mutate the library state).
+// SeededPermissions returns the canonical permission catalog by value, so callers cannot mutate
+// library state.
 func SeededPermissions() []Permission { return rbac.SeededPermissions() }
 
-// DefaultRoleSeeds returns the three default organization roles seeded into
-// every new organization. Consumers may extend with additional roles via
-// Config.RBAC.DefaultRoles; the three reserved names ("owner", "admin",
-// "member") must always remain present.
+// DefaultRoleSeeds returns the three default organization roles seeded into every new organization.
+// The reserved names "owner", "admin" and "member" must stay present when Config.RBAC.DefaultRoles
+// overrides them.
 func DefaultRoleSeeds() []RoleSeed { return rbac.DefaultRoleSeeds() }
 
 func validateRBAC(cfg *RBACConfig) ([]Permission, map[string]Permission, []RoleSeed, error) {
