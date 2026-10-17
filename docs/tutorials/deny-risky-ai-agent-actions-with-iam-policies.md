@@ -13,7 +13,7 @@ In this tutorial you attach an IAM policy to an agent so the token endpoint refu
 go get github.com/glincker/theauth-go/v2@latest
 ```
 
-Agent policies and rate limits ship in the next release after v2.10.0. Until it is tagged, use `@main`.
+Agent policies and rate limits need v2.11.0 or later.
 
 ## 1. Write the policy
 

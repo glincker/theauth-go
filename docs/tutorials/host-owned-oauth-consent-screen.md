@@ -13,7 +13,7 @@ In this tutorial you set a `ConsentHandler` that sends each request to your own 
 go get github.com/glincker/theauth-go/v2@latest
 ```
 
-Host-owned consent ships in the next release after v2.10.0. Until it is tagged, use `@main`. With no `ConsentHandler` set, nothing changes.
+Host-owned consent needs v2.11.0 or later. With no `ConsentHandler` set, nothing changes.
 
 ## 1. Add the handler
 
