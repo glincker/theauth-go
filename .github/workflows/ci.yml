@@ -159,10 +159,21 @@ jobs:
     if: github.event_name != 'schedule'
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    permissions:
+      contents: read
+      # Lets codecov-action authenticate with a GitHub OIDC token when no CODECOV_TOKEN secret is set.
+      id-token: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
         with:
           go-version: "1.26"
       - run: go vet ./storage/sqlite/... ./examples/single-binary-sqlite/...
-      - run: go test -race -timeout=300s ./storage/sqlite/... ./examples/single-binary-sqlite/...
+      # storage/sqlite is its own module, so the root coverage run never sees it. Measure it here.
+      - run: go test -race -timeout=300s -coverprofile=coverage-sqlite.out ./storage/sqlite/... ./examples/single-binary-sqlite/...
+      - uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7
+        with:
+          files: coverage-sqlite.out
+          token: ${{ secrets.CODECOV_TOKEN }}
+          use_oidc: ${{ secrets.CODECOV_TOKEN == '' }}
+          fail_ci_if_error: ${{ github.event_name == 'push' }}
