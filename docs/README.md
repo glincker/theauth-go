@@ -6,7 +6,24 @@ Its source is in the [glincker/theauth](https://github.com/glincker/theauth) rep
 
 Files kept in this directory are internal or repo-level references that code, tests or release tooling use: `AGENTS.md`, `BENCHMARKS.md`, `RELEASING.md`, `REPO-LAYOUT.md`, `ROADMAP.md`, `SECURITY.md`, `SECURITY-DOCTOR.md` (read by `integration/doctor_test.go`), `positioning.md` and `release-notes-v2.6.0.md`.
 
-Feature guides for the OAuth server and shared state are kept here until they move to the docs site: [pluggable-stores.md](pluggable-stores.md), [oauth-endpoint-limits.md](oauth-endpoint-limits.md), [agent-policies.md](agent-policies.md), [device-authorization.md](device-authorization.md) [registration-tokens.md](registration-tokens.md), [device-tokens.md](device-tokens.md), [oidc-provider.md](oidc-provider.md), [otp.md](otp.md), [shared-signals.md](shared-signals.md), [provider-catalog.md](provider-catalog.md) and [cli.md](cli.md).
+Feature guides for the OAuth server, agents and shared state are kept here until they move to the docs site.
+
+Running it:
+
+- [mcp-oauth-sqlite.md](mcp-oauth-sqlite.md): the OAuth 2.1 authorization server on SQLite for an MCP server, including mounting under a path prefix and revocation with `mcpresource`.
+- [storage-capabilities.md](storage-capabilities.md): which capability interfaces each backend (memory, SQLite, Postgres, MySQL) implements, with migration numbers.
+- [pluggable-stores.md](pluggable-stores.md): shared rate limits, replay cache and document cache across replicas.
+
+Authorization server:
+
+- [oauth-consent.md](oauth-consent.md), [session-auth-methods.md](session-auth-methods.md), [access-token-policy.md](access-token-policy.md), [rich-authorization-requests.md](rich-authorization-requests.md), [oauth-endpoint-limits.md](oauth-endpoint-limits.md), [mcp-metadata-paths.md](mcp-metadata-paths.md), [client-compat.md](client-compat.md), [oidc-provider.md](oidc-provider.md), [id-jag.md](id-jag.md), [device-authorization.md](device-authorization.md), [registration-tokens.md](registration-tokens.md), [device-tokens.md](device-tokens.md) and [admission.md](admission.md).
+
+Agents and audit:
+
+- [agent-policies.md](agent-policies.md) and [policy-shrink.md](policy-shrink.md).
+- [shared-signals.md](shared-signals.md).
+
+Other guides: [otp.md](otp.md), [enumeration-safe-passwordless.md](enumeration-safe-passwordless.md), [passkey-attestation.md](passkey-attestation.md), [hooks.md](hooks.md), [provider-catalog.md](provider-catalog.md), [cli.md](cli.md) and [MIGRATING-FROM-KEYCLOAK.md](MIGRATING-FROM-KEYCLOAK.md).
 
 ## Development hooks
 

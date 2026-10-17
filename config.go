@@ -483,7 +483,7 @@ type AuthorizationServerConfig struct {
 
 	// AccessTokenRevocation enables the store-backed access-token jti
 	// denylist (opt-in). When true and the Storage implements the denylist
-	// capability (memory, postgres and mysql do), revoking an access token
+	// capability (memory, sqlite, postgres and mysql do), revoking an access token
 	// at /oauth/revoke, replaying an authorization code, and token
 	// exchange all honor it, and /oauth/introspect reports revoked tokens
 	// inactive. Resource servers that verify JWTs locally never consult
@@ -553,8 +553,8 @@ type AuthorizationServerConfig struct {
 	// DeviceAuthorization enables the RFC 8628 device grant when non-nil:
 	// POST /oauth/device_authorization, the device_code grant at
 	// /oauth/token, and a user-code page at /oauth/device. The storage must
-	// also implement DeviceAuthorizationStorage (memory, Postgres and MySQL
-	// do). Clients opt in by registering the
+	// also implement DeviceAuthorizationStorage (memory, SQLite, Postgres and
+	// MySQL do). Clients opt in by registering the
 	// urn:ietf:params:oauth:grant-type:device_code grant type. Default nil
 	// disables it.
 	DeviceAuthorization *DeviceAuthorizationConfig
@@ -562,7 +562,7 @@ type AuthorizationServerConfig struct {
 	// TokenPolicy enables per-client access token policy: extra signing
 	// algorithms (ES256, RS256) and opaque reference tokens. Nil keeps every
 	// client on EdDSA JWTs. Opaque tokens need a storage that implements
-	// OpaqueTokenStorage (memory, Postgres and MySQL do).
+	// OpaqueTokenStorage (memory, SQLite, Postgres and MySQL do).
 	TokenPolicy *TokenPolicyConfig
 
 	// RAR enables RFC 9396 Rich Authorization Requests: the

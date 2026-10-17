@@ -39,7 +39,7 @@ sess.HasAnyMethod("hwk", "otp") // passkey or TOTP
 sess.HasAllMethods("pwd", "mfa")
 ```
 
-The fields are also in the JSON of the session list (`authMethods`, `authTime`).
+The record lives on the `Session` value your code reads (`Session.AuthMethods`, `Session.AuthTime` and the `HasMethod` helpers). A host that marshals that value sees `authMethods` and `authTime` in the JSON. The built-in `GET /auth/sessions` list returns device information only (id, device label, IP prefix, created, last seen, expiry and whether it is current), not the record.
 
 ## Requiring a method before a risky action
 
@@ -81,7 +81,7 @@ Sessions that exist when you upgrade have no record (`AuthMethods` is nil, `Auth
 | --- | --- | --- |
 | Postgres | `0030_session_auth_methods` (up and down) | `auth_methods text[]`, `auth_time timestamptz`, both nullable |
 | MySQL | `0029_session_auth_methods` | `auth_methods JSON`, `auth_time DATETIME(6)`, both NULL |
-| SQLite | `0050_session_auth_methods` | `auth_methods TEXT` (JSON array), `auth_time INTEGER` (unix microseconds), both NULL |
+| SQLite | `0034_session_auth_methods` | `auth_methods TEXT` (JSON array), `auth_time INTEGER` (unix microseconds), both NULL |
 | Memory | none | fields on the stored session |
 
 Run `Migrate` for your backend before deploying; the columns are additive and old binaries ignore them.

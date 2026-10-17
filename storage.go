@@ -193,8 +193,8 @@ type BackchannelRedeemer interface {
 // DeviceAuthorizationStorage is the optional persistence extension for the
 // OAuth device grant (Config.AuthorizationServer.DeviceAuthorization). Lookups
 // return ErrStorageNotFound on a miss. Decide and Consume are conditional
-// updates that report whether they applied. Memory, Postgres and MySQL
-// implement it; run storagetest.RunDeviceAuthorizations against a custom one.
+// updates that report whether they applied. Memory, SQLite, Postgres and
+// MySQL implement it; run storagetest.RunDeviceAuthorizations against a custom one.
 type DeviceAuthorizationStorage interface {
 	InsertDeviceAuthorization(ctx context.Context, d DeviceAuthorization) error
 	DeviceAuthorizationByDeviceCodeHash(ctx context.Context, hash []byte) (*DeviceAuthorization, error)

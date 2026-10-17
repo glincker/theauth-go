@@ -6,7 +6,7 @@ This is separate from the RFC 8628 device authorization grant ([device-authoriza
 
 ```go
 auth, err := theauth.New(theauth.Config{
-    Storage: store, // memory, Postgres, MySQL (migration 0024) or a SQLite based composite
+    Storage: store, // memory, SQLite (migration 0011), Postgres or MySQL (migration 0024)
     AuthorizationServer: &theauth.AuthorizationServerConfig{
         Issuer:    "https://auth.example.com",
         Resources: []theauth.ProtectedResource{{Identifier: "https://iot.example.com/api", Scopes: []string{"telemetry:write", "config:read"}}},
@@ -29,7 +29,7 @@ auth, err := theauth.New(theauth.Config{
 | `EnrollPerMinute` | 10 | Challenge plus enroll requests per join token per minute, negative disables |
 | `TokenPerMinute` | 60 | Assertion grants per device per minute, negative disables |
 
-The storage must implement `theauth.DeviceIdentityStorage`; `New` fails with `ErrStorageMissingCapability` otherwise. Memory, Postgres (migration 0024), MySQL and SQLite (migration 0011 of `storage/sqlite`) implement it. The SQLite store does not implement the rest of the authorization server storage (clients, codes, keys), so on its own it cannot run an AS; use it from a composite store.
+The storage must implement `theauth.DeviceIdentityStorage`; `New` fails with `ErrStorageMissingCapability` otherwise. Memory, Postgres (migration 0024), MySQL and SQLite (migration 0011 of `storage/sqlite`) implement it.
 
 ## Rate limits
 
@@ -154,4 +154,4 @@ Enrollment goes through an internal `Attestor` interface (`Attest`, `Consume`, `
 
 ## Storage
 
-Migration 0024 (Postgres, MySQL) adds `iot_devices` and `device_join_tokens`. The Postgres migration has a matching down file. Run `storagetest.RunDeviceIdentity` against a custom `DeviceIdentityStorage`.
+Migration 0024 (Postgres, MySQL) and 0011 (SQLite) add `iot_devices` and `device_join_tokens`. The Postgres migration has a matching down file. Run `storagetest.RunDeviceIdentity` against a custom `DeviceIdentityStorage`.

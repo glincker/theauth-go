@@ -138,8 +138,9 @@ agent identities, and revocable delegation chains are a single import.
   agent-side. The `AgentCredentialKindJWK` and `AgentCredentialKindX509`
   paths are reserved.
 - Budget policies (per-resource spend caps that cascade into the actor
-  chain). The audit and delegation tables already carry the fields a
-  budget enforcer would need.
+  chain). Agent budgets and trust scores exist in the TypeScript library
+  only; this Go module has no budget enforcer or trust score. The audit
+  and delegation tables carry the fields one would need.
 - A `pinchtab`-style local MCP harness for integration tests against the
   full stack.
 
