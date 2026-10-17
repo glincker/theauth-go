@@ -177,3 +177,30 @@ jobs:
           token: ${{ secrets.CODECOV_TOKEN }}
           use_oidc: ${{ secrets.CODECOV_TOKEN == '' }}
           fail_ci_if_error: ${{ github.event_name == 'push' }}
+
+  # mcpresource is its own module, so the root `go test ./...` never runs it. It validates access tokens for
+  # resource servers (JWT, DPoP, introspection, opaque tokens), so it gets its own job and its own coverage.
+  mcpresource:
+    if: github.event_name != 'schedule'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      # Lets codecov-action authenticate with a GitHub OIDC token when no CODECOV_TOKEN secret is set.
+      id-token: write
+    defaults:
+      run:
+        working-directory: mcpresource
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version: "1.25"
+      - run: go vet ./...
+      - run: go test -race -timeout=300s -coverprofile=coverage-mcpresource.out ./...
+      - uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7
+        with:
+          files: mcpresource/coverage-mcpresource.out
+          token: ${{ secrets.CODECOV_TOKEN }}
+          use_oidc: ${{ secrets.CODECOV_TOKEN == '' }}
+          fail_ci_if_error: ${{ github.event_name == 'push' }}
