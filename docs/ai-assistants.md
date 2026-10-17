@@ -1,38 +1,35 @@
 # Using theauth-go with AI coding assistants
 
-If an assistant writes your auth code, give it the real docs and a short list of rules. This page covers Cursor, Claude Code, Codex, GitHub Copilot and Gemini CLI. For the library's own agent notes, see [AGENTS.md](AGENTS.md).
+Copy the rule file for your tool into your project, then point the assistant at the docs.
 
-## Docs as context
+```sh
+cp docs/ai-rules/AGENTS.md AGENTS.md
+```
 
-- [`llms.txt`](../llms.txt) in this repository (raw: `https://raw.githubusercontent.com/glincker/theauth-go/main/llms.txt`): a short overview with links.
-- Full Go docs: https://docs.theauth.dev/go
-- The TypeScript SDK publishes `https://docs.theauth.dev/llms.txt` and `https://docs.theauth.dev/llms-full.txt`. Those cover the TypeScript docs, not the Go docs.
-- [AGENTS.md](AGENTS.md): what the library does, a working example and a "what not to do" list.
+| Tool | Copy |
+|---|---|
+| Codex, Cursor, Copilot coding agent, Gemini CLI | `AGENTS.md` to the project root |
+| Cursor | `.cursor/rules/theauth.mdc` to `.cursor/rules/theauth.mdc` |
+| Claude Code | `CLAUDE.md`, appended to your own |
+| GitHub Copilot | `copilot-instructions.md` to `.github/copilot-instructions.md` |
 
-Most tools let you paste a URL into the chat or add it as a doc source (Cursor: `@Docs`). Otherwise point the assistant at the files above.
+`CLAUDE.md` and `copilot-instructions.md` point to `AGENTS.md`, so copy that too. Gemini CLI reads `GEMINI.md` by default: copy `AGENTS.md` to `GEMINI.md`, or set `context.fileName` to `AGENTS.md` in `.gemini/settings.json`.
 
-## Docs MCP server
+Docs for the assistant:
 
-A hosted docs MCP server exists for the TypeScript docs site (`https://docs.theauth.dev/mcp`), but it does not index the Go docs, so it is not recommended here. No Go-specific docs MCP server is published.
+1. [`llms.txt`](../llms.txt) in this repository: a short overview with links.
+2. Full Go docs: https://docs.theauth.dev/go
+3. [AGENTS.md](AGENTS.md): what the library does, a working example and a "what not to do" list.
+4. The TypeScript `llms.txt` and `llms-full.txt` do not cover Go.
 
-## Rule files to copy
+The rules cover wiring (`theauth.New`, `a.Mount`, `a.RequireAuth()`, `policy/toolguard`, `mcpresource`) and forbid:
 
-Ready-made files live in [`ai-rules/`](ai-rules/). Copy the one for your tool into your own project:
+- Logging or committing tokens, secrets or `Authorization` headers.
+- Trusting an agent's claim to act for a user without checking delegation.
+- Allowing policy errors, or wrapping agent tools outside `toolguard.Tool`.
+- Sending non-DPoP MCP tokens across your trust boundary, or non-exact redirect matching.
 
-| File | Copy to | Tool |
-|---|---|---|
-| `AGENTS.md` | `AGENTS.md` in your project root | Codex, Cursor, Copilot coding agent, Gemini CLI |
-| `.cursor/rules/theauth.mdc` | `.cursor/rules/theauth.mdc` | Cursor |
-| `CLAUDE.md` | append to your `CLAUDE.md` | Claude Code |
-| `copilot-instructions.md` | `.github/copilot-instructions.md` | GitHub Copilot |
+## Limits
 
-Gemini CLI reads `GEMINI.md` by default. Copy `AGENTS.md` to `GEMINI.md`, or set `context.fileName` to `AGENTS.md` in `.gemini/settings.json`.
-
-The rules say how to wire the library (`theauth.New`, `a.Mount`, `a.RequireAuth()`, `policy/toolguard`, the `mcpresource` module) and what an assistant must not do:
-
-- Never log or commit tokens, secrets or `Authorization` headers.
-- Always verify delegation. Read the `Principal` from `mcpresource` instead of trusting a claim.
-- Keep policy deny by default. Treat deny, escalation and errors as "do not run".
-- Wrap every agent tool with `toolguard.Tool`.
-- Use DPoP-bound tokens for MCP access tokens that leave your trust boundary.
-- Match redirect URIs exactly.
+- The hosted docs MCP server (`https://docs.theauth.dev/mcp`) indexes the TypeScript docs only. No Go docs MCP server is published, so it is not recommended here.
+- The rule files say how to wire the library and what to avoid. Read the Go docs for options.
