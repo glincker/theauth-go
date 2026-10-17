@@ -20,6 +20,7 @@ Authorization server:
 
 Agents and audit:
 
+- [ai-assistants.md](ai-assistants.md).
 - [agent-policies.md](agent-policies.md) and [policy-shrink.md](policy-shrink.md).
 - [shared-signals.md](shared-signals.md).
 
