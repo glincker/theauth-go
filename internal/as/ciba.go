@@ -4,6 +4,9 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/base64"
+	"fmt"
+	"hash/fnv"
+	"sync"
 	"time"
 
 	"github.com/glincker/theauth-go/v2/internal/models"
@@ -251,17 +254,30 @@ func (s *Service) PollBackchannelToken(ctx context.Context, req CIBATokenRequest
 		return TokenResponse{}, models.ErrCIBAAuthorizationPending
 	case models.BackchannelStatusDenied:
 		return TokenResponse{}, models.ErrCIBAAccessDenied
+	case cibaStatusConsumed:
+		// Tokens were already delivered once; an auth_req_id is single use.
+		return TokenResponse{}, models.ErrOAuthInvalidGrant
 	case models.BackchannelStatusApproved:
 		if row.AccessToken == "" {
 			// Approved row should always have a token; storage inconsistency.
 			return TokenResponse{}, models.ErrCIBAAuthorizationPending
 		}
+		// Atomically claim the tokens. Only the single winner of the
+		// approved -> consumed transition is served; every other poll,
+		// concurrent or later, gets invalid_grant.
+		won, ok, err := redeemBackchannel(ctx, cibaStore, req.AuthReqID, now)
+		if err != nil {
+			return TokenResponse{}, fmt.Errorf("redeem backchannel request: %w", err)
+		}
+		if !ok {
+			return TokenResponse{}, models.ErrOAuthInvalidGrant
+		}
 		return TokenResponse{
-			AccessToken:  row.AccessToken,
+			AccessToken:  won.AccessToken,
 			TokenType:    "Bearer",
 			ExpiresIn:    int(s.Cfg.AccessTokenTTL.Seconds()),
-			RefreshToken: row.RefreshToken,
-			Scope:        scopeJoin(row.Scope),
+			RefreshToken: won.RefreshToken,
+			Scope:        scopeJoin(won.Scope),
 		}, nil
 	default:
 		return TokenResponse{}, models.ErrCIBAAuthorizationPending
@@ -389,4 +405,55 @@ func (s *Service) IsCIBAEnabled() bool {
 	}
 	_, ok := s.Storage.(CIBAStorage)
 	return ok
+}
+
+// cibaStatusConsumed is the status of an approved request whose tokens were
+// already delivered (see theauth.BackchannelStatusConsumed).
+const cibaStatusConsumed = "consumed"
+
+// backchannelRedeemer is the optional storage capability that redeems an
+// approved request atomically (theauth.BackchannelRedeemer).
+type backchannelRedeemer interface {
+	RedeemBackchannelRequest(ctx context.Context, authReqID string, now time.Time) (models.BackchannelRequest, bool, error)
+}
+
+// redeemLocks serializes the fallback redeem per auth_req_id within this
+// process. It is striped so memory use stays bounded.
+var redeemLocks [64]sync.Mutex
+
+func redeemLockFor(authReqID string) *sync.Mutex {
+	h := fnv.New32a()
+	_, _ = h.Write([]byte(authReqID))
+	return &redeemLocks[h.Sum32()%uint32(len(redeemLocks))]
+}
+
+// redeemBackchannel moves an approved, unexpired request to consumed and
+// returns it with its tokens; ok is true for exactly one caller.
+//
+// When the storage implements BackchannelRedeemer the claim is one atomic
+// storage operation and holds across nodes. Otherwise it falls back to an
+// in-process lock keyed by auth_req_id around a read, a status flip through
+// UpdateBackchannelRequest and a write. That is correct for a single process
+// only: multi node deployments must use a storage that implements
+// BackchannelRedeemer (memory, Postgres and SQLite do).
+func redeemBackchannel(ctx context.Context, store CIBAStorage, authReqID string, now time.Time) (models.BackchannelRequest, bool, error) {
+	if r, ok := store.(backchannelRedeemer); ok {
+		return r.RedeemBackchannelRequest(ctx, authReqID, now)
+	}
+	mu := redeemLockFor(authReqID)
+	mu.Lock()
+	defer mu.Unlock()
+	row, err := store.BackchannelRequestByID(ctx, authReqID)
+	if err != nil {
+		return models.BackchannelRequest{}, false, nil
+	}
+	if row.Status != models.BackchannelStatusApproved || !now.Before(row.ExpiresAt) {
+		return models.BackchannelRequest{}, false, nil
+	}
+	claimed := row
+	claimed.Status = cibaStatusConsumed
+	if err := store.UpdateBackchannelRequest(ctx, claimed); err != nil {
+		return models.BackchannelRequest{}, false, fmt.Errorf("mark backchannel request consumed: %w", err)
+	}
+	return claimed, true, nil
 }

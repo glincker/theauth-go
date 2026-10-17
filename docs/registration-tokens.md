@@ -26,7 +26,7 @@ Authorization: Bearer rt_...
 - Unknown, expired, revoked and used-up tokens all return `401 access_denied`, so the response does not say which.
 - Only a SHA-256 digest is stored, plus a short prefix (`rt_ab12`) for recognizing tokens in lists.
 
-Storage must implement `theauth.RegistrationTokenStorage` (memory, Postgres and MySQL do; migration 0019). Static config tokens keep working.
+Storage must implement `theauth.RegistrationTokenStorage` (memory, Postgres, MySQL and SQLite do; migration 0019 on Postgres and MySQL, 0028 on SQLite). Static config tokens keep working.
 
 ## Admin API
 

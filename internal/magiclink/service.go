@@ -179,7 +179,7 @@ func (s *Service) Consume(ctx context.Context, token string) (sessionToken strin
 			slog.Warn("theauth: mark email verified failed", "user_id", u.ID.String(), "err", err.Error())
 		}
 	}
-	sessToken, _, err := s.sessions.Issue(ctx, *u, "", "")
+	sessToken, _, err := s.sessions.Issue(models.WithAuthMethods(ctx, models.AMREmail), *u, "", "")
 	if err != nil {
 		return "", nil, false, err
 	}

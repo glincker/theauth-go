@@ -123,6 +123,10 @@ const (
 	MetricClientAuthCacheMisses        = "theauth_clientauthcache_misses_total"
 	MetricRateLimitBlockedTotal        = "theauth_rate_limit_blocked_total"
 	MetricAuditDroppedTotal            = "theauth_audit_dropped_total"
+	// MetricAgentPolicyResolverErrors counts agent token mints failed closed
+	// because the host policy resolver (or the policy set) was unusable.
+	// Label values: grant type.
+	MetricAgentPolicyResolverErrors = "theauth_agent_policy_resolver_errors_total"
 
 	// Histograms.
 	MetricOAuthTokenLatency      = "theauth_oauth_token_latency_seconds"

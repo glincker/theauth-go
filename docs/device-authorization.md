@@ -12,7 +12,7 @@ AuthorizationServer: &theauth.AuthorizationServerConfig{
 }
 ```
 
-Storage must implement `theauth.DeviceAuthorizationStorage`. The memory, Postgres (migration 0019) and MySQL (migration 0019) adapters do. SQLite does not yet. Register the client with `grant_types: ["urn:ietf:params:oauth:grant-type:device_code"]`. Public clients (`token_endpoint_auth_method: none`) are fine, and CIMD clients work too.
+Storage must implement `theauth.DeviceAuthorizationStorage`. The memory, Postgres (migration 0019), MySQL (migration 0019) and SQLite (migration 0027 of `storage/sqlite`) adapters do. Register the client with `grant_types: ["urn:ietf:params:oauth:grant-type:device_code"]`. Public clients (`token_endpoint_auth_method: none`) are fine, and CIMD clients work too.
 
 The AS metadata gains `device_authorization_endpoint` and lists the grant.
 

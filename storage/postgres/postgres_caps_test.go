@@ -42,6 +42,7 @@ func TestPostgresCapabilityContracts(t *testing.T) {
 		{"DeviceIdentity", func(t *testing.T, s *Store) { storagetest.RunDeviceIdentity(t, s) }},
 		{"OpaqueTokens", func(t *testing.T, s *Store) { storagetest.RunOpaqueTokens(t, s) }},
 		{"SessionManagement", func(t *testing.T, s *Store) { storagetest.RunSessionManagement(t, s) }},
+		{"SessionAuthMethods", func(t *testing.T, s *Store) { storagetest.RunSessionAuthMethods(t, s) }},
 		{"AccountLifecycle", func(t *testing.T, s *Store) { storagetest.RunAccountLifecycle(t, s) }},
 		{"AuditChain", func(t *testing.T, s *Store) { storagetest.RunAuditChain(t, s) }},
 	}

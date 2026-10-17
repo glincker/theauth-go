@@ -797,6 +797,19 @@ func (a *TheAuth) StartAuthorize(ctx context.Context, req AuthorizeRequest, user
 	return a.as.StartAuthorize(ctx, req, user)
 }
 
+// CompleteConsent resumes an authorization the ConsentHandler answered with
+// ConsentInteract. ticket is the consent_ticket query parameter the host's
+// consent page received, dec is what the user chose, and user must be the
+// signed-in user the ticket was issued to. The returned RedirectURL goes
+// back to the client (code, or access_denied for ConsentDeny). Protect the
+// calling endpoint against CSRF. See docs/oauth-consent.md.
+func (a *TheAuth) CompleteConsent(ctx context.Context, ticket string, dec ConsentDecision, user *User) (AuthorizeResult, error) {
+	if a.as == nil {
+		return AuthorizeResult{}, ErrAuthorizationServerNotConfigured
+	}
+	return a.as.CompleteConsent(ctx, ticket, dec, user)
+}
+
 // AuthContext describes how and when the user behind an authorize request
 // authenticated (auth_time and amr). The /oauth/authorize handler builds it
 // from the session; callers of StartAuthorize that bypass the handler attach
@@ -932,7 +945,7 @@ func validateAgentConfig(cfg *AgentConfig) error {
 	if cfg.AgentSecretLength <= 0 {
 		cfg.AgentSecretLength = 32
 	}
-	return nil
+	return validateAgentRateLimit(&cfg.RateLimit)
 }
 
 // service_agent.go: thin forwarders into the extracted agent identity

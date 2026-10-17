@@ -13,6 +13,7 @@ import (
 var (
 	_ theauth.SessionManagementStorage = (*Store)(nil)
 	_ theauth.SessionLinkStorage       = (*Store)(nil)
+	_ theauth.SessionAuthStorage       = (*Store)(nil)
 )
 
 func live(s theauth.Session, now time.Time) bool { return !s.Expired(now) }
@@ -77,6 +78,24 @@ func (s *Store) RevokeSessionsByCredential(_ context.Context, credentialID strin
 		}
 	}
 	return n, nil
+}
+
+// AppendSessionAuthMethods implements theauth.SessionAuthStorage.
+func (s *Store) AppendSessionAuthMethods(_ context.Context, id theauth.ULID, methods []string, at time.Time) ([]string, time.Time, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	sess, ok := s.sessions[id]
+	if !ok {
+		return nil, time.Time{}, storage.ErrNotFound
+	}
+	// MergeAuthMethods builds a new slice, so copies handed out earlier
+	// never observe the append.
+	sess.AuthMethods = theauth.MergeAuthMethods(sess.AuthMethods, methods...)
+	if at.After(sess.AuthTime) {
+		sess.AuthTime = at
+	}
+	s.sessions[id] = sess
+	return append([]string(nil), sess.AuthMethods...), sess.AuthTime, nil
 }
 
 // SetSessionElevatedUntil implements theauth.SessionManagementStorage.

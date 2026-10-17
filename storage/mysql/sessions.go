@@ -3,6 +3,7 @@ package mysql
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
@@ -25,6 +26,8 @@ func scanSession(row interface {
 		activeOrgIDB         []byte
 		lastSeen, elevated   sql.NullTime
 		credentialID         string
+		methodsJSON          []byte
+		authTime             sql.NullTime
 	)
 	err := row.Scan(
 		&idB, &userIDB, &tokenHash,
@@ -32,6 +35,7 @@ func scanSession(row interface {
 		&createdAt, &expiresAt, &revokedAt,
 		&authLevel, &activeOrgIDB,
 		&lastSeen, &elevated, &credentialID,
+		&methodsJSON, &authTime,
 	)
 	if err != nil {
 		return theauth.Session{}, err
@@ -49,6 +53,14 @@ func scanSession(row interface {
 		ElevatedUntil: nullTimeToPtr(elevated),
 		CredentialID:  credentialID,
 	}
+	if len(methodsJSON) > 0 {
+		if err := json.Unmarshal(methodsJSON, &sess.AuthMethods); err != nil {
+			return theauth.Session{}, fmt.Errorf("mysql: decode session auth methods: %w", err)
+		}
+	}
+	if authTime.Valid {
+		sess.AuthTime = authTime.Time.UTC()
+	}
 	if lastSeen.Valid {
 		sess.LastSeenAt = lastSeen.Time.UTC()
 	}
@@ -61,7 +73,8 @@ func scanSession(row interface {
 
 const selectSessionColumns = `
 SELECT id, user_id, token_hash, user_agent, ip, created_at, expires_at,
-       revoked_at, auth_level, active_organization_id, last_seen_at, elevated_until, credential_id
+       revoked_at, auth_level, active_organization_id, last_seen_at, elevated_until, credential_id,
+       auth_methods, auth_time
 FROM sessions`
 
 // CreateSession inserts sess (defaulting AuthLevel to full) and returns the stored row.
@@ -75,8 +88,8 @@ func (s *Store) CreateSession(ctx context.Context, sess theauth.Session) (theaut
 		lastSeen = sql.NullTime{Time: timeUTC(sess.LastSeenAt), Valid: true}
 	}
 	_, err := s.db.ExecContext(ctx, `
-INSERT INTO sessions (id, user_id, token_hash, user_agent, ip, created_at, expires_at, auth_level, last_seen_at, credential_id)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+INSERT INTO sessions (id, user_id, token_hash, user_agent, ip, created_at, expires_at, auth_level, last_seen_at, credential_id, auth_methods, auth_time)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		ulidToBytes(sess.ID),
 		ulidToBytes(sess.UserID),
 		sess.TokenHash,
@@ -87,6 +100,8 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		level,
 		lastSeen,
 		sess.CredentialID,
+		methodsJSONVal(sess.AuthMethods),
+		authTimeVal(sess.AuthTime),
 	)
 	if err != nil {
 		return theauth.Session{}, err

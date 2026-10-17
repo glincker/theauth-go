@@ -48,7 +48,7 @@ An opaque token is 32 random bytes, base64url encoded. The server stores only it
 
 Revocation works without the `AccessTokenRevocation` denylist: `POST /oauth/revoke` marks the row revoked, and only the client the token was issued to can do it. Introspection results are cached for `IntrospectionCacheTTL`, so another replica can keep answering `active` for that long after a revoke. The instance that handled the revoke clears its cache immediately.
 
-Storage: memory, Postgres and MySQL (migration `0021`) implement it. Run `storagetest.RunOpaqueTokens` against your own adapter. Expired rows are not removed for you; delete rows past `expires_at` from a job.
+Storage: memory, SQLite (migration `0026`), Postgres and MySQL (migration `0021`) implement it. Run `storagetest.RunOpaqueTokens` against your own adapter. Expired rows are not removed for you; delete rows past `expires_at` from a job.
 
 ## Not included
 

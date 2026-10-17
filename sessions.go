@@ -13,6 +13,7 @@ import (
 
 	"github.com/glincker/theauth-go/v2/crypto"
 	"github.com/glincker/theauth-go/v2/internal/httpx"
+	"github.com/glincker/theauth-go/v2/internal/models"
 	"github.com/glincker/theauth-go/v2/internal/password"
 	"github.com/glincker/theauth-go/v2/internal/session"
 	"github.com/glincker/theauth-go/v2/internal/ulid"
@@ -234,7 +235,12 @@ func (a *TheAuth) RotateSession(ctx context.Context, old Session) (string, Sessi
 	}
 	// Rotation replaces a session one for one, so it must not trip the
 	// concurrent session cap.
-	tok, ns, err := a.issueSession(session.WithoutLimits(ctx), *user, old.UserAgent, old.IP)
+	// The replacement keeps the old session's record and authentication time.
+	rctx := session.WithoutLimits(ctx)
+	if len(old.AuthMethods) > 0 {
+		rctx = models.WithAuthRecord(rctx, old.AuthTime, old.AuthMethods...)
+	}
+	tok, ns, err := a.issueSession(rctx, *user, old.UserAgent, old.IP)
 	if err != nil {
 		return "", Session{}, fmt.Errorf("theauth: rotate session: issue: %w", err)
 	}
@@ -279,7 +285,7 @@ func (a *TheAuth) ChangePassword(ctx context.Context, cur Session, currentPasswo
 	if err != nil {
 		return "", fmt.Errorf("theauth: change password: load user: %w", err)
 	}
-	tok, _, err := a.issueSession(ctx, *user, cur.UserAgent, cur.IP)
+	tok, _, err := a.issueSession(models.WithAuthMethods(ctx, AMRPassword), *user, cur.UserAgent, cur.IP)
 	if err != nil {
 		return "", fmt.Errorf("theauth: change password: issue session: %w", err)
 	}
@@ -294,71 +300,134 @@ func (a *TheAuth) StepUp(ctx context.Context, sess *Session, in StepUpInput) (ti
 	if a.sx.mgmt == nil {
 		return time.Time{}, missingCapability("SessionManagementStorage")
 	}
-	if err := a.verifyStepUp(ctx, sess, in); err != nil {
+	probe, err := a.verifyStepUp(ctx, sess, in)
+	if err != nil {
 		return time.Time{}, err
 	}
 	until := time.Now().Add(a.sx.stepUpTTL)
 	if err := a.sx.mgmt.SetSessionElevatedUntil(ctx, sess.ID, &until); err != nil {
 		return time.Time{}, fmt.Errorf("theauth: step-up: elevate session: %w", err)
 	}
+	if err := a.recordStepUpMethods(ctx, sess, in.Method, probe); err != nil {
+		return time.Time{}, err
+	}
 	a.EmitAudit(ctx, "session.step_up", TargetRef{Type: "session", ID: sess.ID.String()}, map[string]any{"method": in.Method})
 	return until, nil
 }
 
+// stepUpAMR maps a step-up method to the amr values it proves.
+func stepUpAMR(method string, probe []string) []string {
+	switch method {
+	case StepUpMethodTOTP:
+		return []string{AMROTP}
+	case StepUpMethodPasskey:
+		if len(probe) > 0 {
+			return probe
+		}
+		return nil
+	default:
+		return []string{AMRPassword}
+	}
+}
+
+// recordStepUpMethods appends the completed step-up to the session record
+// and bumps AuthTime. A step-up that proves a factor the session had not
+// proved also records "mfa", but only when the session already carries a
+// record of an earlier factor: a session without a record (legacy, session
+// link) gets exactly what the step-up proved and nothing inferred. It updates
+// sess in place and does nothing when the storage cannot record methods.
+func (a *TheAuth) recordStepUpMethods(ctx context.Context, sess *Session, method string, probe []string) error {
+	if _, ok := a.storage.(SessionAuthStorage); !ok {
+		return nil
+	}
+	add := stepUpAMR(method, probe)
+	if len(add) == 0 {
+		return nil
+	}
+	if len(sess.AuthMethods) > 0 && !sess.HasMethod(add[0]) {
+		add = append(append([]string(nil), add...), AMRMFA)
+	}
+	if err := a.RecordSessionAuth(ctx, sess, add...); err != nil {
+		return fmt.Errorf("theauth: step-up: record methods: %w", err)
+	}
+	return nil
+}
+
+// RecordSessionAuth appends authentication methods to the session's record
+// (RFC 8176 values, see the AMR constants) and advances its AuthTime to now,
+// atomically and without losing concurrent appends. Use it from a host owned
+// second factor or step-up so Session.AuthMethods and the authorization
+// server's amr, acr and auth_time stay truthful. It updates sess in place and
+// returns ErrStorageMissingCapability when the Storage lacks SessionAuthStorage.
+func (a *TheAuth) RecordSessionAuth(ctx context.Context, sess *Session, methods ...string) error {
+	if _, ok := a.storage.(SessionAuthStorage); !ok {
+		return missingCapability("SessionAuthStorage")
+	}
+	got, at, err := a.sessionSvc.Append(ctx, sess.ID, time.Now(), methods...)
+	if err != nil {
+		return fmt.Errorf("theauth: record session auth: %w", err)
+	}
+	if got != nil {
+		sess.AuthMethods = got
+		sess.AuthTime = at
+	}
+	return nil
+}
+
 var errStepUpMethod = NewError(CodeInvalidCredentials, "unsupported or unavailable step-up method", nil)
 
-func (a *TheAuth) verifyStepUp(ctx context.Context, sess *Session, in StepUpInput) error {
+func (a *TheAuth) verifyStepUp(ctx context.Context, sess *Session, in StepUpInput) ([]string, error) {
 	switch in.Method {
 	case StepUpMethodPassword:
 		hash, err := a.storage.UserPasswordHashByID(ctx, sess.UserID)
 		if err != nil {
-			return fmt.Errorf("theauth: step-up: load hash: %w", err)
+			return nil, fmt.Errorf("theauth: step-up: load hash: %w", err)
 		}
 		ok := false
 		if hash != "" {
 			var newHash string
 			if ok, newHash, err = password.VerifyCredential(in.Password, hash, a.allowLegacyBcrypt); err != nil {
-				return fmt.Errorf("theauth: step-up: verify password: %w", err)
+				return nil, fmt.Errorf("theauth: step-up: verify password: %w", err)
 			}
 			if newHash != "" {
 				password.UpgradeAndNotify(ctx, a.storage.SetUserPassword, a.onLegacyHash, sess.UserID, newHash)
 			}
 		}
 		if !ok {
-			return NewError(CodeInvalidCredentials, "incorrect password", nil)
+			return nil, NewError(CodeInvalidCredentials, "incorrect password", nil)
 		}
-		return nil
+		return nil, nil
 	case StepUpMethodTOTP:
 		if a.totpCfg == nil {
-			return errStepUpMethod
+			return nil, errStepUpMethod
 		}
-		return a.totpSvc.CheckCode(ctx, sess.ID, sess.UserID, in.Code)
+		return nil, a.totpSvc.CheckCode(ctx, sess.ID, sess.UserID, in.Code)
 	case StepUpMethodPasskey:
 		if a.webauthnCfg == nil {
-			return errStepUpMethod
+			return nil, errStepUpMethod
 		}
 		// FinishLogin validates the assertion and bumps the sign count; the
 		// session it issues is discarded.
 		_, issued, err := a.webauthnSvc.FinishLogin(session.WithoutLimits(ctx), in.Challenge, bytes.NewReader(in.Assertion), sess.UserAgent, sess.IP)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		if rerr := a.storage.RevokeSession(ctx, issued.ID); rerr != nil {
 			slog.Warn("theauth: revoke step-up probe session failed", "session_id", issued.ID.String(), "err", rerr.Error())
 		}
 		if issued.UserID != sess.UserID {
-			return NewError(CodeInvalidCredentials, "passkey belongs to a different user", nil)
+			return nil, NewError(CodeInvalidCredentials, "passkey belongs to a different user", nil)
 		}
-		return nil
+		return issued.AuthMethods, nil
 	}
-	return errStepUpMethod
+	return nil, errStepUpMethod
 }
 
 // lastAuthAt is when the session's user last proved identity: login time, or
 // the latest step-up. Sessions tied to a credential never count their creation.
 func (a *TheAuth) lastAuthAt(s *Session) time.Time {
-	var t time.Time
-	if s.CredentialID == "" {
+	t := s.AuthTime
+	if s.CredentialID == "" && s.CreatedAt.After(t) {
 		t = s.CreatedAt
 	}
 	if s.ElevatedUntil != nil {
@@ -508,7 +577,9 @@ func (a *TheAuth) ConsumeSessionLink(ctx context.Context, token, userAgent, ip s
 	if err != nil {
 		return "", Session{}, ErrSessionLinkInvalid
 	}
-	tok, sess, err := a.sessionSvc.IssueWith(ctx, *user, session.IssueOptions{
+	// Session links are not interactive sign-ins: never record methods or an
+	// AuthTime, even if the caller context carries a record.
+	tok, sess, err := a.sessionSvc.IssueWith(models.WithAuthRecord(ctx, time.Time{}), *user, session.IssueOptions{
 		UserAgent: userAgent, IP: ip, CredentialID: link.CredentialID, TTL: link.SessionTTL,
 	})
 	if err != nil {

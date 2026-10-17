@@ -168,7 +168,7 @@ Mounting: `a.Handler()` returns a plain `http.Handler` for `net/http`'s `ServeMu
 
 ## Quick start: agent identity and delegation
 
-Give an agent its own credential, then let it act for a user with a narrower scope. This needs `Config.AuthorizationServer` (which requires a 32 byte `EncryptionKey`) and `Config.AgentIdentity`, on a storage backend with agent identity support (memory, Postgres or MySQL; not SQLite). `RegisterAgent` creates the agent and, because `Resource` is set, a delegation grant from the user to the agent in one call.
+Give an agent its own credential, then let it act for a user with a narrower scope. This needs `Config.AuthorizationServer` (which requires a 32 byte `EncryptionKey`) and `Config.AgentIdentity`, on a storage backend with agent identity support (memory, SQLite, Postgres or MySQL). `RegisterAgent` creates the agent and, because `Resource` is set, a delegation grant from the user to the agent in one call.
 
 ```go
 package main
@@ -334,10 +334,10 @@ Persistence is split into small capability interfaces, and `New` fails at startu
 | OAuth accounts, passkeys, TOTP, audit log | Yes | Yes | Yes | Yes |
 | Scoped API tokens, device grant, session management | Yes | Yes | Yes | Yes |
 | Organizations, SAML, SCIM, RBAC | Yes | Yes | Yes | Yes |
-| OAuth 2.1 authorization server, agent identity | Yes | No | Yes | Yes |
-| CIBA backchannel auth | Yes | No | Yes | No |
-| OAuth device grant (RFC 8628) and registration tokens | Yes | No | Yes | Yes |
-| Durable JWT-bearer `jti` replay, policy engine storage | Yes | No | No | No |
+| OAuth 2.1 authorization server, agent identity | Yes | Yes | Yes | Yes |
+| CIBA backchannel auth | Yes | Yes | Yes | No |
+| OAuth device grant (RFC 8628) and registration tokens | Yes | Yes | Yes | Yes |
+| Durable JWT-bearer `jti` replay | Yes | Yes | No | No |
 
 Postgres and MySQL implement the newer token, device, session and throttle capabilities and pass the new `storagetest` suites against live PostgreSQL 16 and MySQL 8. The older shared contract gate for those two adapters is still off in CI because some older subtests fail, so treat their support for the newer features as newly added. You can write your own backend and verify it with the public [`storagetest`](./storagetest) suite.
 
@@ -364,7 +364,7 @@ Packages and APIs that were Stable before v2.6 keep their SemVer guarantees. Amo
 ## FAQ
 
 **Does theauth-go work without Postgres?**
-Yes. Use `storage/sqlite` for a single static binary with one database file, `storage/memory` for tests, or MySQL. SQLite supports organizations, SAML, SCIM and RBAC but has no OAuth authorization server.
+Yes. Use `storage/sqlite` for a single static binary with one database file, `storage/memory` for tests, or MySQL. SQLite supports organizations, SAML, SCIM and RBAC, and runs the OAuth 2.1 authorization server, agents and CIBA (migrations 0020 to 0034); see docs/storage-capabilities.md.
 
 **How do I add passkeys to a Go app?**
 Set `Config.WebAuthn` and use a storage backend that implements `WebAuthnStorage` (all four built in backends do). Register and login routes are then mounted under your auth handler. See the [passkeys guide](https://docs.theauth.dev/go/guides/webauthn-passkeys) and [`examples/webauthn-passkey`](./examples/webauthn-passkey).

@@ -64,4 +64,4 @@ Logout tokens are JWTs with `typ: logout+jwt`, claims `iss`, `aud`, `iat`, `exp`
 - Session linkage (code to session, token family to session, session to clients) is kept in `Config.Stores.Cache`, not in the database. Use a shared cache (Redis or SQL) on more than one replica. A lost entry only drops `sid` and the back-channel notification for that grant. Linking is not atomic across concurrent first logins to different clients.
 - Refresh tokens are not revoked at logout; revoke them yourself if you need that.
 - Only the code flow exists, so there are no `response_type` values such as `id_token`, and no `claims` parameter or request-time `userinfo` signing.
-- Client OIDC metadata is stored as one JSON column (`oidc_metadata`, migration `0025` for Postgres and MySQL). The SQLite module has no authorization server storage yet.
+- Client OIDC metadata is stored as one JSON column (`oidc_metadata`, migration `0025` for Postgres and MySQL, a column of `0020_oauth_clients` on SQLite).

@@ -71,7 +71,14 @@ type AuthorizeResult struct {
 // non-nil, immediately mints an authorization code bound to the request
 // and returns a redirect URL with code + state. When user is nil the
 // caller should redirect to LoginURL so the user can sign in.
-func (s *Service) StartAuthorize(ctx context.Context, req AuthorizeRequest, user *models.User) (result AuthorizeResult, err error) {
+func (s *Service) StartAuthorize(ctx context.Context, req AuthorizeRequest, user *models.User) (AuthorizeResult, error) {
+	return s.startAuthorize(ctx, req, user, nil)
+}
+
+// startAuthorize is StartAuthorize plus the consent resume path: a non-nil
+// resume carries a verified consent ticket and the host's decision, applied
+// instead of calling the ConsentHandler.
+func (s *Service) startAuthorize(ctx context.Context, req AuthorizeRequest, user *models.User, resume *consentResume) (result AuthorizeResult, err error) {
 	if s == nil {
 		return AuthorizeResult{}, errors.New("theauth: authorization server not configured")
 	}
@@ -132,10 +139,24 @@ func (s *Service) StartAuthorize(ctx context.Context, req AuthorizeRequest, user
 	if s.reauthNeeded(req, ac, haveAC, now) {
 		return AuthorizeResult{}, errAuthorizeReauthRequired
 	}
+	var grantExpiry time.Time
+	if s.Cfg.ConsentHandler != nil {
+		out, err := s.consentStep(ctx, req, client, user, scope, resume)
+		if err != nil {
+			return AuthorizeResult{}, err
+		}
+		if out.redirect != "" {
+			return AuthorizeResult{RedirectURL: out.redirect}, nil
+		}
+		scope, grantExpiry = out.scope, out.expiry
+	}
 	codeStr, err := crypto.NewToken()
 	if err != nil {
 		return AuthorizeResult{}, err
 	}
+	// The grant expiry rides inside the code (and later the refresh token);
+	// the stored key is a hash of the whole string, so it cannot be changed.
+	codeStr = withGrantExpiry(codeStr, grantExpiry)
 	if err := s.Storage.InsertAuthorizationCode(ctx, models.AuthorizationCode{
 		Code:                 codeStorageKey(codeStr),
 		ClientID:             client.ClientID,

@@ -152,6 +152,7 @@ func (s *Service) ExchangeAuthorizationCode(ctx context.Context, req TokenReques
 		AuthorizationDetails: details,
 		// AuthCodeHash lets a later replay of this code revoke the family.
 		AuthCodeHash: codeKey,
+		GrantExpiry:  splitGrantExpiry(req.Code),
 		AuthTime:     codeRow.AuthTime,
 		ACR:          codeRow.ACR,
 		AMR:          codeRow.AMR,
@@ -242,6 +243,7 @@ func (s *Service) RefreshAccessToken(ctx context.Context, req TokenRequest) (res
 		Scope:                scope,
 		Resource:             resource,
 		FamilyID:             &rt.FamilyID,
+		GrantExpiry:          splitGrantExpiry(req.RefreshToken),
 		DPoPJKT:              jkt,
 		AuthorizationDetails: details,
 		// The authentication context is carried forward unchanged: a
@@ -269,6 +271,9 @@ type mintInput struct {
 	// AuthCodeHash is the storage key of the authorization code the
 	// family was issued from; empty on refresh and other grants.
 	AuthCodeHash string
+	// GrantExpiry, when non-zero, caps the access and refresh token expiry
+	// (host-owned consent). It is carried inside the code and refresh token.
+	GrantExpiry time.Time
 	// AuthorizationDetails is the RFC 9396 JSON the tokens carry. It becomes
 	// the authorization_details claim and is kept on the refresh token.
 	AuthorizationDetails []byte
@@ -289,6 +294,12 @@ type mintInput struct {
 func (s *Service) mintAccessAndRefresh(ctx context.Context, in mintInput) (TokenResponse, error) {
 	now := time.Now().UTC()
 	accessExp := now.Add(s.Cfg.AccessTokenTTL)
+	if !in.GrantExpiry.IsZero() && in.GrantExpiry.Before(accessExp) {
+		accessExp = in.GrantExpiry
+	}
+	if !accessExp.After(now) {
+		return TokenResponse{}, models.ErrOAuthInvalidGrant
+	}
 	jti := ulid.New().String()
 	sub := ""
 	if in.UserID != nil {
@@ -341,6 +352,11 @@ func (s *Service) mintAccessAndRefresh(ctx context.Context, in mintInput) (Token
 	if err != nil {
 		return TokenResponse{}, fmt.Errorf("mint refresh token: %w", err)
 	}
+	refreshExp := now.Add(s.Cfg.RefreshTokenTTL)
+	if !in.GrantExpiry.IsZero() && in.GrantExpiry.Before(refreshExp) {
+		refreshExp = in.GrantExpiry
+	}
+	refreshToken = withGrantExpiry(refreshToken, in.GrantExpiry)
 	refreshHash := crypto.HashToken(refreshToken)
 	familyID := ulid.New()
 	if in.FamilyID != nil {
@@ -362,7 +378,7 @@ func (s *Service) mintAccessAndRefresh(ctx context.Context, in mintInput) (Token
 		ACR:                  in.ACR,
 		AMR:                  in.AMR,
 		IssuedAt:             now,
-		ExpiresAt:            now.Add(s.Cfg.RefreshTokenTTL),
+		ExpiresAt:            refreshExp,
 	}
 	if err := s.Storage.InsertRefreshToken(ctx, rt); err != nil {
 		return TokenResponse{}, fmt.Errorf("insert refresh token: %w", err)
@@ -370,7 +386,7 @@ func (s *Service) mintAccessAndRefresh(ctx context.Context, in mintInput) (Token
 	resp := TokenResponse{
 		AccessToken:          access,
 		TokenType:            tokenType,
-		ExpiresIn:            int(s.Cfg.AccessTokenTTL.Seconds()),
+		ExpiresIn:            int(accessExp.Sub(now).Seconds()),
 		RefreshToken:         refreshToken,
 		Scope:                scopeJoin(in.Scope),
 		AuthorizationDetails: authorizationDetailsRaw(claims.Extra),

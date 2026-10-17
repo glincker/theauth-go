@@ -553,9 +553,14 @@ func (a *TheAuth) asAuthContext(r *http.Request) (internalas.AuthContext, bool) 
 	if !ok || sess == nil {
 		return internalas.AuthContext{}, false
 	}
-	amr := []string{"pwd"}
+	amr := []string{AMRPassword}
+	if len(sess.AuthMethods) > 0 {
+		amr = sess.AuthMethods
+	}
 	if fn := a.as.Cfg.SessionAMR; fn != nil {
-		amr = fn(r.Context(), sess)
+		if got := fn(r.Context(), sess); len(got) > 0 {
+			amr = got
+		}
 	}
 	return internalas.AuthContext{AuthTime: a.lastAuthAt(sess), AMR: amr, SessionID: sess.ID.String()}, true
 }

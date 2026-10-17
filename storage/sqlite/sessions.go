@@ -3,21 +3,86 @@ package sqlite
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
+	"fmt"
 	"time"
 
 	"github.com/glincker/theauth-go/v2"
 )
 
-const sessionCols = `id, user_id, token_hash, user_agent, ip, created_at, expires_at, revoked_at, auth_level, last_seen_at, elevated_until, credential_id`
+const sessionBaseCols = `id, user_id, token_hash, user_agent, ip, created_at, expires_at, revoked_at, auth_level, last_seen_at, elevated_until, credential_id`
 
-func scanSession(r scanner) (theauth.Session, error) {
+const sessionAuthCols = sessionBaseCols + `, auth_methods, auth_time`
+
+// sessionAuthProbeKey keys the cached column probe in Store.cache. Real cache
+// keys are SQL text, so this cannot collide.
+const sessionAuthProbeKey = "\x00probe:session-auth-columns"
+
+// hasSessionAuthCols reports whether the sessions table carries the
+// auth_methods and auth_time columns of migration 0034. Hosts that upgraded
+// the library without running newer migrations keep working: sessions then
+// read with no auth record. The answer is probed once per Store (a Store made
+// after migrating sees the columns); concurrent first use may probe twice,
+// which is harmless. A failed probe is not cached.
+func (s *Store) hasSessionAuthCols(ctx context.Context) (bool, error) {
+	if v, ok := s.cache.Load(sessionAuthProbeKey); ok {
+		return v.(bool), nil
+	}
+	rows, err := s.db.QueryContext(ctx, s.q(`PRAGMA table_info(theauth_sessions)`))
+	if err != nil {
+		return false, err
+	}
+	defer func() { _ = rows.Close() }()
+	var found int
+	for rows.Next() {
+		var (
+			cid        int
+			name, typ  string
+			notNull    int
+			dflt       sql.NullString
+			primaryKey int
+		)
+		if err := rows.Scan(&cid, &name, &typ, &notNull, &dflt, &primaryKey); err != nil {
+			return false, err
+		}
+		if name == "auth_methods" || name == "auth_time" {
+			found++
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return false, err
+	}
+	has := found == 2
+	s.cache.Store(sessionAuthProbeKey, has)
+	return has, nil
+}
+
+// sessionCols returns the session column list for the current schema, and
+// whether it includes the auth record columns.
+func (s *Store) sessionCols(ctx context.Context) (string, bool, error) {
+	has, err := s.hasSessionAuthCols(ctx)
+	if err != nil {
+		return "", false, err
+	}
+	if has {
+		return sessionAuthCols, true, nil
+	}
+	return sessionBaseCols, false, nil
+}
+
+func scanSession(r scanner, withAuth bool) (theauth.Session, error) {
 	var (
 		id, userID, ua, ip, level, cred string
 		hash                            []byte
 		created, expires, seen          int64
-		revoked, elevated               sql.NullInt64
+		revoked, elevated, authTime     sql.NullInt64
+		methodsJSON                     sql.NullString
 	)
-	if err := r.Scan(&id, &userID, &hash, &ua, &ip, &created, &expires, &revoked, &level, &seen, &elevated, &cred); err != nil {
+	dest := []any{&id, &userID, &hash, &ua, &ip, &created, &expires, &revoked, &level, &seen, &elevated, &cred}
+	if withAuth {
+		dest = append(dest, &methodsJSON, &authTime)
+	}
+	if err := r.Scan(dest...); err != nil {
 		return theauth.Session{}, err
 	}
 	sid, err := parseID(id)
@@ -32,7 +97,19 @@ func scanSession(r scanner) (theauth.Session, error) {
 	if seen != 0 {
 		lastSeen = fromMicro(seen)
 	}
+	var methods []string
+	if methodsJSON.Valid && methodsJSON.String != "" {
+		if err := json.Unmarshal([]byte(methodsJSON.String), &methods); err != nil {
+			return theauth.Session{}, fmt.Errorf("decode session auth methods: %w", err)
+		}
+	}
+	var authAt time.Time
+	if authTime.Valid {
+		authAt = fromMicro(authTime.Int64)
+	}
 	return theauth.Session{
+		AuthMethods:   methods,
+		AuthTime:      authAt,
 		ID:            sid,
 		UserID:        uid,
 		TokenHash:     hash,
@@ -54,14 +131,23 @@ func (s *Store) CreateSession(ctx context.Context, sess theauth.Session) (theaut
 	if level == "" {
 		level = theauth.AuthLevelFull
 	}
-	row := s.db.QueryRowContext(ctx, s.q(`
-INSERT INTO theauth_sessions (id, user_id, token_hash, user_agent, ip, created_at, expires_at, auth_level, last_seen_at, credential_id)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-RETURNING `+sessionCols),
+	cols, withAuth, err := s.sessionCols(ctx)
+	if err != nil {
+		return theauth.Session{}, wrap("create session", err)
+	}
+	insertCols := `id, user_id, token_hash, user_agent, ip, created_at, expires_at, auth_level, last_seen_at, credential_id`
+	marks := `?, ?, ?, ?, ?, ?, ?, ?, ?, ?`
+	args := []any{
 		idStr(sess.ID), idStr(sess.UserID), sess.TokenHash, sess.UserAgent, sess.IP,
 		toMicro(orNow(sess.CreatedAt)), toMicro(sess.ExpiresAt), level, lastSeenMicro(sess.LastSeenAt), sess.CredentialID,
-	)
-	out, err := scanSession(row)
+	}
+	if withAuth {
+		insertCols += `, auth_methods, auth_time`
+		marks += `, ?, ?`
+		args = append(args, methodsJSONVal(sess.AuthMethods), authTimeVal(sess.AuthTime))
+	}
+	row := s.db.QueryRowContext(ctx, s.q(`INSERT INTO theauth_sessions (`+insertCols+`) VALUES (`+marks+`) RETURNING `+cols), args...)
+	out, err := scanSession(row, withAuth)
 	if err != nil {
 		return theauth.Session{}, wrap("create session", err)
 	}
@@ -75,8 +161,12 @@ func (s *Store) CreateSessionWithAuthLevel(ctx context.Context, sess theauth.Ses
 
 // SessionByTokenHash returns the session for a token hash, including revoked and expired ones.
 func (s *Store) SessionByTokenHash(ctx context.Context, hash []byte) (*theauth.Session, error) {
+	cols, withAuth, err := s.sessionCols(ctx)
+	if err != nil {
+		return nil, wrap("session by token hash", err)
+	}
 	sess, err := scanSession(s.db.QueryRowContext(ctx,
-		s.q(`SELECT `+sessionCols+` FROM theauth_sessions WHERE token_hash = ?`), hash))
+		s.q(`SELECT `+cols+` FROM theauth_sessions WHERE token_hash = ?`), hash), withAuth)
 	if err != nil {
 		return nil, notFoundOr("session by token hash", err)
 	}
@@ -88,8 +178,12 @@ func (s *Store) SessionByTokenHash(ctx context.Context, hash []byte) (*theauth.S
 
 // SessionByID returns the session with the given ID.
 func (s *Store) SessionByID(ctx context.Context, id theauth.ULID) (*theauth.Session, error) {
+	cols, withAuth, err := s.sessionCols(ctx)
+	if err != nil {
+		return nil, wrap("session by id", err)
+	}
 	sess, err := scanSession(s.db.QueryRowContext(ctx,
-		s.q(`SELECT `+sessionCols+` FROM theauth_sessions WHERE id = ?`), idStr(id)))
+		s.q(`SELECT `+cols+` FROM theauth_sessions WHERE id = ?`), idStr(id)), withAuth)
 	if err != nil {
 		return nil, notFoundOr("session by id", err)
 	}

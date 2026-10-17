@@ -170,6 +170,13 @@ func (s *Service) IssueWith(ctx context.Context, user models.User, opts IssueOpt
 		ExpiresAt:    now.Add(ttl),
 		CredentialID: opts.CredentialID,
 	}
+	if rec := models.AuthRecordFrom(ctx); len(rec.Methods) > 0 {
+		sess.AuthMethods = rec.Methods
+		sess.AuthTime = rec.At
+		if sess.AuthTime.IsZero() {
+			sess.AuthTime = now
+		}
+	}
 	sess, err = s.storage.CreateSession(ctx, sess)
 	if err != nil {
 		return "", models.Session{}, err

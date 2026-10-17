@@ -119,6 +119,7 @@ const (
 	MetricClientAuthCacheMisses        = observability.MetricClientAuthCacheMisses
 	MetricClientAuthCacheSize          = observability.MetricClientAuthCacheSize
 	MetricRateLimitBlockedTotal        = observability.MetricRateLimitBlockedTotal
+	MetricAgentPolicyResolverErrors    = observability.MetricAgentPolicyResolverErrors
 	MetricAuditDroppedTotal            = observability.MetricAuditDroppedTotal
 	MetricAuditQueueDepth              = observability.MetricAuditQueueDepth
 	MetricSessionActive                = observability.MetricSessionActive

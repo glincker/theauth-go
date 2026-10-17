@@ -95,3 +95,19 @@ func (s *Store) TouchBackchannelPoll(_ context.Context, authReqID string, now ti
 	c.requests[authReqID] = r
 	return r, nil
 }
+
+// RedeemBackchannelRequest implements theauth.BackchannelRedeemer. It moves an
+// approved, unexpired request to consumed under the store lock, so exactly one
+// concurrent caller wins. Any other state returns ok == false.
+func (s *Store) RedeemBackchannelRequest(_ context.Context, authReqID string, now time.Time) (theauth.BackchannelRequest, bool, error) {
+	c := s.ensureCIBA()
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	r, ok := c.requests[authReqID]
+	if !ok || r.Status != theauth.BackchannelStatusApproved || !now.Before(r.ExpiresAt) {
+		return theauth.BackchannelRequest{}, false, nil
+	}
+	r.Status = theauth.BackchannelStatusConsumed
+	c.requests[authReqID] = r
+	return r, true, nil
+}

@@ -562,7 +562,7 @@ func (s *Service) Callback(ctx context.Context, providerName, code, state, bindi
 		return CallbackResult{}, nil, false, fmt.Errorf("theauth: upsert oauth account: %w", err)
 	}
 
-	sessToken, _, err := s.sessions.Issue(ctx, *resolved, userAgent, ip)
+	sessToken, _, err := s.sessions.Issue(models.WithAuthMethods(ctx, models.AMRFederated), *resolved, userAgent, ip)
 	if err != nil {
 		return CallbackResult{}, nil, false, err
 	}

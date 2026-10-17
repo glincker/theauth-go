@@ -836,6 +836,7 @@ func mapOAuthErrorCode(err error) string {
 	case errors.Is(err, models.ErrOAuthInvalidResource):
 		return oauthErrInvalidTarget
 	case errors.Is(err, models.ErrAgentInactive),
+		errors.Is(err, models.ErrAgentPolicyDenied),
 		errors.Is(err, models.ErrDelegationNotFound),
 		errors.Is(err, models.ErrDelegationRevoked):
 		return oauthErrAccessDenied

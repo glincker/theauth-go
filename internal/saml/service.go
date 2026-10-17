@@ -738,7 +738,7 @@ func (s *Service) outstandingAuthnRequestIDs() []string {
 
 // issueSessionForOrg mints a session with the supplied active org pre-set.
 func (s *Service) issueSessionForOrg(ctx context.Context, user models.User, orgID models.ULID, ua, ip string) (string, models.Session, error) {
-	token, sess, err := s.sessions.Issue(ctx, user, ua, ip)
+	token, sess, err := s.sessions.Issue(models.WithAuthMethods(ctx, models.AMRSSO), user, ua, ip)
 	if err != nil {
 		return "", models.Session{}, err
 	}

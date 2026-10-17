@@ -13,6 +13,7 @@ import (
 
 var (
 	_ theauth.SessionManagementStorage = (*Store)(nil)
+	_ theauth.SessionAuthStorage       = (*Store)(nil)
 	_ theauth.SessionLinkStorage       = (*Store)(nil)
 )
 
