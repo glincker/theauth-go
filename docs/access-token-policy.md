@@ -52,4 +52,4 @@ Storage: memory, SQLite (migration `0026`), Postgres and MySQL (migration `0021`
 
 ## Not included
 
-Resource servers using the `mcpresource` package keep validating Ed25519 tokens locally. For other algorithms or opaque tokens, use introspection.
+Resource servers using the `mcpresource` package keep validating Ed25519 tokens locally. For other algorithms, use introspection. For opaque tokens, add `mcpresource.WithOpaqueTokens()` together with `WithIntrospection` (see `docs/mcp-oauth-sqlite.md`).

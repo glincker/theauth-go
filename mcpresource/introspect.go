@@ -30,6 +30,14 @@ type introspectionResult struct {
 	Jti               string      `json:"jti,omitempty"`
 	Act               *actorClaim `json:"act,omitempty"`
 	DelegationGrantID string      `json:"delegation_grant_id,omitempty"`
+	DeviceID          string      `json:"device_id,omitempty"`
+	ACR               string      `json:"acr,omitempty"`
+	AMR               []string    `json:"amr,omitempty"`
+	AuthTime          int64       `json:"auth_time,omitempty"`
+
+	// Cnf is the RFC 7800 confirmation claim, present when the AS bound the
+	// token to a DPoP key.
+	Cnf *confirmationClaim `json:"cnf,omitempty"`
 
 	// AuthorizationDetails is the raw RFC 9396 array, when the AS reports it.
 	AuthorizationDetails json.RawMessage `json:"authorization_details,omitempty"`
@@ -41,10 +49,13 @@ type actorClaim struct {
 	Act *actorClaim `json:"act,omitempty"`
 }
 
-// introspectCache memoizes recent introspection results by token hash. TTL
-// matches the cacheTTL configured on the Validator; introspection responses
-// the AS marks with shorter Cache-Control max-age are honored down to one
-// second.
+// introspectCache memoizes recent introspection results by token hash. The
+// entry lifetime is the cacheTTL configured on the Validator, unless the AS
+// answers with a positive Cache-Control max-age: that value (whole seconds,
+// shorter or longer than cacheTTL) replaces cacheTTL for that entry. A
+// max-age of 0, a missing directive or an unparsable one falls back to
+// cacheTTL. The cache holds at most maxIntrospectEntries entries; keys are
+// SHA-256 digests of the token, never the token itself.
 //
 // Concurrency: the lock is a sync.RWMutex so the hit path (the common case
 // for a busy MCP resource server) can read in parallel across cores. The
@@ -60,9 +71,16 @@ type introspectCache struct {
 	httpClient *http.Client
 	ttl        time.Duration
 
+	// now is the clock; tests replace it.
+	now func() time.Time
+
 	mu      sync.RWMutex
 	entries map[string]*introspectCacheEntry
 }
+
+// maxIntrospectEntries bounds the cache so a flood of distinct tokens cannot
+// grow it without limit.
+const maxIntrospectEntries = 10000
 
 type introspectCacheEntry struct {
 	expiresAt time.Time
@@ -79,6 +97,7 @@ func newIntrospectCache(uri, clientID, secret string, client *http.Client, ttl t
 		secret:     secret,
 		httpClient: client,
 		ttl:        ttl,
+		now:        time.Now,
 		entries:    map[string]*introspectCacheEntry{},
 	}
 }
@@ -103,7 +122,7 @@ func (c *introspectCache) Lookup(token, audience string) (*introspectionResult, 
 	// reused across many tool invocations inside the IntrospectionCacheTTL
 	// window).
 	c.mu.RLock()
-	if entry, ok := c.entries[key]; ok && time.Now().Before(entry.expiresAt) {
+	if entry, ok := c.entries[key]; ok && c.now().Before(entry.expiresAt) {
 		out := entry.result
 		c.mu.RUnlock()
 		return out, nil
@@ -123,17 +142,39 @@ func (c *introspectCache) Lookup(token, audience string) (*introspectionResult, 
 	// each overwrite the entry; with it, the first writer wins and the
 	// rest no-op without overwriting a possibly-fresher entry).
 	c.mu.Lock()
-	if existing, ok := c.entries[key]; ok && time.Now().Before(existing.expiresAt) {
+	if existing, ok := c.entries[key]; ok && c.now().Before(existing.expiresAt) {
 		out := existing.result
 		c.mu.Unlock()
 		return out, nil
 	}
+	c.evictLocked()
 	c.entries[key] = &introspectCacheEntry{
-		expiresAt: time.Now().Add(ttl),
+		expiresAt: c.now().Add(ttl),
 		result:    res,
 	}
 	c.mu.Unlock()
 	return res, nil
+}
+
+// evictLocked makes room for one more entry. It drops expired entries first
+// and, if the cache is still full, one arbitrary entry. The caller holds the
+// write lock.
+func (c *introspectCache) evictLocked() {
+	if len(c.entries) < maxIntrospectEntries {
+		return
+	}
+	now := c.now()
+	for k, e := range c.entries {
+		if !now.Before(e.expiresAt) {
+			delete(c.entries, k)
+		}
+	}
+	for k := range c.entries {
+		if len(c.entries) < maxIntrospectEntries {
+			break
+		}
+		delete(c.entries, k)
+	}
 }
 
 // Invalidate drops the cached entry for a token. The middleware calls this on

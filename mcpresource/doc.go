@@ -32,9 +32,15 @@
 // introspection endpoint.
 //
 // The package validates the JWT signature against a cached JWKS, enforces the
-// audience claim against the configured resource URI, checks expiry with a
-// small skew tolerance, and walks the RFC 8693 actor chain via the AS
-// introspection endpoint so revocations propagate inside WithCacheTTL.
+// audience claim against the configured resource URI and checks expiry with a
+// small skew tolerance. Only tokens that carry an act claim or a
+// delegation_grant_id are rechecked against the AS introspection endpoint
+// (RFC 7662), so a revoked delegation is seen within WithCacheTTL (or the AS
+// Cache-Control max-age). Other JWTs are validated offline.
+//
+// WithOpaqueTokens adds support for opaque (reference) access tokens: tokens
+// that are not JWT shaped are introspected, and the Principal is built from
+// the introspection response with the same audience, expiry and DPoP checks.
 //
 // This package is intentionally a standalone Go module with zero
 // dependencies outside the standard library. A consumer importing it does

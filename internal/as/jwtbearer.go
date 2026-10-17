@@ -207,8 +207,12 @@ func (s *Service) JWTBearerGrant(ctx context.Context, req TokenRequest, assertio
 	if !jwtStringIn(header.Alg, issuer.AllowedAlgorithms) {
 		return TokenResponse{}, models.ErrOAuthInvalidGrant
 	}
-	// aud must match the AS issuer URL.
-	if subtle.ConstantTimeCompare([]byte(claims.Aud), []byte(s.Cfg.Issuer)) != 1 {
+	// aud must match the AS issuer URL (or the issuer's configured audience).
+	wantAud := s.Cfg.Issuer
+	if issuer.Audience != "" {
+		wantAud = issuer.Audience
+	}
+	if subtle.ConstantTimeCompare([]byte(claims.Aud), []byte(wantAud)) != 1 {
 		return TokenResponse{}, models.ErrOAuthInvalidGrant
 	}
 	if claims.Exp == 0 || time.Unix(claims.Exp, 0).Add(s.Cfg.ClockSkew).Before(now) {
@@ -237,6 +241,14 @@ func (s *Service) JWTBearerGrant(ctx context.Context, req TokenRequest, assertio
 	}
 	if !verifyWithJWKS(keys, header, []byte(signingInput), sig) {
 		return TokenResponse{}, models.ErrOAuthInvalidGrant
+	}
+	// Required claims run only on a signature-verified payload. A missing
+	// payload map fails closed when any matcher is configured.
+	if len(issuer.RequiredClaims) > 0 {
+		if failed := failedClaims(issuer.RequiredClaims, claims.raw); len(failed) > 0 {
+			s.auditClaimsDenied(ctx, req, issuer.Issuer, failed)
+			return TokenResponse{}, models.ErrOAuthInvalidGrant
+		}
 	}
 	// Resolve to a local user.
 	if issuer.SubjectMapper == nil {
@@ -320,6 +332,20 @@ func (s *Service) JWTBearerGrant(ctx context.Context, req TokenRequest, assertio
 		ExpiresIn:   int(s.Cfg.AccessTokenTTL.Seconds()),
 		Scope:       scopeJoin(grantScope),
 	}, nil
+}
+
+// auditClaimsDenied records a required-claims denial. It names the issuer,
+// the failed claim names and the agent when the request identifies one; it
+// never carries claim values.
+func (s *Service) auditClaimsDenied(ctx context.Context, req TokenRequest, issuer string, failed []string) {
+	meta := map[string]any{"issuer": issuer, "failed_claims": failed, "grant": models.GrantTypeJWTBearer}
+	if req.ClientID != "" {
+		if ag, err := s.Storage.AgentByClientID(ctx, req.ClientID); err == nil && ag != nil {
+			meta["agent_id"] = ag.ID.String()
+			meta["agent_name"] = ag.Name
+		}
+	}
+	s.Audit.EmitAudit(ctx, "jwt_bearer.claims_denied", models.TargetRef{Type: "jwt_issuer", ID: issuer}, meta)
 }
 
 // jtiReplayCheck records a jti and returns an error if it was already seen

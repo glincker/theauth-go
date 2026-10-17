@@ -49,6 +49,8 @@ func (v *Validator) Middleware(next http.Handler) http.Handler {
 // authenticate runs the full validation chain for a token and returns a
 // populated Principal on success. Steps:
 //
+//  0. With WithOpaqueTokens, a token that is not JWT shaped skips the steps
+//     below and is validated through introspection (authenticateOpaque).
 //  1. Verify the JWT signature + structural claims against the JWKS cache.
 //  2. Reject any aud mismatch up front (defence in depth: verifyJWT also
 //     enforces this).
@@ -64,6 +66,9 @@ func (v *Validator) Middleware(next http.Handler) http.Handler {
 //  6. Build the Principal and return.
 func (v *Validator) authenticate(r *http.Request, token, scheme string) (*Principal, error) {
 	now := time.Now()
+	if v.opaque && !looksLikeJWT(token) {
+		return v.authenticateOpaque(r, token, scheme, now)
+	}
 	claims, err := verifyJWT(token, v.resourceURI, v.jwks.Key, now, v.clockSkew, v.allowMissingTyp)
 	if err != nil {
 		return nil, err
@@ -83,23 +88,7 @@ func (v *Validator) authenticate(r *http.Request, token, scheme string) (*Princi
 	// AS chose at issuance time whether to constrain; the resource
 	// server enforces unconditionally.
 	if claims.Cnf != nil && claims.Cnf.JKT != "" {
-		if v.dpop == nil {
-			return nil, fmt.Errorf("%w: resource server has no DPoP verifier configured", errDPoPMissingHeader)
-		}
-		if !strings.EqualFold(scheme, "dpop") {
-			return nil, errDPoPMissingHeader
-		}
-		proof := r.Header.Get("DPoP")
-		if proof == "" {
-			return nil, errDPoPMissingHeader
-		}
-		jkt, err := v.dpop.verifyAndBind(proof, dpopVerifyParams{
-			method:      r.Method,
-			url:         requestURL(r),
-			accessToken: token,
-			requiredJKT: claims.Cnf.JKT,
-			now:         now,
-		})
+		jkt, err := v.bindDPoP(r, token, scheme, claims.Cnf.JKT, now)
 		if err != nil {
 			return nil, err
 		}
@@ -126,6 +115,28 @@ func (v *Validator) authenticate(r *http.Request, token, scheme string) (*Princi
 		}
 	}
 	return principal, nil
+}
+
+// bindDPoP enforces RFC 9449 sender constraint for a token bound to wantJKT
+// and returns the proof key thumbprint. JWTs and opaque tokens share it.
+func (v *Validator) bindDPoP(r *http.Request, token, scheme, wantJKT string, now time.Time) (string, error) {
+	if v.dpop == nil {
+		return "", fmt.Errorf("%w: resource server has no DPoP verifier configured", errDPoPMissingHeader)
+	}
+	if !strings.EqualFold(scheme, "dpop") {
+		return "", errDPoPMissingHeader
+	}
+	proof := r.Header.Get("DPoP")
+	if proof == "" {
+		return "", errDPoPMissingHeader
+	}
+	return v.dpop.verifyAndBind(proof, dpopVerifyParams{
+		method:      r.Method,
+		url:         requestURL(r),
+		accessToken: token,
+		requiredJKT: wantJKT,
+		now:         now,
+	})
 }
 
 // requestURL rebuilds the absolute URL the validator passes to the DPoP

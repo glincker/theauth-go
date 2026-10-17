@@ -39,7 +39,8 @@ type Store struct {
 	parInitMu sync.Mutex
 	par       *parState
 	// jti: RFC 7523 JTI replay cache. See memory_jwtbearer.go.
-	jti *jtiState
+	jti     *jtiState
+	jtiOnce sync.Once
 	// CIBA: backchannel authentication requests. See memory_ciba.go.
 	ciba *cibaState
 	// scoped API tokens + device codes. See memory_apitokens.go.

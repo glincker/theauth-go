@@ -17,9 +17,7 @@ type jtiState struct {
 }
 
 func (s *Store) ensureJTI() *jtiState {
-	if s.jti == nil {
-		s.jti = &jtiState{jtis: map[string]time.Time{}}
-	}
+	s.jtiOnce.Do(func() { s.jti = &jtiState{jtis: map[string]time.Time{}} })
 	return s.jti
 }
 

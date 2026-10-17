@@ -138,9 +138,38 @@ mux.Handle("/mcp", v.Middleware(handler))
 mux.Handle("/write", v.Middleware(v.RequireScope("files.write")(writeHandler)))
 ```
 
-`WithCacheTTL` sets the JWKS and introspection cache window. A value of zero or less is ignored and the 60 second default stays. If neither `WithJWKS` nor `WithIntrospection` is set, every token is refused; `v.Diagnostics()` reports that as a `no-verification-source` warning. It also warns when `WithDeviceRevocationIntrospection` is set without an introspection URL.
+`WithCacheTTL` sets the JWKS and introspection cache window. A value of zero or less is ignored and the 60 second default stays. If neither `WithJWKS` nor `WithIntrospection` is set, every request gets a 401; `v.Diagnostics()` reports that as a `no-verification-source` warning. It also warns when `WithDeviceRevocationIntrospection` is set without an introspection URL.
 
 On a missing or bad token the middleware answers 401 with a `WWW-Authenticate: Bearer` header that carries `resource_metadata="https://mcp.example.com/.well-known/oauth-protected-resource/mcp"`. A token for another audience is refused. A token without the scope gets 403 `insufficient_scope` with the scope named in the header. Inside the handler, `v.Principal(ctx)` returns the subject, scopes, audience and, for delegated agent tokens, the actor and actor chain.
+
+### Opaque access tokens
+
+A client registered with `access_token_format: "opaque"` (needs `TokenPolicy` on the AS) gets random reference tokens instead of JWTs. The resource server cannot verify those offline, so turn on `WithOpaqueTokens` next to `WithIntrospection`:
+
+```go
+v := mcpresource.New("https://mcp.example.com/mcp",
+	mcpresource.WithJWKS("https://auth.example.com/oauth/jwks"), // optional if you only see opaque tokens
+	mcpresource.WithIntrospection("https://auth.example.com/oauth/introspect", rsID, rsSecret),
+	mcpresource.WithOpaqueTokens(),
+)
+```
+
+A token that has three base64url segments and a header starting `eyJ` is a JWT and always takes the JWT path. A bad JWT is never retried as an opaque token. Anything else is sent to `/oauth/introspect`, unless it is longer than 2048 bytes or has characters outside the RFC 6750 token set; those get a 401 without calling the AS.
+
+The Principal comes from the introspection response, and the checks match the JWT ones:
+
+- `active` must be true. Inactive gives 401 `invalid_token`.
+- `aud` must contain the resource URI. A response with no `aud` is refused.
+- `exp` must be present and not past (with the usual clock skew). No `exp` is refused.
+- A `token_type` of `refresh_token` is refused, since the AS reports active refresh tokens too.
+- Scope may be empty, as it may for a JWT.
+- `act`, `delegation_grant_id`, `device_id`, `acr`, `amr`, `auth_time` and `authorization_details` fill the matching Principal fields.
+
+DPoP works through `cnf.jkt` in the response. If it is present, the request must carry a matching proof and `WithDPoPVerification` must be set, exactly as for a bound JWT. A response that says `token_type: "DPoP"` without `cnf.jkt` is refused.
+
+Answers are cached under a SHA-256 of the token, never the token. The entry lives for `WithCacheTTL`, or for the AS `Cache-Control` max-age when that is a positive number of seconds (a `max-age=0` falls back to `WithCacheTTL`). The cache holds at most 10000 entries. A token revoked at `/oauth/revoke` is therefore still accepted until its cached answer expires; lower `WithCacheTTL` and the AS `IntrospectionCacheTTL` to shrink that window.
+
+Without `WithIntrospection`, every opaque token is refused and `v.Diagnostics()` reports `opaque-no-introspection`.
 
 ### Revocation is not seen by offline validation
 
