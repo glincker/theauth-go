@@ -138,7 +138,8 @@ func sign(key *rsa.PrivateKey, extra map[string]any) string {
 	pb, _ := json.Marshal(p)
 	in := b64(h) + "." + b64(pb)
 	sum := sha256.Sum256([]byte(in))
-	sig, err := rsa.SignPKCS1v15(rand.Reader, key, crypto.SHA256, sum[:])
+	// RS256 is RSASSA-PKCS1-v1_5 by definition (RFC 7518 section 3.3), so this padding is required and is a signature, not encryption.
+	sig, err := rsa.SignPKCS1v15(rand.Reader, key, crypto.SHA256, sum[:]) // NOSONAR S5542
 	if err != nil {
 		log.Fatal(err)
 	}
