@@ -49,6 +49,10 @@ type Validator struct {
 	revocation         RevocationChecker
 	revocationFailOpen bool
 
+	// opaque, when set, sends tokens that are not JWT shaped to the
+	// introspection endpoint instead of rejecting them.
+	opaque bool
+
 	startOnce sync.Once
 }
 
@@ -196,7 +200,8 @@ func (v *Validator) validateConfig() error {
 	if v.resourceURI == "" {
 		return errors.New("mcpresource: resourceURI required")
 	}
-	if v.jwksURI == "" {
+	// An opaque-only deployment has no JWKS; it needs introspection instead.
+	if v.jwksURI == "" && !(v.opaque && v.introspectURI != "") {
 		return errInvalidConfig
 	}
 	return nil
@@ -220,15 +225,18 @@ type Diagnostic struct {
 //
 // Current rules:
 //   - "warn" / "no-verification-source": neither JWKS URI nor introspection
-//     URI is configured; every token will be rejected as inactive, which
+//     URI is configured. Every request is answered 401 invalid_token, which
 //     looks identical to a bad-token bug and is almost certainly a
 //     misconfiguration.
 //   - "warn" / "revocation-no-introspection": WithDeviceRevocationIntrospection
 //     is set without an introspection URI, so device tokens are refused.
+//   - "warn" / "opaque-no-introspection": WithOpaqueTokens is set without an
+//     introspection URI, so every opaque token is refused.
 //   - "info" / "dual-verification": both JWKS URI and introspection URI are
-//     set; the validator uses JWKS for JWT validation and introspection for
-//     opaque tokens. This is a valid configuration but worth surfacing so
-//     operators know both paths are active.
+//     set. JWTs are verified against the JWKS. Introspection is used only
+//     for tokens that carry act or delegation_grant_id, for device
+//     revocation (WithDeviceRevocationIntrospection) and, with
+//     WithOpaqueTokens, for tokens that are not JWT shaped.
 func (v *Validator) Diagnostics() []Diagnostic {
 	var out []Diagnostic
 	hasJWKS := v.jwksURI != ""
@@ -237,7 +245,7 @@ func (v *Validator) Diagnostics() []Diagnostic {
 		out = append(out, Diagnostic{
 			Severity: "warn",
 			Code:     "no-verification-source",
-			Message:  "mcpresource: neither JWKS URI nor introspection URI is configured; every token will be rejected as inactive",
+			Message:  "mcpresource: neither JWKS URI nor introspection URI is configured; every request will be answered 401 invalid_token",
 		})
 	}
 	if _, ok := v.revocation.(deviceIntrospectionChecker); ok && !hasIntrospect {
@@ -251,7 +259,14 @@ func (v *Validator) Diagnostics() []Diagnostic {
 		out = append(out, Diagnostic{
 			Severity: "info",
 			Code:     "dual-verification",
-			Message:  "mcpresource: both JWKS URI and introspection URI are configured; JWTs use JWKS, opaque tokens use introspection",
+			Message:  "mcpresource: both JWKS URI and introspection URI are configured; JWTs use JWKS, introspection covers act/delegation_grant_id tokens, device revocation and (with WithOpaqueTokens) opaque tokens",
+		})
+	}
+	if v.opaque && !hasIntrospect {
+		out = append(out, Diagnostic{
+			Severity: "warn",
+			Code:     "opaque-no-introspection",
+			Message:  "mcpresource: WithOpaqueTokens needs WithIntrospection; every opaque token will be refused",
 		})
 	}
 	return out

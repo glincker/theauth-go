@@ -60,3 +60,28 @@ Without `IDJAG` set, such an assertion is refused.
 ## Audit events
 
 `id_jag.issued` on issue. Redemption emits the existing `jwt_bearer.token_minted`.
+
+## Required claim matchers
+
+Any jwt-bearer trusted issuer can require claims on the verified assertion with `TrustedJWTIssuer.RequiredClaims`. This matters for multi-tenant issuers (GitHub Actions, GitLab CI, cloud workload identity) where a valid signature only proves the token came from the platform, not from your project. See [GitHub Actions OIDC](github-actions-oidc.md).
+
+```go
+RequiredClaims: []theauth.ClaimMatcher{
+    {Claim: "repository", Equals: "acme/app"},
+    {Claim: "ref", Pattern: "refs/heads/release/*"},
+    {Claim: "environment", OneOf: []string{"staging", "production"}},
+    {Claim: "actor", Present: true},
+}
+```
+
+- Each matcher sets exactly one of `Equals`, `OneOf`, `Pattern` or `Present`. Anything else is rejected by `New` with `ErrInvalidClaimMatcher`, naming the issuer and claim.
+- All matchers must pass. A missing claim fails.
+- Comparison is exact and case sensitive. Values are never coerced: a number or boolean claim matches only `Present`.
+- A string array claim passes if any string element matches.
+- `Pattern` is a glob where `*` matches any run of characters, including `/`. It is anchored to the whole value, and there is no regex.
+- `Present` means the claim exists and is not null, an empty string or an empty array.
+- A dotted name such as `ctx.team` reads a nested object when no top level claim has that exact name.
+- Matchers run after the signature check. A failure returns `invalid_grant` with no claim names or values and emits `jwt_bearer.claims_denied` (issuer, failed claim names, agent when known).
+- `TrustedJWTIssuer.Audience` replaces the authorization server URL as the expected `aud` for that issuer.
+- With no matchers configured the behavior is unchanged.
+

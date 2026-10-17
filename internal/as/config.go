@@ -281,6 +281,10 @@ type TrustedJWTIssuer struct {
 	// The internal package holds it as a plain func to avoid a dependency on
 	// root interfaces.
 	SubjectMapper func(claims map[string]any) (models.ULID, error)
+	// RequiredClaims must all pass (AND) on the verified assertion.
+	RequiredClaims []ClaimMatcher
+	// Audience, when non-empty, replaces the AS issuer URL as the expected aud.
+	Audience string
 }
 
 // Validate applies defaults and screens required fields. Mirror of the
@@ -394,6 +398,9 @@ func Validate(cfg *Config, encryptionKey []byte) error {
 			cfg.JWTBearer.MaxActorChainDepth = 5
 		}
 		for i, iss := range cfg.JWTBearer.TrustedJWTIssuers {
+			if err := validateClaimMatchers(iss.Issuer, iss.RequiredClaims); err != nil {
+				return err
+			}
 			if len(iss.AllowedAlgorithms) == 0 {
 				cfg.JWTBearer.TrustedJWTIssuers[i].AllowedAlgorithms = []string{"ES256", "RS256", "EdDSA"}
 			}

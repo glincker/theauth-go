@@ -752,7 +752,31 @@ type TrustedJWTIssuer struct {
 	// Use EmailMapper to resolve the email claim to a local user.Email
 	// row instead.
 	SubjectMapper SubjectMapper
+
+	// RequiredClaims are matchers that every verified assertion from this
+	// issuer must satisfy (AND) before it is exchanged. A missing claim
+	// fails closed, values are never coerced and matching is case
+	// sensitive. A failure returns invalid_grant with a generic
+	// description and emits a jwt_bearer.claims_denied audit event that
+	// names the failed claims but not their values. With none configured
+	// every validly signed assertion from the issuer is accepted, which is
+	// unsafe for multi-tenant issuers such as GitHub Actions: see
+	// GitHubActionsIssuer.
+	RequiredClaims []ClaimMatcher
+
+	// Audience, when non-empty, is the aud value this issuer's assertions
+	// must carry instead of the authorization server issuer URL.
+	Audience string
 }
+
+// ClaimMatcher requires one claim of a verified jwt-bearer assertion to
+// satisfy exactly one operator (Equals, OneOf, Pattern or Present). See
+// TrustedJWTIssuer.RequiredClaims.
+type ClaimMatcher = internalas.ClaimMatcher
+
+// ErrInvalidClaimMatcher is returned by New (wrapped) for a misconfigured
+// ClaimMatcher.
+var ErrInvalidClaimMatcher = internalas.ErrInvalidClaimMatcher
 
 // SubjectMapper resolves claims from a trusted external JWT to a local
 // user ULID. Two built-in implementations are provided:
@@ -909,6 +933,8 @@ func jwtBearerConfigFromRoot(c *JWTBearerConfig) *internalas.JWTBearerConfig {
 			JWKSURL:           t.JWKSURL,
 			AllowedAlgorithms: algs,
 			SubjectMapper:     mapper,
+			RequiredClaims:    append([]ClaimMatcher(nil), t.RequiredClaims...),
+			Audience:          t.Audience,
 		}
 	}
 	return &internalas.JWTBearerConfig{
@@ -1000,6 +1026,22 @@ func validateASConfig(cfg *AuthorizationServerConfig, encryptionKey []byte) erro
 	cfg.LoginURL = internal.LoginURL
 	cfg.RateLimits = internal.RateLimits
 	cfg.RegistrationTokenTTL = internal.RegistrationTokenTTL
+	// Mirror JWT bearer defaults back (assertion ages, JWKS cache, default
+	// algorithms); without this an omitted AssertionMaxAge rejects every grant.
+	if jb, ij := cfg.JWTBearer, internal.JWTBearer; jb != nil && ij != nil {
+		jb.ClientAssertionMaxAge = ij.ClientAssertionMaxAge
+		jb.AssertionMaxAge = ij.AssertionMaxAge
+		jb.ReplayCacheTTL = ij.ReplayCacheTTL
+		jb.MaxActorChainDepth = ij.MaxActorChainDepth
+		jb.JWKSCacheTTL = ij.JWKSCacheTTL
+		jb.JWKSCacheMaxEntries = ij.JWKSCacheMaxEntries
+		jb.JWKSFetchTimeout = ij.JWKSFetchTimeout
+		for i := range jb.TrustedJWTIssuers {
+			if i < len(ij.TrustedJWTIssuers) && len(jb.TrustedJWTIssuers[i].AllowedAlgorithms) == 0 {
+				jb.TrustedJWTIssuers[i].AllowedAlgorithms = ij.TrustedJWTIssuers[i].AllowedAlgorithms
+			}
+		}
+	}
 	// Mirror CIBA defaults back.
 	if cfg.CIBA != nil && internal.CIBA != nil {
 		cfg.CIBA.DefaultExpiry = internal.CIBA.DefaultExpiry
