@@ -16,7 +16,7 @@ go get github.com/glincker/theauth-go/mcpresource@latest
 go get github.com/go-chi/chi/v5 github.com/oklog/ulid/v2 modernc.org/sqlite
 ```
 
-The SQLite authorization server setup shown here ships in the next release after v2.10.0, so until it is tagged use `@main` instead of `@latest`.
+The SQLite authorization server needs root v2.11.0 or later and a `storage/sqlite` release newer than v0.2.0 (v0.3.0 once tagged). Until that tag exists, use `@main` for `storage/sqlite`.
 
 ## 1. Imports and constants
 

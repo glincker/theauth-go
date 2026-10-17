@@ -14,7 +14,7 @@ In this tutorial you guard an endpoint so it needs a recent proof and a second f
 go get github.com/glincker/theauth-go/v2@latest
 ```
 
-Recording `amr` and `auth_time` on sessions ships in the next release after v2.10.0. Until it is tagged, use `@main`.
+Recording `amr` and `auth_time` on sessions needs v2.11.0 or later.
 
 ## How the session remembers
 
