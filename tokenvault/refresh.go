@@ -38,6 +38,9 @@ type OAuthRefresher struct {
 	ClientID     string
 	ClientSecret string
 	HTTPClient   *http.Client
+	// AuthStyle selects how client credentials are sent. The zero value is
+	// AuthBasic, the original behavior.
+	AuthStyle AuthStyle
 	// AllowInsecureHTTP permits a non https TokenURL. Tests and local demos only.
 	AllowInsecureHTTP bool
 }
@@ -52,13 +55,19 @@ func (o OAuthRefresher) Refresh(ctx context.Context, refreshToken string) (Token
 		return TokenResponse{}, errors.New("tokenvault: token URL must be https")
 	}
 	form := url.Values{"grant_type": {"refresh_token"}, "refresh_token": {refreshToken}}
+	if o.AuthStyle == AuthPost {
+		form.Set("client_id", o.ClientID)
+		form.Set("client_secret", o.ClientSecret)
+	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, o.TokenURL, strings.NewReader(form.Encode()))
 	if err != nil {
 		return TokenResponse{}, errors.New("tokenvault: build refresh request")
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.Header.Set("Accept", "application/json")
-	req.SetBasicAuth(url.QueryEscape(o.ClientID), url.QueryEscape(o.ClientSecret))
+	if o.AuthStyle != AuthPost {
+		req.SetBasicAuth(url.QueryEscape(o.ClientID), url.QueryEscape(o.ClientSecret))
+	}
 	client := o.HTTPClient
 	if client == nil {
 		client = &http.Client{Timeout: 15 * time.Second}

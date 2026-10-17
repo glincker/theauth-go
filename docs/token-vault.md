@@ -37,6 +37,21 @@ The vault stores a user's third party OAuth credentials encrypted at rest. Agent
 | 4 | Within `ExpirySkew` (default 60 seconds) of expiry, the vault refreshes. `invalid_grant` sets `needs_reauth`. |
 | 5 | Decrypt, write the audit event, then return the token. If the audit write fails, the token is withheld. |
 
+## Provider presets
+
+| Provider | Token URL | Refresh behavior | Quirk |
+|---|---|---|---|
+| github | `https://github.com/login/oauth/access_token` | Opt in | Tokens never expire unless token expiration is enabled; then 8 hour access, rotating refresh. |
+| google | `https://oauth2.googleapis.com/token` | Authorize params | Needs `access_type=offline` and `prompt=consent`; refresh token usually only on first consent. |
+| slack | `https://slack.com/api/oauth.v2.access` | Opt in | Rotation is per app and cannot be turned off; 12 hour access, single use refresh. |
+| linear | `https://api.linear.app/oauth/token` | Always | 24 hour access; every refresh rotates the refresh token. |
+| microsoft | `https://login.microsoftonline.com/common/oauth2/v2.0/token` | Scope | Request `offline_access` or no refresh token is issued. |
+| discord | `https://discord.com/api/oauth2/token` | Always | Basic auth; implicit and client credentials grants return no refresh token. |
+
+Notion and Atlassian are not preset because their token endpoints are documented with JSON bodies, which the vault refresh does not send.
+
+`tokenvault.RefresherFromPreset("github", id, secret, nil)` builds the refresher with the right token URL and `AuthStyle`.
+
 ## Key rotation
 
 1. Add the new key to the ring and make it active. Deploy.
