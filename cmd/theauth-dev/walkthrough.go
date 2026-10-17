@@ -157,11 +157,8 @@ func walkthrough(ctx context.Context, e *devEnv, out io.Writer) error {
 	return nil
 }
 
-// verifyAuditChain waits for the async audit writer, then hashes the events
-// into a SHA-256 chain and re-walks it. The memory store keeps no native
-// chain, so this proves the recorded sequence is intact in this process. The
-// sqlite, postgres and mysql stores chain every row and expose the same check
-// through (*TheAuth).VerifyAuditChain.
+// verifyAuditChain waits for the async audit writer, then re-walks a SHA-256 chain over the
+// recorded events. The memory store keeps no native chain.
 func (e *devEnv) verifyAuditChain(ctx context.Context) (int, string, error) {
 	const wantDecisions = 2
 	var events []theauth.AuditEvent

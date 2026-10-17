@@ -16,18 +16,10 @@ import (
 // the hashed payload, so rows of different versions never collide.
 const ChainHashVersion = 1
 
-// ChainPayload is the exact structure hashed for one audit row. Struct field
-// order fixes the JSON key order and every backend (sqlite, postgres, mysql)
-// hashes this same shape, so a chain verifies identically wherever it is
-// stored. storage/sqlite is a separate module and cannot import this internal
-// package, so it carries a byte-identical copy; TestChainHashGoldenVector here
-// and its twin in storage/sqlite pin both to one fixed digest.
-//
-// The personal ids (actor user, subject, actor, approver) are hashed as keyed
-// pseudonyms, never raw, so erasing a user blanks the raw columns and leaves
-// the chain intact. A pseudonym is linkable by whoever holds the installation
-// secret (theauth_audit_secrets); key shredding is deliberately not
-// implemented.
+// ChainPayload is the exact structure hashed for one audit row. Field order fixes the JSON key
+// order, and every backend hashes this same shape. storage/sqlite is a separate module with a
+// byte-identical copy; TestChainHashGoldenVector here and its twin there pin both to one digest.
+// Personal ids are hashed as keyed pseudonyms, so erasing a user keeps the chain intact.
 type ChainPayload struct {
 	V               int    `json:"v"`
 	ChainKey        string `json:"chainKey"`
@@ -106,9 +98,8 @@ type ChainHead struct {
 type ChainEntry struct {
 	Payload ChainPayload
 	Hash    string
-	// Metadata, DelegationChain and InputProvenance are the JSON text stored
-	// verbatim in text columns. Backends whose native JSON type reorders keys
-	// keep Metadata in a text column too, so the hash recomputes exactly.
+	// Metadata, DelegationChain and InputProvenance are stored verbatim as JSON text, so the hash
+	// recomputes exactly.
 	Metadata        string
 	DelegationChain string
 	InputProvenance string
@@ -124,9 +115,8 @@ func ChainKey(e models.AuditEvent) string {
 	return e.OrganizationID.String()
 }
 
-// BuildChainEntry computes the stored strings and hash for e as the row at
-// head+1 of its chain. This single function defines the hash input for every
-// backend.
+// BuildChainEntry computes the stored strings and hash for the row at head+1 of a chain. It defines
+// the hash input for every backend.
 func BuildChainEntry(e models.AuditEvent, secret []byte, head ChainHead) (ChainEntry, error) {
 	meta, err := MarshalOr(e.Metadata, "{}")
 	if err != nil {
@@ -173,19 +163,16 @@ type ChainRow struct {
 	Hash    string
 	// Raw ids as currently stored. Empty after erasure.
 	RawActorUser, RawSubject, RawActor, RawApprover string
-	// RawOrg and RawSession are the foreign-key columns (empty when null or
-	// when the referenced row was deleted). When present they must agree with
-	// the hashed values.
+	// RawOrg and RawSession are the foreign-key columns (empty when null or deleted). When present
+	// they must agree with the hashed values.
 	RawOrg, RawSession string
-	// ExtraBreak, when non-empty, is a backend-detected inconsistency (for
-	// example a native JSON column that no longer matches the hashed text)
-	// reported as the break reason after the hash itself verifies.
+	// ExtraBreak, when set, is a backend-detected inconsistency reported as the break reason after the
+	// hash verifies.
 	ExtraBreak string
 }
 
-// VerifyChainRows walks rows, which must be ordered by (chain key, seq), and
-// returns the verification result. unchained is the count of pre-chain rows.
-// secret may be nil when no chained write ever happened.
+// VerifyChainRows walks rows ordered by (chain key, seq). unchained counts the pre-chain rows.
+// secret may be nil when no chained write happened.
 func VerifyChainRows(next func() (ChainRow, bool, error), secret []byte, unchained int) (models.AuditChainResult, error) {
 	res := models.AuditChainResult{Supported: true, Unchained: unchained, OK: true}
 	var (

@@ -11,9 +11,8 @@ import (
 
 type principalOnlyKey struct{}
 
-// requireBearerToken admits only a request authenticated by an API bearer
-// token. A session cookie is refused with 403 so sessions keep using the
-// session routes, and an invalid, expired, revoked or orphaned token gets 401.
+// requireBearerToken admits only API bearer tokens. Session cookies get 403 so sessions keep their
+// own routes.
 func (s *Service) requireBearerToken(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if _, ok := BearerToken(r); !ok {

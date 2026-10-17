@@ -137,9 +137,8 @@ func TestVerifyChainRowsResetsPerChain(t *testing.T) {
 	}
 }
 
-// TestServiceEmitBeforeStartAndAfterStop covers the lifecycle edges: emit is
-// rejected before Start, Start is idempotent, and emit after Stop is rejected
-// without panicking.
+// TestServiceEmitBeforeStartAndAfterStop checks that emit is rejected before Start, Start is
+// idempotent, and emit after Stop does not panic.
 func TestServiceEmitBeforeStartAndAfterStop(t *testing.T) {
 	st := &recordingStore{}
 	s := NewService(st, Config{BufferSize: 8, BatchSize: 4, FlushInterval: time.Millisecond, DrainTimeout: time.Second})

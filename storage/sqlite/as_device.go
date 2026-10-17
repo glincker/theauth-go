@@ -23,10 +23,8 @@ func asIsUnique(err error) bool {
 	return err != nil && strings.Contains(err.Error(), "UNIQUE constraint failed")
 }
 
-// InsertDeviceAuthorization implements theauth.DeviceAuthorizationStorage. An
-// expired holder of the same user code is deleted first so it cannot block
-// reuse; a live holder yields ErrDeviceAuthUserCodeTaken. Both statements run
-// in one transaction that opens with a write.
+// InsertDeviceAuthorization implements theauth.DeviceAuthorizationStorage. An expired holder
+// of the same user code is deleted first; a live one yields ErrDeviceAuthUserCodeTaken.
 func (s *Store) InsertDeviceAuthorization(ctx context.Context, d theauth.DeviceAuthorization) error {
 	scope, err := asEncodeList(d.Scope)
 	if err != nil {
@@ -83,7 +81,6 @@ func asScanDevAuth(r scanner) (theauth.DeviceAuthorization, error) {
 	return out, nil
 }
 
-// DeviceAuthorizationByDeviceCodeHash implements theauth.DeviceAuthorizationStorage.
 func (s *Store) DeviceAuthorizationByDeviceCodeHash(ctx context.Context, hash []byte) (*theauth.DeviceAuthorization, error) {
 	d, err := asScanDevAuth(s.db.QueryRowContext(ctx, s.q(
 		`SELECT `+asDevAuthCols+` FROM theauth_device_authorizations WHERE device_code_hash = ?`), hash))
@@ -93,7 +90,6 @@ func (s *Store) DeviceAuthorizationByDeviceCodeHash(ctx context.Context, hash []
 	return &d, nil
 }
 
-// DeviceAuthorizationByUserCodeHash implements theauth.DeviceAuthorizationStorage.
 func (s *Store) DeviceAuthorizationByUserCodeHash(ctx context.Context, hash []byte) (*theauth.DeviceAuthorization, error) {
 	d, err := asScanDevAuth(s.db.QueryRowContext(ctx, s.q(
 		`SELECT `+asDevAuthCols+` FROM theauth_device_authorizations WHERE user_code_hash = ?`), hash))
@@ -113,7 +109,6 @@ WHERE id = ? AND status = 'pending' AND expires_at > ?`),
 	return rowWon(res, err, "decide device authorization")
 }
 
-// RecordDeviceAuthorizationPoll implements theauth.DeviceAuthorizationStorage.
 func (s *Store) RecordDeviceAuthorizationPoll(ctx context.Context, id theauth.ULID, polledAt time.Time, intervalSeconds int) error {
 	res, err := s.db.ExecContext(ctx, s.q(
 		`UPDATE theauth_device_authorizations SET last_poll_at = ?, interval_seconds = ? WHERE id = ?`),
@@ -133,7 +128,6 @@ WHERE id = ? AND status = 'approved' AND expires_at > ?`), idStr(id), toMicro(no
 	return rowWon(res, err, "consume device authorization")
 }
 
-// DeleteExpiredDeviceAuthorizations implements theauth.DeviceAuthorizationStorage.
 func (s *Store) DeleteExpiredDeviceAuthorizations(ctx context.Context, before time.Time) (int64, error) {
 	res, err := s.db.ExecContext(ctx, s.q(`DELETE FROM theauth_device_authorizations WHERE expires_at < ?`), toMicro(before))
 	if err != nil {
@@ -143,7 +137,6 @@ func (s *Store) DeleteExpiredDeviceAuthorizations(ctx context.Context, before ti
 	return n, wrap("delete expired device authorizations", err)
 }
 
-// InsertRegistrationToken implements theauth.RegistrationTokenStorage.
 func (s *Store) InsertRegistrationToken(ctx context.Context, t theauth.RegistrationToken) error {
 	scopes, err := asEncodeList(t.Scopes)
 	if err != nil {
@@ -198,7 +191,6 @@ func asScanRegToken(r scanner) (theauth.RegistrationToken, error) {
 	return out, nil
 }
 
-// RegistrationTokenByHash implements theauth.RegistrationTokenStorage.
 func (s *Store) RegistrationTokenByHash(ctx context.Context, hash []byte) (*theauth.RegistrationToken, error) {
 	t, err := asScanRegToken(s.db.QueryRowContext(ctx, s.q(
 		`SELECT `+asRegTokenCols+` FROM theauth_registration_tokens WHERE token_hash = ?`), hash))
@@ -208,7 +200,6 @@ func (s *Store) RegistrationTokenByHash(ctx context.Context, hash []byte) (*thea
 	return &t, nil
 }
 
-// RegistrationTokenByID implements theauth.RegistrationTokenStorage.
 func (s *Store) RegistrationTokenByID(ctx context.Context, id theauth.ULID) (*theauth.RegistrationToken, error) {
 	t, err := asScanRegToken(s.db.QueryRowContext(ctx, s.q(
 		`SELECT `+asRegTokenCols+` FROM theauth_registration_tokens WHERE id = ?`), idStr(id)))
@@ -243,15 +234,14 @@ func (s *Store) ListRegistrationTokens(ctx context.Context, orgID *theauth.ULID)
 	return out, wrap("list registration tokens", rows.Err())
 }
 
-// RevokeRegistrationToken implements theauth.RegistrationTokenStorage.
 func (s *Store) RevokeRegistrationToken(ctx context.Context, id theauth.ULID, at time.Time) (bool, error) {
 	res, err := s.db.ExecContext(ctx, s.q(
 		`UPDATE theauth_registration_tokens SET revoked_at = ? WHERE id = ? AND revoked_at IS NULL`), toMicro(at), idStr(id))
 	return rowWon(res, err, "revoke registration token")
 }
 
-// RedeemRegistrationToken implements theauth.RegistrationTokenStorage. The
-// uses < max_uses guard inside the UPDATE keeps a one-time token to one winner.
+// RedeemRegistrationToken implements theauth.RegistrationTokenStorage. The uses < max_uses
+// guard keeps a one-time token to one winner.
 func (s *Store) RedeemRegistrationToken(ctx context.Context, id theauth.ULID, now time.Time) (bool, error) {
 	res, err := s.db.ExecContext(ctx, s.q(`
 UPDATE theauth_registration_tokens SET uses = uses + 1, last_used_at = ?
@@ -260,7 +250,6 @@ WHERE id = ? AND revoked_at IS NULL AND expires_at > ? AND uses < max_uses`),
 	return rowWon(res, err, "redeem registration token")
 }
 
-// RefundRegistrationToken implements theauth.RegistrationTokenStorage.
 func (s *Store) RefundRegistrationToken(ctx context.Context, id theauth.ULID) error {
 	_, err := s.db.ExecContext(ctx, s.q(
 		`UPDATE theauth_registration_tokens SET uses = uses - 1 WHERE id = ? AND uses > 0`), idStr(id))

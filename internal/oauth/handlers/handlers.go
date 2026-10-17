@@ -1,11 +1,5 @@
-// Package handlers exposes the /auth/providers/{name}/start and
-// /auth/providers/{name}/callback endpoints for user-facing OAuth
-// login (Google, GitHub, Discord, Microsoft).
-//
-// Extracted from root handlers_oauth.go in PR E of the 2026-06
-// architecture reorg. The OAuth service is still owned by root (it
-// has not yet been moved to internal/oauth) so this handler talks to
-// it through a small Service interface that root *TheAuth satisfies.
+// Package handlers exposes the /auth/providers/{name}/start and /callback endpoints for user-facing OAuth
+// login (Google, GitHub, Discord, Microsoft). The OAuth service is reached through a small Service interface.
 package handlers
 
 import (

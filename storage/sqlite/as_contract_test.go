@@ -160,8 +160,7 @@ func TestASContracts(t *testing.T) {
 		if err := s.InsertRefreshToken(ctx, parent); err != nil {
 			t.Fatal(err)
 		}
-		// N clients present the same parent. Whoever wins the revoke mints the
-		// child; every loser treats it as replay and revokes the family.
+		// Whoever wins the revoke mints the child; every loser treats it as replay.
 		var minted atomic.Int32
 		wins := asRace(24, func() bool {
 			if err := s.RevokeRefreshToken(ctx, parent.Hash, "rotated"); err != nil {
@@ -181,8 +180,7 @@ func TestASContracts(t *testing.T) {
 		if wins != 1 {
 			t.Fatalf("rotation winners = %d, want 1", wins)
 		}
-		// The winner may have inserted its child after a loser's family sweep, so
-		// run one more replay now that every goroutine is done, as a real attacker would.
+		// Replay once more after all goroutines finish, as a real attacker would.
 		if err := s.RevokeRefreshTokenFamily(ctx, fam, "replay"); err != nil {
 			t.Fatal(err)
 		}

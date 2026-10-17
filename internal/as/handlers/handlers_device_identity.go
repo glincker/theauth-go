@@ -1,17 +1,7 @@
 package handlers
 
-// handlers_device_identity.go: constrained device enrollment and its admin
-// API.
-//
-//	POST /oauth/devices/challenge   join token + public JWK -> challenge nonce
-//	POST /oauth/devices/enroll      challenge + signed proof -> registered device
-//
-// Admin routes, inside the organization-scoped admin tree:
-//
-//	POST /admin/v1/organizations/{orgID}/devices/join-tokens
-//	DELETE /admin/v1/organizations/{orgID}/devices/join-tokens/{tokenID}
-//	GET  /admin/v1/organizations/{orgID}/devices
-//	POST /admin/v1/organizations/{orgID}/devices/{deviceID}/revoke
+// handlers_device_identity.go serves constrained device enrollment (challenge and enroll) and its
+// org-scoped admin routes.
 
 import (
 	"encoding/json"
@@ -92,8 +82,7 @@ func (h *Handler) handleDeviceEnroll(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// deviceView is the wire form of a device. It never carries key material
-// beyond the public thumbprint.
+// deviceView is the wire form of a device. It carries only the public thumbprint, never key material.
 type deviceView struct {
 	ID          string     `json:"id"`
 	Name        string     `json:"name"`

@@ -20,21 +20,13 @@ import (
 // of the hashed payload, so rows of different versions never collide.
 const auditHashVersion = 1
 
-// ChainSupported reports that this backend keeps a tamper-evident audit hash
-// chain. The memory backend returns false. postgres and mysql chain with the
-// same hash input (internal/audit.ChainPayload); the golden vector test pins both.
+// ChainSupported reports that this backend keeps the tamper-evident audit hash chain
+// (memory returns false). It hashes like postgres and mysql; the golden vector test pins them.
 func (s *Store) ChainSupported() bool { return true }
 
-// auditChainPayload is the exact structure hashed for one row. Struct field
-// order fixes the JSON key order; the string columns are hashed as stored so
-// a read-back recomputes the same bytes.
-//
-// The personal ids (actor user, subject, actor, approver) are hashed as keyed
-// pseudonyms, never raw. Erasure (DeleteUserCascade) blanks the raw columns
-// and keeps the pseudonym columns, so the hash still verifies afterwards.
-// Tradeoff: a pseudonym is linkable by whoever holds the installation secret
-// (theauth_audit_secrets), so deleting that secret is a further erasure
-// option. It is deliberately not implemented here (no key shredding).
+// auditChainPayload is the structure hashed per row; field order fixes the JSON key order.
+// Personal ids are hashed as keyed pseudonyms, so erasure can blank raw columns and the
+// chain still verifies. The pseudonym stays linkable to whoever holds theauth_audit_secrets.
 type auditChainPayload struct {
 	V               int    `json:"v"`
 	ChainKey        string `json:"chainKey"`
@@ -98,7 +90,7 @@ func (s *Store) auditSecret(ctx context.Context, q DBTX) ([]byte, error) {
 ON CONFLICT (id) DO NOTHING`), fresh, toMicro(time.Now())); err != nil {
 		return nil, err
 	}
-	// Re-read so a concurrent creator's value wins consistently.
+	// Re-read so a concurrent creator's value wins.
 	if err := q.QueryRowContext(ctx, s.q(`SELECT secret FROM theauth_audit_secrets WHERE id = 1`)).Scan(&secret); err != nil {
 		return nil, err
 	}
@@ -111,12 +103,8 @@ type (
 	AuditChainResult = theauth.AuditChainResult
 )
 
-// VerifyAuditChain walks every chain in seq order and reports the first row
-// whose link or hash does not match. Rows written before migration 0017 have
-// no chain position and are counted as Unchained, not as failures. Rows whose
-// raw ids were erased still verify through the stored pseudonyms and are
-// counted in Erased. Where a raw id is still present it must match its
-// pseudonym, so editing a raw column is reported as pseudonym_mismatch.
+// VerifyAuditChain walks every chain in seq order and reports the first mismatched row.
+// Pre-0017 rows count as Unchained; erased rows verify via their pseudonyms and count as Erased.
 func (s *Store) VerifyAuditChain(ctx context.Context) (AuditChainResult, error) {
 	res := AuditChainResult{Supported: true}
 	row := s.db.QueryRowContext(ctx, s.q(

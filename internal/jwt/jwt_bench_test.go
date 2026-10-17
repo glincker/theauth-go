@@ -9,11 +9,8 @@ import (
 	"github.com/glincker/theauth-go/v2/internal/jwt"
 )
 
-// BenchmarkJWTSign measures a single Ed25519 JWT sign (header + payload
-// marshal + base64url + ed25519.Sign). Catches accidental algorithm changes
-// or extra allocations in the signing path.
-//
-// gate:include
+// BenchmarkJWTSign measures one Ed25519 JWT sign, to catch algorithm changes or extra allocations
+// on the signing path.
 func BenchmarkJWTSign(b *testing.B) {
 	_, priv, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {
@@ -39,11 +36,8 @@ func BenchmarkJWTSign(b *testing.B) {
 	}
 }
 
-// BenchmarkJWTVerify measures a single Ed25519 JWT verify (split + base64url
-// decode + ed25519.Verify + claims unmarshal). Catches algorithm confusion
-// regressions and extra allocation in the verify path.
-//
-// gate:include
+// BenchmarkJWTVerify measures one Ed25519 JWT verify, to catch algorithm confusion regressions and
+// extra allocations.
 func BenchmarkJWTVerify(b *testing.B) {
 	pub, priv, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {

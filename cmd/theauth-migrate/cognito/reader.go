@@ -1,17 +1,6 @@
-// Package cognito reads AWS Cognito user-pool exports and converts them to
-// the migration Bundle format.
-//
-// Two input formats are supported:
-//
-//  1. Cognito User Export CSV - produced by the "Export users" button in the
-//     Cognito console or via `aws cognito-idp list-users --output csv`.
-//
-//  2. Cognito JSON - a newline-delimited array of AdminGetUser / list-users
-//     JSON responses that each contain a UserAttributes slice.
-//
-// Cognito does NOT export password hashes; all migrated users will have
-// RequiresPasswordReset=true. See https://docs.theauth.dev/go/guides/migrate-from-cognito for the
-// recommended operator workflow.
+// Package cognito reads AWS Cognito user exports and converts them to the migration Bundle. Both
+// the console CSV and the list-users JSON are accepted. Cognito does not export password hashes, so
+// every migrated user must reset their password.
 package cognito
 
 import (
@@ -25,14 +14,8 @@ import (
 	"github.com/glincker/theauth-go/v2/cmd/theauth-migrate/internal"
 )
 
-// ReadCSV reads a Cognito user export CSV from r and returns a Bundle.
-// The standard Cognito CSV columns are:
-//
-//	name, given_name, family_name, middle_name, nickname, preferred_username,
-//	profile, picture, website, email, email_verified, gender, birthdate,
-//	zoneinfo, locale, phone_number, phone_number_verified, address, updated_at,
-//	cognito:username, cognito:status, cognito:mfa_enabled, cognito:user_status,
-//	custom:*
+// ReadCSV reads a Cognito user export CSV and returns a Bundle. Standard columns include name,
+// email, email_verified and cognito:mfa_enabled; custom:* attributes are read too.
 func ReadCSV(r io.Reader) (*internal.Bundle, error) {
 	cr := csv.NewReader(r)
 	cr.TrimLeadingSpace = true
@@ -173,10 +156,8 @@ type CognitoUser struct {
 	} `json:"Attributes"`
 }
 
-// ReadJSON reads a Cognito JSON export from r. The input may be either:
-//   - A JSON array: [ { "Username": "...", ... }, ... ]
-//   - A newline-delimited JSON object wrapping a "Users" array
-//     (output of `aws cognito-idp list-users`)
+// ReadJSON reads a Cognito JSON export, either a JSON array of users or a list-users response with
+// a "Users" array.
 func ReadJSON(r io.Reader) (*internal.Bundle, error) {
 	data, err := io.ReadAll(r)
 	if err != nil {

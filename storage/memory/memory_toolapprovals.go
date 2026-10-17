@@ -10,7 +10,6 @@ import (
 
 var _ theauth.ToolApprovalStorage = (*Store)(nil)
 
-// OpenToolApproval implements theauth.ToolApprovalStorage.
 func (s *Store) OpenToolApproval(_ context.Context, a theauth.ToolApproval) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -28,7 +27,6 @@ func toolApprovalLive(a theauth.ToolApproval, now time.Time) bool {
 	return a.ConsumedAt.IsZero() && (a.ExpiresAt.IsZero() || a.ExpiresAt.After(now))
 }
 
-// ApproveToolApproval implements theauth.ToolApprovalStorage.
 func (s *Store) ApproveToolApproval(_ context.Context, id, approver string, now time.Time) (bool, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -41,7 +39,6 @@ func (s *Store) ApproveToolApproval(_ context.Context, id, approver string, now 
 	return true, nil
 }
 
-// ConsumeToolApproval implements theauth.ToolApprovalStorage.
 func (s *Store) ConsumeToolApproval(_ context.Context, id, agentID, action, resource string, now time.Time) (bool, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()

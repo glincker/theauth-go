@@ -1,27 +1,6 @@
-// Package prombridge bridges theauth.Metrics to
-// github.com/prometheus/client_golang/prometheus.
-//
-// Usage:
-//
-//	import (
-//	    "github.com/glincker/theauth-go/v2"
-//	    prombridge "github.com/glincker/theauth-go/examples/observability-prom"
-//	    "github.com/prometheus/client_golang/prometheus"
-//	)
-//
-//	reg := prometheus.NewRegistry()
-//	metrics := prombridge.New(reg)
-//	hooks := &theauth.Hooks{Metrics: metrics}
-//	auth, _ := theauth.New(theauth.Config{
-//	    ...
-//	    Observability: hooks,
-//	})
-//
-// The bridge memoizes instruments by (name, label-name-set) so repeated
-// calls from the library return the same underlying *prometheus.MetricVec
-// child. Label cardinality discipline lives at the library call site
-// (high-cardinality identifiers go on spans, not metric labels); the
-// bridge does not police that.
+// Package prombridge bridges theauth.Metrics to the Prometheus client library.
+// Instruments are memoized per (name, label-name-set), so repeated library calls reuse one child.
+// Keep label cardinality low at the call site; high-cardinality ids belong on spans.
 package prombridge
 
 import (
@@ -43,9 +22,7 @@ type Metrics struct {
 	gauges     map[string]*prometheus.GaugeVec
 }
 
-// New returns a bridge that registers instruments on the supplied
-// Registerer. Pass prometheus.DefaultRegisterer for the default global
-// registry, or a fresh prometheus.NewRegistry() for a scoped subset.
+// New returns a bridge registering instruments on the supplied Registerer.
 func New(reg prometheus.Registerer) *Metrics {
 	if reg == nil {
 		reg = prometheus.DefaultRegisterer
@@ -58,19 +35,14 @@ func New(reg prometheus.Registerer) *Metrics {
 	}
 }
 
-// Counter returns a Prometheus counter child for the supplied labels. The
-// underlying *CounterVec is created once per metric name; subsequent calls
-// with the same name MUST use the same label name set (the library does;
-// callers using these helpers from their own code should follow the same
-// discipline).
+// Counter returns a counter child. Label names for one metric name must stay identical across calls.
 func (m *Metrics) Counter(name string, labels theauth.Labels) theauth.Counter {
 	names := labelNames(labels)
 	vec := m.counterVec(name, names)
 	return promCounter{c: vec.With(labelValues(names, labels))}
 }
 
-// Histogram returns a Prometheus histogram child. buckets MUST match
-// between calls for the same metric name; the first call wins.
+// Histogram returns a histogram child. Buckets must match across calls; the first call wins.
 func (m *Metrics) Histogram(name string, labels theauth.Labels, buckets []float64) theauth.Histogram {
 	names := labelNames(labels)
 	vec := m.histogramVec(name, names, buckets)
@@ -167,10 +139,7 @@ func vecKey(name string, labelNames []string) string {
 	return name + "|" + strings.Join(labelNames, ",")
 }
 
-// helpFor returns a best-effort help string. Operators can post-process
-// the registered instruments to override; this exists so the metrics
-// endpoint never serves a HELP-less metric (which the Prometheus linter
-// flags).
+// helpFor returns a placeholder HELP string so the metrics endpoint never serves a HELP-less metric.
 func helpFor(name string) string {
 	return "theauth-go: " + name
 }

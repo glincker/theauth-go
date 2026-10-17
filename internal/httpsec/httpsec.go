@@ -68,12 +68,9 @@ func (w *CookieWriter) Flush() {
 // Unwrap lets http.ResponseController reach Hijack and deadlines.
 func (w *CookieWriter) Unwrap() http.ResponseWriter { return w.ResponseWriter }
 
-// OriginAllowed implements the CSRF defence for cookie-authenticated
-// state-changing requests. Safe methods and bearer-token requests are
-// exempt. A request that carries cookies must present an Origin (or
-// Referer) in the trusted set; with neither header, Sec-Fetch-Site decides
-// when the browser sent it. SameSite=Lax alone does not stop sibling
-// subdomains, which are same-site.
+// OriginAllowed is the CSRF check for cookie-authenticated unsafe requests. Safe methods and bearer
+// requests are exempt. Otherwise Origin or Referer must be trusted, and Sec-Fetch-Site decides when
+// neither is sent. SameSite=Lax alone does not stop sibling subdomains.
 func OriginAllowed(r *http.Request, baseURL string, trusted []string) bool {
 	switch r.Method {
 	case http.MethodGet, http.MethodHead, http.MethodOptions:

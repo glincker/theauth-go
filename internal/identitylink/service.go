@@ -1,11 +1,7 @@
-// Package identitylink owns the three identity-linking service methods
-// (v2.3): LinkOAuthToCurrentUser, LinkPasswordToCurrentUser, MergeAccounts.
-// All three require a fully-authenticated session (AuthLevel = "full") and
-// emit structured audit events.
-//
-// The package declares its own Storage and SessionStore interfaces so it can
-// be constructed without importing the root theauth package (which would
-// create an import cycle). The root *TheAuth wires the concrete adapters in.
+// Package identitylink owns the identity-linking methods: link an OAuth account, link a password,
+// merge accounts and unlink a provider. Every method requires a full session and emits audit
+// events. The package declares its own Storage and SessionStore interfaces, so root wires the
+// adapters in without an import cycle.
 package identitylink
 
 import (
@@ -68,9 +64,8 @@ func New(storage Storage, encKey []byte, em audit.Emitter) *Service {
 	return &Service{storage: storage, encKey: encKey, auditEm: em}
 }
 
-// requireFullSession verifies that the session resolved from sessionToken is
-// fully authenticated (AuthLevel = "full"). Returns ErrStepUpRequired when
-// the session is pending_2fa or missing, or the resolved session on success.
+// requireFullSession resolves sessionToken and requires AuthLevel full. It returns
+// ErrStepUpRequired for a pending or missing session.
 func (s *Service) requireFullSession(ctx context.Context, sessionToken string) (*models.Session, error) {
 	hash := crypto.HashToken(sessionToken)
 	sess, err := s.storage.SessionByTokenHash(ctx, hash)
@@ -86,9 +81,8 @@ func (s *Service) requireFullSession(ctx context.Context, sessionToken string) (
 	return sess, nil
 }
 
-// authMethodCount returns the total number of authentication methods bound to
-// userID: one for a confirmed password, one per linked OAuth provider, one per
-// WebAuthn credential, one for a confirmed TOTP secret.
+// authMethodCount counts the authentication methods bound to the user: the password, each OAuth
+// provider, each passkey, and TOTP.
 func (s *Service) authMethodCount(ctx context.Context, userID models.ULID) (int, error) {
 	count := 0
 
@@ -123,17 +117,9 @@ func (s *Service) authMethodCount(ctx context.Context, userID models.ULID) (int,
 	return count, nil
 }
 
-// LinkOAuthToCurrentUser binds an already-exchanged OAuth account to the
-// currently-authenticated user. providerName and providerUserID identify the
-// OAuth row. The caller (handler layer) is responsible for running the full
-// OAuth authorization-code flow and extracting the provider user ID before
-// calling this method.
-//
-// If the OAuth account is already linked to a different user an
-// *IdentityConflictError (wrapping ErrIdentityConflict) is returned.
-//
-// Returns ErrStepUpRequired when sessionToken resolves to a pending_2fa or
-// otherwise incomplete session.
+// LinkOAuthToCurrentUser binds an already-exchanged OAuth account to the authenticated user. The
+// caller runs the OAuth code flow and passes the provider user ID. If the account belongs to
+// another user it returns *IdentityConflictError, and a pending session gets ErrStepUpRequired.
 func (s *Service) LinkOAuthToCurrentUser(
 	ctx context.Context,
 	sessionToken, providerName, providerUserID string,
@@ -186,12 +172,9 @@ func (s *Service) LinkOAuthToCurrentUser(
 	return nil
 }
 
-// LinkPasswordToCurrentUser adds email+password as a backup authentication
-// method for the currently-authenticated user. The new password is hashed
-// with Argon2id using the same parameters as the password.Service.
-//
-// Returns ErrStepUpRequired when sessionToken resolves to a pending_2fa or
-// otherwise incomplete session.
+// LinkPasswordToCurrentUser adds email and password as a backup method for the authenticated user.
+// The password is hashed with the same Argon2id parameters as password.Service. A pending session
+// gets ErrStepUpRequired.
 func (s *Service) LinkPasswordToCurrentUser(ctx context.Context, sessionToken, password string) error {
 	sess, err := s.requireFullSession(ctx, sessionToken)
 	if err != nil {
@@ -225,18 +208,9 @@ type MergeInput struct {
 	AuditReason string
 }
 
-// MergeAccounts moves all authentication methods (OAuth accounts, password,
-// WebAuthn credentials, TOTP secret) from secondaryID to primaryID, revokes
-// all sessions of the secondary user, and emits audit events.
-//
-// primaryID must be the authenticated user's ID (the session resolved from
-// sessionToken). secondaryID must be a different user.
-//
-// Returns ErrStepUpRequired when sessionToken is not fully authenticated.
-// Returns an error when primaryID and secondaryID are equal.
-//
-// Not transactional: a failure partway through is safe to retry with the
-// same IDs, since every move step no-ops once its data is already moved.
+// MergeAccounts moves every authentication method from secondaryID to primaryID and revokes the
+// secondary user's sessions. primaryID must be the authenticated user and the two IDs must differ.
+// Not transactional, but a retry is safe because each move no-ops once done.
 func (s *Service) MergeAccounts(
 	ctx context.Context,
 	sessionToken string,
@@ -302,11 +276,8 @@ func (s *Service) MergeAccounts(
 	return nil
 }
 
-// UnlinkOAuthProvider removes the named provider from the current user's
-// account. Returns ErrLastAuthMethod when the provider is the only
-// authentication method remaining.
-//
-// Returns ErrStepUpRequired when sessionToken is not fully authenticated.
+// UnlinkOAuthProvider removes a provider from the user's account. It returns ErrLastAuthMethod when
+// that is the only method left.
 func (s *Service) UnlinkOAuthProvider(ctx context.Context, sessionToken, provider string) error {
 	sess, err := s.requireFullSession(ctx, sessionToken)
 	if err != nil {

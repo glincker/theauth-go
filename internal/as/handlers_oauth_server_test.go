@@ -22,7 +22,7 @@ import (
 // drive the authorize endpoint with an authenticated principal.
 func newASHarness(t *testing.T) (*theauth.TheAuth, *httptest.Server, theauth.User, string) {
 	t.Helper()
-	// security audit H1 (2026-06-20): tests that exercise the bearer
+	// security audit H1: tests that exercise the bearer
 	// gated DCR path must register their initial-access-token with the
 	// AS config; the legacy "any bearer accepted" behavior is gone.
 	a, store := newASInstance(t, func(c *theauth.AuthorizationServerConfig) {
@@ -108,7 +108,7 @@ func TestJWKSEndpointServesEd25519Keys(t *testing.T) {
 }
 
 func TestDCRBearerGatedDenialAndAnonymousFlag(t *testing.T) {
-	// security audit H1 (2026-06-20): bearer gate now validates the
+	// security audit H1: bearer gate now validates the
 	// supplied token against AuthorizationServerConfig.RegistrationTokens
 	// under crypto/subtle.ConstantTimeCompare. Bearers that do not match
 	// any configured token (or the empty configuration) are rejected with

@@ -18,7 +18,6 @@ var (
 
 func live(s theauth.Session, now time.Time) bool { return !s.Expired(now) }
 
-// ListUserSessions implements theauth.SessionManagementStorage.
 func (s *Store) ListUserSessions(_ context.Context, userID theauth.ULID) ([]theauth.Session, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -33,7 +32,6 @@ func (s *Store) ListUserSessions(_ context.Context, userID theauth.ULID) ([]thea
 	return out, nil
 }
 
-// TouchSession implements theauth.SessionManagementStorage.
 func (s *Store) TouchSession(_ context.Context, id theauth.ULID, at time.Time) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -48,7 +46,6 @@ func (s *Store) TouchSession(_ context.Context, id theauth.ULID, at time.Time) e
 	return nil
 }
 
-// RevokeOtherUserSessions implements theauth.SessionManagementStorage.
 func (s *Store) RevokeOtherUserSessions(_ context.Context, userID, keep theauth.ULID) (int, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -64,7 +61,6 @@ func (s *Store) RevokeOtherUserSessions(_ context.Context, userID, keep theauth.
 	return n, nil
 }
 
-// RevokeSessionsByCredential implements theauth.SessionManagementStorage.
 func (s *Store) RevokeSessionsByCredential(_ context.Context, credentialID string) (int, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -80,7 +76,6 @@ func (s *Store) RevokeSessionsByCredential(_ context.Context, credentialID strin
 	return n, nil
 }
 
-// AppendSessionAuthMethods implements theauth.SessionAuthStorage.
 func (s *Store) AppendSessionAuthMethods(_ context.Context, id theauth.ULID, methods []string, at time.Time) ([]string, time.Time, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -98,7 +93,6 @@ func (s *Store) AppendSessionAuthMethods(_ context.Context, id theauth.ULID, met
 	return append([]string(nil), sess.AuthMethods...), sess.AuthTime, nil
 }
 
-// SetSessionElevatedUntil implements theauth.SessionManagementStorage.
 func (s *Store) SetSessionElevatedUntil(_ context.Context, id theauth.ULID, until *time.Time) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -115,7 +109,6 @@ func (s *Store) SetSessionElevatedUntil(_ context.Context, id theauth.ULID, unti
 	return nil
 }
 
-// CreateSessionLink implements theauth.SessionLinkStorage.
 func (s *Store) CreateSessionLink(_ context.Context, l theauth.SessionLink) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -126,7 +119,6 @@ func (s *Store) CreateSessionLink(_ context.Context, l theauth.SessionLink) erro
 	return nil
 }
 
-// ConsumeSessionLink implements theauth.SessionLinkStorage.
 func (s *Store) ConsumeSessionLink(_ context.Context, tokenHash []byte, now time.Time) (*theauth.SessionLink, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()

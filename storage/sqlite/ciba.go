@@ -73,8 +73,7 @@ func encodeScope(scope []string) (string, error) {
 	return string(b), nil
 }
 
-// InsertBackchannelRequest implements theauth.CIBAStorage. A duplicate
-// auth_req_id fails on the primary key.
+// InsertBackchannelRequest fails on a duplicate auth_req_id (primary key).
 func (s *Store) InsertBackchannelRequest(ctx context.Context, req theauth.BackchannelRequest) error {
 	scope, err := encodeScope(req.Scope)
 	if err != nil {
@@ -95,7 +94,6 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`),
 	return wrap("insert backchannel request", err)
 }
 
-// BackchannelRequestByID implements theauth.CIBAStorage.
 func (s *Store) BackchannelRequestByID(ctx context.Context, authReqID string) (theauth.BackchannelRequest, error) {
 	req, err := scanBackchannel(s.db.QueryRowContext(ctx,
 		s.q(`SELECT `+cibaCols+` FROM theauth_backchannel_requests WHERE auth_req_id = ?`), authReqID))
@@ -105,11 +103,9 @@ func (s *Store) BackchannelRequestByID(ctx context.Context, authReqID string) (t
 	return req, nil
 }
 
-// UpdateBackchannelRequest implements theauth.CIBAStorage. It writes the
-// mutable fields only while the stored row is still pending, in one
-// conditional UPDATE, so a request is approved or denied exactly once under
-// concurrency. A later writer gets ErrBackchannelStateConflict, and a missing
-// row gets theauth.ErrStorageNotFound.
+// UpdateBackchannelRequest implements theauth.CIBAStorage. Mutable fields are written only
+// while the row is still pending, in one conditional UPDATE, so approval or denial happens
+// exactly once under concurrency.
 func (s *Store) UpdateBackchannelRequest(ctx context.Context, req theauth.BackchannelRequest) error {
 	res, err := s.db.ExecContext(ctx, s.q(`
 UPDATE theauth_backchannel_requests SET
@@ -139,7 +135,6 @@ WHERE auth_req_id = ? AND status = 'pending'`),
 	return fmt.Errorf("update backchannel request: %w", ErrBackchannelStateConflict)
 }
 
-// DeleteBackchannelRequest implements theauth.CIBAStorage.
 func (s *Store) DeleteBackchannelRequest(ctx context.Context, authReqID string) error {
 	res, err := s.db.ExecContext(ctx, s.q(`DELETE FROM theauth_backchannel_requests WHERE auth_req_id = ?`), authReqID)
 	if err != nil {
@@ -148,8 +143,7 @@ func (s *Store) DeleteBackchannelRequest(ctx context.Context, authReqID string) 
 	return requireRows("delete backchannel request", res)
 }
 
-// TouchBackchannelPoll implements theauth.CIBAStorage. One UPDATE ... RETURNING
-// records the poll time and interval and returns the updated row.
+// TouchBackchannelPoll implements theauth.CIBAStorage in one UPDATE ... RETURNING.
 func (s *Store) TouchBackchannelPoll(ctx context.Context, authReqID string, now time.Time, newInterval int) (theauth.BackchannelRequest, error) {
 	req, err := scanBackchannel(s.db.QueryRowContext(ctx, s.q(`
 UPDATE theauth_backchannel_requests SET last_poll_at = ?, poll_interval = ?
@@ -161,11 +155,9 @@ RETURNING `+cibaCols), toMicro(now), newInterval, authReqID))
 	return req, nil
 }
 
-// RedeemBackchannelRequest atomically moves an approved, unexpired request to
-// consumed and returns it with its tokens. Exactly one concurrent caller wins;
-// every other caller (and any caller for a pending, denied, consumed, expired
-// or unknown request) gets ok == false. This is an extension beyond
-// theauth.CIBAStorage for callers that need one-time token delivery.
+// RedeemBackchannelRequest moves an approved, unexpired request to consumed in one
+// statement, so exactly one concurrent caller wins. It extends theauth.CIBAStorage for
+// one-time token delivery.
 func (s *Store) RedeemBackchannelRequest(ctx context.Context, authReqID string, now time.Time) (theauth.BackchannelRequest, bool, error) {
 	req, err := scanBackchannel(s.db.QueryRowContext(ctx, s.q(`
 UPDATE theauth_backchannel_requests SET status = 'consumed'

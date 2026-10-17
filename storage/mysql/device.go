@@ -24,7 +24,6 @@ interval_seconds, last_poll_at, created_at, expires_at, decided_at`
 const regTokenCols = `id, token_hash, token_prefix, label, organization_id, scopes, grant_types, max_uses, uses,
 created_by, created_at, expires_at, last_used_at, revoked_at`
 
-// InsertDeviceAuthorization satisfies DeviceAuthorizationStorage.
 func (s *Store) InsertDeviceAuthorization(ctx context.Context, d theauth.DeviceAuthorization) error {
 	scope, err := encodeList(d.Scope)
 	if err != nil {
@@ -79,7 +78,6 @@ func scanDevAuth(r rowScanner) (theauth.DeviceAuthorization, error) {
 	}, nil
 }
 
-// DeviceAuthorizationByDeviceCodeHash satisfies DeviceAuthorizationStorage.
 func (s *Store) DeviceAuthorizationByDeviceCodeHash(ctx context.Context, hash []byte) (*theauth.DeviceAuthorization, error) {
 	d, err := scanDevAuth(s.db.QueryRowContext(ctx,
 		`SELECT `+devAuthCols+` FROM device_authorizations WHERE device_code_hash = ?`, hash))
@@ -89,7 +87,6 @@ func (s *Store) DeviceAuthorizationByDeviceCodeHash(ctx context.Context, hash []
 	return &d, nil
 }
 
-// DeviceAuthorizationByUserCodeHash satisfies DeviceAuthorizationStorage.
 func (s *Store) DeviceAuthorizationByUserCodeHash(ctx context.Context, hash []byte) (*theauth.DeviceAuthorization, error) {
 	d, err := scanDevAuth(s.db.QueryRowContext(ctx,
 		`SELECT `+devAuthCols+` FROM device_authorizations WHERE user_code_hash = ?`, hash))
@@ -110,7 +107,6 @@ func rowsOne(res sql.Result, err error, op string) (bool, error) {
 	return n == 1, nil
 }
 
-// DecideDeviceAuthorization satisfies DeviceAuthorizationStorage.
 func (s *Store) DecideDeviceAuthorization(ctx context.Context, id theauth.ULID, status string, userID theauth.ULID, now time.Time) (bool, error) {
 	res, err := s.db.ExecContext(ctx, `UPDATE device_authorizations
 SET status = ?, user_id = ?, decided_at = ?
@@ -119,7 +115,6 @@ WHERE id = ? AND status = 'pending' AND expires_at > ?`,
 	return rowsOne(res, err, "decide device authorization")
 }
 
-// RecordDeviceAuthorizationPoll satisfies DeviceAuthorizationStorage.
 func (s *Store) RecordDeviceAuthorizationPoll(ctx context.Context, id theauth.ULID, polledAt time.Time, intervalSeconds int) error {
 	_, err := s.db.ExecContext(ctx,
 		`UPDATE device_authorizations SET last_poll_at = ?, interval_seconds = ? WHERE id = ?`,
@@ -130,14 +125,12 @@ func (s *Store) RecordDeviceAuthorizationPoll(ctx context.Context, id theauth.UL
 	return nil
 }
 
-// ConsumeDeviceAuthorization satisfies DeviceAuthorizationStorage.
 func (s *Store) ConsumeDeviceAuthorization(ctx context.Context, id theauth.ULID, now time.Time) (bool, error) {
 	res, err := s.db.ExecContext(ctx, `UPDATE device_authorizations SET status = 'consumed'
 WHERE id = ? AND status = 'approved' AND expires_at > ?`, ulidToBytes(id), timeUTC(now))
 	return rowsOne(res, err, "consume device authorization")
 }
 
-// DeleteExpiredDeviceAuthorizations satisfies DeviceAuthorizationStorage.
 func (s *Store) DeleteExpiredDeviceAuthorizations(ctx context.Context, before time.Time) (int64, error) {
 	res, err := s.db.ExecContext(ctx, `DELETE FROM device_authorizations WHERE expires_at < ?`, timeUTC(before))
 	if err != nil {
@@ -146,7 +139,6 @@ func (s *Store) DeleteExpiredDeviceAuthorizations(ctx context.Context, before ti
 	return res.RowsAffected()
 }
 
-// InsertRegistrationToken satisfies RegistrationTokenStorage.
 func (s *Store) InsertRegistrationToken(ctx context.Context, t theauth.RegistrationToken) error {
 	scopes, err := encodeList(t.Scopes)
 	if err != nil {
@@ -199,7 +191,6 @@ func scanRegToken(r rowScanner) (theauth.RegistrationToken, error) {
 	}, nil
 }
 
-// RegistrationTokenByHash satisfies RegistrationTokenStorage.
 func (s *Store) RegistrationTokenByHash(ctx context.Context, hash []byte) (*theauth.RegistrationToken, error) {
 	t, err := scanRegToken(s.db.QueryRowContext(ctx, `SELECT `+regTokenCols+` FROM registration_tokens WHERE token_hash = ?`, hash))
 	if err != nil {
@@ -208,7 +199,6 @@ func (s *Store) RegistrationTokenByHash(ctx context.Context, hash []byte) (*thea
 	return &t, nil
 }
 
-// RegistrationTokenByID satisfies RegistrationTokenStorage.
 func (s *Store) RegistrationTokenByID(ctx context.Context, id theauth.ULID) (*theauth.RegistrationToken, error) {
 	t, err := scanRegToken(s.db.QueryRowContext(ctx, `SELECT `+regTokenCols+` FROM registration_tokens WHERE id = ?`, ulidToBytes(id)))
 	if err != nil {
@@ -217,7 +207,6 @@ func (s *Store) RegistrationTokenByID(ctx context.Context, id theauth.ULID) (*th
 	return &t, nil
 }
 
-// ListRegistrationTokens satisfies RegistrationTokenStorage.
 func (s *Store) ListRegistrationTokens(ctx context.Context, orgID *theauth.ULID) ([]theauth.RegistrationToken, error) {
 	q := `SELECT ` + regTokenCols + ` FROM registration_tokens`
 	var args []any
@@ -242,21 +231,18 @@ func (s *Store) ListRegistrationTokens(ctx context.Context, orgID *theauth.ULID)
 	return out, rows.Err()
 }
 
-// RevokeRegistrationToken satisfies RegistrationTokenStorage.
 func (s *Store) RevokeRegistrationToken(ctx context.Context, id theauth.ULID, at time.Time) (bool, error) {
 	res, err := s.db.ExecContext(ctx,
 		`UPDATE registration_tokens SET revoked_at = ? WHERE id = ? AND revoked_at IS NULL`, timeUTC(at), ulidToBytes(id))
 	return rowsOne(res, err, "revoke registration token")
 }
 
-// RedeemRegistrationToken satisfies RegistrationTokenStorage.
 func (s *Store) RedeemRegistrationToken(ctx context.Context, id theauth.ULID, now time.Time) (bool, error) {
 	res, err := s.db.ExecContext(ctx, `UPDATE registration_tokens SET uses = uses + 1, last_used_at = ?
 WHERE id = ? AND revoked_at IS NULL AND expires_at > ? AND uses < max_uses`, timeUTC(now), ulidToBytes(id), timeUTC(now))
 	return rowsOne(res, err, "redeem registration token")
 }
 
-// RefundRegistrationToken satisfies RegistrationTokenStorage.
 func (s *Store) RefundRegistrationToken(ctx context.Context, id theauth.ULID) error {
 	if _, err := s.db.ExecContext(ctx,
 		`UPDATE registration_tokens SET uses = uses - 1 WHERE id = ? AND uses > 0`, ulidToBytes(id)); err != nil {

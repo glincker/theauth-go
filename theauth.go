@@ -38,338 +38,230 @@ import (
 	"github.com/glincker/theauth-go/v2/kv"
 )
 
-// Config holds the wiring for a TheAuth instance.
-//
-// BaseURL and exactly one of Storage or CoreStorage are required. Everything else has sensible defaults
-// applied by New: SessionTTL=24h, MagicLinkTTL=15m, CookieName="theauth_session",
-// EmailSender=email.Noop{}. SigningKey is reserved for future JWT signing (v0.2+);
-// v0.1 uses opaque tokens and leaves the field nil.
+// Config holds the wiring for a TheAuth instance. BaseURL and exactly one of Storage or CoreStorage
+// are required; New applies the other defaults. SigningKey is reserved for future JWT signing (v0.1
+// uses opaque tokens).
 type Config struct {
 	Storage Storage
-	// CoreStorage is the alternative to Storage for adapters that implement
-	// only the capabilities the enabled features need. It must cover users,
-	// sessions, magic links and passwords; New returns
-	// ErrStorageMissingCapability when an enabled feature needs more.
+	// CoreStorage is the alternative to Storage for adapters that implement only the capabilities
+	// enabled features need. New returns ErrStorageMissingCapability when a feature needs more.
 	CoreStorage CoreStorage
 	storageRaw  any
 	EmailSender email.Sender
 	BaseURL     string
-	// PathPrefix is the route prefix Mount and Handler serve under, and the
-	// prefix of every URL the library generates. Default "/auth". It must
-	// start with "/" and not end with one, for example "/api/v1/auth".
+	// PathPrefix is the route prefix Mount and Handler serve under (default "/auth"). It must start
+	// with "/" and not end with one.
 	PathPrefix string
 	SigningKey ed25519.PrivateKey
-	// SessionTTL is the absolute session lifetime. Defaults to 24h.
 	SessionTTL time.Duration
-	// SessionIdleTimeout expires a session unused for this long. Zero
-	// disables it. Needs a storage implementing SessionManagementStorage.
+	// SessionIdleTimeout expires a session unused for this long; zero disables it. Needs
+	// SessionManagementStorage.
 	SessionIdleTimeout time.Duration
-	// SessionTouchInterval throttles last-seen writes to at most one per
-	// session per interval. Defaults to 1m; negative disables last-seen
-	// tracking. Must be shorter than SessionIdleTimeout when that is set.
+	// SessionTouchInterval throttles last-seen writes (default 1m; negative disables). Must be shorter
+	// than SessionIdleTimeout.
 	SessionTouchInterval time.Duration
-	// StepUpTTL is how long a successful POST /auth/step-up elevates a
-	// session. Defaults to 5m.
-	StepUpTTL time.Duration
-	// SessionLinks enables programmatic session links when non-nil. Needs a
-	// storage implementing SessionLinkStorage and SessionManagementStorage.
+	StepUpTTL            time.Duration
+	// SessionLinks enables programmatic session links when non-nil. Needs SessionLinkStorage and
+	// SessionManagementStorage.
 	SessionLinks *SessionLinksConfig
 	MagicLinkTTL time.Duration
 	CookieName   string
-	// SecureCookie forces the Secure attribute on every session cookie. It
-	// defaults to true when BaseURL is https. When false, Secure is still
-	// set per request if BaseURL is https, the
-	// connection is TLS, or a TrustedProxies peer sent X-Forwarded-Proto: https.
+	// SecureCookie forces the Secure attribute on session cookies. It defaults to true when BaseURL is
+	// https; otherwise Secure is still set per request when the connection is TLS or a trusted proxy
+	// sent X-Forwarded-Proto: https.
 	SecureCookie bool
-	// SuppressSecureCookieWarning silences the v2.2 deprecation WARN logged
-	// when SecureCookie is false. Set this to true in local/dev environments
-	// that run without TLS so the startup log stays clean. In production,
-	// prefer enabling SecureCookie instead.
+	// SuppressSecureCookieWarning silences the startup WARN logged when SecureCookie is false. Use it
+	// only for local dev without TLS.
 	SuppressSecureCookieWarning bool
-	// RateLimitPerIP is the per-IP per-minute budget applied to credential
-	// endpoints (signup/signin/forgot/reset). Defaults to 5 when zero.
+	// RateLimitPerIP is the per-IP per-minute budget for credential endpoints (default 5).
 	RateLimitPerIP int
-	// RateLimitPerEmail is the per-email per-minute budget applied to signin
-	// + forgot. Defaults to 3 when zero.
+	// RateLimitPerEmail is the per-email per-minute budget for signin and forgot (default 3).
 	RateLimitPerEmail int
 
-	// TrustedProxies is the operator-supplied allowlist of reverse-proxy
-	// networks whose X-Forwarded-For header is trusted by the rate
-	// limiter and the audit IP capture path. Default: empty slice (no
-	// XFF trust). Existing deployments that depend on XFF must opt in
-	// explicitly by listing their reverse-proxy CIDR(s) here (security
-	// audit H4, 2026-06-20).
-	//
-	// Example values: netip.MustParsePrefix("10.0.0.0/8"),
-	// netip.MustParsePrefix("172.16.0.0/12"). For a single-host LB front
-	// end pass a /32 (or /128 for IPv6) literal.
+	// TrustedProxies lists reverse-proxy networks whose X-Forwarded-For is trusted by the rate limiter
+	// and the audit IP capture. Default empty (no XFF trust); deployments that depend on XFF must list
+	// their proxy CIDRs (security audit H4). For a single-host load balancer pass a /32 (or /128)
+	// prefix.
 	TrustedProxies []netip.Prefix
 
-	// Stores plugs in the shared state backends: the rate limiter behind
-	// RateLimitByIP, RateLimitByEmail and the AS endpoint limits, the DPoP
-	// proof replay cache, and the CIMD document cache. Nil fields keep the
-	// in-process defaults, which are per replica. Behind several replicas set
-	// them to a shared adapter (kv.FromCache(sqlkv or kv/redis)) so limits and
-	// replay protection hold across instances. See the kv package.
+	// Stores plugs in shared state backends: the rate limiters, the DPoP replay cache and the CIMD
+	// cache. Nil fields keep per-replica in-process defaults. Behind several replicas, use a shared
+	// adapter (see the kv package).
 	Stores kv.Stores
 
-	// TrustedOrigins lists extra origins (scheme://host[:port]) allowed to
-	// send cookie-authenticated state-changing requests. The BaseURL origin
-	// is always trusted. Cross-origin SPAs on a sibling domain add theirs here.
+	// TrustedOrigins lists extra origins (scheme://host[:port]) allowed to send cookie-authenticated
+	// state-changing requests. The BaseURL origin is always trusted.
 	TrustedOrigins []string
 
-	// DisableCSRFProtection turns off the Origin/Referer check on
-	// cookie-authenticated POST/PUT/PATCH/DELETE requests. Leave false
-	// unless a fronting layer already enforces it.
+	// DisableCSRFProtection turns off the Origin/Referer check on cookie-authenticated unsafe methods.
+	// Leave false unless a fronting layer enforces it.
 	DisableCSRFProtection bool
 
-	// Admission, when set, runs the Admission middleware ahead of every
-	// route Mount and Handler register: tiered per-client rate limits and a
-	// cross-site check, with counters in Stores.RateLimiter. Nil leaves it
-	// off. It stacks with the per-route credential limits.
+	// Admission, when set, runs the Admission middleware ahead of every route Mount and Handler
+	// register. It stacks with the per-route credential limits.
 	Admission *AdmissionOptions
 
-	// ErrorResponder, when set, writes every error response the root
-	// middleware produces (Authn family, RequireAuth, RequirePermission,
-	// RequireAbility, the Origin check, rate limiters) so an app can emit its
-	// own error envelope. status is the HTTP status, code the stable machine
-	// code (for example "auth.unauthenticated") and message the human text.
-	// On a 401 the WWW-Authenticate challenge header is already set before
-	// the call. Nil keeps the built-in RFC 7807 / {"code","message"} bodies
-	// byte for byte. Handler-level routes under Mount keep their own bodies.
+	// ErrorResponder, when set, writes every error response the root middleware produces, so an app
+	// can emit its own envelope. status is the HTTP status, code the stable machine code and message
+	// the text. The WWW-Authenticate header is already set on a 401. Nil keeps the built-in RFC 7807
+	// bodies.
 	ErrorResponder func(w http.ResponseWriter, r *http.Request, status int, code, message string)
 
-	// SuppressTrustedProxiesWarning silences the startup WARN logged when
-	// TrustedProxies is empty. Set it when the server is exposed directly
-	// with no reverse proxy in front.
+	// SuppressTrustedProxiesWarning silences the startup WARN logged when TrustedProxies is empty.
 	SuppressTrustedProxiesWarning bool
 
-	// Providers is the list of OAuth providers exposed under
-	// /auth/providers/{name}/start and /callback. Leave nil to disable
-	// OAuth entirely (v0.1 / v0.2 behavior). Each provider's Name() must
-	// be unique within the slice.
+	// Providers is the list of OAuth providers exposed under /auth/providers/{name}/start and
+	// /callback. Nil disables OAuth. Each Name() must be unique.
 	Providers []Provider
 
-	// ProviderResolver, when set, supplies OAuth/OIDC providers that are not
-	// in Providers, looked up per request by name. Static providers win
-	// unless ProviderResolverFirst is set. A resolver error fails the flow
-	// closed. EncryptionKey is required when a resolver is set.
-	ProviderResolver ProviderResolver
-	// ProviderResolverFirst makes the resolver take precedence over Providers.
+	// ProviderResolver supplies OAuth/OIDC providers not in Providers, looked up per request by name.
+	// Static providers win unless ProviderResolverFirst is set. A resolver error fails the flow
+	// closed. EncryptionKey is required with it.
+	ProviderResolver      ProviderResolver
 	ProviderResolverFirst bool
-	// ProviderResolverTTL caches resolver answers, including "not found",
-	// for this long. Zero disables caching; use InvalidateProvider to
-	// drop an entry early.
+	// ProviderResolverTTL caches resolver answers, including "not found". Zero disables caching; use
+	// InvalidateProvider to drop an entry early.
 	ProviderResolverTTL time.Duration
 
-	// EncryptionKey is the 32-byte AES-256 key used to encrypt provider
-	// access/refresh tokens before they hit storage. Required when
-	// len(Providers) > 0; New returns an error otherwise. Source this from
-	// a secrets manager; never commit it.
+	// EncryptionKey is the 32-byte AES-256 key that encrypts provider tokens before storage. Required
+	// when Providers is non-empty. Source it from a secrets manager; never commit it.
 	EncryptionKey []byte
 
-	// PostLoginRedirect is where the OAuth callback handler 302s to after
-	// a successful sign-in. Defaults to "/" when empty. Set to a path on
-	// your own origin; cross-origin redirects are not validated here.
+	// PostLoginRedirect is where the OAuth callback redirects after sign-in (default "/"). Set a path
+	// on your own origin.
 	PostLoginRedirect string
 
-	// APITokens enables scoped API tokens, RequireAbility and, via its Device
-	// field, the device authorization grant. Needs APITokenStorage (and
-	// DeviceCodeStorage for Device).
+	// APITokens enables scoped API tokens, RequireAbility and, via its Device field, the device grant.
 	APITokens *APITokensConfig
 
-	// WebAuthn enables passkey registration + discoverable login when non-nil.
-	// RPID and RPOrigins are mandatory per spec. Leave nil to keep v0.4 behavior.
+	// WebAuthn enables passkey registration and discoverable login when non-nil.
 	WebAuthn *WebAuthnConfig
 
-	// OAuth tunes OAuth login hardening: state store, return-to allow-list
-	// and signup policy. Nil keeps the defaults documented on OAuthConfig.
 	OAuth *OAuthConfig
 
-	// AuthEventSink, when set, receives every security-relevant
-	// authentication event (login, MFA, password, passkey, TOTP, session,
-	// token) as a PII-minimal AuthEvent. Independent of Config.Audit.
+	// AuthEventSink, when set, receives every security-relevant authentication event as a PII-minimal AuthEvent.
+	// It is independent of Config.Audit.
 	AuthEventSink AuthEventSink
 
-	// SharedSignals enables the OpenID Shared Signals Framework 1.0
-	// transmitter (CAEP and RISC events, push and poll delivery) and an
-	// optional receiver. Requires AuthorizationServer. See
-	// docs/shared-signals.md. Nil keeps it off.
+	// SharedSignals enables the OpenID Shared Signals Framework 1.0 transmitter and optional receiver. Requires
+	// AuthorizationServer. See docs/shared-signals.md.
 	SharedSignals *SharedSignalsConfig
 
-	// TOTP enables time-based second-factor enrollment + verification when non-nil.
-	// Requires Config.EncryptionKey (already required by v0.3 OAuth) so the stored
-	// secret is encrypted at rest. New returns an error if TOTP is set without a key.
+	// TOTP enables time-based second-factor enrollment. Requires EncryptionKey so the secret is
+	// encrypted at rest.
 	TOTP *TOTPConfig
 
-	// Organizations (v0.7) enables multi-tenancy when non-nil. Single-tenant
-	// deployments leave this nil; organization-scoped routes (SAML connection
-	// CRUD, SCIM token CRUD, /auth/orgs/*) are not mounted.
+	// Organizations enables multi-tenancy when non-nil. Organization-scoped routes are not mounted otherwise.
 	Organizations *OrganizationsConfig
 
-	// SAML (v0.7) enables the per-connection Service Provider routes when
-	// non-nil. The SP keypair lives on the config so multi-tenant deployments
-	// can rotate it centrally; every connection signs AuthnRequests with this
-	// single keypair. Requires Organizations to be non-nil.
+	// SAML enables the per-connection Service Provider routes when non-nil. The SP keypair lives here
+	// so it can rotate centrally. Requires Organizations.
 	SAML *SAMLConfig
 
-	// SCIM (v0.7) enables the /scim/v2 endpoints when non-nil. Requires
-	// Organizations to be non-nil.
+	// SCIM enables the /scim/v2 endpoints when non-nil. Requires Organizations.
 	SCIM *SCIMConfig
 
-	// RBAC (v1.0) enables organization-scoped role and permission
-	// management when non-nil. The zero value RBACConfig{} accepts the
-	// seeded permissions and default org roles documented in
-	// service_rbac.go; consumers extend (never shrink) the seeded lists.
-	// New returns an error if Admin is non-nil and RBAC is nil because the
-	// admin endpoints are permission-gated and meaningless without RBAC.
+	// RBAC enables organization-scoped role and permission management when non-nil. Consumers extend,
+	// never shrink, the seeded lists. New fails if Admin is set without RBAC, since admin endpoints
+	// are permission-gated.
 	RBAC *RBACConfig
 
-	// Audit (v1.0) enables the async batched audit writer when non-nil.
-	// When nil, EmitAudit is a silent no-op and no writer goroutine starts;
-	// the v0.7 stub call sites keep working as no-ops, so deployments that
-	// do not configure audit continue to behave exactly as before.
+	// Audit enables the async batched audit writer when non-nil. When nil, EmitAudit is a silent no-op.
 	Audit *AuditConfig
 
-	// Admin (v1.0) mounts /admin/v1/* when non-nil. Requires RBAC to be
-	// non-nil. The PathPrefix can be moved (e.g. "/api/admin/v1") but the
-	// trailing version segment is always v1.
+	// Admin mounts /admin/v1/* when non-nil. Requires RBAC.
 	Admin *AdminConfig
 
-	// AuthorizationServer (v2.0 phase 1 + 2) enables the OAuth 2.1 + MCP
-	// authorization server. When non-nil, /.well-known/oauth-authorization-server,
-	// /oauth/authorize, /oauth/token, /oauth/revoke, /oauth/introspect,
-	// /oauth/register, and /oauth/jwks are mounted. Requires
-	// Config.EncryptionKey (32 bytes) and a Storage that satisfies
+	// AuthorizationServer enables the OAuth 2.1 and MCP authorization server, mounting the
+	// /.well-known and /oauth routes. Requires EncryptionKey (32 bytes) and a Storage implementing
 	// OAuthServerStorage.
 	AuthorizationServer *AuthorizationServerConfig
 
-	// AgentIdentity (v2.0 phase 3 + 4) enables the agent identity service
-	// surface (Create / Rotate / Suspend / Resume / Revoke), the
-	// client_credentials grant on /oauth/token, the delegation_grants
-	// service surface, and the RFC 8693 token-exchange grant on /oauth/token.
-	// Requires AuthorizationServer to be non-nil. Defaults applied at New:
-	// MaxChainDepth=3, MaxDelegationDuration=90d, DefaultDelegatedTokenTTL=15m,
-	// AgentSecretLength=32.
+	// AgentIdentity enables the agent identity service, the client_credentials grant, delegation
+	// grants and RFC 8693 token exchange on /oauth/token. Requires AuthorizationServer. Defaults are
+	// applied at New.
 	AgentIdentity *AgentConfig
 
-	// RevocationBus carries revocation events to long-lived connections.
-	// Defaults to an in-process bus; supply one backed by Postgres NOTIFY or
-	// Redis when streams and revokes can land on different processes.
+	// RevocationBus carries revocation events to long-lived connections. Defaults to an in-process
+	// bus; supply one backed by Postgres NOTIFY or Redis when streams and revokes can land on
+	// different processes.
 	RevocationBus RevocationBus
 
-	// AccountUX (v2.0 phase 6) mounts /account/agents and /account/delegations
-	// when true. Requires AgentIdentity to be configured. Routes are gated by
-	// session cookie auth only (no special permission): they manage the
-	// authenticated user's own agents and the user's own granted delegations.
+	// AccountUX mounts /account/agents and /account/delegations. Requires AgentIdentity. Routes use
+	// session auth only and manage the user's own agents and delegations.
 	AccountUX bool
 
-	// Observability optionally wires consumer-supplied Tracer + Metrics
-	// adapters. When nil the library uses no-op adapters and emits no
-	// spans or metrics. The adapter pattern keeps OpenTelemetry,
-	// Prometheus, and every other vendor out of theauth-go/go.mod;
-	// consumers pick the stack they want and bridge it via the
-	// Tracer/Metrics interfaces re-exported from this package.
-	//
-	// See observability.go for the re-exported types and
-	// examples/observability-otel + examples/observability-prom for
-	// reference implementations.
+	// Observability optionally wires consumer-supplied Tracer and Metrics adapters. Nil uses no-op
+	// adapters, which keeps OpenTelemetry and other vendor SDKs out of this module. See
+	// examples/observability-otel and observability-prom.
 	Observability *Hooks
 
-	// PasswordPolicy controls optional extensions to the password-verification
-	// path. The zero value is safe (all extensions disabled).
+	// PasswordPolicy controls optional extensions to password verification. The zero value disables them all.
 	PasswordPolicy PasswordPolicyConfig
 
-	// LifecycleHooks (v2.5) lets consumers react to authentication-lifecycle
-	// events (signup, signin, password change, MFA enable, token issuance,
-	// org switch) without forking handlers or wrapping every endpoint at the
-	// HTTP boundary. Optional; nil is a silent no-op. See the LifecycleHooks
-	// type doc for semantics, error handling, and current wiring status.
+	// LifecycleHooks lets consumers react to authentication lifecycle events without forking handlers.
+	// Nil is a no-op. See the LifecycleHooks type for semantics.
 	LifecycleHooks *LifecycleHooks
 
-	// Tenancy (v2.5) wires opt-in tenant-provisioning behavior. When
-	// Tenancy.AutoCreatePersonalOrg is true and Config.Organizations is
-	// also non-nil, every signup automatically creates a personal
-	// organization, adds the user as its owner, and sets the session's
-	// active organization to it. Removes the SQL-seeding friction
-	// consumers previously hit on first signup. Nil = no auto-provisioning.
+	// Tenancy opts into tenant provisioning. When Tenancy.AutoCreatePersonalOrg is true and
+	// Organizations is set, each signup creates a personal organization owned by the user and makes it
+	// active.
 	Tenancy *TenancyConfig
 
-	// LoginThrottle tunes password-login backoff, per-user lockout and the
-	// per-user TOTP/recovery-code attempt limit. Nil selects safe defaults
-	// (enabled); set LoginThrottle.Disabled to opt out.
+	// LoginThrottle tunes password-login backoff, per-user lockout and the TOTP attempt limit. Nil
+	// selects safe defaults.
 	LoginThrottle *LoginThrottleConfig
 
-	// Bootstrap, when non-nil, closes public signup and requires a one-time
-	// setup token to create the first user. Needs a storage implementing
-	// UserCountStorage.
+	// Bootstrap, when non-nil, closes public signup and requires a one-time setup token for the first
+	// user. Needs UserCountStorage.
 	Bootstrap *BootstrapConfig
 
-	// EmailNFKC additionally applies Unicode NFKC folding when canonicalizing
-	// email addresses. Trimming and lowercasing always apply.
+	// EmailNFKC additionally applies Unicode NFKC folding when canonicalizing emails. Trimming and
+	// lowercasing always apply.
 	EmailNFKC bool
 
-	// Account lifecycle and session policy
-
-	// AccountState enforces per-user lifecycle flags at every sign-in: the
-	// forced password change flag (SetMustChangePassword, ResetPasswordAdmin
-	// with RequirePasswordChange, importers) and DisableUser. Needs a
-	// storage implementing AccountStateStorage and its migration applied.
+	// AccountState enforces per-user lifecycle flags (forced password change, disabled users) at every
+	// sign-in. Needs AccountStateStorage.
 	AccountState bool
 
-	// AccountDeletion mounts DELETE /account for self-service deletion when
-	// non-nil. The session must have authenticated recently (RequireRecentAuth).
+	// AccountDeletion mounts DELETE /account when non-nil. The session must have authenticated recently.
 	AccountDeletion *AccountDeletionConfig
 
-	// SessionPolicy caps concurrent sessions per user. Nil means no cap.
 	SessionPolicy *SessionPolicy
 
-	// TrustedDevices enables remember-this-device for TOTP when non-nil.
 	TrustedDevices *TrustedDevicesConfig
 }
 
-// PasswordPolicyConfig holds optional password-verification extensions.
-// These are designed for migration windows; disable them once users have
-// been migrated and re-hashed.
+// PasswordPolicyConfig holds optional password-verification extensions, meant for migration
+// windows. Disable them once users are migrated and re-hashed.
 type PasswordPolicyConfig struct {
-	// AllowLegacyBcrypt enables the legacy-hash fallback in VerifyPassword for
-	// migrated users. When true, bcrypt hashes ("$2a$", "$2b$", "$2x$", from
-	// Auth0 and others) and PBKDF2 hashes ("$pbkdf2-sha256$", "$pbkdf2-sha512$",
-	// from Keycloak) are verified. On a successful match the password is
-	// transparently re-hashed with Argon2id and persisted by the library;
-	// hosts that mirror hashes can observe it via OnLegacyHashAccepted.
-	// With false, a bcrypt hash fails as invalid credentials. Set to false (default) in all non-migration deployments.
+	// AllowLegacyBcrypt enables the legacy-hash fallback for migrated users: bcrypt ($2a$, $2b$, $2x$)
+	// and PBKDF2 hashes are verified and transparently re-hashed to Argon2id on success. With false a
+	// bcrypt hash fails. Leave false outside migrations.
 	AllowLegacyBcrypt bool
 
-	// HashConcurrency bounds how many Argon2id hashes or verifications run at
-	// once across the process; extra sign-ins wait their turn instead of each
-	// allocating 64 MiB. Default NumCPU/4 (at least 1), which measured as the
-	// throughput knee. The bound is process-wide, the last New call wins.
+	// HashConcurrency bounds concurrent Argon2id hashes process-wide (default NumCPU/4, at least 1) so
+	// sign-ins queue instead of each allocating 64 MiB. The last New call wins.
 	HashConcurrency int
 
-	// MinLength is the minimum password length in bytes. Default 12.
+	// MinLength is the minimum password length in bytes (default 12).
 	MinLength int
 
-	// MaxBytes is the maximum password length in bytes. Longer passwords are
-	// rejected with CodeWeakPassword (HTTP 400). Default 72, the bcrypt limit.
+	// MaxBytes is the maximum password length in bytes, rejected with CodeWeakPassword (default 72,
+	// the bcrypt limit).
 	MaxBytes int
 
-	// BreachChecker, when set, rejects passwords found in a breach corpus on
-	// signup and password change. Lookup errors fail open. Default nil (off).
+	// BreachChecker, when set, rejects passwords found in a breach corpus on signup and change. Lookup
+	// errors fail open.
 	BreachChecker BreachChecker
 
-	// OnLegacyHashAccepted is invoked after the library has persisted the new
-	// Argon2id hash for a user who signed in or stepped up with a legacy
-	// bcrypt hash, from a separate goroutine, with (userID, newArgon2idHash).
-	// A host that mirrors password hashes can update its own copy. The
-	// library does not need it to work, so leaving it nil is fine. It is not
-	// called if the rehash or persist failed, a panic in it is recovered and
-	// logged, and it never blocks or fails the login.
+	// OnLegacyHashAccepted is called from a separate goroutine after a legacy-hash user's password is
+	// re-hashed to Argon2id, with (userID, newHash), so hosts that mirror hashes can update their
+	// copy. Panics are recovered; it never fails a login.
 	OnLegacyHashAccepted func(userID string, newArgon2idHash string)
 }
 
-// TheAuth is the public entry point, constructed once at app start and
-// shared across handlers.
+// TheAuth is the public entry point, constructed once at app start and shared across handlers.
 type TheAuth struct {
 	storage           Storage
 	emailSender       email.Sender
@@ -400,18 +292,12 @@ type TheAuth struct {
 	throttle   *throttle.Limiter
 	bootstrap  *bootstrap.Gate
 
-	// dcrRegistrationTokenHashes is the sha256-hashed set of operator
-	// initial access tokens accepted by POST /oauth/register when DCR is
-	// bearer gated. Compares run with crypto/subtle.ConstantTimeCompare so
-	// token-presence timing is not observable. Empty when no tokens are
-	// configured; the handler then rejects every Authorization-bearing
-	// request (security audit H1, 2026-06-20).
+	// dcrRegistrationTokenHashes holds the sha256 digests of operator initial access tokens for
+	// bearer-gated DCR. Compares are constant time. Empty means the handler rejects every
+	// Authorization-bearing request (security audit H1).
 	dcrRegistrationTokenHashes [][32]byte
 
-	// OAuth (v0.3). oauthSvc owns the start/callback state machine (GC
-	// goroutine, PKCE state, provider dispatch). Nil when no Providers are
-	// configured. PR H (2026-06-22): extracted from root service_oauth.go
-	// into internal/oauth.Service; root keeps thin forwarder methods.
+	// providers are the OAuth providers by name. The OAuth state machine lives in internal/oauth.
 	providers         map[string]Provider
 	providerReg       *internaloauth.Registry
 	encryptionKey     []byte
@@ -419,25 +305,17 @@ type TheAuth struct {
 	oauthSvc          *internaloauth.Service
 	authEventSink     AuthEventSink
 
-	// WebAuthn (v0.5). webauthnCfg is the original Config.WebAuthn pointer
-	// kept as a nil-signal for mount() and to give the handler access to
-	// ChallengeTTL for the bridging cookie. The runtime state (in-flight
-	// challenges + GC goroutine) lives on webauthnSvc.
+	// webauthnCfg is the original Config.WebAuthn, kept as the nil signal for mount() and for
+	// ChallengeTTL. The runtime state lives on webauthnSvc.
 	webauthnCfg *WebAuthnConfig
-	// totpCfg is the original Config.TOTP pointer kept as a nil-signal
-	// for mount(). The runtime state (enrollments + failure counters + GC
-	// goroutine) lives on totpSvc.
+	// totpCfg is the original Config.TOTP, kept as the nil signal for mount(). Runtime state lives on totpSvc.
 	totpCfg *TOTPConfig
 
-	// v0.7
 	orgsCfg *OrganizationsConfig
-	// samlCfg is the original Config.SAML pointer kept as a nil-signal
-	// for mount(). The SP keypair, AuthnRequest in-flight map, and GC
-	// goroutine live on samlSvc.
+	// samlCfg is the original Config.SAML, kept as the nil signal for mount(). Runtime state lives on samlSvc.
 	samlCfg *SAMLConfig
 	scimCfg *SCIMConfig
 
-	// v1.0
 	rbacCfg          *RBACConfig
 	auditCfg         *AuditConfig
 	adminCfg         *AdminConfig
@@ -445,96 +323,65 @@ type TheAuth struct {
 	permIndex        map[string]Permission // name -> Permission, lookup cache
 	defaultRoleSeeds []RoleSeed
 
-	// v2.0 phase 1 + 2: OAuth 2.1 authorization server runtime state.
-	// Nil when Config.AuthorizationServer is not set. PR B architecture
-	// reorg (2026-06-20): the *asState struct and every per-method entry
-	// point moved to internal/as as a unit. Root keeps thin forwarders
-	// per public *TheAuth method so the v2.0 stability surface is
-	// unchanged.
+	// as is the OAuth 2.1 authorization server service, nil when Config.AuthorizationServer is unset.
+	// Root keeps thin forwarders per public method so the surface is unchanged.
 	as *internalas.Service
 
-	// signalsSvc is the Shared Signals Framework transmitter and receiver;
-	// nil unless Config.SharedSignals is set.
+	// signalsSvc is the Shared Signals transmitter and receiver, nil unless Config.SharedSignals is set.
 	signalsSvc *sharedSignals
 
-	// v2.0 phase 3 + 4: agent identity + delegation policy. Nil when
-	// Config.AgentIdentity is not set; client_credentials and token-exchange
-	// grants short-circuit with unsupported_grant_type in that case.
+	// agentCfg is the original Config.AgentIdentity. Nil makes client_credentials and token exchange
+	// return unsupported_grant_type.
 	agentCfg *AgentConfig
 
-	// v2.0 phase 6: end-user self-service UX. When true, /account/agents and
-	// /account/delegations are mounted. Requires agentCfg to be non-nil.
 	accountUX bool
 
-	// v2.5 lifecycle hooks. Never nil after New: substituted with
-	// &LifecycleHooks{} when Config.LifecycleHooks is nil so forwarders can
-	// dispatch without nil-checking the pointer. Individual function fields
-	// MAY still be nil; the runHook helper handles that.
+	// lifecycle is never nil after New; it is substituted with an empty LifecycleHooks so forwarders
+	// need no nil check.
 	lifecycle *LifecycleHooks
 
-	// v2.5 tenancy auto-provisioning policy. Nil-safe: forwarders gate on
-	// nil before calling autoProvisionPersonalOrg.
+	// tenancyCfg is the Tenancy policy. Nil-safe: callers gate on nil before auto-provisioning.
 	tenancyCfg *TenancyConfig
 
-	// hooks is the consumer-supplied observability bundle. Never nil: the
-	// constructor substitutes &Hooks{} when Config.Observability is nil so
-	// internal services can call hooks.StartSpan / hooks.Counter without
-	// nil-checking the pointer itself. The fields inside (Tracer, Metrics)
-	// MAY still be nil; the nil-safe helpers on *Hooks handle that path.
+	// hooks is the observability bundle, never nil: New substitutes an empty Hooks, and its nil-safe
+	// helpers handle nil fields.
 	hooks *Hooks
 
-	// PR A architecture reorg (2026-06): low-complexity services are
-	// extracted into internal packages and held here. Root methods on
-	// *TheAuth forward to these so the v1.0/v2.0 public surface keeps the
-	// exact same method signatures. Each internal package declares its own
-	// minimal Storage interface so the constructor cycle stays broken.
+	// Low-complexity services are extracted into internal packages and held here. Each declares its
+	// own minimal Storage interface so the constructor cycle stays broken.
 	sessionSvc *session.Service
 	magicSvc   *magiclink.Service
 	scimSvc    *internalscim.Service
 	orgsSvc    *organizations.Service
 	rbacSvc    *rbac.Service
 
-	// PR C architecture reorg (2026-06-20): agent identity + delegation
-	// services. Nil when Config.AuthorizationServer is not set; the
-	// service_agent.go and service_delegation.go forwarders short-circuit
-	// against agentCfg in that case. Each package declares its own
-	// minimal Storage interface so the constructor cycle stays broken
-	// and the PR B oauthStorage back-door is gone for good.
+	// agentSvc and delegation services. Nil when AuthorizationServer is unset.
 	agentSvc      *agent.Service
 	agentGate     *agent.Gate
 	delegationSvc *delegation.Service
 
-	// PR D architecture reorg (2026-06-20): high-complexity services
-	// (password, totp, webauthn, saml, audit) are extracted into internal
-	// packages and held here. Each internal package owns its own runtime
-	// state (in-flight challenges / enrollments / AuthnRequests + GC
-	// goroutines + audit writer goroutine) and declares its own minimal
-	// Storage interface. Root methods on *TheAuth forward to these so the
-	// public surface is byte-stable.
+	// sx holds the high-complexity services (password, totp, webauthn, saml, audit). Each owns its
+	// runtime state and GC goroutines and declares its own minimal Storage interface, so the public
+	// surface stays byte-stable.
 	sx          *sessionExt
 	passwordSvc *password.Service
 	totpSvc     *internaltotp.Service
 	webauthnSvc *internalwebauthn.Service
 	samlSvc     *internalsaml.Service
 	auditSvc    *internalaudit.Service
-	// v2.3 identity-linking service. Non-nil whenever at least one OAuth
-	// provider or password auth is configured (which covers essentially all
-	// deployments). Gated at account handler mount time so non-AccountUX
-	// consumers are unaffected.
+	// identityLinkSvc is non-nil whenever an OAuth provider or password auth is configured.
 	identityLinkSvc *identitylink.Service
 
-	// Account lifecycle. acct gates sign-in and reacts to password changes;
-	// devices backs remember-this-device; deletion enables DELETE /account.
-	// See lifecycle.go.
+	// acct gates sign-in and reacts to password changes; devices backs remember-this-device; deletion
+	// enables DELETE /account.
 	acct         *accountLifecycle
 	devices      *trusteddevice.Service
 	deviceCookie string
 	deletion     *AccountDeletionConfig
 }
 
-// New validates the Config, applies defaults, and returns a ready TheAuth.
-// Validation and service wiring are delegated to helpers in wiring.go so
-// this function stays a short orchestrator.
+// New validates the Config, applies defaults, and returns a ready TheAuth. Validation and wiring
+// are delegated to wiring.go so this function stays a short orchestrator.
 func New(cfg Config) (*TheAuth, error) {
 	applyConfigDefaults(&cfg)
 	crypto.SetHashConcurrency(cfg.PasswordPolicy.HashConcurrency)
@@ -562,19 +409,18 @@ func New(cfg Config) (*TheAuth, error) {
 	}
 
 	a := &TheAuth{
-		storage:           cfg.Storage,
-		emailSender:       cfg.EmailSender,
-		baseURL:           cfg.BaseURL,
-		allowLegacyBcrypt: cfg.PasswordPolicy.AllowLegacyBcrypt,
-		onLegacyHash:      cfg.PasswordPolicy.OnLegacyHashAccepted,
-		pathPrefix:        pathprefix.Normalize(cfg.PathPrefix),
-		signingKey:        cfg.SigningKey,
-		sessionTTL:        cfg.SessionTTL,
-		sx:                sx,
-		magicLinkTTL:      cfg.MagicLinkTTL,
-		cookieName:        cfg.CookieName,
-		revocations:       cfg.RevocationBus,
-		// Secure defaults to on whenever BaseURL is https.
+		storage:                    cfg.Storage,
+		emailSender:                cfg.EmailSender,
+		baseURL:                    cfg.BaseURL,
+		allowLegacyBcrypt:          cfg.PasswordPolicy.AllowLegacyBcrypt,
+		onLegacyHash:               cfg.PasswordPolicy.OnLegacyHashAccepted,
+		pathPrefix:                 pathprefix.Normalize(cfg.PathPrefix),
+		signingKey:                 cfg.SigningKey,
+		sessionTTL:                 cfg.SessionTTL,
+		sx:                         sx,
+		magicLinkTTL:               cfg.MagicLinkTTL,
+		cookieName:                 cfg.CookieName,
+		revocations:                cfg.RevocationBus,
 		secureCookie:               cfg.SecureCookie || strings.HasPrefix(strings.ToLower(cfg.BaseURL), "https://"),
 		rateLimitPerIP:             cfg.RateLimitPerIP,
 		rateLimitPerEmail:          cfg.RateLimitPerEmail,
@@ -625,14 +471,8 @@ func New(cfg Config) (*TheAuth, error) {
 	return a, nil
 }
 
-// Start spawns the audit writer goroutine when Config.Audit is non-nil
-// and the writer is not already running. Idempotent; safe to call
-// multiple times. New calls Start automatically so existing callers that
-// never invoked Start keep working.
-//
-// PR D architecture reorg (2026-06-20): forwards to the extracted audit
-// service. WebAuthn / TOTP / SAML GC loops are spawned directly in New
-// via their per-service Start methods; Close handles their lifecycle.
+// Start spawns the audit writer goroutine when Config.Audit is set. It is idempotent. New calls it
+// automatically.
 func (a *TheAuth) Start() error {
 	if a.auditSvc == nil {
 		return nil
@@ -640,11 +480,8 @@ func (a *TheAuth) Start() error {
 	return a.auditSvc.Start()
 }
 
-// Close releases background resources started by New: the OAuth state GC
-// loop (v0.3), the WebAuthn challenge / TOTP enrollment GC loops (v0.5),
-// the SAML AuthnRequest GC loop (v0.7), and the audit writer goroutine
-// (v1.0). Audit drain waits up to Config.Audit.DrainTimeout (default 5
-// seconds) for the writer to flush. Safe to call multiple times.
+// Close releases background resources: the OAuth state, WebAuthn, TOTP and SAML GC loops and the
+// audit writer. Audit drain waits up to Config.Audit.DrainTimeout. Safe to call multiple times.
 func (a *TheAuth) Close() {
 	if a.oauthSvc != nil {
 		a.oauthSvc.Stop()

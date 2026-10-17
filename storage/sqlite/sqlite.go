@@ -99,11 +99,9 @@ func New(db *sql.DB, opts ...Option) (*Store, error) {
 	return &Store{db: db, prefix: c.prefix}, nil
 }
 
-// NewTx binds a Store to the caller's open transaction so every method runs on it.
-//
-// Nothing is committed or rolled back by the Store: the caller owns tx and must
-// stop using the Store once tx ends. Multi-statement methods use SAVEPOINTs
-// inside tx. Run Migrate on the *sql.DB beforehand; it cannot run inside a Tx.
+// NewTx binds a Store to the caller's open transaction. The Store never commits or rolls back;
+// multi-statement methods use SAVEPOINTs inside tx. Run Migrate on the *sql.DB beforehand, as it
+// cannot run inside a Tx.
 func NewTx(tx *sql.Tx, opts ...Option) (*Store, error) {
 	if tx == nil {
 		return nil, errors.New("theauth sqlite: nil *sql.Tx")

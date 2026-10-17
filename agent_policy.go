@@ -11,12 +11,8 @@ import (
 	"github.com/glincker/theauth-go/v2/internal/ratelimit"
 )
 
-// agent_policy.go: per agent IAM policy and rate limit (see AgentConfig.PolicyEngine
-// and AgentConfig.RateLimit, and the agentpolicy package).
-
-// AgentPolicyEngine resolves and evaluates the policies attached to an agent.
-// The agentpolicy package provides the implementation; hosts rarely implement
-// it themselves.
+// AgentPolicyEngine resolves and evaluates the policies attached to an agent. Hosts normally use the
+// agentpolicy package rather than implementing it.
 type AgentPolicyEngine = agent.PolicyEngine
 
 // AgentRateLimit bounds how often one agent may mint tokens or call Authorize:
@@ -59,9 +55,8 @@ func validateAgentRateLimit(r *AgentRateLimit) error {
 	return nil
 }
 
-// Normalize applies the defaults (Per one minute, Burst equal to Requests) and
-// rejects negative values and a non-positive Requests. The zero value is
-// invalid here: use a nil pointer where "no override" is meant.
+// Normalize applies defaults (Per one minute, Burst equal to Requests) and rejects negative values and
+// a non-positive Requests. The zero value is invalid: use a nil pointer for "no override".
 func (r AgentRateLimit) Normalize() (AgentRateLimit, error) {
 	if r.Requests < 0 || r.Per < 0 || r.Burst < 0 {
 		return AgentRateLimit{}, fmt.Errorf("%w: negative value", ErrAgentRateLimit)
@@ -78,13 +73,10 @@ func (r AgentRateLimit) Normalize() (AgentRateLimit, error) {
 	return r, nil
 }
 
-// AuthorizeAgent asks whether the agent may perform action on resource under
-// its attached policies, using the same engine that vets token mints. Resource
-// servers call it at call time. It spends one unit of the agent's rate budget
-// and returns nil when allowed. A refusal is an *AgentPolicyDeniedError, an
-// exhausted budget an *AgentRateLimitedError (with RetryAfter), and an
-// unresolvable policy an error. Without AgentConfig.PolicyEngine and
-// RateLimit it returns nil.
+// AuthorizeAgent checks whether the agent may perform action on resource under its attached policies,
+// spending one unit of its rate budget. It returns nil when allowed, *AgentPolicyDeniedError on refusal,
+// *AgentRateLimitedError (with RetryAfter) when the budget is spent, and an error for an unresolvable
+// policy. Without PolicyEngine and RateLimit it returns nil.
 func (a *TheAuth) AuthorizeAgent(ctx context.Context, agentID, action, resource string) error {
 	if a == nil || a.agentGate == nil {
 		return nil
@@ -92,8 +84,8 @@ func (a *TheAuth) AuthorizeAgent(ctx context.Context, agentID, action, resource 
 	return a.agentGate.Authorize(ctx, agentID, action, resource)
 }
 
-// CheckAgentRate spends one unit of the agent's rate budget without evaluating
-// policy. It suits toolguard.Guard.Limit.
+// CheckAgentRate spends one unit of the agent's rate budget without evaluating policy; it suits
+// toolguard.Guard.Limit.
 func (a *TheAuth) CheckAgentRate(ctx context.Context, agentID string) error {
 	if a == nil || a.agentGate == nil {
 		return nil

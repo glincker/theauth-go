@@ -19,22 +19,19 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
-// Authn looks for a session cookie, validates it, and adds the user + session
-// to the request context. Does NOT reject anonymous requests. Pair with
-// RequireAuth (full) or RequirePendingOrFull (TOTP verify routes only).
+// Authn reads the session cookie, validates it and adds the user and session to the request
+// context. It does not reject anonymous requests; pair it with RequireAuth or RequirePendingOrFull.
 func (a *TheAuth) Authn() func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			cookie, err := r.Cookie(a.cookieName)
 			if err != nil || cookie.Value == "" {
-				// No cookie present, silent anonymous request.
 				next.ServeHTTP(w, r)
 				return
 			}
 			sess, user, err := a.validateSession(r.Context(), cookie.Value)
 			if err != nil {
-				// Cookie present but validation failed: log so DB outages
-				// don't masquerade as "user is anonymous". Token value is
+				// Validation failures are logged so DB outages do not look like anonymous users. The token is
 				// never logged.
 				slog.Warn("theauth: session validation failed", "err", err.Error())
 				next.ServeHTTP(w, r)
@@ -47,20 +44,10 @@ func (a *TheAuth) Authn() func(http.Handler) http.Handler {
 	}
 }
 
-// RequireAuth runs Authn, then rejects requests that don't have a FULL
-// session. Pending_2fa sessions are treated as unauthorized here. The two
-// TOTP verify routes opt in to RequirePendingOrFull instead.
-//
-// Errors are emitted as RFC 7807 problem+json with a WWW-Authenticate header
-// per RFC 7235. Two failure codes are surfaced:
-//
-//   - auth.unauthenticated when no session cookie was presented or it failed
-//     validation (cookie missing, expired, revoked, or storage rejected).
-//   - auth.step_up_required when a pending_2fa session is present and the
-//     caller must complete the second factor before proceeding.
-//
-// Frontends can distinguish the step-up case from a fresh login without
-// special-casing string bodies.
+// RequireAuth runs Authn, then rejects requests without a full session. Pending 2FA sessions are
+// refused; only the TOTP verify routes opt in to RequirePendingOrFull. Errors are RFC 7807
+// problem+json with a WWW-Authenticate header. The codes are auth.unauthenticated and
+// auth.step_up_required (a pending 2FA session that must complete the second factor).
 func (a *TheAuth) RequireAuth() func(http.Handler) http.Handler {
 	authn := a.Authn()
 	return func(next http.Handler) http.Handler {
@@ -70,7 +57,6 @@ func (a *TheAuth) RequireAuth() func(http.Handler) http.Handler {
 				a.unauthenticated(w, r, "auth.unauthenticated", "Missing or invalid session")
 				return
 			}
-			// AuthLevel is "" on pre-v0.5 rows; treat as full for back compat.
 			if sess.AuthLevel != "" && sess.AuthLevel != AuthLevelFull {
 				a.unauthenticated(w, r, "auth.step_up_required", "Session requires second-factor verification")
 				return
@@ -80,9 +66,8 @@ func (a *TheAuth) RequireAuth() func(http.Handler) http.Handler {
 	}
 }
 
-// RequirePendingOrFull (v0.5) accepts both pending_2fa and full sessions.
-// Used exclusively by /auth/totp/verify and /auth/totp/recovery so a user
-// mid-step-up can complete the second factor.
+// RequirePendingOrFull accepts pending_2fa and full sessions. Only the TOTP verify and recovery
+// routes use it.
 func (a *TheAuth) RequirePendingOrFull() func(http.Handler) http.Handler {
 	authn := a.Authn()
 	return func(next http.Handler) http.Handler {
@@ -96,16 +81,10 @@ func (a *TheAuth) RequirePendingOrFull() func(http.Handler) http.Handler {
 	}
 }
 
-// RequirePermission (v1.0) returns a middleware that enforces the caller
-// holds every named permission inside session.active_organization_id. A
-// session without active_organization_id is 403 rbac.no_active_org. A user
-// with the system super_admin role bypasses the check entirely. The
-// permission lookup hits storage once per request; subsequent middleware
-// in the same chain hit the per-request cache attached to ctx.
-//
-// When Config.RBAC is nil the middleware short-circuits to 500: an admin
-// trying to wire RequirePermission without enabling RBAC is a programming
-// error worth surfacing loudly.
+// RequirePermission enforces that the caller holds every named permission in
+// session.active_organization_id. A session with no active organization gets 403
+// rbac.no_active_org, and the system super_admin bypasses the check. With Config.RBAC nil it
+// returns 500, since wiring the middleware without RBAC is a programming error.
 func (a *TheAuth) RequirePermission(perms ...string) func(http.Handler) http.Handler {
 	authn := a.Authn()
 	return func(next http.Handler) http.Handler {
@@ -133,7 +112,6 @@ func (a *TheAuth) RequirePermission(perms ...string) func(http.Handler) http.Han
 				cache = &rbac.PermissionCache{OrgID: sess.ActiveOrganizationID}
 			}
 			cache.Once.Do(func() {
-				// super_admin lookup (system role, org NULL).
 				roles, err := a.storage.RolesForUser(r.Context(), user.ID, nil)
 				if err != nil {
 					cache.Err = err
@@ -174,8 +152,6 @@ func (a *TheAuth) RequirePermission(perms ...string) func(http.Handler) http.Han
 	}
 }
 
-// SCIM bearer-auth middleware
-
 type scimCtxKey int
 
 const (
@@ -184,11 +160,9 @@ const (
 	scimTokenRawKey
 )
 
-// scimAuth is the bearer-auth middleware for /scim/v2/*. It enforces
-// HTTPS (per SCIMConfig.RequireHTTPS), extracts the Authorization:
-// Bearer token, resolves it to an organization via sha256 lookup, and
-// stashes both the orgID and the token row ID in the context for
-// downstream handlers + audit emission.
+// scimAuth is the bearer middleware for /scim/v2/*. It enforces HTTPS (per
+// SCIMConfig.RequireHTTPS), resolves the bearer token to an organization by hash, and stores the
+// org and token row ID in the context for handlers and audit events.
 func (a *TheAuth) scimAuth() func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -206,8 +180,6 @@ func (a *TheAuth) scimAuth() func(http.Handler) http.Handler {
 				return
 			}
 			token := strings.TrimSpace(strings.TrimPrefix(authz, "Bearer "))
-			// AuthenticateSCIMToken now returns orgID + tokenID in one
-			// storage round-trip (perf re-audit 2026-06-21, item 1).
 			result, err := a.AuthenticateSCIMToken(r.Context(), token)
 			if err != nil {
 				writeSCIMMiddlewareError(w, http.StatusUnauthorized, "invalid bearer token")
@@ -221,14 +193,12 @@ func (a *TheAuth) scimAuth() func(http.Handler) http.Handler {
 	}
 }
 
-// scimOrgFromContext returns the organization ID resolved by scimAuth.
 func scimOrgFromContext(ctx context.Context) (ULID, bool) {
 	v, ok := ctx.Value(scimOrgIDKey).(ULID)
 	return v, ok
 }
 
-// scimTokenIDFromContext returns the SCIM token row ID resolved by
-// scimAuth. Used as the actor for SCIM audit events.
+// scimTokenIDFromContext returns the SCIM token row ID set by scimAuth. It is the actor on SCIM audit events.
 func scimTokenIDFromContext(ctx context.Context) ULID {
 	if v, ok := ctx.Value(scimTokenIDKey).(ULID); ok {
 		return v
@@ -236,8 +206,7 @@ func scimTokenIDFromContext(ctx context.Context) ULID {
 	return ULID{}
 }
 
-// isHTTPS reports whether the request was served over TLS or arrived
-// behind a TLS-terminating proxy that set X-Forwarded-Proto: https.
+// isHTTPS reports whether the request came over TLS or through a proxy that sent X-Forwarded-Proto: https.
 func isHTTPS(r *http.Request) bool {
 	if r.TLS != nil {
 		return true
@@ -245,29 +214,25 @@ func isHTTPS(r *http.Request) bool {
 	return strings.EqualFold(r.Header.Get("X-Forwarded-Proto"), "https")
 }
 
-// writeSCIMMiddlewareError emits the SCIM error body shape from the
-// bearer middleware path. PR F architecture reorg (2026-06-20): we
-// can no longer call the package-private writeSCIMError because the
-// handler moved into internal/scim/handlers; we re-marshal directly
-// using the wire helpers exported from internal/scim.
+// writeSCIMMiddlewareError writes the SCIM error body from the bearer middleware. It re-marshals
+// with the wire helpers in internal/scim, since the handler's writer is unexported there.
 func writeSCIMMiddlewareError(w http.ResponseWriter, status int, detail string) {
 	w.Header().Set("Content-Type", internalscim.ContentType)
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(internalscim.NewError(status, "", detail))
 }
 
-// Handler returns a stdlib http.Handler serving every route Mount would
-// register, for consumers on net/http's ServeMux without chi. Routes keep
-// their configured paths (Config.PathPrefix, default /auth/..., and /oauth/...),
-// so no http.StripPrefix is needed when the prefix matches the mount point.
+// Handler returns a stdlib http.Handler serving every route Mount registers, for net/http users
+// without chi. Paths keep their configured prefixes, so http.StripPrefix is unnecessary when the
+// prefix matches the mount point.
 func (a *TheAuth) Handler() http.Handler {
 	r := chi.NewRouter()
 	a.Mount(r)
 	return r
 }
 
-// securityMiddleware applies per-request Secure cookie derivation and the
-// Origin check ahead of every route Mount registers.
+// securityMiddleware derives the Secure cookie flag per request and runs the Origin check ahead of
+// every route.
 func (a *TheAuth) securityMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !a.csrfDisabled && !httpsec.OriginAllowed(r, a.baseURL, a.trustedOrigins) {
@@ -281,9 +246,8 @@ func (a *TheAuth) securityMiddleware(next http.Handler) http.Handler {
 	})
 }
 
-// requestIsSecure reports whether cookies set for r must carry Secure.
-// The explicit Config.SecureCookie flag wins; otherwise an https BaseURL,
-// direct TLS, or X-Forwarded-Proto: https from a trusted proxy qualifies.
+// requestIsSecure reports whether cookies for r must carry Secure. Config.SecureCookie wins;
+// otherwise an https BaseURL, direct TLS, or X-Forwarded-Proto from a trusted proxy qualifies.
 func (a *TheAuth) requestIsSecure(r *http.Request) bool {
 	if a.secureCookie {
 		return true
@@ -309,13 +273,10 @@ func firstToken(v string) string {
 
 var extractClientIPTrusting = ratelimit.ClientIP
 
-// newAllower returns the per-key limiter behind RateLimitByIP and
-// RateLimitByEmail. Without Config.Stores.RateLimiter it is the in-process
-// limiter, one independent bucket set per call. With a shared limiter the keys
-// carry a rule name and a per-call sequence number, so separate middleware
-// instances still get separate budgets and every replica that wires routes in
-// the same order shares them. A backend error fails open: a limiter outage
-// should not lock every user out of sign-in.
+// newAllower returns the per-key limiter behind RateLimitByIP and RateLimitByEmail. With a shared
+// limiter, keys carry a rule name and a per-call sequence so separate middleware instances keep
+// separate budgets. A backend error fails open, so a limiter outage does not lock every user out of
+// sign-in.
 func (a *TheAuth) newAllower(rule string, perMinute int) func(context.Context, string) bool {
 	if a.stores.RateLimiter == nil {
 		k := ratelimit.New(perMinute)
@@ -336,16 +297,9 @@ func (a *TheAuth) newAllower(rule string, perMinute int) func(context.Context, s
 	}
 }
 
-// RateLimitByIP returns a middleware that limits requests per source IP to
-// perMinute per minute. Use on credential endpoints (signin, signup, forgot,
-// reset). The limiter lives on the returned handler. Multiple calls produce
-// independent buckets, so wire it once per route group at startup.
-//
-// X-Forwarded-For is honored only when r.RemoteAddr is inside one of the
-// Config.TrustedProxies prefixes. Deployments behind a reverse proxy MUST
-// opt in by listing the proxy network in TrustedProxies; the default is
-// the empty allowlist (no XFF trust), which is the safe behavior on a
-// direct public-internet bind (security audit H4, 2026-06-20).
+// RateLimitByIP limits requests per source IP to perMinute. Wire it once per route group at
+// startup. X-Forwarded-For is honored only from Config.TrustedProxies; the empty default trusts no
+// proxy (security audit H4).
 func (a *TheAuth) RateLimitByIP(perMinute int) func(http.Handler) http.Handler {
 	allow := a.newAllower("ip", perMinute)
 	trusted := a.trustedProxies
@@ -364,10 +318,9 @@ func (a *TheAuth) RateLimitByIP(perMinute int) func(http.Handler) http.Handler {
 	}
 }
 
-// RateLimitByEmail returns a middleware that limits requests per email body
-// field. Reads the JSON body up to 16 KiB, extracts "email", restores the body
-// so downstream handlers can re-read it. Requests without a parseable email
-// are passed through unlimited (handler will reject them on its own).
+// RateLimitByEmail limits requests per "email" field of the JSON body (read up to 16 KiB, then
+// restored for the handler). Requests without a parseable email pass through; the handler rejects
+// them.
 func (a *TheAuth) RateLimitByEmail(perMinute int) func(http.Handler) http.Handler {
 	allow := a.newAllower("email", perMinute)
 	blocked := a.hooks.Counter(MetricRateLimitBlockedTotal, Labels{AttrRule: "email"})
@@ -379,13 +332,11 @@ func (a *TheAuth) RateLimitByEmail(perMinute int) func(http.Handler) http.Handle
 				return
 			}
 			_ = r.Body.Close()
-			// Restore body for the downstream handler.
 			r.Body = io.NopCloser(bytes.NewReader(buf))
 
 			var body struct {
 				Email string `json:"email"`
 			}
-			// Best-effort decode; if it fails, we don't have a key, pass through.
 			if err := json.Unmarshal(buf, &body); err != nil || body.Email == "" {
 				next.ServeHTTP(w, r)
 				return

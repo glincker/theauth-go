@@ -14,9 +14,8 @@ import (
 	oulid "github.com/oklog/ulid/v2"
 )
 
-// mountAPITokens registers /auth/tokens. List, mint and revoke-by-id need a
-// full session: a token cannot mint or revoke tokens, which blocks escalation
-// chains. Only /tokens/current is bearer-only and touches the caller's own record.
+// mountAPITokens registers /auth/tokens. Listing, minting and revoking by id need a full session,
+// so a token cannot mint or revoke tokens.
 func (s *Service) MountTokens(r chi.Router, ipLimit func(http.Handler) http.Handler) {
 	r.Route("/tokens", func(r chi.Router) {
 		r.Group(func(r chi.Router) {

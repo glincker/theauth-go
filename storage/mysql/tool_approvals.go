@@ -29,7 +29,6 @@ func oneRow(res sql.Result, err error, op string) (bool, error) {
 	return n == 1, nil
 }
 
-// OpenToolApproval implements theauth.ToolApprovalStorage.
 func (s *Store) OpenToolApproval(ctx context.Context, a theauth.ToolApproval) error {
 	_, err := s.db.ExecContext(ctx, `
 INSERT INTO theauth_tool_approvals (id, agent_id, action, resource, requirement, tier, reason, created_at, expires_at)
@@ -42,7 +41,6 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 	return nil
 }
 
-// ApproveToolApproval implements theauth.ToolApprovalStorage.
 func (s *Store) ApproveToolApproval(ctx context.Context, id, approver string, now time.Time) (bool, error) {
 	res, err := s.db.ExecContext(ctx, `
 UPDATE theauth_tool_approvals SET approved_at = ?, approver = ?

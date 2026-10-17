@@ -31,8 +31,6 @@ func New(pool *pgxpool.Pool) *Store {
 	return &Store{pool: pool, q: sqlcgen.New(pool)}
 }
 
-// type mapping helpers
-
 func ulidToPgUUID(id theauth.ULID) pgtype.UUID {
 	return pgtype.UUID{Bytes: [16]byte(id), Valid: true}
 }
@@ -57,9 +55,8 @@ func tsToTime(ts pgtype.Timestamptz) time.Time {
 	return ts.Time
 }
 
-// ipStrToPg returns a pointer to a parsed netip.Addr, or nil if the input is
-// empty or unparseable. Bad IP strings are silently dropped (v0.1 behavior:
-// don't fail the whole call on a malformed UA-supplied IP).
+// ipStrToPg returns nil for an empty or unparseable IP. Bad strings are dropped
+// rather than failing the whole call.
 func ipStrToPg(ip string) *netip.Addr {
 	if ip == "" {
 		return nil
@@ -77,8 +74,6 @@ func pgIPToStr(p *netip.Addr) string {
 	}
 	return p.String()
 }
-
-// row -> domain mappers
 
 func rowToUser(r sqlcgen.User) theauth.User {
 	return theauth.User{
@@ -137,8 +132,6 @@ func timePtrToTs(t *time.Time) pgtype.Timestamptz {
 	return pgtype.Timestamptz{Time: *t, Valid: true}
 }
 
-// Users
-
 func (s *Store) CreateUser(ctx context.Context, u theauth.User) (theauth.User, error) {
 	row, err := s.q.CreateUser(ctx, sqlcgen.CreateUserParams{
 		ID:        ulidToPgUUID(u.ID),
@@ -188,8 +181,6 @@ func (s *Store) MarkEmailVerified(ctx context.Context, userID theauth.ULID) erro
 	return nil
 }
 
-// Sessions
-
 func (s *Store) RevokeSession(ctx context.Context, id theauth.ULID) error {
 	if err := s.q.RevokeSession(ctx, ulidToPgUUID(id)); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -209,8 +200,6 @@ func (s *Store) RevokeUserSessions(ctx context.Context, userID theauth.ULID) err
 	}
 	return nil
 }
-
-// Magic links
 
 func (s *Store) CreateMagicLink(ctx context.Context, ml theauth.MagicLink) error {
 	return s.q.CreateMagicLink(ctx, sqlcgen.CreateMagicLinkParams{
@@ -233,8 +222,6 @@ func (s *Store) ConsumeMagicLink(ctx context.Context, tokenHash []byte) (*theaut
 	ml := rowToMagicLink(row)
 	return &ml, nil
 }
-
-// Password credentials (v0.2)
 
 func (s *Store) SetUserPassword(ctx context.Context, userID theauth.ULID, passwordHash string) error {
 	ph := passwordHash
@@ -292,8 +279,6 @@ func (s *Store) ConsumePasswordResetToken(ctx context.Context, tokenHash []byte)
 	return &rt, nil
 }
 
-// OAuth accounts (v0.3)
-
 func (s *Store) UpsertOAuthAccount(ctx context.Context, a theauth.OAuthAccount) (theauth.OAuthAccount, error) {
 	row, err := s.q.UpsertOAuthAccount(ctx, sqlcgen.UpsertOAuthAccountParams{
 		ID:              ulidToPgUUID(a.ID),
@@ -328,8 +313,6 @@ func (s *Store) OAuthAccountByProviderUserID(ctx context.Context, provider, prov
 	return &acct, nil
 }
 
-// Sessions (v0.5 step-up)
-
 func (s *Store) UpdateSessionAuthLevel(ctx context.Context, id theauth.ULID, level string) error {
 	if err := s.q.UpdateSessionAuthLevel(ctx, sqlcgen.UpdateSessionAuthLevelParams{
 		ID:        ulidToPgUUID(id),
@@ -340,12 +323,8 @@ func (s *Store) UpdateSessionAuthLevel(ctx context.Context, id theauth.ULID, lev
 	return nil
 }
 
-// WebAuthn credentials (v0.5)
-
-// signCountInt64ToUint32 narrows a Postgres bigint column to the uint32 that
-// the WebAuthn spec requires. Values outside the uint32 range (which the
-// spec forbids; authenticators MUST emit a 32-bit counter) are clamped to
-// the maximum to keep replay detection safe-by-default rather than wrapping.
+// signCountInt64ToUint32 clamps to the uint32 range (WebAuthn counters are 32-bit).
+// Clamping rather than wrapping keeps replay detection safe by default.
 func signCountInt64ToUint32(v int64) uint32 {
 	if v < 0 {
 		return 0
@@ -357,8 +336,7 @@ func signCountInt64ToUint32(v int64) uint32 {
 	return uint32(v)
 }
 
-// pgBoolToPtr converts a nullable Postgres boolean into a *bool: NULL (Valid
-// false) maps to nil ("never recorded"), a present value to a heap copy.
+// pgBoolToPtr maps a NULL boolean to nil and a present value to a heap copy.
 func pgBoolToPtr(b pgtype.Bool) *bool {
 	if !b.Valid {
 		return nil
@@ -393,9 +371,8 @@ func rowToWebAuthnCredential(r sqlcgen.WebauthnCredential) theauth.WebAuthnCrede
 }
 
 func (s *Store) InsertWebAuthnCredential(ctx context.Context, c theauth.WebAuthnCredential) (theauth.WebAuthnCredential, error) {
-	// Normalise nil to an empty slice so pgx serialises it as the text[]
-	// literal '{}' rather than SQL NULL (the column is NOT NULL with a
-	// DEFAULT '{}', and an explicit INSERT bypasses the default).
+	// Send '{}' rather than NULL: the column is NOT NULL and an explicit insert
+	// bypasses its DEFAULT.
 	transports := c.Transports
 	if transports == nil {
 		transports = []string{}
@@ -444,12 +421,9 @@ func (s *Store) WebAuthnCredentialByCredentialID(ctx context.Context, credential
 	return &c, nil
 }
 
-// UpdateWebAuthnSignCount executes the strictly-greater UPDATE; zero rows
-// affected with the credential present means the supplied count was not
-// strictly greater than the stored one, which is the WebAuthn replay
-// signal. We disambiguate "no such credential" from "replay" via a follow
-// up SELECT only when the UPDATE is a miss, to keep the happy path single
-// round-trip.
+// UpdateWebAuthnSignCount requires a strictly greater count. On a miss it runs a
+// follow-up SELECT to tell a missing credential from a replay, keeping the happy
+// path to one round-trip.
 func (s *Store) UpdateWebAuthnSignCount(ctx context.Context, credentialID []byte, newCount uint32, usedAt time.Time) error {
 	affected, err := s.q.UpdateWebAuthnSignCount(ctx, sqlcgen.UpdateWebAuthnSignCountParams{
 		CredentialID: credentialID,
@@ -462,19 +436,17 @@ func (s *Store) UpdateWebAuthnSignCount(ctx context.Context, credentialID []byte
 	if affected == 1 {
 		return nil
 	}
-	// Zero rows: either the credential is gone or sign_count didn't move
-	// forward. A targeted lookup distinguishes the two without leaking any
-	// information beyond what the caller already sees.
+	// Zero rows means the credential is gone or the count did not advance; a
+	// targeted lookup tells the two apart.
 	if _, lookupErr := s.q.WebAuthnCredentialByCredentialID(ctx, credentialID); errors.Is(lookupErr, pgx.ErrNoRows) {
 		return storage.ErrNotFound
 	}
 	return theauth.ErrReplayDetected
 }
 
-// UpdateWebAuthnBackupFlags records the BE / BS flags for a credential that
-// had none stored (trust-on-first-use reconciliation for legacy synced
-// passkeys). A missing credential returns nil (not an error): the caller
-// treats reconciliation as best-effort and must not fail a verified login.
+// UpdateWebAuthnBackupFlags reconciles BE/BS flags for legacy synced passkeys
+// (trust-on-first-use). A missing credential returns nil: the caller treats this
+// as best-effort.
 func (s *Store) UpdateWebAuthnBackupFlags(ctx context.Context, credentialID []byte, backupEligible, backupState bool) error {
 	_, err := s.q.UpdateWebAuthnBackupFlags(ctx, sqlcgen.UpdateWebAuthnBackupFlagsParams{
 		CredentialID:   credentialID,
@@ -484,7 +456,6 @@ func (s *Store) UpdateWebAuthnBackupFlags(ctx context.Context, credentialID []by
 	return err
 }
 
-// RenameWebAuthnCredential implements theauth.WebAuthnRenameStorage.
 func (s *Store) RenameWebAuthnCredential(ctx context.Context, id, userID theauth.ULID, name string) error {
 	tag, err := s.pool.Exec(ctx,
 		`UPDATE webauthn_credentials SET name = $1 WHERE id = $2 AND user_id = $3`,
@@ -511,8 +482,6 @@ func (s *Store) DeleteWebAuthnCredential(ctx context.Context, id theauth.ULID, u
 	}
 	return nil
 }
-
-// TOTP secrets (v0.5)
 
 func rowToTOTPSecret(r sqlcgen.TotpSecret) theauth.TOTPSecret {
 	return theauth.TOTPSecret{
@@ -563,17 +532,12 @@ func (s *Store) TOTPSecretByUserID(ctx context.Context, userID theauth.ULID) (*t
 }
 
 func (s *Store) DeleteTOTPSecret(ctx context.Context, userID theauth.ULID) error {
-	// FK is ON DELETE CASCADE so dropping totp_secrets via the user row
-	// would cascade, but here we delete by user_id directly and also
-	// clear recovery codes to keep the in-memory and postgres adapters
-	// observably identical.
+	// Cleared explicitly so the postgres and in-memory adapters stay observably identical.
 	if err := s.q.DeleteRecoveryCodesByUserID(ctx, ulidToPgUUID(userID)); err != nil {
 		return err
 	}
 	return s.q.DeleteTOTPSecret(ctx, ulidToPgUUID(userID))
 }
-
-// Recovery codes (v0.5)
 
 func (s *Store) InsertRecoveryCodes(ctx context.Context, codes []theauth.RecoveryCode) error {
 	for _, c := range codes {
@@ -589,7 +553,6 @@ func (s *Store) InsertRecoveryCodes(ctx context.Context, codes []theauth.Recover
 	return nil
 }
 
-// CountUnusedRecoveryCodes implements theauth.RecoveryCodeStorage.
 func (s *Store) CountUnusedRecoveryCodes(ctx context.Context, userID theauth.ULID) (int, error) {
 	var n int
 	err := s.pool.QueryRow(ctx,
@@ -598,7 +561,6 @@ func (s *Store) CountUnusedRecoveryCodes(ctx context.Context, userID theauth.ULI
 	return n, err
 }
 
-// ReplaceRecoveryCodes implements theauth.RecoveryCodeStorage.
 func (s *Store) ReplaceRecoveryCodes(ctx context.Context, userID theauth.ULID, codes []theauth.RecoveryCode) error {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
@@ -635,8 +597,7 @@ func (s *Store) ConsumeRecoveryCode(ctx context.Context, userID theauth.ULID, co
 			return err
 		}
 		if affected == 0 {
-			// Lost a race to another concurrent verify; keep walking the
-			// remaining unused codes in case there is another match.
+			// Lost a race to a concurrent verify; keep walking in case another code matches.
 			continue
 		}
 		return nil

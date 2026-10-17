@@ -1,10 +1,5 @@
-// Command theauth-go is a small developer CLI for theauth-go projects.
-//
-//	theauth-go secret [--bytes 32] [--format base64url|hex|env] [--name THEAUTH_SECRET]
-//	theauth-go openapi [--base-url URL] [--title T] [--version V] [--out FILE]
-//
-// For the runtime security report use theauth-doctor, and for importing
-// users from other providers use theauth-migrate.
+// Command theauth-go is a small developer CLI for theauth-go projects: secret generation and
+// OpenAPI export. For the security report use theauth-doctor; for user imports use theauth-migrate.
 package main
 
 import (

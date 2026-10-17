@@ -12,13 +12,8 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
-// BenchmarkSCIMTokenAuth measures the per-request cost of SCIM bearer
-// authentication: sha256 hash of the presented token, one in-memory map
-// lookup for the matching row, and context injection. The test drives the
-// full HTTP middleware stack so the measured cost matches the production
-// path.
-//
-// gate:include
+// BenchmarkSCIMTokenAuth measures SCIM bearer authentication through the full HTTP middleware: one
+// hash, one map lookup, and context injection.
 func BenchmarkSCIMTokenAuth(b *testing.B) {
 	store := memory.New()
 	a, err := theauth.New(theauth.Config{

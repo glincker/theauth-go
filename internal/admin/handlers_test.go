@@ -1,8 +1,5 @@
-// Package admin_handlers_test contains direct HTTP-layer table tests for
-// internal/admin/admin. Each sub-test mounts Handler via Mount onto a
-// chi.Router backed by stub implementations, then fires requests through
-// httptest so the full handler chain is exercised without any root TheAuth
-// state.
+// Package admin_handlers_test holds HTTP table tests for the admin handlers, run through httptest
+// against stub dependencies.
 package admin_test
 
 import (
@@ -219,12 +216,9 @@ func (a *stubAudit) HashEmailForAudit(email string) string { return "hashed:" + 
 
 // Test server construction
 
-// buildAdminServer constructs a chi.Router with the admin Handler mounted and
-// returns an httptest.Server. orgID is the active organization that the session
-// is scoped to. user and sess may be nil.
-//
-// allowPermission controls whether the requirePermission gate passes. When
-// false, any permission-gated endpoint returns 403.
+// buildAdminServer mounts the admin Handler on a chi router and returns an httptest.Server. orgID
+// is the active organization of the session. allowPermission false makes permission-gated endpoints
+// return 403.
 func buildAdminServer(
 	store *stubAdminStorage,
 	rbac *stubRBAC,

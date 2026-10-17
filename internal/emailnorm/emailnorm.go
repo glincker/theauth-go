@@ -1,6 +1,5 @@
-// Package emailnorm canonicalizes email addresses so uniqueness checks and
-// lookups agree regardless of case, surrounding whitespace, or Unicode
-// compatibility forms.
+// Package emailnorm canonicalizes email addresses, so uniqueness checks and lookups agree on case,
+// whitespace and Unicode forms.
 package emailnorm
 
 import (

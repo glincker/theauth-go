@@ -3,11 +3,7 @@
 //   sqlc v1.30.0
 // source: queries.sql
 //
-// Hand-maintained mirror of the v0.5 query block (CreateSessionWithAuthLevel
-// and downwards through ConsumeRecoveryCodeByID). The sqlc binary was not
-// available locally at v0.5 codegen time; this file matches the v1.30.0
-// emit format used by queries.sql.go so that re-running sqlc generate later
-// produces a stable diff.
+// Hand-maintained mirror of the v0.5 query block; the sqlc binary was unavailable at codegen time.
 
 package sqlc
 
@@ -76,12 +72,8 @@ func (q *Queries) UpdateSessionAuthLevel(ctx context.Context, arg UpdateSessionA
 	return err
 }
 
-// NOTE: This file is normally sqlc-generated, but sqlc cannot regenerate it
-// in this repo: sqlc.yaml lists only migrations 0001-0005 as its schema, so
-// `sqlc generate` fails against the current schema. The generated files are
-// therefore hand-maintained mirrors (repo convention). The backup_eligible /
-// backup_state columns (migration 0017) were added below by hand to match the
-// style sqlc would emit.
+// NOTE: hand-maintained because sqlc.yaml lists only migrations 0001-0005, so generate fails on the
+// current schema. The backup_eligible and backup_state columns (migration 0017) were added by hand.
 
 const insertWebAuthnCredential = `-- name: InsertWebAuthnCredential :one
 INSERT INTO webauthn_credentials (

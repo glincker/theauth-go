@@ -75,9 +75,8 @@ ON CONFLICT (user_id) DO UPDATE SET disabled_at = EXCLUDED.disabled_at`,
 	return nil
 }
 
-// DeleteUserCascade removes the user and every row that belongs to it in one
-// transaction. Foreign keys cascade everything except API tokens and magic
-// links, which carry no user foreign key.
+// DeleteUserCascade removes the user and its rows in one transaction. Foreign keys cascade everything
+// except API tokens and magic links, which have no user foreign key.
 func (s *Store) DeleteUserCascade(ctx context.Context, userID theauth.ULID) error {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
@@ -98,10 +97,8 @@ func (s *Store) DeleteUserCascade(ctx context.Context, userID theauth.ULID) erro
 	}{
 		{`DELETE FROM api_tokens WHERE owner_id = $1 OR delegated_by = $1`, []any{uid}},
 		{`DELETE FROM magic_links WHERE email = $1`, []any{email}},
-		// Erasure keeps the audit chain valid: the hash covers keyed pseudonyms,
-		// not the raw ids. actor_user_id is nulled by its foreign key when the
-		// user row goes; the free-text id columns are blanked here. Pre-chain
-		// rows (chain_seq NULL) are left alone.
+		// Blank the free-text id columns; hashed pseudonyms stay so the audit chain still verifies.
+		// Pre-chain rows (chain_seq NULL) are left alone.
 		{`UPDATE audit_events SET subject_id = '' WHERE subject_id = $1 AND chain_seq IS NOT NULL`, []any{userID.String()}},
 		{`UPDATE audit_events SET actor_id = '' WHERE actor_id = $1 AND chain_seq IS NOT NULL`, []any{userID.String()}},
 		{`UPDATE audit_events SET approver_id = '' WHERE approver_id = $1 AND chain_seq IS NOT NULL`, []any{userID.String()}},

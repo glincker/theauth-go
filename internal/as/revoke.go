@@ -12,19 +12,12 @@ import (
 	obs "github.com/glincker/theauth-go/v2/internal/observability"
 )
 
-// revoke.go: RFC 7009 token revocation.
-//
-// Per RFC 7009 the endpoint always returns 200 for any well-formed
-// request (to avoid leaking which tokens exist), regardless of whether
-// the token was found, already expired, or belonged to a different
-// client. The only error path that surfaces is invalid client
-// authentication; the handler maps that to 401 invalid_client per RFC
-// 6749.
+// revoke.go implements RFC 7009 token revocation. The endpoint answers 200 for any well-formed
+// request, so it never reveals which tokens exist. Only invalid client authentication is an error
+// (401 invalid_client).
 
-// RevokeToken invalidates a refresh token (whole rotation family) or, when
-// Config.AccessTokenRevocation is on, an access token via the jti
-// denylist. Only the client the token was issued to may revoke it.
-// Authorization codes are single-use anyway.
+// RevokeToken invalidates a refresh token family, or an access token through the jti denylist when
+// AccessTokenRevocation is on. Only the client the token was issued to may revoke it.
 func (s *Service) RevokeToken(ctx context.Context, token, tokenTypeHint, clientID, clientSecret string) (err error) {
 	if s == nil {
 		return errors.New("theauth: authorization server not configured")
@@ -46,13 +39,11 @@ func (s *Service) RevokeToken(ctx context.Context, token, tokenTypeHint, clientI
 		return err
 	}
 	if token == "" {
-		// Per RFC 7009 section 2.1, a missing token parameter is still
-		// treated as 200; the higher layer drops the empty-string before
-		// calling here.
+		// A missing token parameter is still answered 200 (RFC 7009 section 2.1).
 		return nil
 	}
-	// Access tokens are JWTs (three segments); refresh tokens are opaque.
-	// The hint is advisory (RFC 7009 section 2.1), so the shape decides.
+	// Access tokens are JWTs (three segments) and refresh tokens are opaque. The hint is advisory, so
+	// the shape decides.
 	if strings.Count(token, ".") == 2 {
 		s.revokeAccessToken(ctx, token, client.ClientID)
 		return nil
@@ -64,30 +55,24 @@ func (s *Service) RevokeToken(ctx context.Context, token, tokenTypeHint, clientI
 	if tokenTypeHint == "access_token" {
 		return nil
 	}
-	// security re-audit L3 (2026-06-22): explicit revoke should walk the
-	// entire rotation family (parent + all children) so that rotating a
-	// compromised token before calling revoke does not leave the fresh
-	// child alive. Mirror the reuse-detection family walk in
-	// RefreshAccessToken.
+	// Explicit revoke walks the whole rotation family, parent and children, so rotating a compromised
+	// token before revoking it cannot leave the fresh child alive (security re-audit L3).
 	s.revokeRefreshFamily(ctx, hash, client.ClientID)
 	return nil
 }
 
-// revokeRefreshFamily revokes the rotation family of the refresh token with
-// the given hash when it belongs to clientID. RFC 7009 requires a 200 answer
-// whatever happens, so failures are logged, never returned.
+// revokeRefreshFamily revokes the rotation family of the refresh token, when it belongs to
+// clientID. Failures are logged, never returned (RFC 7009).
 func (s *Service) revokeRefreshFamily(ctx context.Context, hash []byte, clientID string) {
 	rt, err := s.Storage.RefreshTokenByHash(ctx, hash)
 	if err != nil {
-		// Unknown, expired or never issued: RFC 7009 still answers 200.
 		if !errors.Is(err, models.ErrStorageNotFound) {
 			slog.Warn("theauth: refresh token lookup failed during revoke", "err", err.Error())
 		}
 		return
 	}
-	// RFC 7009 section 2.1: the AS validates that the token was issued to
-	// the authenticated client. A mismatch is answered 200 without effect
-	// so a client cannot probe or kill another client's tokens.
+	// A token issued to another client is answered 200 without effect, so clients cannot probe or kill
+	// each other's tokens (RFC 7009 section 2.1).
 	if rt == nil || rt.ClientID != clientID {
 		return
 	}
@@ -96,9 +81,8 @@ func (s *Service) revokeRefreshFamily(ctx context.Context, hash []byte, clientID
 	}
 }
 
-// revokeAccessToken adds the token's jti to the denylist when the feature
-// is enabled. Without it, access tokens stay stateless and the call is a
-// no-op, as before. Only the issuing client may revoke.
+// revokeAccessToken adds the token's jti to the denylist when the feature is on. Otherwise access
+// tokens stay stateless.
 func (s *Service) revokeAccessToken(ctx context.Context, token, clientID string) {
 	if s.denylist() == nil {
 		return
@@ -112,9 +96,7 @@ func (s *Service) revokeAccessToken(ctx context.Context, token, clientID string)
 	}
 }
 
-// revokeOpaqueAccessToken revokes a reference access token issued to
-// clientID and reports whether the token was one. Opaque tokens are stateful,
-// so revocation does not depend on the jti denylist being enabled.
+// revokeOpaqueAccessToken revokes a reference access token issued to clientID and reports whether it was one.
 func (s *Service) revokeOpaqueAccessToken(ctx context.Context, hash []byte, clientID string) bool {
 	store, ok := s.opaqueStore()
 	if !ok {
@@ -133,8 +115,8 @@ func (s *Service) revokeOpaqueAccessToken(ctx context.Context, hash []byte, clie
 	return true
 }
 
-// touchAgentLastActive records agent activity; a failure only affects the
-// last-active display, so it is logged and otherwise ignored.
+// touchAgentLastActive records agent activity. A failure only affects the last-active display, so
+// it is logged.
 func (s *Service) touchAgentLastActive(ctx context.Context, id models.ULID, at time.Time) {
 	if err := s.Storage.UpdateAgentLastActive(ctx, id, at); err != nil {
 		slog.Warn("theauth: agent last active update failed", "agent_id", id.String(), "err", err.Error())

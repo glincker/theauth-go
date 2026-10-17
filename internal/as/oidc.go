@@ -17,11 +17,9 @@ import (
 	"github.com/glincker/theauth-go/v2/internal/models"
 )
 
-// oidc.go: OpenID Provider core. ID token issuance, subject identifiers and
-// the session linkage that logout needs. Userinfo and logout live in
-// oidc_userinfo.go and oidc_logout.go.
+// oidc.go is the OpenID Provider core: ID token issuance, subject identifiers and the session
+// linkage that logout needs.
 
-// OIDC scope values handled by the provider.
 const (
 	ScopeOpenID  = "openid"
 	ScopeProfile = "profile"
@@ -38,8 +36,8 @@ func (s *Service) OIDCEnabled() bool { return s != nil && s.Cfg.OIDC != nil }
 
 func hasScope(scope []string, want string) bool { return slices.Contains(scope, want) }
 
-// splitOIDCScopes separates the OIDC scopes, which are implicitly allowed,
-// from the ones that must appear in the resource catalog.
+// splitOIDCScopes separates the implicitly allowed OIDC scopes from scopes that must appear in the
+// resource catalog.
 func splitOIDCScopes(requested []string) (std, rest []string) {
 	for _, sc := range requested {
 		switch sc {
@@ -52,7 +50,6 @@ func splitOIDCScopes(requested []string) (std, rest []string) {
 	return std, rest
 }
 
-// clientSubjectType resolves the effective subject type of a client.
 func (s *Service) clientSubjectType(c *models.OAuthClient) string {
 	if c != nil && c.SubjectType != "" {
 		return c.SubjectType
@@ -63,8 +60,7 @@ func (s *Service) clientSubjectType(c *models.OAuthClient) string {
 	return models.SubjectTypePublic
 }
 
-// sectorIdentifier is the host shared by the client's redirect URIs, or the
-// client_id when there is none to use.
+// sectorIdentifier is the host shared by the client's redirect URIs, or the client_id when there is none.
 func sectorIdentifier(c *models.OAuthClient) string {
 	for _, raw := range c.RedirectURIs {
 		if u, err := url.Parse(raw); err == nil && u.Hostname() != "" {
@@ -74,9 +70,8 @@ func sectorIdentifier(c *models.OAuthClient) string {
 	return c.ClientID
 }
 
-// subjectFor returns the sub the client sees for userID: the local user id
-// for public clients, an HMAC keyed by the pairwise salt and the client's
-// sector otherwise.
+// subjectFor returns the sub a client sees for userID: the local id for public clients, and an HMAC
+// over the pairwise salt and sector otherwise, so clients cannot correlate users.
 func (s *Service) subjectFor(c *models.OAuthClient, userID string) string {
 	if c == nil || s.Cfg.OIDC == nil || s.clientSubjectType(c) != models.SubjectTypePairwise || len(s.Cfg.OIDC.PairwiseSalt) == 0 {
 		return userID
@@ -88,8 +83,7 @@ func (s *Service) subjectFor(c *models.OAuthClient, userID string) string {
 	return base64.RawURLEncoding.EncodeToString(mac.Sum(nil))
 }
 
-// sidFor derives the per client session identifier from the local session
-// id, so two RPs cannot correlate a user by sid.
+// sidFor derives a per-client session id, so two relying parties cannot correlate a user by sid.
 func (s *Service) sidFor(sessionID, clientID string) string {
 	h := sha256.New()
 	if s.Cfg.OIDC != nil {
@@ -102,8 +96,7 @@ func (s *Service) sidFor(sessionID, clientID string) string {
 	return base64.RawURLEncoding.EncodeToString(h.Sum(nil)[:16])
 }
 
-// halfHash is the left half of the digest of v, base64url encoded, as used
-// by at_hash. The digest follows the signing alg (OIDC Core 3.1.3.6).
+// halfHash is the left half of the digest of v, base64url encoded, as used by at_hash (OIDC Core 3.1.3.6).
 func halfHash(alg, v string) string {
 	var sum []byte
 	if alg == jwt.AlgEdDSA {
@@ -116,7 +109,6 @@ func halfHash(alg, v string) string {
 	return base64.RawURLEncoding.EncodeToString(sum[:len(sum)/2])
 }
 
-// idTokenInput is what issueIDToken needs from a grant.
 type idTokenInput struct {
 	ClientID    string
 	UserID      models.ULID
@@ -128,8 +120,8 @@ type idTokenInput struct {
 	AMR         []string
 }
 
-// issueIDToken signs an ID token for the client. The signing alg follows the
-// client's access token policy so one JWKS serves both.
+// issueIDToken signs an ID token for the client. It uses the client's access token algorithm, so
+// one JWKS serves both.
 func (s *Service) issueIDToken(ctx context.Context, in idTokenInput) (string, error) {
 	client, err := s.ResolveClient(ctx, in.ClientID)
 	if err != nil {
@@ -167,10 +159,9 @@ func (s *Service) issueIDToken(ctx context.Context, in idTokenInput) (string, er
 	return jwt.SignPayloadWith(claims, "JWT", key.KID, alg, signer)
 }
 
-// Session linkage. The authorization code row and the refresh token carry no
-// session id, so the link lives in the shared cache for the life of the
-// grant: code -> session, token family -> session, session -> clients. Losing
-// an entry only drops sid and the back-channel notification for that grant.
+// Session linkage: codes and refresh tokens carry no session id, so the link lives in the shared
+// cache for the grant's life. Losing an entry only drops sid and the back-channel notification for
+// that grant.
 
 const (
 	oidcCodeKeyPrefix = "oidc:code:"
@@ -207,8 +198,7 @@ func (s *Service) familySession(ctx context.Context, familyID models.ULID) strin
 	return string(v)
 }
 
-// linkFamilySession records that the token family belongs to the session and
-// that clientID took part in it.
+// linkFamilySession records that a token family belongs to the session and that clientID took part in it.
 func (s *Service) linkFamilySession(ctx context.Context, familyID models.ULID, sessionID, clientID string) {
 	if s.oidcCache == nil || sessionID == "" {
 		return
@@ -240,7 +230,6 @@ func (s *Service) sessionClients(ctx context.Context, sessionID string) []string
 	return out
 }
 
-// validateOIDCMetadata vets the OIDC client metadata of a registration.
 func (s *Service) validateOIDCMetadata(req ClientRegistrationRequest, anonymous bool) error {
 	set := req.SubjectType != "" || len(req.PostLogoutRedirectURIs) > 0 ||
 		req.BackchannelLogoutURI != "" || req.BackchannelLogoutSessionRequired

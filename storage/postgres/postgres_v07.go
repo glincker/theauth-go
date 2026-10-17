@@ -15,13 +15,9 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-// v0.7 storage extension: organizations, organization_members, sessions
-// active_organization_id, saml_connections, saml_identities, scim_tokens,
-// groups, group_members, plus a few helpers (UserByExternalIDInOrg,
-// UpdateUserSCIM, ListUsersByOrganization, ListGroupsByOrganization).
-// All methods are additive; v0.6 callers never invoke them.
-
-// Organizations
+// v0.7 storage extension: organizations, SAML, SCIM and groups, plus helpers
+// (UserByExternalIDInOrg, UpdateUserSCIM, ListUsersByOrganization, ListGroupsByOrganization).
+// All methods are additive.
 
 func rowToOrganization(r sqlcgen.Organization) theauth.Organization {
 	return theauth.Organization{
@@ -102,8 +98,6 @@ func (s *Store) DeleteOrganization(ctx context.Context, id theauth.ULID) error {
 	}
 	return nil
 }
-
-// Organization members
 
 func rowToOrgMember(r sqlcgen.OrganizationMember) theauth.OrganizationMember {
 	return theauth.OrganizationMember{
@@ -196,8 +190,6 @@ func (s *Store) SetSessionActiveOrganization(ctx context.Context, sessionID thea
 	}
 	return nil
 }
-
-// SAML connections
 
 func rowToSAMLConnection(r sqlcgen.SamlConnection) theauth.SAMLConnection {
 	var amap theauth.SAMLAttributeMap
@@ -297,8 +289,6 @@ func (s *Store) SAMLConnectionsByOrg(ctx context.Context, orgID theauth.ULID) ([
 	return out, nil
 }
 
-// SAML identities
-
 func rowToSAMLIdentity(r sqlcgen.SamlIdentity) theauth.SAMLIdentity {
 	return theauth.SAMLIdentity{
 		ID:           pgUUIDToULID(r.ID),
@@ -351,8 +341,6 @@ func (s *Store) TouchSAMLIdentityLastLogin(ctx context.Context, id theauth.ULID,
 		LastLoginAt: timeToTs(at),
 	})
 }
-
-// SCIM tokens
 
 func rowToSCIMToken(r sqlcgen.ScimToken) theauth.SCIMToken {
 	return theauth.SCIMToken{
@@ -428,8 +416,6 @@ func (s *Store) TouchSCIMTokenLastUsed(ctx context.Context, id theauth.ULID, at 
 		LastUsedAt: timeToTs(at),
 	})
 }
-
-// SCIM scoped user/group reads + user update
 
 func rowToUserV07(r sqlcgen.User) theauth.User {
 	u := rowToUser(r)
@@ -537,8 +523,6 @@ func (s *Store) UpdateUserSCIM(ctx context.Context, u theauth.User) error {
 	}
 	return nil
 }
-
-// Groups
 
 func rowToGroup(r sqlcgen.Group) theauth.Group {
 	ext := ""
@@ -697,9 +681,8 @@ func (s *Store) GroupMembers(ctx context.Context, groupID theauth.ULID) ([]theau
 	return out, nil
 }
 
-// isUniqueViolation checks if err is a pgx unique-constraint violation on the
-// named constraint. We avoid pulling in pgconn just for this; the error
-// stringification is stable across pgx v5.
+// isUniqueViolation reports whether err is a unique violation on the named constraint,
+// matched by message since pgx v5 messages are stable.
 func isUniqueViolation(err error, constraint string) bool {
 	if err == nil {
 		return false

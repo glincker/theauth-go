@@ -23,11 +23,8 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
-// oauth_e2e_test.go proves the OAuth 2.1 authorization server runs on the
-// SQLite store alone: discovery, DCR, authorization code with PKCE, refresh
-// rotation, revocation, agent token exchange, CIBA and restart durability,
-// all over real HTTP against a theauth instance (the flows Levelrail's MCP
-// clients depend on).
+// oauth_e2e_test.go runs the OAuth 2.1 authorization server end to end over real HTTP
+// on a SQLite file, including restart durability.
 
 const (
 	oaIssuer    = "https://auth.levelrail.test"
@@ -257,8 +254,7 @@ func (e *oaEnv) registerNative() string {
 	return out.str("client_id")
 }
 
-// registerConfidential registers a client_secret_basic client (resource server
-// introspection caller) with the operator initial access token.
+// registerConfidential registers a client_secret_basic client for introspection.
 func (e *oaEnv) registerConfidential(name string, grants []string) (string, string) {
 	e.t.Helper()
 	code, out := e.register(oaJSON{
@@ -577,8 +573,7 @@ func TestOAuthServerE2E(t *testing.T) {
 		wrong, _ := pkcePair()
 		status, body := e.exchangeCode(clientID, code, wrong)
 		wantErr(t, status, body, http.StatusBadRequest, "invalid_grant")
-		// The failed attempt must not have burned a usable path for the attacker,
-		// and a mismatched redirect_uri must fail too.
+		// A failed attempt must not burn the code; a mismatched redirect_uri must fail too.
 		code2 := e.getCode(cookie, clientID, c, oaScopeRead)
 		status, body = e.postForm("/oauth/token", url.Values{
 			"grant_type": {"authorization_code"}, "client_id": {clientID}, "code": {code2},
@@ -756,8 +751,7 @@ func TestOAuthServerE2E(t *testing.T) {
 			t.Fatalf("delegated token inactive before revoke: %v", in)
 		}
 
-		// Revoke through the storage method; the chain cache is keyed to the
-		// injected clock, so advancing it past the TTL forces a fresh check.
+		// Advancing the injected clock past the chain cache TTL forces a fresh check.
 		if err := e.store.RevokeDelegationGrant(ctx, grant.ID, time.Now(), "e2e storage revoke"); err != nil {
 			t.Fatalf("RevokeDelegationGrant: %v", err)
 		}

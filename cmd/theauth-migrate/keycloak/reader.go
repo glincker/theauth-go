@@ -1,13 +1,5 @@
-// Package keycloak reads a Keycloak realm export and converts it to the
-// migration Bundle format.
-//
-// Input is the JSON from Realm settings, Action, Partial export (or
-// kc.sh export), which has a "users" array. Keycloak's pbkdf2 password hashes
-// are converted to theauth's legacy "$pbkdf2-sha256$..." form and verified
-// with Config.PasswordPolicy.AllowLegacyBcrypt on, then replaced with Argon2id
-// on each user's first successful login, the same path Auth0 bcrypt takes.
-// Users whose credential uses another algorithm get a password reset. OTP
-// secrets are not migrated; those users re-enroll.
+// Package keycloak reads a Keycloak realm export into the migration Bundle. pbkdf2 hashes are kept
+// in the legacy form, and users with other credential types must reset their password.
 package keycloak
 
 import (

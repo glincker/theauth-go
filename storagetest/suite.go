@@ -89,13 +89,8 @@ func RunOAuthServer(t *testing.T, store theauth.OAuthServerStorage) {
 	t.Run("Delegations", func(t *testing.T) { testDelegations(t, store) })
 }
 
-// Run executes the full contract test suite against the given storage by
-// calling every per-capability entry point. Pass a fresh storage instance
-// (no rows).
-//
-// If the backend also implements theauth.OAuthServerStorage, the OAuth 2.1
-// authorization server domains are included. Otherwise those sub-tests are
-// skipped.
+// Run executes the full contract suite against storage, which must be fresh (no rows).
+// OAuth 2.1 server domains run only when storage implements theauth.OAuthServerStorage.
 func Run(t *testing.T, store theauth.Storage) {
 	t.Helper()
 

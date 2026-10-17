@@ -1,17 +1,8 @@
-// Command cli-device-login signs a command-line tool in with the OAuth 2.0
-// device authorization grant (RFC 8628). It needs no browser on the machine
-// running the CLI: it prints a short code and a URL, the user approves on any
-// device, and the CLI polls until it receives tokens.
-//
-// Try it against the bundled demo server:
-//
-//	go run ./examples/cli-device-login/server          # prints the exact command below
-//	go run ./examples/cli-device-login -issuer http://127.0.0.1:8080 \
-//	    -client-id <printed id> -scope profile -resource http://127.0.0.1:8080/api
-//
-// Only the standard library is used, so the file can be copied into a CLI as
-// is. Human-readable progress goes to stderr; with -json the token response is
-// written to stdout so it can be piped.
+// Command cli-device-login signs a CLI in with the RFC 8628 device grant. It prints a short code
+// and URL, the user approves on any device, and the CLI polls until tokens arrive.
+// Demo: run go run ./examples/cli-device-login/server, then go run ./examples/cli-device-login with the
+// printed client id, -issuer http://127.0.0.1:8080 and -resource http://127.0.0.1:8080/api.
+// Use -json to print tokens to stdout.
 package main
 
 import (

@@ -23,7 +23,6 @@ scopes, status, created_at, last_seen_at, revoked_at`
 const joinTokenCols = `id, token_hash, token_prefix, organization_id, name, spiffe_id, scopes, created_by,
 created_at, expires_at, redeemed_at, device_id, revoked_at`
 
-// InsertDevice satisfies DeviceIdentityStorage.
 func (s *Store) InsertDevice(ctx context.Context, d theauth.Device) error {
 	scopes, err := encodeList(d.Scopes)
 	if err != nil {
@@ -76,7 +75,6 @@ func scanIoTDevice(r pgx.Row) (theauth.Device, error) {
 	return d, nil
 }
 
-// DeviceByID satisfies DeviceIdentityStorage.
 func (s *Store) DeviceByID(ctx context.Context, id theauth.ULID) (*theauth.Device, error) {
 	d, err := scanIoTDevice(s.pool.QueryRow(ctx, `SELECT `+iotDeviceCols+` FROM iot_devices WHERE id = $1`, ulidToPgUUID(id)))
 	if err != nil {
@@ -85,7 +83,6 @@ func (s *Store) DeviceByID(ctx context.Context, id theauth.ULID) (*theauth.Devic
 	return &d, nil
 }
 
-// ListDevices satisfies DeviceIdentityStorage.
 func (s *Store) ListDevices(ctx context.Context, orgID *theauth.ULID) ([]theauth.Device, error) {
 	q := `SELECT ` + iotDeviceCols + ` FROM iot_devices`
 	args := []any{}
@@ -110,7 +107,6 @@ func (s *Store) ListDevices(ctx context.Context, orgID *theauth.ULID) ([]theauth
 	return out, rows.Err()
 }
 
-// RevokeDevice satisfies DeviceIdentityStorage.
 func (s *Store) RevokeDevice(ctx context.Context, id theauth.ULID, at time.Time) (bool, error) {
 	tag, err := s.pool.Exec(ctx,
 		`UPDATE iot_devices SET status = 'revoked', revoked_at = $2 WHERE id = $1 AND revoked_at IS NULL`,
@@ -121,7 +117,6 @@ func (s *Store) RevokeDevice(ctx context.Context, id theauth.ULID, at time.Time)
 	return tag.RowsAffected() == 1, nil
 }
 
-// TouchDevice satisfies DeviceIdentityStorage.
 func (s *Store) TouchDevice(ctx context.Context, id theauth.ULID, at time.Time) error {
 	if _, err := s.pool.Exec(ctx, `UPDATE iot_devices SET last_seen_at = $2 WHERE id = $1`, ulidToPgUUID(id), at); err != nil {
 		return fmt.Errorf("postgres: touch device: %w", err)
@@ -129,7 +124,6 @@ func (s *Store) TouchDevice(ctx context.Context, id theauth.ULID, at time.Time) 
 	return nil
 }
 
-// InsertDeviceJoinToken satisfies DeviceIdentityStorage.
 func (s *Store) InsertDeviceJoinToken(ctx context.Context, t theauth.DeviceJoinToken) error {
 	scopes, err := encodeList(t.Scopes)
 	if err != nil {
@@ -170,7 +164,6 @@ func scanJoinToken(r pgx.Row) (theauth.DeviceJoinToken, error) {
 	}, nil
 }
 
-// DeviceJoinTokenByHash satisfies DeviceIdentityStorage.
 func (s *Store) DeviceJoinTokenByHash(ctx context.Context, hash []byte) (*theauth.DeviceJoinToken, error) {
 	t, err := scanJoinToken(s.pool.QueryRow(ctx, `SELECT `+joinTokenCols+` FROM device_join_tokens WHERE token_hash = $1`, hash))
 	if err != nil {
@@ -179,7 +172,6 @@ func (s *Store) DeviceJoinTokenByHash(ctx context.Context, hash []byte) (*theaut
 	return &t, nil
 }
 
-// DeviceJoinTokenByID satisfies DeviceIdentityStorage.
 func (s *Store) DeviceJoinTokenByID(ctx context.Context, id theauth.ULID) (*theauth.DeviceJoinToken, error) {
 	t, err := scanJoinToken(s.pool.QueryRow(ctx, `SELECT `+joinTokenCols+` FROM device_join_tokens WHERE id = $1`, ulidToPgUUID(id)))
 	if err != nil {
@@ -188,7 +180,6 @@ func (s *Store) DeviceJoinTokenByID(ctx context.Context, id theauth.ULID) (*thea
 	return &t, nil
 }
 
-// RevokeDeviceJoinToken satisfies DeviceIdentityStorage.
 func (s *Store) RevokeDeviceJoinToken(ctx context.Context, id theauth.ULID, at time.Time) (bool, error) {
 	tag, err := s.pool.Exec(ctx,
 		`UPDATE device_join_tokens SET revoked_at = $2 WHERE id = $1 AND revoked_at IS NULL`, ulidToPgUUID(id), at)
@@ -198,7 +189,6 @@ func (s *Store) RevokeDeviceJoinToken(ctx context.Context, id theauth.ULID, at t
 	return tag.RowsAffected() == 1, nil
 }
 
-// RedeemDeviceJoinToken satisfies DeviceIdentityStorage.
 func (s *Store) RedeemDeviceJoinToken(ctx context.Context, id, deviceID theauth.ULID, now time.Time) (bool, error) {
 	tag, err := s.pool.Exec(ctx, `UPDATE device_join_tokens SET redeemed_at = $3, device_id = $2
 WHERE id = $1 AND redeemed_at IS NULL AND revoked_at IS NULL AND expires_at > $3`,
@@ -209,7 +199,6 @@ WHERE id = $1 AND redeemed_at IS NULL AND revoked_at IS NULL AND expires_at > $3
 	return tag.RowsAffected() == 1, nil
 }
 
-// RefundDeviceJoinToken satisfies DeviceIdentityStorage.
 func (s *Store) RefundDeviceJoinToken(ctx context.Context, id theauth.ULID) error {
 	if _, err := s.pool.Exec(ctx,
 		`UPDATE device_join_tokens SET redeemed_at = NULL, device_id = NULL WHERE id = $1`, ulidToPgUUID(id)); err != nil {

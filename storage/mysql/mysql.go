@@ -1,5 +1,4 @@
-// Package mysql: mysql.go defines the Store type and shared type-mapping
-// helpers. All SQL uses database/sql with ? placeholders (MySQL style).
+// Package mysql implements the MySQL storage adapter using database/sql with ? placeholders.
 package mysql
 
 import (
@@ -26,8 +25,6 @@ type Store struct {
 func New(db *sql.DB) *Store {
 	return &Store{db: db}
 }
-
-// type-mapping helpers
 
 // ulidToBytes converts a theauth.ULID to a 16-byte slice for BINARY(16).
 func ulidToBytes(id theauth.ULID) []byte {

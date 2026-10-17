@@ -16,7 +16,6 @@ var (
 	_ theauth.TrustedDeviceStorage = (*Store)(nil)
 )
 
-// AccountStateByUserID implements theauth.AccountStateStorage.
 func (s *Store) AccountStateByUserID(_ context.Context, userID theauth.ULID) (theauth.AccountState, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -43,12 +42,10 @@ func (s *Store) updateState(userID theauth.ULID, fn func(*theauth.AccountState))
 	return nil
 }
 
-// SetMustChangePassword implements theauth.AccountStateStorage.
 func (s *Store) SetMustChangePassword(_ context.Context, userID theauth.ULID, required bool) error {
 	return s.updateState(userID, func(st *theauth.AccountState) { st.MustChangePassword = required })
 }
 
-// SetUserDisabledAt implements theauth.AccountStateStorage.
 func (s *Store) SetUserDisabledAt(_ context.Context, userID theauth.ULID, at *time.Time) error {
 	return s.updateState(userID, func(st *theauth.AccountState) {
 		if at == nil {
@@ -60,7 +57,6 @@ func (s *Store) SetUserDisabledAt(_ context.Context, userID theauth.ULID, at *ti
 	})
 }
 
-// DeleteUserCascade implements theauth.AccountDeleteStorage.
 func (s *Store) DeleteUserCascade(_ context.Context, userID theauth.ULID) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -184,7 +180,6 @@ func (s *Store) deleteUserDependents(userID theauth.ULID) {
 	}
 }
 
-// InsertTrustedDevice implements theauth.TrustedDeviceStorage.
 func (s *Store) InsertTrustedDevice(_ context.Context, d theauth.TrustedDevice) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -196,7 +191,6 @@ func (s *Store) InsertTrustedDevice(_ context.Context, d theauth.TrustedDevice) 
 	return nil
 }
 
-// TrustedDeviceByTokenHash implements theauth.TrustedDeviceStorage.
 func (s *Store) TrustedDeviceByTokenHash(_ context.Context, userID theauth.ULID, hash []byte) (*theauth.TrustedDevice, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -209,7 +203,6 @@ func (s *Store) TrustedDeviceByTokenHash(_ context.Context, userID theauth.ULID,
 	return nil, storage.ErrNotFound
 }
 
-// ListTrustedDevices implements theauth.TrustedDeviceStorage.
 func (s *Store) ListTrustedDevices(_ context.Context, userID theauth.ULID) ([]theauth.TrustedDevice, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -224,7 +217,6 @@ func (s *Store) ListTrustedDevices(_ context.Context, userID theauth.ULID) ([]th
 	return out, nil
 }
 
-// TouchTrustedDevice implements theauth.TrustedDeviceStorage.
 func (s *Store) TouchTrustedDevice(_ context.Context, id theauth.ULID, at time.Time) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -237,7 +229,6 @@ func (s *Store) TouchTrustedDevice(_ context.Context, id theauth.ULID, at time.T
 	return nil
 }
 
-// RevokeTrustedDevice implements theauth.TrustedDeviceStorage.
 func (s *Store) RevokeTrustedDevice(_ context.Context, userID, id theauth.ULID) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -251,7 +242,6 @@ func (s *Store) RevokeTrustedDevice(_ context.Context, userID, id theauth.ULID) 
 	return nil
 }
 
-// RevokeUserTrustedDevices implements theauth.TrustedDeviceStorage.
 func (s *Store) RevokeUserTrustedDevices(_ context.Context, userID theauth.ULID) (int, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()

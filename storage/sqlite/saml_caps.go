@@ -9,8 +9,7 @@ import (
 	"github.com/glincker/theauth-go/v2"
 )
 
-// saml_caps.go: SAMLStorage over migration 0014. Connections hold the IdP
-// certificate (public) and URLs only; no private key material is stored.
+// saml_caps.go: SAMLStorage over migration 0014. Only public IdP certificate and URLs are stored.
 
 var _ theauth.SAMLStorage = (*Store)(nil)
 

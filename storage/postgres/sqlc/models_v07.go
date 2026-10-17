@@ -2,16 +2,7 @@
 // versions:
 //   sqlc v1.30.0
 //
-// Hand-maintained mirror of the v0.7 model additions (organizations,
-// organization_members, saml_connections, saml_identities, scim_tokens,
-// groups, group_members, plus the new users columns external_id,
-// given_name, family_name, display_name).
-//
-// The sqlc binary was not available locally at v0.7 codegen time; this
-// file matches the v1.30.0 emit format used by models.go so that
-// re-running sqlc generate later produces a stable diff. The User struct
-// is amended in models.go itself to add the new columns (sqlc would
-// regenerate that file in place).
+// Hand-maintained mirror of the v0.7 model additions. The User struct itself is amended in models.go.
 
 package sqlc
 

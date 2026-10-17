@@ -11,19 +11,12 @@ import (
 	obs "github.com/glincker/theauth-go/v2/internal/observability"
 )
 
-// authz.go: GET /oauth/authorize state machine.
-//
-// Phase 1 + 2 ships a minimal consent path: when the user is already
-// authenticated and the requested scope is a subset of the resource's
-// catalog, the authorize endpoint issues an authorization code
-// immediately and redirects. Consent screen rendering belongs to the
-// consuming application; the AS surface stays headless. A consent screen
-// overlay can be wired in a later phase by short-circuiting StartAuthorize.
+// authz.go implements the GET /oauth/authorize state machine. When the user is already
+// authenticated and the scope fits the resource catalog, it issues a code immediately. Consent
+// screens belong to the host (see consent.go).
 
-// AuthorizeRequest is the parsed GET /oauth/authorize query string. PKCE
-// fields are required; OAuth 2.1 forbids the legacy implicit and password
-// flows so response_type MUST be "code" and code_challenge_method MUST be
-// "S256".
+// AuthorizeRequest is the parsed GET /oauth/authorize query. PKCE is required and response_type
+// must be "code" (OAuth 2.1).
 type AuthorizeRequest struct {
 	ClientID            string
 	RedirectURI         string
@@ -35,49 +28,39 @@ type AuthorizeRequest struct {
 	Resource            string
 	Nonce               string
 
-	// MaxAge is the OIDC max_age parameter in seconds; nil when absent. A
-	// session whose authentication is older, or any value of 0, requires
+	// MaxAge is the OIDC max_age in seconds, nil when absent. An older authentication, or 0, requires
 	// re-authentication.
 	MaxAge *int64
-	// ACRValues is the acr_values parameter: acceptable authentication
-	// context classes. A session satisfies it when its acr equals one.
+	// ACRValues is the acr_values parameter. A session satisfies it when its acr equals one of them.
 	ACRValues []string
-	// Prompt is the OIDC prompt parameter. Only "none" is interpreted, by
-	// the handler: it answers login_required instead of redirecting to the
-	// login page.
+	// Prompt is the OIDC prompt parameter. Only "none" is interpreted: it answers login_required
+	// instead of redirecting.
 	Prompt string
 
-	// AuthorizationDetails is the raw RFC 9396 authorization_details JSON
-	// array, empty when the request carries none.
+	// AuthorizationDetails is the raw RFC 9396 JSON array, empty when absent.
 	AuthorizationDetails string
 
-	// RequestURI, when non-empty, identifies a pushed authorization
-	// request (RFC 9126). The handler resolves it before calling
-	// StartAuthorize; this field is informational at service level.
+	// RequestURI identifies a pushed authorization request (RFC 9126). The handler resolves it before
+	// StartAuthorize.
 	RequestURI string
 
-	// RequestObject, when non-empty, is the raw JAR JWT (RFC 9101).
-	// The handler resolves it before calling StartAuthorize.
+	// RequestObject is the raw JAR JWT (RFC 9101). The handler resolves it before StartAuthorize.
 	RequestObject string
 }
 
-// AuthorizeResult is the outcome of a successful authorize call: the
-// redirect URL the handler should 302 the user agent to.
+// AuthorizeResult is the redirect URL the handler sends the user agent to.
 type AuthorizeResult struct {
 	RedirectURL string
 }
 
-// StartAuthorize validates the request and, when the supplied user is
-// non-nil, immediately mints an authorization code bound to the request
-// and returns a redirect URL with code + state. When user is nil the
-// caller should redirect to LoginURL so the user can sign in.
+// StartAuthorize validates the request. With a user it mints a code and returns the redirect URL.
+// With a nil user the caller redirects to LoginURL.
 func (s *Service) StartAuthorize(ctx context.Context, req AuthorizeRequest, user *models.User) (AuthorizeResult, error) {
 	return s.startAuthorize(ctx, req, user, nil)
 }
 
-// startAuthorize is StartAuthorize plus the consent resume path: a non-nil
-// resume carries a verified consent ticket and the host's decision, applied
-// instead of calling the ConsentHandler.
+// startAuthorize is StartAuthorize plus the consent resume path, which applies a verified ticket
+// and the host's decision.
 func (s *Service) startAuthorize(ctx context.Context, req AuthorizeRequest, user *models.User, resume *consentResume) (result AuthorizeResult, err error) {
 	if s == nil {
 		return AuthorizeResult{}, errors.New("theauth: authorization server not configured")
@@ -102,9 +85,8 @@ func (s *Service) startAuthorize(ctx context.Context, req AuthorizeRequest, user
 	if req.CodeChallenge == "" || req.CodeChallengeMethod != "S256" {
 		return AuthorizeResult{}, models.ErrOAuthInvalidRequest
 	}
-	// security re-audit L5 (2026-06-22): when RequireState is enabled,
-	// reject requests that omit a non-empty state parameter. An absent
-	// state param removes the CSRF protection layer that state provides.
+	// RequireState rejects requests without a non-empty state parameter (security re-audit L5).
+	// Without it the CSRF protection state provides is lost.
 	if s.Cfg.RequireState && req.State == "" {
 		return AuthorizeResult{}, models.ErrOAuthInvalidRequest
 	}
@@ -128,10 +110,8 @@ func (s *Service) startAuthorize(ctx context.Context, req AuthorizeRequest, user
 		return AuthorizeResult{}, err
 	}
 	if user == nil {
-		// Unauthenticated; let the caller redirect to LoginURL with a
-		// `next` query so the user returns here after sign in. This
-		// struct value signals login-required by returning an empty
-		// RedirectURL.
+		// An unauthenticated caller gets an empty RedirectURL, which signals that the caller should send
+		// the user to login.
 		return AuthorizeResult{}, errAuthorizeLoginRequired
 	}
 	now := time.Now()
@@ -154,8 +134,8 @@ func (s *Service) startAuthorize(ctx context.Context, req AuthorizeRequest, user
 	if err != nil {
 		return AuthorizeResult{}, err
 	}
-	// The grant expiry rides inside the code (and later the refresh token);
-	// the stored key is a hash of the whole string, so it cannot be changed.
+	// The grant expiry rides inside the code and the refresh token. The stored key hashes the whole
+	// string, so it cannot be changed.
 	codeStr = withGrantExpiry(codeStr, grantExpiry)
 	if err := s.Storage.InsertAuthorizationCode(ctx, models.AuthorizationCode{
 		Code:                 codeStorageKey(codeStr),
@@ -183,10 +163,8 @@ func (s *Service) startAuthorize(ctx context.Context, req AuthorizeRequest, user
 	return AuthorizeResult{RedirectURL: redirectURL}, nil
 }
 
-// RedirectURIRegisteredFor reports whether uri matches a redirect URI
-// registered for clientID (exactly, or port-agnostic for loopback URIs when
-// ClientCompat.LoopbackAnyPort is on). Callers must not redirect to uri
-// otherwise.
+// RedirectURIRegisteredFor reports whether uri is registered for clientID, exactly or port-agnostic
+// for loopback URIs when ClientCompat.LoopbackAnyPort is on. Never redirect to a URI this rejects.
 func (s *Service) RedirectURIRegisteredFor(ctx context.Context, clientID, uri string) bool {
 	client, err := s.ResolveClient(ctx, clientID)
 	if err != nil || client == nil {
@@ -195,9 +173,8 @@ func (s *Service) RedirectURIRegisteredFor(ctx context.Context, clientID, uri st
 	return s.redirectURIRegistered(client.RedirectURIs, uri)
 }
 
-// redirectURIRegistered returns true when the supplied URI exactly
-// matches one of the registered URIs. OAuth 2.1 mandates exact match (no
-// path substring matching).
+// redirectURIRegistered reports an exact match against the registered URIs. OAuth 2.1 mandates
+// exact matching.
 func redirectURIRegistered(registered []string, uri string) bool {
 	if uri == "" {
 		return false
@@ -210,13 +187,10 @@ func redirectURIRegistered(registered []string, uri string) bool {
 	return false
 }
 
-// buildAuthzRedirect appends ?code=...&state=... to the supplied redirect
-// URI, preserving any pre-existing query parameters.
+// buildAuthzRedirect appends code and state to a redirect URI, keeping its existing query parameters.
 func buildAuthzRedirect(redirectURI, code, state, issuer string) string {
 	u, err := url.Parse(redirectURI)
 	if err != nil {
-		// fallback: plain concat (the registered URI was already
-		// validated as a parseable URL at client registration).
 		return redirectURI + "?code=" + url.QueryEscape(code) + "&state=" + url.QueryEscape(state)
 	}
 	q := u.Query()
@@ -225,7 +199,7 @@ func buildAuthzRedirect(redirectURI, code, state, issuer string) string {
 		q.Set("state", state)
 	}
 	if issuer != "" {
-		// RFC 9207 mix-up defence; advertised in AS metadata.
+		// RFC 9207 mix-up defence: the iss parameter. It is advertised in the AS metadata.
 		q.Set("iss", issuer)
 	}
 	u.RawQuery = q.Encode()

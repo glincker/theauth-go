@@ -10,7 +10,7 @@ import (
 
 // TestChainStillActiveCachedWithinTTL: two IntrospectToken calls on the
 // same token within 1 second both return the same result and neither
-// panics or corrupts state (perf re-audit 2026-06-21, item 3).
+// panics or corrupts state.
 func TestChainStillActiveCachedWithinTTL(t *testing.T) {
 	t.Parallel()
 	a, store := newAgentASInstance(t)
@@ -68,7 +68,7 @@ func TestChainStillActiveCachedWithinTTL(t *testing.T) {
 // TestChainStillActiveInvalidatedOnSuspend: after suspend, a FRESHLY
 // minted token's introspection must return inactive. This validates that
 // the chain-cache invalidation propagates correctly through the suspend
-// path (perf re-audit 2026-06-21, item 3).
+// path.
 //
 // Note: plain client-credentials token introspection is not re-validated
 // on IntrospectionCache hits (the re-check only applies to delegated tokens

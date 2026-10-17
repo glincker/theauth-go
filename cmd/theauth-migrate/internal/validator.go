@@ -14,9 +14,8 @@ type ValidationResult struct {
 // OK returns true when there are no validation errors (warnings are allowed).
 func (v *ValidationResult) OK() bool { return len(v.Errors) == 0 }
 
-// ValidateBundle performs structural and semantic checks on b.
-// It does not touch storage; call this before --apply or as the sole action
-// for the "validate" sub-command.
+// ValidateBundle runs structural and semantic checks on b without touching storage. Call it before
+// --apply or on its own with the validate command.
 func ValidateBundle(b *Bundle) ValidationResult {
 	var r ValidationResult
 

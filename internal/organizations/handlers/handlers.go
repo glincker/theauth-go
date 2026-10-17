@@ -1,10 +1,7 @@
 // Package handlers exposes the /auth/orgs/* HTTP endpoints for
 // multi-tenant organization create / read / membership management.
 //
-// Extracted from root handlers_organizations.go in PR F of the 2026-06
-// architecture reorg. The root *theauth.TheAuth constructs a Handler
-// here and Mount is invoked from a thin mountOrganizationsHandlers
-// forwarder so the public surface and route shapes are unchanged.
+// Routes are mounted by the root *theauth.TheAuth through the thin mountOrganizationsHandlers forwarder.
 //
 // Sub-route mounting for SAML connection CRUD and SCIM token CRUD
 // stays in root because those CRUDs depend on services this handler

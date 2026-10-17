@@ -262,7 +262,6 @@ WHERE credential_id = ?`,
 	return err
 }
 
-// RenameWebAuthnCredential implements theauth.WebAuthnRenameStorage.
 func (s *Store) RenameWebAuthnCredential(ctx context.Context, id, userID theauth.ULID, name string) error {
 	res, err := s.db.ExecContext(ctx,
 		`UPDATE webauthn_credentials SET name = ? WHERE id = ? AND user_id = ?`,

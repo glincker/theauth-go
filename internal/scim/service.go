@@ -1,5 +1,4 @@
-// SCIM token service. Extracted from root service_scim.go in PR A of the
-// 2026-06 architecture reorg.
+// SCIM token service.
 //
 // Tokens are 256-bit base64url-encoded random strings; the sha256 hash is
 // persisted and the plaintext is returned to the caller exactly once. The
@@ -7,7 +6,7 @@
 // bound organization or models.ErrInvalidToken and touches last_used_at on
 // success.
 //
-// Perf re-audit 2026-06-21: AuthenticateResult bundles orgID + tokenID from
+// AuthenticateResult bundles orgID and tokenID from
 // a single storage round-trip, removing the double SCIMTokenByHash call the
 // middleware previously performed. TouchSCIMTokenLastUsed is dispatched on a
 // background goroutine so the auth hot path is never stalled by a write.
@@ -115,7 +114,7 @@ type AuthenticateResult struct {
 // on every request. Returns the bound organization and token row ID in a
 // single storage round-trip, or models.ErrInvalidToken on failure.
 // TouchSCIMTokenLastUsed is dispatched asynchronously so the auth hot
-// path never blocks on a write (perf re-audit 2026-06-21, item 1).
+// path never blocks on a write.
 func (s *Service) Authenticate(ctx context.Context, presented string) (AuthenticateResult, error) {
 	if presented == "" {
 		return AuthenticateResult{}, models.ErrInvalidToken

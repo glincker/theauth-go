@@ -1,7 +1,7 @@
 package as
 
-// jwks_fetcher.go: SSRF-guarded, bounded, expiring fetcher for remote JWKS
-// documents (client jwks_uri and TrustedJWTIssuer.JWKSURL).
+// jwks_fetcher.go is an SSRF-guarded, bounded and expiring fetcher for remote JWKS documents
+// (client jwks_uri and TrustedJWTIssuer.JWKSURL).
 
 import (
 	"context"
@@ -17,25 +17,20 @@ import (
 )
 
 const (
-	// DefaultJWKSCacheTTL bounds how long a fetched JWKS is reused before
-	// it is fetched again, so rotated keys are picked up.
+	// DefaultJWKSCacheTTL bounds how long a fetched JWKS is reused, so rotated keys are picked up.
 	DefaultJWKSCacheTTL = 5 * time.Minute
 
-	// DefaultJWKSCacheMaxEntries bounds the number of distinct JWKS URLs
-	// kept in memory. URLs can be attacker-influenced (client jwks_uri).
+	// DefaultJWKSCacheMaxEntries bounds the cached JWKS URLs. URLs can be attacker influenced via
+	// client jwks_uri.
 	DefaultJWKSCacheMaxEntries = 256
 
 	// DefaultJWKSFetchTimeout is the total time allowed for one JWKS fetch.
 	DefaultJWKSFetchTimeout = 5 * time.Second
 
-	// maxJWKSBytes caps the size of a JWKS response body.
 	maxJWKSBytes = 512 * 1024
 )
 
-// Errors returned by the JWKS fetcher. They are wrapped with the URL.
 var (
-	// ErrJWKSInsecureURL is returned for a non-https JWKS URL when private
-	// networks are not allowed.
 	ErrJWKSInsecureURL = errors.New("jwks url must be https")
 	// ErrJWKSStatus is returned when the JWKS endpoint answers non-200.
 	ErrJWKSStatus = errors.New("jwks endpoint returned a non-200 status")
@@ -48,7 +43,6 @@ type jwksCacheEntry struct {
 	expiresAt time.Time
 }
 
-// jwksFetcher fetches and caches JWKS documents. Safe for concurrent use.
 type jwksFetcher struct {
 	client       *http.Client
 	allowPrivate bool
@@ -60,8 +54,7 @@ type jwksFetcher struct {
 	entries map[string]jwksCacheEntry
 }
 
-// newJWKSFetcher builds a fetcher from cfg. cfg may be nil, in which case
-// every default applies.
+// newJWKSFetcher builds a fetcher from cfg. A nil cfg applies every default.
 func newJWKSFetcher(cfg *JWTBearerConfig) *jwksFetcher {
 	f := &jwksFetcher{
 		ttl:        DefaultJWKSCacheTTL,
@@ -89,8 +82,7 @@ func newJWKSFetcher(cfg *JWTBearerConfig) *jwksFetcher {
 	return f
 }
 
-// Fetch returns the parsed keys for jwksURL, from cache when fresh.
-// Failures are never cached.
+// Fetch returns the parsed keys for jwksURL, from cache when fresh. Failures are never cached.
 func (f *jwksFetcher) Fetch(ctx context.Context, jwksURL string) ([]jwksEntry, error) {
 	if keys, ok := f.cached(jwksURL); ok {
 		return keys, nil
@@ -143,8 +135,8 @@ func (f *jwksFetcher) cached(jwksURL string) ([]jwksEntry, bool) {
 	return e.keys, true
 }
 
-// store inserts keys, first dropping expired entries and then, if the
-// cache is still full, the entry closest to expiry.
+// store inserts keys, dropping expired entries first, then the entry closest to expiry if the cache
+// is still full.
 func (f *jwksFetcher) store(jwksURL string, keys []jwksEntry) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -169,8 +161,7 @@ func (f *jwksFetcher) store(jwksURL string, keys []jwksEntry) {
 	f.entries[jwksURL] = jwksCacheEntry{keys: keys, expiresAt: now.Add(f.ttl)}
 }
 
-// size reports the number of cached entries (including not yet purged
-// expired ones). Test helper.
+// size reports the number of cached entries, including expired ones not yet purged. Test helper.
 func (f *jwksFetcher) size() int {
 	f.mu.Lock()
 	defer f.mu.Unlock()

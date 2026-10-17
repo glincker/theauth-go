@@ -353,7 +353,7 @@ func splitOnN(s, sep string, n int) []string {
 }
 
 // TestPKCEVerifierConstantTime verifies that a wrong code_verifier returns
-// ErrOAuthPKCEMismatch (security re-audit L2, 2026-06-22). The constant-time
+// ErrOAuthPKCEMismatch. The constant-time
 // property is a runtime guarantee of the implementation; this test covers
 // correctness (wrong verifier is still rejected) so the switch to
 // crypto/subtle.ConstantTimeCompare does not regress behavior.
@@ -425,7 +425,7 @@ func issueTokenFamily(t *testing.T) (*theauth.TheAuth, theauth.RegisteredClient,
 
 // TestRevokeTokenWalksFamily verifies that revoking any member of a refresh-
 // token rotation family also invalidates all siblings (security re-audit L3,
-// 2026-06-22). Prior behavior revoked only the single presented token.
+// Prior behavior revoked only the single presented token.
 func TestRevokeTokenWalksFamily(t *testing.T) {
 	a, client, rt0 := issueTokenFamily(t)
 	ctx := context.Background()
@@ -475,7 +475,7 @@ func TestRevokeTokenWalksFamily(t *testing.T) {
 
 // TestRequireStateRejectsMissing verifies that when RequireState is true,
 // /oauth/authorize requests without a non-empty state parameter are rejected
-// with ErrOAuthInvalidRequest (security re-audit L5, 2026-06-22).
+// with ErrOAuthInvalidRequest.
 func TestRequireStateRejectsMissing(t *testing.T) {
 	a, store := newASInstance(t, func(c *theauth.AuthorizationServerConfig) {
 		c.RequireState = true

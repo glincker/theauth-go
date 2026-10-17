@@ -12,12 +12,8 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-// v2.0 (phase 1 + 2): Postgres adapter for the OAuth 2.1 authorization
-// server tables introduced by migrations 0011 to 0014. Queries are hand
-// rolled against pgx/v5 to keep this PR self contained; sqlc regeneration
-// for these tables is deferred (the existing sqlc directory stays untouched).
-
-// OAuth clients
+// v2.0 Postgres adapter for the OAuth 2.1 authorization server tables (migrations 0011-0014).
+// Queries are hand rolled on pgx/v5; sqlc regeneration for these tables is deferred.
 
 func (s *Store) InsertOAuthClient(ctx context.Context, c theauth.OAuthClient) (theauth.OAuthClient, error) {
 	const q = `
@@ -171,8 +167,6 @@ func (s *Store) DeleteOAuthClient(ctx context.Context, clientID string) error {
 	return nil
 }
 
-// authorization codes
-
 func (s *Store) InsertAuthorizationCode(ctx context.Context, c theauth.AuthorizationCode) error {
 	const q = `
 INSERT INTO oauth_authorization_codes (
@@ -264,8 +258,6 @@ RETURNING code, client_id, user_id, organization_id, redirect_uri, scope, resour
 	out.CreatedAt = tsToTime(created)
 	return &out, nil
 }
-
-// refresh tokens
 
 func (s *Store) InsertRefreshToken(ctx context.Context, t theauth.RefreshToken) error {
 	const q = `
@@ -362,9 +354,8 @@ func (s *Store) RevokeRefreshToken(ctx context.Context, hash []byte, reason stri
 	return nil
 }
 
-// RevokeRefreshTokensByAuthCode revokes every live token in the rotation
-// families first issued from the code stored under codeHash and returns the
-// access-token jtis of the tokens it revoked.
+// RevokeRefreshTokensByAuthCode revokes the rotation families of the code under codeHash and
+// returns the revoked access-token jtis.
 func (s *Store) RevokeRefreshTokensByAuthCode(ctx context.Context, codeHash, reason string) ([]string, error) {
 	if codeHash == "" {
 		return nil, nil
@@ -417,8 +408,6 @@ func (s *Store) RevokeRefreshTokenFamily(ctx context.Context, familyID theauth.U
 	_, err := s.pool.Exec(ctx, q, ulidToPgUUID(familyID), reason)
 	return err
 }
-
-// JWKS
 
 func (s *Store) InsertJWKSKey(ctx context.Context, k theauth.JWKSKey) error {
 	const q = `
@@ -491,12 +480,9 @@ func (s *Store) UpdateJWKSKeyState(ctx context.Context, kid, state string, at ti
 	return err
 }
 
-// AtomicRotateJWKS implements as.JWKSAtomicRotator. It wraps the entire JWKS
-// rotation state transition in a single serializable transaction so that
-// concurrent callers cannot produce two rows with state = current.
-//
-// The theauth_jwks_one_current partial unique index (migration 0015) enforces
-// this invariant at the database level as a belt-and-suspenders guard.
+// AtomicRotateJWKS implements as.JWKSAtomicRotator in one serializable transaction, so
+// concurrent callers cannot leave two rows with state = current. The theauth_jwks_one_current
+// partial unique index (migration 0015) enforces the same invariant in the database.
 func (s *Store) AtomicRotateJWKS(ctx context.Context, retireKIDs []string, demoteKID, promoteKID string, freshKey theauth.JWKSKey, now time.Time) error {
 	tx, err := s.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.Serializable})
 	if err != nil {
@@ -553,5 +539,4 @@ func (s *Store) AtomicRotateJWKS(ctx context.Context, retireKIDs []string, demot
 	return tx.Commit(ctx)
 }
 
-// scan helpers + small mapping utilities live in postgres_v20_helpers.go to
-// keep this file under the 500 LOC budget.
+// Scan helpers and small mappers live in postgres_v20_helpers.go to stay under the LOC budget.

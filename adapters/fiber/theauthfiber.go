@@ -1,18 +1,6 @@
-// Package theauthfiber adapts theauth-go middleware and routes to Fiber v2
-// through Fiber's net/http adaptor.
-//
-// It wraps the net/http middleware of a *theauth.TheAuth as native
-// fiber.Handler values and exposes the authenticated user, session and API
-// token principal through fiber accessors. Error responses are written by
-// theauth itself, so Config.ErrorResponder (when set) shapes them exactly as
-// it does under net/http; the adapter never writes its own error bodies.
-//
-// Buffering caveat: Fiber runs on fasthttp, and the adaptor executes the
-// net/http handler against an in-memory response writer, then copies the
-// result. Responses from Mount and from theauth middleware are therefore
-// fully buffered: http.Flusher based streaming (SSE, long polling) is not
-// available through this adapter. Serve streaming routes with your own Fiber
-// handlers and use only Authn, RequireAuth and RequireAbility in front.
+// Package theauthfiber adapts theauth-go middleware and routes to Fiber v2 through Fiber's net/http adaptor.
+// Responses from Mount and theauth middleware are fully buffered, so SSE and long polling need
+// your own Fiber handlers; put only Authn, RequireAuth and RequireAbility in front of them.
 package theauthfiber
 
 import (
@@ -51,11 +39,9 @@ func Principal(c *fiber.Ctx) (*theauth.Principal, bool) {
 	return theauth.PrincipalFromContext(ctxOf(c))
 }
 
-// Mount serves every theauth route (auth, oauth and well-known) under prefix,
-// for example Mount(a, app, "/api") serves /api/auth/signin. The routes keep
-// Config.PathPrefix below prefix. An empty prefix mounts /auth, /oauth and
-// /.well-known at the router root. Responses are buffered (see the package
-// comment).
+// Mount serves every theauth route (auth, oauth and well-known) under prefix, e.g.
+// Mount(a, app, "/api") serves /api/auth/signin. The routes keep Config.PathPrefix below prefix.
+// An empty prefix mounts at the router root.
 func Mount(a *theauth.TheAuth, r fiber.Router, prefix string) {
 	prefix = strings.TrimRight(prefix, "/")
 	h := http.Handler(a.Handler())
@@ -70,10 +56,8 @@ func Mount(a *theauth.TheAuth, r fiber.Router, prefix string) {
 
 func ctxOf(c *fiber.Ctx) context.Context { return c.UserContext() }
 
-// wrap turns a net/http middleware into a fiber handler. The context the
-// middleware attached (user, session) becomes the Fiber user context before
-// the next handler runs. A middleware that wrote a response (a 401, say) is
-// copied to the Fiber response and the chain stops.
+// wrap turns a net/http middleware into a fiber handler, carrying the attached user and session
+// into the Fiber context.
 func wrap(mw func(http.Handler) http.Handler) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		var next context.Context
@@ -86,9 +70,7 @@ func wrap(mw func(http.Handler) http.Handler) fiber.Handler {
 		if next == nil {
 			return nil
 		}
-		// Reset the placeholder 200 the buffered writer produced so the
-		// downstream handler owns the response; headers set by the
-		// middleware (refreshed cookies) are kept.
+		// Reset the buffered writer's placeholder 200 so the downstream handler owns the response.
 		c.Response().ResetBody()
 		c.SetUserContext(next)
 		return c.Next()

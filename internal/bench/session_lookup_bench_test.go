@@ -8,10 +8,8 @@ import (
 	"testing"
 )
 
-// BenchmarkSessionLookup measures the per-request cost of validating a
-// session cookie through the Authn middleware path. Runs against the
-// in-memory adapter so the number is the floor (real Postgres adds a
-// round trip).
+// BenchmarkSessionLookup measures session cookie validation through Authn on the in-memory adapter,
+// which gives the floor cost.
 func BenchmarkSessionLookup(b *testing.B) {
 	a, h := newBenchRouter(b)
 

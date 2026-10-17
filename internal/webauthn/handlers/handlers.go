@@ -1,10 +1,5 @@
-// Package handlers exposes the /auth/webauthn/* HTTP endpoints for
-// passkey registration, authentication, and credential management.
-//
-// Extracted from root handlers_webauthn.go in PR E of the 2026-06
-// architecture reorg. The root *theauth.TheAuth constructs a Handler
-// here and Mount is invoked from a thin mountWebAuthn forwarder so
-// the public surface and route shapes are unchanged.
+// Package handlers exposes the /auth/webauthn/* endpoints for passkey registration, login and credential
+// management.
 package handlers
 
 import (

@@ -35,21 +35,15 @@ import (
 	internalwebauthn "github.com/glincker/theauth-go/v2/internal/webauthn"
 )
 
-// wiring.go holds the config-translation helpers (xxxConfigFromRoot) and
-// the extracted wiring steps called from New(). Split from theauth.go in
-// PR H (2026-06-22) to bring theauth.go below the 500 LOC ceiling. No
-// behaviour change; all functions remain package-private.
+// wiring.go holds the config translation helpers (xxxConfigFromRoot) and the wiring steps called from New.
 
-// samlParsed is the pre-parsed SAML keypair returned by parseSAMLConfig.
-// Bundling cert + key avoids threading two separate return values through
-// New() and wireServices.
+// samlParsed is the pre-parsed SAML keypair, bundled so New and wireServices pass one value.
 type samlParsed struct {
 	cert *x509.Certificate
 	key  *rsa.PrivateKey
 }
 
-// applyConfigDefaults fills in zero-value Config fields with library
-// defaults. Must be called before any validation or wiring.
+// applyConfigDefaults fills zero-value Config fields with library defaults. It must run before validation.
 func applyConfigDefaults(cfg *Config) {
 	applySessionDefaults(cfg)
 	if cfg.SessionTTL == 0 {
@@ -92,9 +86,8 @@ func applyConfigDefaults(cfg *Config) {
 	}
 }
 
-// validateConfig checks operator-supplied fields that cannot be covered by
-// defaults. Returns the pre-parsed SAML keypair (non-nil only when
-// cfg.SAML != nil), the parsed provider map, and the pre-hashed DCR tokens.
+// validateConfig checks operator-supplied fields that defaults cannot cover. It returns the parsed
+// providers, the SAML keypair (set only when SAML is configured) and the pre-hashed DCR tokens.
 func validateConfig(cfg *Config) (providers map[string]Provider, sp samlParsed, dcrTokenHashes [][32]byte, err error) {
 	if err := selectStorage(cfg); err != nil {
 		return nil, samlParsed{}, nil, err
@@ -107,7 +100,7 @@ func validateConfig(cfg *Config) (providers map[string]Provider, sp samlParsed, 
 		return nil, samlParsed{}, nil, errors.New("theauth: Config.PathPrefix " + strconv.Quote(cfg.PathPrefix) + ": " + err.Error())
 	}
 
-	// M3 (security audit 2026-06-21): warn when SecureCookie is false.
+	// SecureCookie false is a security warning (security audit M3).
 	if !cfg.SecureCookie && !cfg.SuppressSecureCookieWarning && !strings.HasPrefix(strings.ToLower(cfg.BaseURL), "https://") {
 		slog.Warn("SecureCookie: false with a non-https BaseURL; cookies are Secure only when the request arrives over TLS or via a trusted proxy. Set Config.SuppressSecureCookieWarning=true to suppress this warning in dev.")
 	}
@@ -115,7 +108,6 @@ func validateConfig(cfg *Config) (providers map[string]Provider, sp samlParsed, 
 		slog.Warn("TrustedProxies is empty: behind a reverse proxy every client shares one per-IP rate-limit bucket. List the proxy CIDRs in Config.TrustedProxies, or set Config.SuppressTrustedProxiesWarning=true if exposed directly.")
 	}
 
-	// OAuth providers: need a 32-byte key, unique names.
 	providers = map[string]Provider{}
 	if len(cfg.Providers) > 0 || cfg.ProviderResolver != nil {
 		if len(cfg.EncryptionKey) != crypto.AESKeyLen {
@@ -136,7 +128,6 @@ func validateConfig(cfg *Config) (providers map[string]Provider, sp samlParsed, 
 		}
 	}
 
-	// WebAuthn: RPID + at least one origin required.
 	if cfg.WebAuthn != nil {
 		if cfg.WebAuthn.RPID == "" {
 			return nil, samlParsed{}, nil, errors.New("theauth: Config.WebAuthn.RPID is required")
@@ -146,7 +137,6 @@ func validateConfig(cfg *Config) (providers map[string]Provider, sp samlParsed, 
 		}
 	}
 
-	// TOTP: encryption key + issuer required.
 	if cfg.TOTP != nil {
 		if len(cfg.EncryptionKey) != crypto.AESKeyLen {
 			return nil, samlParsed{}, nil, errors.New("theauth: Config.EncryptionKey must be 32 bytes when TOTP is configured")
@@ -156,7 +146,6 @@ func validateConfig(cfg *Config) (providers map[string]Provider, sp samlParsed, 
 		}
 	}
 
-	// v0.7: SAML and SCIM require Organizations.
 	if cfg.SCIM != nil && cfg.Organizations == nil {
 		return nil, samlParsed{}, nil, ErrSCIMRequiresOrganizations
 	}
@@ -164,7 +153,6 @@ func validateConfig(cfg *Config) (providers map[string]Provider, sp samlParsed, 
 		return nil, samlParsed{}, nil, ErrSAMLRequiresOrganizations
 	}
 
-	// SAML: parse SP cert + key.
 	if cfg.SAML != nil {
 		var parseErr error
 		sp, parseErr = parseSAMLConfig(cfg.SAML)
@@ -173,12 +161,10 @@ func validateConfig(cfg *Config) (providers map[string]Provider, sp samlParsed, 
 		}
 	}
 
-	// v1.0 RBAC + Admin.
 	if cfg.Admin != nil && cfg.RBAC == nil {
 		return nil, samlParsed{}, nil, ErrAdminRequiresRBAC
 	}
 
-	// v2.0 authorization server.
 	if cfg.AuthorizationServer != nil {
 		if err := validateASConfig(cfg.AuthorizationServer, cfg.EncryptionKey); err != nil {
 			return nil, samlParsed{}, nil, err
@@ -193,7 +179,6 @@ func validateConfig(cfg *Config) (providers map[string]Provider, sp samlParsed, 
 		}
 	}
 
-	// v2.0 agent identity + delegation.
 	if cfg.AgentIdentity != nil {
 		if cfg.AuthorizationServer == nil {
 			return nil, samlParsed{}, nil, ErrAgentRequiresAS
@@ -206,7 +191,7 @@ func validateConfig(cfg *Config) (providers map[string]Provider, sp samlParsed, 
 		return nil, samlParsed{}, nil, ErrAccountUXRequiresAgents
 	}
 
-	// Security audit H1 (2026-06-20): pre-hash DCR registration tokens.
+	// Security audit H1: DCR registration tokens are hashed up front so the plaintext is dropped.
 	if cfg.AuthorizationServer != nil && len(cfg.AuthorizationServer.RegistrationTokens) > 0 {
 		dcrTokenHashes = make([][32]byte, 0, len(cfg.AuthorizationServer.RegistrationTokens))
 		for _, tok := range cfg.AuthorizationServer.RegistrationTokens {
@@ -224,9 +209,8 @@ func validateConfig(cfg *Config) (providers map[string]Provider, sp samlParsed, 
 	return providers, sp, dcrTokenHashes, nil
 }
 
-// parseSAMLConfig decodes and parses the PEM-encoded SP cert and private key
-// from cfg. Accepts PKCS1 RSA, PKCS8 RSA. Returns an error for unsupported
-// key types or malformed PEM.
+// parseSAMLConfig decodes and parses the PEM SP certificate and private key. It accepts PKCS1 and
+// PKCS8 RSA keys only.
 func parseSAMLConfig(cfg *SAMLConfig) (samlParsed, error) {
 	if len(cfg.SPCertificatePEM) == 0 {
 		return samlParsed{}, errors.New("theauth: Config.SAML.SPCertificatePEM is required")
@@ -246,8 +230,7 @@ func parseSAMLConfig(cfg *SAMLConfig) (samlParsed, error) {
 	if keyBlock == nil {
 		return samlParsed{}, errors.New("theauth: Config.SAML.SPPrivateKeyPEM is not valid PEM")
 	}
-	// Accept PKCS1 RSA, PKCS8 RSA, and EC-as-PKCS8 (Microsoft tooling
-	// often emits PKCS8 even for RSA keys); other key types reject.
+	// PKCS8 is accepted because Microsoft tooling often emits it even for RSA keys.
 	var key *rsa.PrivateKey
 	switch keyBlock.Type {
 	case "RSA PRIVATE KEY":
@@ -272,12 +255,9 @@ func parseSAMLConfig(cfg *SAMLConfig) (samlParsed, error) {
 	return samlParsed{cert: c, key: key}, nil
 }
 
-// wireServices constructs and wires all internal services onto a. Called once
-// from New after the TheAuth struct is allocated. Returns any constructor
-// error (password.NewService, webauthn.NewService, as.Start).
+// wireServices constructs and wires the internal services onto a. It runs once from New, after allocation.
 func wireServices(a *TheAuth, cfg Config, providers map[string]Provider, sp samlParsed) error {
-	// Wire audit first so subsequent constructors that take an audit.Emitter
-	// receive the live writer.
+	// Audit is wired first so constructors taking an audit.Emitter receive the live writer.
 	if cfg.Audit != nil {
 		internalSinks := make([]internalaudit.Sink, len(cfg.Audit.Sinks))
 		for i, s := range cfg.Audit.Sinks {
@@ -298,7 +278,6 @@ func wireServices(a *TheAuth, cfg Config, providers map[string]Provider, sp saml
 		a.auditSvc.SetHooks(a.hooks)
 	}
 
-	// v2.0 authorization server + agent identity + delegation.
 	if cfg.AuthorizationServer != nil {
 		oss := cfg.storageRaw.(OAuthServerStorage)
 		var policy *internalas.AgentPolicy
@@ -373,7 +352,6 @@ func wireServices(a *TheAuth, cfg Config, providers map[string]Provider, sp saml
 		}
 	}
 
-	// Core services (session, magic link, SCIM, organizations, RBAC).
 	permCatalog, permIndex, defaultSeeds := a.permCatalog, a.permIndex, a.defaultRoleSeeds
 	a.sessionSvc = session.New(cfg.Storage, cfg.SessionTTL)
 	a.sx.install(a.sessionSvc)
@@ -383,8 +361,7 @@ func wireServices(a *TheAuth, cfg Config, providers map[string]Provider, sp saml
 	a.orgsSvc = organizations.New(cfg.Storage, orgsConfigFromRoot(cfg.Organizations))
 	a.rbacSvc = rbac.New(cfg.Storage, rbacConfigFromValidated(cfg.RBAC, permCatalog, permIndex, defaultSeeds), a)
 
-	// High-complexity services: TOTP before password (password depends on
-	// totpSvc as its PendingTOTPIssuer).
+	// TOTP is constructed before password, which depends on it as its PendingTOTPIssuer.
 	a.throttle = cfg.LoginThrottle.limiter()
 	var gate *bootstrap.Gate
 	if cfg.Bootstrap != nil {
@@ -457,8 +434,7 @@ func wireServices(a *TheAuth, cfg Config, providers map[string]Provider, sp saml
 	}
 	a.samlSvc = internalsaml.NewService(cfg.Storage, a.sessionSvc, a, samlCfg)
 
-	// Wire OAuth provider service. The GC goroutine is started inside
-	// internaloauth.New so there is no separate Start call needed.
+	// The OAuth GC goroutine starts inside internal/oauth, so no separate Start call is needed.
 	if len(providers) > 0 || cfg.ProviderResolver != nil {
 		var onConflict func(ctx context.Context, p internaloauth.ConflictPayload) (string, error)
 		if cfg.LifecycleHooks != nil && cfg.LifecycleHooks.OnOAuthConflict != nil {
@@ -492,12 +468,10 @@ func wireServices(a *TheAuth, cfg Config, providers map[string]Provider, sp saml
 		a.oauthSvc.SetLookup(a.providerReg)
 	}
 
-	// Wire identity-linking service (v2.3). Always constructed so that the
-	// service methods are available regardless of whether AccountUX is
-	// enabled; mountAccount gates whether the HTTP endpoints are exposed.
+	// Identity linking is always constructed; mountAccount decides whether its HTTP endpoints are exposed.
 	a.identityLinkSvc = identitylink.New(a.storage, a.encryptionKey, a)
 
-	// Start background loops. Every goroutine has a matching Stop in Close.
+	// Every background goroutine started here has a matching stop in Close.
 	if a.auditSvc != nil {
 		if err := a.auditSvc.Start(); err != nil {
 			return err
@@ -514,11 +488,8 @@ func wireServices(a *TheAuth, cfg Config, providers map[string]Provider, sp saml
 	return nil
 }
 
-// auditSinkAdapter bridges the public AuditSink interface (which uses the
-// root-package type alias AuditEvent = models.AuditEvent) to the
-// internalaudit.Sink interface (which names models.AuditEvent directly).
-// Because AuditEvent is a type alias, the slice types are identical at
-// compile time; the adapter is purely a nominal bridge.
+// auditSinkAdapter bridges AuditSink to internal/audit.Sink. AuditEvent is an alias, so the bridge
+// is purely nominal.
 type auditSinkAdapter struct{ inner AuditSink }
 
 func (a auditSinkAdapter) Stream(ctx context.Context, batch []models.AuditEvent) error {
@@ -527,21 +498,15 @@ func (a auditSinkAdapter) Stream(ctx context.Context, batch []models.AuditEvent)
 
 func (a auditSinkAdapter) Name() string { return a.inner.Name() }
 
-// oauthSessionAdapter adapts *session.Service to the internaloauth.SessionIssuer
-// interface without creating an import cycle. session.Service.Issue has the
-// right signature already; this thin wrapper satisfies the interface declared
-// in internal/oauth.
+// oauthSessionAdapter satisfies internal/oauth.SessionIssuer with *session.Service without an import cycle.
 type oauthSessionAdapter struct{ svc *session.Service }
 
 func (a oauthSessionAdapter) Issue(ctx context.Context, user models.User, userAgent, ip string) (string, models.Session, error) {
 	return a.svc.Issue(ctx, user, userAgent, ip)
 }
 
-// xxxConfigFromRoot translators
-
-// totpConfigFromRoot translates the root TOTPConfig pointer into the
-// internal/totp Config the extracted service consumes. Returns nil when
-// the root config is nil so the service's "disabled" branch fires.
+// totpConfigFromRoot translates TOTPConfig into the internal/totp Config. Nil input yields nil,
+// which disables the service.
 func totpConfigFromRoot(c *TOTPConfig) *internaltotp.Config {
 	if c == nil {
 		return nil
@@ -552,10 +517,8 @@ func totpConfigFromRoot(c *TOTPConfig) *internaltotp.Config {
 	}
 }
 
-// webauthnConfigFromRoot translates the root WebAuthnConfig pointer into
-// the internal/webauthn Config the extracted service consumes. Returns
-// nil when the root config is nil so the service's "disabled" branch
-// fires (every entry point returns "WebAuthn not configured").
+// webauthnConfigFromRoot translates WebAuthnConfig into the internal/webauthn Config. Nil input
+// yields nil, which disables it.
 func webauthnConfigFromRoot(c *WebAuthnConfig) *internalwebauthn.Config {
 	if c == nil {
 		return nil
@@ -579,10 +542,8 @@ func webauthnConfigFromRoot(c *WebAuthnConfig) *internalwebauthn.Config {
 	}
 }
 
-// samlConfigFromRoot translates the root SAMLConfig pointer plus the
-// pre-parsed cert/key into the internal/saml Config the extracted service
-// consumes. Returns nil when the root config is nil so the service's
-// "disabled" branch fires.
+// samlConfigFromRoot translates SAMLConfig and the parsed keypair into the internal/saml Config.
+// Nil input yields nil.
 func samlConfigFromRoot(c *SAMLConfig, cert *x509.Certificate, key *rsa.PrivateKey) *internalsaml.Config {
 	if c == nil {
 		return nil
@@ -595,9 +556,7 @@ func samlConfigFromRoot(c *SAMLConfig, cert *x509.Certificate, key *rsa.PrivateK
 	}
 }
 
-// scimConfigFromRoot translates the root SCIMConfig pointer into the
-// internal/scim Config the extracted service consumes. Returns nil when
-// the root config is nil so the service's "disabled" branch fires.
+// scimConfigFromRoot translates SCIMConfig into the internal/scim Config. Nil input yields nil.
 func scimConfigFromRoot(c *SCIMConfig) *internalscim.Config {
 	if c == nil {
 		return nil
@@ -605,9 +564,8 @@ func scimConfigFromRoot(c *SCIMConfig) *internalscim.Config {
 	return &internalscim.Config{RequireHTTPS: c.RequireHTTPS, MaxPageSize: c.MaxPageSize}
 }
 
-// orgsConfigFromRoot translates the root OrganizationsConfig pointer into
-// the internal/organizations Config. Returns nil when the root config is
-// nil so the service's "disabled" branch fires.
+// orgsConfigFromRoot translates OrganizationsConfig into the internal/organizations Config. Nil
+// input yields nil.
 func orgsConfigFromRoot(c *OrganizationsConfig) *organizations.Config {
 	if c == nil {
 		return nil
@@ -615,11 +573,9 @@ func orgsConfigFromRoot(c *OrganizationsConfig) *organizations.Config {
 	return &organizations.Config{}
 }
 
-// asConfigFromRoot translates the root AuthorizationServerConfig into
-// the internal/as Config the extracted service consumes. The root and
-// internal structs intentionally have identical field sets; the
-// translation lives here so the internal package does not import root.
-// Called once at New() time after validateASConfig has applied defaults.
+// asConfigFromRoot translates AuthorizationServerConfig into the internal/as Config. The field sets
+// match; the translation lives here so internal/as does not import root. It runs once in New, after
+// validateASConfig.
 func asConfigFromRoot(c *AuthorizationServerConfig) internalas.Config {
 	if c == nil {
 		return internalas.Config{}
@@ -667,9 +623,7 @@ func asConfigFromRoot(c *AuthorizationServerConfig) internalas.Config {
 	}
 }
 
-// jwtBearerStorageAdapter bridges the root JWTBearerStorage to the
-// internal/as.JWTBearerStorageAdapter interface. A thin wrapper is needed
-// because the root and internal interfaces live in different packages.
+// jwtBearerStorageAdapter bridges the root JWTBearerStorage to the internal/as interface.
 type jwtBearerStorageAdapter struct {
 	s JWTBearerStorage
 }
@@ -678,11 +632,8 @@ func (a jwtBearerStorageAdapter) InsertJTI(ctx context.Context, jti string, expi
 	return a.s.InsertJTI(ctx, jti, expiresAt)
 }
 
-// rbacConfigFromValidated produces the internal/rbac Config from the
-// already-validated catalog, index, and default-role seeds. Returns nil
-// when the root RBAC config is nil so the service's "disabled" branch
-// fires (every method returns models.ErrRBACDisabled, matching the legacy
-// root behavior).
+// rbacConfigFromValidated builds the internal/rbac Config from the validated catalog, index and
+// seeds. Nil RBAC yields nil, and every method then returns ErrRBACDisabled.
 func rbacConfigFromValidated(cfg *RBACConfig, catalog []Permission, index map[string]Permission, seeds []RoleSeed) *rbac.Config {
 	if cfg == nil {
 		return nil

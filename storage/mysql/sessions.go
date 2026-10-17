@@ -149,9 +149,7 @@ func (s *Store) SessionByTokenHash(ctx context.Context, hash []byte) (*theauth.S
 	return &sess, nil
 }
 
-// SessionByID is the public counterpart of the internal sessionByID helper
-// already used by CreateSession, exposed to satisfy the Storage interface's
-// SessionByID method.
+// SessionByID returns the session with the given ID.
 func (s *Store) SessionByID(ctx context.Context, id theauth.ULID) (*theauth.Session, error) {
 	return s.sessionByID(ctx, id)
 }
@@ -205,11 +203,8 @@ func (s *Store) SetSessionActiveOrganization(ctx context.Context, sessionID thea
 	return s.requireSessionRow(ctx, res, sessionID)
 }
 
-// requireSessionRow maps a zero RowsAffected to ErrNotFound only when the
-// session truly does not exist. MySQL counts changed rows, not matched rows
-// (unless the DSN sets clientFoundRows=true, which this store does not
-// control), so re-applying an identical value reports 0 and must be a no-op
-// success, as it is on the Postgres and SQLite stores.
+// requireSessionRow maps zero RowsAffected to ErrNotFound only when the session truly does not
+// exist. MySQL counts changed rows, so re-applying an identical value must succeed.
 func (s *Store) requireSessionRow(ctx context.Context, res sql.Result, id theauth.ULID) error {
 	n, err := res.RowsAffected()
 	if err == nil && n > 0 {

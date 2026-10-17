@@ -10,7 +10,6 @@ import (
 
 // as_opaque.go: opaque (reference) access tokens over migration 0026.
 
-// InsertOpaqueAccessToken implements theauth.OpaqueTokenStorage.
 func (s *Store) InsertOpaqueAccessToken(ctx context.Context, t theauth.OpaqueAccessToken) error {
 	_, err := s.db.ExecContext(ctx, s.q(`
 INSERT INTO theauth_oauth_opaque_access_tokens (hash, jti, client_id, claims, issued_at, expires_at)
@@ -19,7 +18,6 @@ VALUES (?, ?, ?, ?, ?, ?)`),
 	return wrap("insert opaque access token", err)
 }
 
-// OpaqueAccessTokenByHash implements theauth.OpaqueTokenStorage.
 func (s *Store) OpaqueAccessTokenByHash(ctx context.Context, hash []byte) (*theauth.OpaqueAccessToken, error) {
 	var (
 		out             theauth.OpaqueAccessToken

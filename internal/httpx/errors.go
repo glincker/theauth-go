@@ -1,9 +1,5 @@
-// Package httpx hosts shared HTTP helpers used by extracted handler
-// packages: the canonical sentinel-error to status mapping, the
-// {code,message} JSON error body, the URL-param ULID parser, and the
-// no-trust client IP shim. Extracted from root handlers.go in PR E of
-// the 2026-06 architecture reorg so internal handler packages do not
-// each re-implement these.
+// Package httpx holds shared HTTP helpers for the extracted handler packages: the error to status
+// mapping, the {code,message} body, the ULID path parser and the client IP shim.
 package httpx
 
 import (
@@ -19,9 +15,7 @@ import (
 	"github.com/oklog/ulid/v2"
 )
 
-// ErrToHTTP maps any error a service layer returns to the canonical
-// HTTP status the legacy root handlers emitted. Mirrors the root
-// errToHTTP behavior verbatim so the public surface is unchanged.
+// ErrToHTTP maps a service error to its canonical HTTP status, matching the legacy root behavior.
 func ErrToHTTP(w http.ResponseWriter, err error) {
 	var te *models.TheAuthError
 	if errors.As(err, &te) {
@@ -101,9 +95,7 @@ func WriteJSONError(w http.ResponseWriter, status int, code, message string) {
 	}{Code: code, Message: message})
 }
 
-// ParseULIDParam parses a Crockford-base32 ULID from a URL path
-// parameter. Returns an error on any malformed input; callers map that
-// to 400.
+// ParseULIDParam parses a Crockford base32 ULID from a path parameter. Callers map an error to 400.
 func ParseULIDParam(s string) (models.ULID, error) {
 	return ulid.Parse(s)
 }
@@ -126,9 +118,7 @@ func WriteJSON(w http.ResponseWriter, status int, v any) {
 	_ = json.NewEncoder(w).Encode(v)
 }
 
-// PathULID parses a chi URL path parameter into a ULID. On parse
-// failure it writes a 400 plain-text response and returns ok=false.
-// Mirrors the legacy root pathULID exactly.
+// PathULID parses a chi path parameter as a ULID. On failure it writes a 400 and returns ok=false.
 func PathULID(w http.ResponseWriter, r *http.Request, name string) (models.ULID, bool) {
 	raw := chi.URLParam(r, name)
 	id, err := ulid.Parse(raw)
@@ -139,9 +129,7 @@ func PathULID(w http.ResponseWriter, r *http.Request, name string) (models.ULID,
 	return id, true
 }
 
-// ParseULIDPath is the silent variant of PathULID: it does not write a
-// response on failure, leaving the caller free to emit a structured
-// problem+json body. Mirrors the legacy root parseULIDPath.
+// ParseULIDPath is the silent PathULID, which leaves the response to the caller.
 func ParseULIDPath(r *http.Request, name string) (models.ULID, bool) {
 	s := chi.URLParam(r, name)
 	if s == "" {

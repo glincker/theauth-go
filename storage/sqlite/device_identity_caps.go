@@ -9,8 +9,7 @@ import (
 	"github.com/glincker/theauth-go/v2"
 )
 
-// device_identity_caps.go: DeviceIdentityStorage (registered constrained
-// devices and single-use join tokens) over migration 0011.
+// device_identity_caps.go: registered devices and single-use join tokens over migration 0011.
 
 var _ theauth.DeviceIdentityStorage = (*Store)(nil)
 

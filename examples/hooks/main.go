@@ -1,11 +1,6 @@
-// hooks is a runnable demo of Config.LifecycleHooks. It mounts the full /auth/* route set with TOTP enabled and wires every observe-only hook to a structured log line.
-//
-// POST /auth/signup -> OnSignup(password), OnSignin is not fired
-// POST /auth/signin -> OnSignin
-// POST /auth/totp/enroll/* -> OnMFAEnabled(totp) when enrollment is confirmed
-// POST /auth/totp/verify -> OnSignin (the second factor completes the sign-in)
-//
-// Passkey login, SAML, magic link and OAuth callback fire OnSignin the same way. Hooks run after the action committed, so they cannot veto it. A returned error is logged and reported to OnHookError, and the request still succeeds. Use OnHookError to alert instead of only logging.
+// Command hooks demos Config.LifecycleHooks: /auth/* routes with TOTP enabled and every observe-only
+// hook logging a structured line. Hooks run after the action commits, so they cannot veto it.
+// Signup fires OnSignup, signin and TOTP verify fire OnSignin, and enrollment fires OnMFAEnabled.
 package main
 
 import (
@@ -31,15 +26,12 @@ func main() {
 		EncryptionKey: key,
 		TOTP:          &theauth.TOTPConfig{Issuer: "TheAuth Hooks Demo"},
 		LifecycleHooks: &theauth.LifecycleHooks{
-			// Provision per-user resources here: a tenant row, a Stripe
-			// customer, a welcome email. method says which credential path
-			// created the account.
+			// Provision per-user resources here (tenant row, billing customer, welcome email).
 			OnSignup: func(ctx context.Context, u *theauth.User, method theauth.SignupMethod) error {
 				slog.InfoContext(ctx, "hook: signup", "user", u.ID.String(), "method", string(method))
 				return nil
 			},
-			// Fires once per completed sign-in, whatever the method. It does
-			// not fire for the pending second-factor intermediate.
+			// Fires once per completed sign-in, not for the pending second-factor step.
 			OnSignin: func(ctx context.Context, u *theauth.User, s *theauth.Session) error {
 				slog.InfoContext(ctx, "hook: signin", "user", u.ID.String(), "session", s.ID.String())
 				return nil
@@ -50,16 +42,14 @@ func main() {
 			},
 			OnMFAEnabled: func(ctx context.Context, u *theauth.User, kind theauth.MFAKind) error {
 				slog.InfoContext(ctx, "hook: mfa enabled", "user", u.ID.String(), "kind", string(kind))
-				// Returning an error here would be logged and reported to
-				// OnHookError, but would not undo the enrollment.
+				// Returning an error logs it and reports it to OnHookError; enrollment is not undone.
 				return nil
 			},
 			OnOrgSwitch: func(ctx context.Context, u *theauth.User, orgID string) error {
 				slog.InfoContext(ctx, "hook: org switch", "user", u.ID.String(), "org", orgID)
 				return nil
 			},
-			// OnHookError sees every hook error and recovered panic, in
-			// addition to the default slog line. Send it to your alerting.
+			// OnHookError sees every hook error and recovered panic; send it to alerting.
 			OnHookError: func(ctx context.Context, hook string, err error) {
 				slog.ErrorContext(ctx, "hook failed", "hook", hook, "err", err.Error())
 			},

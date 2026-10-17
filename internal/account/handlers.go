@@ -1,13 +1,5 @@
-// Package account exposes the /account/* end-user self-service
-// endpoints (agents the user owns and delegation grants the user has
-// issued). Extracted from root handlers_account.go in PR F of the
-// 2026-06 architecture reorg. Collapsed from internal/account/handlers
-// into internal/account in PR H (2026-06-22): the handlers/ subdir
-// was the only child so the extra nesting added no value.
-//
-// Every route is session-gated via the RequireAuth middleware
-// supplied at Mount time; no special permission is required because
-// every action is scoped to the calling user's own records.
+// Package account serves the /account/* self-service endpoints: the agents and delegation grants a
+// user owns. Every route is session gated, and every action is scoped to the caller's own records.
 package account
 
 import (
@@ -24,9 +16,7 @@ import (
 	"github.com/oklog/ulid/v2"
 )
 
-// AgentService is the subset of the agent service the account
-// handler needs. Implemented by root *TheAuth so this package does
-// not import root.
+// AgentService is the subset of the agent service the account handler needs. Root *TheAuth implements it.
 type AgentService interface {
 	ListAgentsByOwner(ctx context.Context, owner models.AgentOwner) ([]models.Agent, error)
 	CreateAgent(ctx context.Context, in models.CreateAgentInput) (models.Agent, models.AgentSecret, error)
@@ -74,9 +64,8 @@ func New(agents AgentService, delegations DelegationService, userFromCtx UserFro
 	return &Handler{agents: agents, delegations: delegations, userFromCtx: userFromCtx}
 }
 
-// WithIdentityLink attaches the identity-linking service to the handler.
-// sessToken is a function that extracts the raw session token from a cookie;
-// oauthInit is optional and enables the /oauth and /oauth/callback routes.
+// WithIdentityLink attaches the identity-linking service. oauthInit is optional and enables the
+// OAuth link routes.
 func (h *Handler) WithIdentityLink(svc IdentityLinkService, sessToken SessionTokenFromRequest, oauthInit OAuthLinkInitiator) *Handler {
 	h.identityLink = svc
 	h.sessionToken = sessToken
@@ -273,9 +262,8 @@ func (h *Handler) revokeDelegation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if grant.UserID != user.ID {
-		// Cross-user revocation is forbidden: only the granting user (or
-		// an org admin via /admin/v1) can revoke. Return 404 to avoid
-		// leaking grant existence.
+		// Cross-user revocation is refused with 404, so grant existence does not leak. Only the granting
+		// user or an org admin may revoke.
 		admin.Write(w, http.StatusNotFound, admin.CodeNotFound, "delegation grant not found", "")
 		return
 	}

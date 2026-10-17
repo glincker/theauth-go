@@ -23,23 +23,17 @@ type ownerTokenRevoker interface {
 	RevokeAPITokensByOwner(ctx context.Context, ownerID models.ULID, at time.Time) (int, error)
 }
 
-// mintedTokenStore is the optional storage surface the cascade uses to void
-// API tokens minted for the agent by MintAgentToken. Those tokens are owned
-// by the delegating user, so the owner revoke above never reaches them.
+// mintedTokenStore is the optional storage surface that voids API tokens minted for the agent by
+// MintAgentToken. Those tokens belong to the delegating user, so the owner revoke never reaches
+// them.
 type mintedTokenStore interface {
 	APITokensByOwner(ctx context.Context, ownerID models.ULID) ([]apitokens.APIToken, error)
 	ListAPITokens(ctx context.Context) ([]apitokens.APIToken, error)
 	RevokeAPIToken(ctx context.Context, id models.ULID, at time.Time) error
 }
 
-// cascadeAgentRevocation voids every delegation grant of the agent, every
-// API token it owns and every agent API token minted for it, then emits one
-// delegation.revoked event per grant (so streams scoped to a grant end), one
-// api_token.revoked event per minted token (so token-scoped streams end) and
-// one agent.cascade.revoked event so agent-scoped streams and caches drop
-// together. Storage without the optional capabilities skips that part. A
-// failure is returned after the remaining steps ran, so the operator can
-// retry (the status change and every revoke are idempotent).
+// cascadeAgentRevocation voids the agent's grants, owned tokens and minted tokens, then emits the
+// revocation events. It is idempotent, so a failed run can be retried.
 func (s *Service) cascadeAgentRevocation(ctx context.Context, ag models.Agent, status, reason string, at time.Time) error {
 	var errs []error
 	grants, gerrs := s.revokeAgentGrants(ctx, ag, status, reason, at)
@@ -106,16 +100,9 @@ type agentTokenLister interface {
 	APITokensByAgentID(ctx context.Context, agentID models.ULID) ([]apitokens.APIToken, error)
 }
 
-// revokeMintedTokens revokes the live agent-kind API tokens minted for ag and
-// returns the number revoked.
-//
-// Tokens that carry ag.ID in AgentID are matched exactly and revoked first.
-// The name-and-owner match below is a fallback for legacy rows minted before
-// the agent id was stored (AgentID is NULL): kind=agent, AgentName == ag.Name
-// and, for a user-owned agent, DelegatedBy == the owner. An organization-owned
-// agent has no single delegating user, so every user's legacy token of that
-// name is revoked (fail closed). The fallback never touches a token whose
-// AgentID is set, so a same-named agent keeps its own tokens.
+// revokeMintedTokens revokes the live agent-kind API tokens minted for ag and returns how many.
+// Tokens matched by AgentID go first. A legacy name-and-owner fallback covers rows with no AgentID
+// and never touches a token whose AgentID is set.
 func (s *Service) revokeMintedTokens(ctx context.Context, ag models.Agent, status string, at time.Time) (int, error) {
 	ts, ok := s.storage.(mintedTokenStore)
 	if !ok {

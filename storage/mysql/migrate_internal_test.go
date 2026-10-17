@@ -2,12 +2,8 @@ package mysql
 
 import "testing"
 
-// TestSplitStatements_KeepsStatementPrecededByCommentLines is a regression
-// test: splitStatements used to check whether the *whole* trimmed segment
-// started with "--" before stripping comment lines, which silently
-// discarded the entire statement whenever a segment began with one or more
-// leading "--" comment lines (exactly the shape of every migration file's
-// header comment followed by its first CREATE TABLE).
+// TestSplitStatements_KeepsStatementPrecededByCommentLines is a regression test: comment-only
+// lines before a statement must not drop it.
 func TestSplitStatements_KeepsStatementPrecededByCommentLines(t *testing.T) {
 	body := "-- header line one\n-- header line two\nCREATE TABLE t (id INT)"
 	got := splitStatements(body)
@@ -38,12 +34,8 @@ func TestSplitStatements_CommentOnlySegmentDropped(t *testing.T) {
 	}
 }
 
-// TestSplitStatements_SemicolonInsideCommentIgnored is a regression test
-// for 0004_webauthn_credentials.up.sql's actual header comment, which
-// contains a semicolon ("-- ... monotonic counter; checked ..."). A
-// naive split-on-";" before comment stripping mistakes that for a
-// statement terminator and corrupts both the preceding and following
-// statement.
+// TestSplitStatements_SemicolonInsideCommentIgnored is a regression test: a semicolon inside a
+// "--" comment is not a statement terminator.
 func TestSplitStatements_SemicolonInsideCommentIgnored(t *testing.T) {
 	body := "-- sign_count is BIGINT for monotonic counter; checked strictly-greater at\n" +
 		"-- application layer for replay detection.\n\n" +

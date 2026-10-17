@@ -13,9 +13,7 @@ import (
 	"github.com/glincker/theauth-go/v2/storage"
 )
 
-// TestMemorySessionAuthLevelDefault confirms CreateSession with an empty
-// AuthLevel field stamps the row as AuthLevelFull, mirroring the Postgres
-// DDL default. Backward compat: pre-v0.5 callers see no behavior change.
+// TestMemorySessionAuthLevelDefault: an empty AuthLevel defaults to full, as in the Postgres DDL.
 func TestMemorySessionAuthLevelDefault(t *testing.T) {
 	s := New()
 	ctx := context.Background()

@@ -14,13 +14,9 @@ import (
 	oklogulid "github.com/oklog/ulid/v2"
 )
 
-// gate.go: per agent IAM policy and rate limit enforcement. The Gate sits in
-// front of every agent token mint (client credentials, token exchange,
-// jwt-bearer) and answers the same question at call time through Authorize.
-//
-// The policy engine is an interface because the policy package imports the
-// root package, so internal code cannot import it. The agentpolicy package
-// provides the engine backed by policy.Evaluator.
+// gate.go enforces per-agent IAM policy and rate limits. It sits in front of every agent token mint
+// and answers the same question at call time through Authorize. The policy engine is an interface
+// because the policy package imports root.
 
 // Policy effects reported by a PolicyEngine.
 const (
@@ -51,9 +47,8 @@ type PolicyDecision struct {
 	// Applies is false when no policy is attached to the agent. The gate then
 	// changes nothing.
 	Applies bool
-	// DenyList is true when the engine runs in deny list mode: only explicit
-	// denies and escalations restrict, and an unmatched action passes. False
-	// means allow list mode, where an unmatched action is refused.
+	// DenyList is true when the engine runs in deny list mode, where only explicit denies restrict.
+	// False means allow list mode.
 	DenyList bool
 	// RateLimit, when non-nil, replaces the gate's configured budget for this
 	// agent.
@@ -92,9 +87,8 @@ func errorClass(err error) string {
 	return ErrClassResolver
 }
 
-// PolicyEngine resolves the policies attached to an agent and evaluates
-// queries against them. A returned error means the policies could not be
-// resolved; the gate then fails closed.
+// PolicyEngine resolves an agent's policies and evaluates queries against them. An error makes the
+// gate fail closed.
 type PolicyEngine interface {
 	Decide(ctx context.Context, ag models.Agent, queries []PolicyQuery) (PolicyDecision, error)
 }
@@ -130,9 +124,8 @@ type Gate struct {
 	def     ratelimit.Window
 }
 
-// NewGate builds a Gate. It returns nil when neither an engine nor a rate
-// limit is configured, so callers can leave the gate unset and keep their
-// behavior unchanged.
+// NewGate builds a Gate. It returns nil when neither an engine nor a rate limit is configured, so
+// callers can leave it unset.
 func NewGate(cfg GateConfig) *Gate {
 	if cfg.Engine == nil && !cfg.RateLimit.Enabled() {
 		return nil
@@ -146,9 +139,8 @@ func NewGate(cfg GateConfig) *Gate {
 	return g
 }
 
-// CheckRate spends one unit of the agent's budget under the limit the agent
-// last used (the configured one until a per agent override has been seen). It
-// returns *models.AgentRateLimitedError when the budget is used up.
+// CheckRate spends one unit of the agent's budget under its current limit and returns
+// *models.AgentRateLimitedError when spent.
 func (g *Gate) CheckRate(ctx context.Context, agentID string) error {
 	if g == nil || g.limiter == nil {
 		return nil
@@ -300,11 +292,9 @@ func (g *Gate) refuse(ctx context.Context, ag models.Agent, req models.AgentMint
 // ErrAgentNotActive is returned by Authorize for an unknown or inactive agent.
 var ErrAgentNotActive = errors.New("theauth: agent not active")
 
-// Authorize answers, at call time, whether the agent may perform action on
-// resource under its attached policies. It spends one unit of the agent's rate
-// budget. With no policy attached it permits the call. It returns
-// *models.AgentPolicyDeniedError on a refusal and *models.AgentRateLimitedError
-// when the budget is used up. Resolver failures and unknown agents fail closed.
+// Authorize answers whether the agent may perform action on resource under its policies, spending
+// one rate unit. With no policy it permits the call. Resolver failures and unknown agents fail
+// closed.
 func (g *Gate) Authorize(ctx context.Context, agentID, action, resource string) error {
 	if g == nil {
 		return nil

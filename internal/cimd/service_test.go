@@ -50,10 +50,7 @@ func (ts *testServer) setHandler(h http.HandlerFunc) {
 	ts.handle = h
 }
 
-// trustingClient returns an http.Client wired to skip TLS verification so
-// httptest.NewTLSServer's self-signed cert is accepted. The Service is
-// instantiated with this client in every test that exercises a network
-// fetch.
+// trustingClient returns an http.Client that accepts the httptest self-signed certificate.
 func trustingClient(timeout time.Duration) *http.Client {
 	return &http.Client{
 		Timeout: timeout,
@@ -362,9 +359,7 @@ func TestLooksLikeCIMD(t *testing.T) {
 	}
 }
 
-// TestCacheRaceWithGC exercises concurrent Resolve + GC sweeps to catch
-// data races under -race. The test runs short of go test timeout but
-// long enough for the GC ticker to fire at least once with a 10ms TTL.
+// TestCacheRaceWithGC runs Resolve and GC sweeps concurrently, to catch data races under -race.
 func TestCacheRaceWithGC(t *testing.T) {
 	t.Parallel()
 	ts := newTestServer(t, nil)
@@ -378,9 +373,7 @@ func TestCacheRaceWithGC(t *testing.T) {
 		CacheTTL:    5 * time.Millisecond,
 		HTTPClient:  trustingClient(2 * time.Second),
 	}, nil)
-	// Drive the GC loop manually instead of relying on the 60s
-	// production ticker; the ticker would never fire inside test
-	// duration. Equivalent code, much faster.
+	// The GC loop is driven by hand, since the 60s production ticker would not fire within the test.
 	stop := make(chan struct{})
 	done := make(chan struct{})
 	go func() {

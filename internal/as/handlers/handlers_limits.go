@@ -1,8 +1,7 @@
 package handlers
 
-// handlers_limits.go: per-IP and per-client request limits for the token,
-// revoke, introspect, PAR, bc-authorize and device_authorization endpoints,
-// plus the 503 mapping for the Argon2id concurrency cap.
+// handlers_limits.go applies per-IP and per-client limits to the token, revoke, introspect, PAR,
+// bc-authorize and device endpoints.
 
 import (
 	"errors"
@@ -22,9 +21,8 @@ const (
 	maxLimitedBody = 1 << 16
 )
 
-// SetClientIP installs the function used to derive the client address for
-// rate limiting. Root passes one that honors Config.TrustedProxies. The
-// default is the connection address, which never trusts forwarded headers.
+// SetClientIP installs the function that derives the client address for rate limiting. The default
+// is the connection address.
 func (h *Handler) SetClientIP(fn func(*http.Request) string) {
 	if fn != nil {
 		h.clientIP = fn
@@ -38,10 +36,8 @@ func (h *Handler) ipOf(r *http.Request) string {
 	return ratelimit.RemoteAddrHost(r)
 }
 
-// limited wraps an endpoint with the configured request limits. It parses the
-// form (body capped at 64 KiB) so it can read client_id, then hands the
-// already-parsed request on; handlers that call ParseForm again see the cached
-// values.
+// limited wraps an endpoint with the request limits. It parses the form first (body capped at 64
+// KiB) so client_id is readable.
 func (h *Handler) limited(next http.Handler) http.Handler {
 	cfg := h.svc.Cfg.RateLimits
 	if cfg == nil || (cfg.PerIPPerMinute < 0 && cfg.PerClientPerMinute < 0) {
@@ -63,8 +59,7 @@ func (h *Handler) limited(next http.Handler) http.Handler {
 		}
 		if cfg.PerClientPerMinute > 0 {
 			r.Body = http.MaxBytesReader(w, r.Body, maxLimitedBody)
-			// ParseForm caches its result, so a parse error must be answered
-			// here: the handler's own ParseForm would see an empty form.
+			// ParseForm caches its result, so a parse error must be answered here, not by the handler's own ParseForm.
 			if err := r.ParseForm(); err != nil {
 				writeOAuthError(w, http.StatusBadRequest, oauthErrInvalidRequest, "malformed form")
 				return
@@ -103,10 +98,9 @@ func writeRateLimited(w http.ResponseWriter, retry time.Duration) {
 	writeOAuthError(w, http.StatusTooManyRequests, "rate_limited", "too many requests")
 }
 
-// isBusy reports whether err is the Argon2id concurrency shed.
 func isBusy(err error) bool { return errors.Is(err, models.ErrOAuthServerBusy) }
 
-// writeBusy answers 503 temporarily_unavailable (RFC 6749 section 5.2 style).
+// writeBusy answers 503 temporarily_unavailable.
 func writeBusy(w http.ResponseWriter) {
 	w.Header().Set("Retry-After", "1")
 	writeOAuthError(w, http.StatusServiceUnavailable, "temporarily_unavailable", "server is busy, retry shortly")

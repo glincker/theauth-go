@@ -177,9 +177,8 @@ func TestTSFixtureVerifies(t *testing.T) {
 	}
 }
 
-// TestTSFixtureRebuilt rebuilds every artifact in Go from the TypeScript rows
-// and requires it to equal the TypeScript output exactly. Ed25519 is
-// deterministic, so equal signatures prove the signed bytes match.
+// TestTSFixtureRebuilt rebuilds every artifact from the TypeScript rows and requires exact
+// equality. Equal Ed25519 signatures prove the signed bytes match.
 func TestTSFixtureRebuilt(t *testing.T) {
 	f := loadTS(t)
 	lg := f.log()
@@ -297,9 +296,8 @@ func goRows() StaticSource {
 	return rows
 }
 
-// TestWriteGoFixture regenerates testdata/go-fixture.json when
-// THEAUTH_WRITE_GO_FIXTURE=1. Without the variable it only checks that the
-// committed fixture still verifies in Go.
+// TestWriteGoFixture regenerates testdata/go-fixture.json when THEAUTH_WRITE_GO_FIXTURE=1, and
+// otherwise checks the committed fixture verifies.
 func TestWriteGoFixture(t *testing.T) {
 	ctx := context.Background()
 	lg := Log{Source: goRows(), SaltKey: []byte("go-interop-fixture-key")}

@@ -1,14 +1,6 @@
-// Package admin exposes the /admin/v1 organization-scoped admin
-// API: user / session / role / audit / oauth-account management.
-//
-// Extracted from root handlers_admin.go in PR F of the 2026-06
-// architecture reorg. Collapsed from internal/admin/handlers into
-// internal/admin in PR H (2026-06-22): the handlers/ subdir was the
-// only child so the extra nesting added no value. The agent +
-// delegation admin routes live in a sibling package
-// (internal/agent/handlers) and are mounted as a subtree of the same
-// /admin/v1/organizations/{orgID} route via the mountAgents callback
-// supplied at Mount time.
+// Package admin serves the /admin/v1 organization-scoped API: user, session, role, audit and OAuth
+// account management. The agent and delegation admin routes live in a sibling package and mount as
+// a subtree.
 package admin
 
 import (
@@ -27,9 +19,8 @@ import (
 	"github.com/oklog/ulid/v2"
 )
 
-// Storage is the persistence surface this handler needs. Declared
-// here (not imported from root) so the extracted package does not
-// import root.
+// Storage is the persistence surface this handler needs. It is declared here so the package does
+// not import root.
 type Storage interface {
 	ListUsersByOrganization(ctx context.Context, orgID models.ULID, offset, limit int, f models.SCIMUserFilter) ([]models.User, int, error)
 	UserByID(ctx context.Context, id models.ULID) (*models.User, error)
@@ -78,17 +69,13 @@ type SessionFromCtx func(r *http.Request) (*models.Session, bool)
 // session lacks the named permission.
 type PermissionGate func(permission string) func(http.Handler) http.Handler
 
-// MountAgents wires the sibling internal/agent/handlers Mount onto an
-// existing chi router scoped under /admin/v1/organizations/{orgID}.
-// Supplied by root because the agent handler has its own
-// constructor + service dependencies.
+// MountAgents wires the agent and delegation subroutes under /admin/v1/organizations/{orgID}. Root
+// supplies it.
 type MountAgents func(r chi.Router)
 
-// Lifecycle is the optional account lifecycle surface. When supplied through
-// WithLifecycle, PATCH /users/{userID} accepts mustChangePassword and
-// disabled, and DELETE /users/{userID}/account deletes the account. Disabling
-// and deleting are global, so they require the super_admin role; forcing a
-// password change only requires users:admin.
+// Lifecycle is the optional account lifecycle surface. With it, PATCH /users/{userID} accepts
+// mustChangePassword and disabled, and DELETE /users/{userID}/account deletes the account.
+// Disabling and deleting require super_admin.
 type Lifecycle interface {
 	SetMustChangePassword(ctx context.Context, userID models.ULID, required bool) error
 	DisableUser(ctx context.Context, userID models.ULID) error
@@ -139,11 +126,8 @@ func New(
 	}
 }
 
-// Mount wires the entire /admin/v1 tree under r. requireAuth wraps
-// every route; requirePermission gates each endpoint per the v1.0
-// spec section 9 table. mountAgents (optional, may be nil) attaches
-// the agent + delegation subroutes under the same
-// /organizations/{orgID} scope.
+// Mount wires the whole /admin/v1 tree under r. Each endpoint is gated by requirePermission, per
+// the RBAC seed table.
 func (h *Handler) Mount(r chi.Router, requireAuth func(http.Handler) http.Handler, requirePermission PermissionGate, mountAgents MountAgents) {
 	r.Route(h.pathPrefix, func(r chi.Router) {
 		r.Use(requireAuth)
@@ -743,10 +727,8 @@ func (h *Handler) queryAudit(w http.ResponseWriter, r *http.Request) {
 // oauth accounts
 
 func (h *Handler) listOAuthAccounts(w http.ResponseWriter, _ *http.Request) {
-	// The Storage interface does not expose
-	// ListOAuthAccountsByOrganization or ListOAuthAccountsByUser. v1.0
-	// returns an empty list to honour the contract; operators with
-	// custom adapters can shadow this endpoint.
+	// v1.0 returns an empty list here because Storage has no OAuth account listing. Custom adapters
+	// can shadow this endpoint.
 	type response struct {
 		Accounts []models.OAuthAccount `json:"accounts"`
 	}

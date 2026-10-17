@@ -13,14 +13,9 @@ import (
 	"github.com/glincker/theauth-go/v2/internal/ulid"
 )
 
-// idjag.go: Identity Assertion JWT Authorization Grant
-// (draft-ietf-oauth-identity-assertion-authz-grant). Two halves:
-//
-//   - Issuing: a client exchanges an access token this server issued for a
-//     short-lived ID-JAG addressed to another authorization server
-//     (RFC 8693 with requested_token_type=...:id-jag).
-//   - Redeeming: this server accepts an ID-JAG from a trusted issuer at the
-//     jwt-bearer grant and mints an access token for the named client.
+// idjag.go implements the Identity Assertion JWT Authorization Grant
+// (draft-ietf-oauth-identity-assertion-authz-grant) in two halves: issuing an ID-JAG through token
+// exchange, and redeeming one from a trusted issuer at the jwt-bearer grant.
 
 const (
 	defaultIDJAGTTL = 5 * time.Minute
@@ -29,12 +24,11 @@ const (
 
 // IDJAGConfig enables ID-JAG issuing and redemption.
 type IDJAGConfig struct {
-	// Audiences lists the authorization server issuer URLs an ID-JAG may be
-	// addressed to. Required for issuing; a request for any other audience
-	// is refused so a client cannot mint assertions for arbitrary servers.
+	// Audiences lists the AS issuer URLs an ID-JAG may be addressed to. Requests for any other
+	// audience are refused.
 	Audiences []string
 
-	// TTL is the lifetime of an issued ID-JAG. Default 5 minutes, at most 10.
+	// TTL is the lifetime of an issued ID-JAG (default 5 minutes, at most 10).
 	TTL time.Duration
 }
 
@@ -58,8 +52,8 @@ func validateIDJAG(cfg *Config) error {
 	return nil
 }
 
-// exchangeForIDJAG implements the issuing half. The subject token is an
-// access token this server issued to the authenticated client.
+// exchangeForIDJAG implements the issuing half. The subject token is an access token this server
+// issued to the client.
 func (s *Service) exchangeForIDJAG(ctx context.Context, req TokenExchangeRequest) (resp TokenResponse, err error) {
 	cfg := s.Cfg.IDJAG
 	if cfg == nil || len(cfg.Audiences) == 0 {
@@ -94,7 +88,6 @@ func (s *Service) exchangeForIDJAG(ctx context.Context, req TokenExchangeRequest
 	if subject.ClientID != client.ClientID || strings.HasPrefix(subject.Sub, models.AgentSubjectPrefix) || subject.Sub == "" {
 		return TokenResponse{}, models.ErrSubjectTokenInvalid
 	}
-	// A DPoP-bound subject token may only be exchanged by the key holder.
 	if jkt := cnfJKT(subject.Extra); jkt != "" {
 		proof, perr := s.dpopThumbprintForRequest(TokenRequest{
 			ClientID: client.ClientID, DPoPProof: req.DPoPProof,
@@ -156,8 +149,7 @@ func (s *Service) exchangeForIDJAG(ctx context.Context, req TokenExchangeRequest
 	}, nil
 }
 
-// idJAGSubject verifies the subject token (JWT or opaque) as an unrevoked
-// access token issued by this server.
+// idJAGSubject verifies the subject token as an unrevoked access token issued by this server.
 func (s *Service) idJAGSubject(ctx context.Context, token string, now time.Time) (jwt.Claims, error) {
 	var claims jwt.Claims
 	if strings.Count(token, ".") == 2 {
@@ -182,9 +174,8 @@ func (s *Service) idJAGSubject(ctx context.Context, token string, now time.Time)
 	return claims, nil
 }
 
-// vetIDJAGRedemption applies the extra checks an ID-JAG needs on top of a
-// plain RFC 7523 assertion and returns the scope to grant. The caller has
-// already verified signature, issuer, audience and freshness.
+// vetIDJAGRedemption applies the ID-JAG checks on top of a plain RFC 7523 assertion and returns the
+// scope to grant.
 func (s *Service) vetIDJAGRedemption(ctx context.Context, req TokenRequest, raw map[string]any) ([]string, error) {
 	if s.Cfg.IDJAG == nil {
 		return nil, models.ErrOAuthInvalidGrant
@@ -231,10 +222,8 @@ func stringClaim(raw map[string]any, key string) string {
 	return v
 }
 
-// sameResource reports whether the resource an ID-JAG was issued for and the
-// resource presented at redemption name the same target. Identical strings
-// match; with ClientCompat.PathAudience (or a trailing slash) two spellings
-// match when both resolve to the same configured resource.
+// sameResource reports whether the issued-for and presented resources name the same target.
+// PathAudience and trailing slashes allow different spellings to match.
 func (s *Service) sameResource(claimed, presented string) bool {
 	if claimed == presented {
 		return true

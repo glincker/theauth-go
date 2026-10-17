@@ -6,18 +6,11 @@ import (
 	"github.com/glincker/theauth-go/v2/internal/models"
 )
 
-// metadata_resource.go: RFC 9728 OAuth 2.0 Protected Resource Metadata.
-//
-// Resource servers (MCP servers using the mcpresource SDK) need a
-// discovery document so a fresh client can find the AS that mints tokens
-// for them. The AS exposes one document per configured
-// ProtectedResource; the path includes the resource identifier path so
-// multiple resources can co-exist on the same origin.
+// metadata_resource.go serves RFC 9728 protected resource metadata, so a fresh client can find the
+// AS that mints tokens for a resource. There is one document per configured ProtectedResource.
 
-// ProtectedResourceMetadata is the JSON document mandated by RFC 9728.
-// Only the fields the spec marks REQUIRED + the most-used OPTIONAL ones
-// are declared; omitted fields fall away via omitempty so a strict
-// parser stays happy.
+// ProtectedResourceMetadata is the JSON document mandated by RFC 9728. Only the required and
+// most-used optional fields are declared.
 type ProtectedResourceMetadata struct {
 	Resource                    string   `json:"resource"`
 	AuthorizationServers        []string `json:"authorization_servers"`
@@ -29,9 +22,8 @@ type ProtectedResourceMetadata struct {
 	JwksURI                     string   `json:"jwks_uri,omitempty"`
 }
 
-// ProtectedResourceMetadataDoc builds the RFC 9728 document for the
-// resource matching the supplied identifier. Returns an error when the
-// identifier is not one of the configured resources.
+// ProtectedResourceMetadataDoc builds the RFC 9728 document for the resource with the given
+// identifier, or errors if it is not configured.
 func (s *Service) ProtectedResourceMetadataDoc(resourceID string) (ProtectedResourceMetadata, error) {
 	if s == nil {
 		return ProtectedResourceMetadata{}, errors.New("theauth: authorization server not configured")

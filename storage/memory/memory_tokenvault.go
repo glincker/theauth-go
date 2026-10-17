@@ -21,7 +21,6 @@ func cloneVaultCredential(c theauth.VaultCredential) theauth.VaultCredential {
 	return c
 }
 
-// PutVaultCredential implements theauth.TokenVaultStorage.
 func (s *Store) PutVaultCredential(_ context.Context, c theauth.VaultCredential) (theauth.VaultCredential, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -44,7 +43,6 @@ func (s *Store) PutVaultCredential(_ context.Context, c theauth.VaultCredential)
 	return cloneVaultCredential(c), nil
 }
 
-// VaultCredentialByUserProvider implements theauth.TokenVaultStorage.
 func (s *Store) VaultCredentialByUserProvider(_ context.Context, userID, provider string) (*theauth.VaultCredential, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -56,7 +54,6 @@ func (s *Store) VaultCredentialByUserProvider(_ context.Context, userID, provide
 	return &out, nil
 }
 
-// SwapVaultCredential implements theauth.TokenVaultStorage.
 func (s *Store) SwapVaultCredential(_ context.Context, c theauth.VaultCredential, expectedVersion int64) (bool, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -71,7 +68,6 @@ func (s *Store) SwapVaultCredential(_ context.Context, c theauth.VaultCredential
 	return true, nil
 }
 
-// ListVaultCredentials implements theauth.TokenVaultStorage.
 func (s *Store) ListVaultCredentials(_ context.Context, userID string) ([]theauth.VaultCredential, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -85,7 +81,6 @@ func (s *Store) ListVaultCredentials(_ context.Context, userID string) ([]theaut
 	return out, nil
 }
 
-// ScanVaultCredentials implements theauth.TokenVaultStorage.
 func (s *Store) ScanVaultCredentials(_ context.Context, afterID string, limit int) ([]theauth.VaultCredential, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -102,7 +97,6 @@ func (s *Store) ScanVaultCredentials(_ context.Context, afterID string, limit in
 	return out, nil
 }
 
-// DeleteVaultCredential implements theauth.TokenVaultStorage.
 func (s *Store) DeleteVaultCredential(_ context.Context, userID, provider string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()

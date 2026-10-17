@@ -14,47 +14,32 @@ import (
 	"github.com/glincker/theauth-go/v2/internal/throttle"
 )
 
-// config.go holds the concrete sub-config types that hang off Config.
-// Moved from theauth.go into config.go in PR H (2026-06-22) to bring
-// theauth.go below the 500 LOC ceiling. The types are unchanged; this is
-// a pure file split with no API impact.
-
-// AgentConfig wires the agent-identity policy. Set on Config.AgentIdentity
-// to enable Phase 3 + 4 behavior (agents + delegations + token-exchange).
-// The zero value AgentConfig{} is valid and is interpreted as accept-all-
-// defaults at New.
+// AgentConfig wires the agent-identity policy. Set it on Config.AgentIdentity to enable agents,
+// delegations and token exchange. The zero value is valid and means accept-all defaults at New.
 type AgentConfig struct {
-	// MaxChainDepth caps the actor chain length. Defaults to 3 (root subject
-	// plus two agents). Operators may lower (to 2, disabling sub-delegation)
-	// but never raise above 3 in v2.0; New returns an error if asked to.
+	// MaxChainDepth caps the actor chain length (default 3: root subject plus two agents). Operators may
+	// lower it to 2 to disable sub-delegation, but New rejects values above 3 in v2.0.
 	MaxChainDepth int
 
 	// MaxDelegationDuration caps any single delegation_grants.max_duration.
 	// Defaults to 90 days. Per-grant max_duration_seconds MUST be <= this.
 	MaxDelegationDuration time.Duration
 
-	// DefaultDelegatedTokenTTL is the default exp window for tokens minted
-	// via the token-exchange grant when the requester does not narrow it
-	// further. Defaults to 15 minutes.
+	// DefaultDelegatedTokenTTL is the exp window for token-exchange tokens when the requester does not
+	// narrow it (default 15 minutes).
 	DefaultDelegatedTokenTTL time.Duration
 
-	// AgentSecretLength controls bytes of entropy in generated agent
-	// secrets. Defaults to 32 (256 bits). Stored hashed (Argon2id);
-	// transmitted exactly once at creation or rotation.
+	// AgentSecretLength is the entropy in bytes of generated agent secrets (default 32, 256 bits). Secrets
+	// are stored hashed (Argon2id) and shown once, at creation or rotation.
 	AgentSecretLength int
 
-	// PolicyEngine, when set, attaches IAM policy to agents. Every agent token
-	// mint (client credentials, token exchange, jwt-bearer) is evaluated
-	// against the agent's policies: an explicit Deny fails the mint with
-	// access_denied, scopes no Allow statement covers are narrowed away, and
-	// the ids and hash of the policies in force go into the token's
-	// agent_policy claim and the audit event. Build one with the agentpolicy
-	// package. Nil leaves minting unchanged.
+	// PolicyEngine, when set, evaluates the agent's IAM policies on every agent token mint. An explicit Deny
+	// fails the mint with access_denied, scopes no Allow covers are narrowed away, and the policy ids and
+	// hash go into the agent_policy claim and audit event. Build one with the agentpolicy package.
 	PolicyEngine AgentPolicyEngine
 
-	// RateLimit bounds how often each agent may mint tokens or call
-	// AuthorizeAgent, keyed by agent id. A mint over the limit gets HTTP 429
-	// with a Retry-After header. The zero value disables the limit.
+	// RateLimit bounds how often each agent (keyed by agent id) may mint tokens or call AuthorizeAgent.
+	// Over the limit the mint gets HTTP 429 with Retry-After. The zero value disables it.
 	RateLimit AgentRateLimit
 }
 
@@ -62,169 +47,124 @@ type AgentConfig struct {
 // value is valid and accepts the seeded permission list plus the seeded
 // "owner", "admin", "member" roles.
 type RBACConfig struct {
-	// Permissions extends the seeded catalog. Names are deduped by case-
-	// sensitive equality with the seeded list. New returns an error if any
-	// supplied name contains whitespace or non-ASCII (permission names are
-	// program identifiers, not user input).
+	// Permissions extends the seeded catalog, deduped by case-sensitive name. New rejects names containing
+	// whitespace or non-ASCII, since permission names are program identifiers.
 	Permissions []Permission
 
-	// DefaultRoles seeds every new organization. When empty the three
-	// default roles ("owner", "admin", "member") are used. Reserved names
-	// ("owner", "admin", "member") must remain present when consumers
-	// override; New returns an error otherwise.
+	// DefaultRoles seeds every new organization; empty uses owner, admin and member. Reserved names must
+	// stay present when overridden, or New returns an error.
 	DefaultRoles []RoleSeed
 }
 
-// RoleSeed describes one organization-scoped role created at
-// SeedOrganizationRoles time. Permissions are permission names; unknown
-// names cause New to return a validation error so typos surface at startup
-// instead of on the first permission check.
+// RoleSeed describes one organization-scoped role created at SeedOrganizationRoles time. Unknown
+// permission names make New fail so typos surface at startup.
 type RoleSeed = rbac.RoleSeed
 
-// AuditConfig configures the async audit writer. All fields have safe
-// defaults; the zero value AuditConfig{} is valid.
+// AuditConfig configures the async audit writer. The zero value is valid.
 type AuditConfig struct {
-	// BufferSize is the channel buffer between EmitAudit and the writer
-	// goroutine. Defaults to 4096. When full, EmitAudit drops the event
-	// and increments Stats.AuditDropped.
+	// BufferSize is the channel buffer between EmitAudit and the writer goroutine (default 4096). When full,
+	// EmitAudit drops the event and increments Stats.AuditDropped.
 	BufferSize int
 
 	// BatchSize is the maximum events per INSERT. Defaults to 100.
 	BatchSize int
 
-	// FlushInterval is the maximum delay before a partial batch flushes.
-	// Defaults to 1 second.
+	// FlushInterval is the maximum delay before a partial batch flushes (default 1 second).
 	FlushInterval time.Duration
 
-	// Redactor optionally transforms metadata before storage. The default
-	// redactor strips the keys "password", "secret", "token", "code",
-	// "refresh_token", "access_token" (case-insensitive) at any nesting
-	// depth and replaces their values with the string "[REDACTED]".
+	// Redactor optionally transforms metadata before storage. The default strips password, secret,
+	// token, code, refresh_token and access_token keys (case-insensitive) at any depth, replacing
+	// values with "[REDACTED]".
 	Redactor func(metadata map[string]any) map[string]any
 
-	// DrainTimeout caps how long Close waits for the writer goroutine to
-	// drain remaining events. Defaults to 5 seconds.
+	// DrainTimeout caps how long Close waits for the writer goroutine to drain (default 5 seconds).
 	DrainTimeout time.Duration
 
-	// Sinks is the optional list of external SIEM streaming destinations.
-	// After each successful canonical storage write the writer goroutine
-	// fans out to every sink in a separate goroutine. A failing sink is
-	// logged at Warn level, counted in Stats.AuditSinkFailed, and
-	// silently dropped: sink failures NEVER block storage writes or delay
-	// the next batch. Built-in implementations are in sub-packages of
-	// audit/sinks/.
+	// Sinks are optional SIEM streaming destinations, fanned out after each successful storage write. A
+	// failing sink is logged at Warn, counted in Stats.AuditSinkFailed and dropped, so sink failures never
+	// block storage writes. Built-in sinks live in audit/sinks/.
 	Sinks []AuditSink
 
-	// FailClosed makes decision-class audit events fail closed: when one
-	// cannot be queued, the internal audit service's EmitDecision returns an
-	// error so the caller can deny the action. Off by default, so audit
-	// pressure never fails or blocks request paths unless opted in.
+	// FailClosed makes decision-class audit events fail closed: when one cannot be queued, EmitDecision
+	// returns an error so the caller can deny the action. Off by default so audit pressure never blocks
+	// request paths.
 	FailClosed bool
 
-	// DecisionActionPrefixes overrides which audit action prefixes count as
-	// decision-class for FailClosed. Empty uses the internal defaults.
+	// DecisionActionPrefixes overrides the audit action prefixes treated as decision-class for FailClosed.
 	DecisionActionPrefixes []string
 }
 
-// AdminConfig mounts /admin/v1/* when non-nil on the same chi router passed
-// to Mount.
+// AdminConfig mounts /admin/v1/* on the router passed to Mount when non-nil.
 type AdminConfig struct {
 	// PathPrefix where admin routes mount. Defaults to "/admin/v1".
 	PathPrefix string
 }
 
-// OrganizationsConfig is currently empty: there are no tunables for v0.7.
-// The presence of a non-nil value is the signal that multi-tenancy is on.
-// Future fields (default member role, invitation TTL, etc.) land here without
-// breaking the existing zero-value wiring.
+// OrganizationsConfig is empty for now; a non-nil value turns multi-tenancy on. Future tunables land
+// here without breaking zero-value wiring.
 type OrganizationsConfig struct{}
 
 // SAMLConfig wires the Service Provider keypair and base behavior. Per-IdP
 // configuration lives in saml_connections rows, not here.
 type SAMLConfig struct {
-	// SPCertificatePEM and SPPrivateKeyPEM are PEM-encoded; they sign every
-	// outbound AuthnRequest and identify the SP in metadata XML. New returns
-	// an error if either is missing or unparseable.
+	// SPCertificatePEM and SPPrivateKeyPEM sign every outbound AuthnRequest; New fails if either is unparseable.
 	SPCertificatePEM []byte
 	SPPrivateKeyPEM  []byte
 
-	// AuthnRequestTTL caps how long an outstanding SP-initiated AuthnRequest
-	// ID is tracked for replay protection. Defaults to 10 minutes.
+	// AuthnRequestTTL caps how long an SP-initiated AuthnRequest ID is tracked for replay protection
+	// (default 10 minutes).
 	AuthnRequestTTL time.Duration
 
-	// ClockSkew accepted on Conditions.NotBefore / NotOnOrAfter. Defaults to
-	// 30 seconds (matches crewjam default). Some IdPs (Okta on slow clocks)
-	// need 60s.
+	// ClockSkew tolerated on Conditions.NotBefore and NotOnOrAfter (default 30 seconds; some IdPs need 60).
 	ClockSkew time.Duration
 
-	// AllowedRelayStates lists extra post-login destinations accepted as
-	// RelayState (exact absolute URLs, or "/" prefixes ending in "*").
-	// Same-site paths and Config.PostLoginRedirect are always accepted;
-	// any other RelayState falls back to PostLoginRedirect.
+	// AllowedRelayStates lists extra post-login destinations accepted as RelayState (exact URLs or "/" prefixes
+	// ending in "*"); any other value falls back to PostLoginRedirect.
 	AllowedRelayStates []string
 }
 
 // SCIMConfig wires the SCIM 2.0 endpoint behavior.
 type SCIMConfig struct {
-	// RequireHTTPS rejects requests whose r.TLS is nil and whose
-	// X-Forwarded-Proto header is not "https". Default true. Set false only
-	// when SCIM is fronted by a TLS-terminating proxy that strips the header
-	// (in which case the proxy is responsible for TLS).
+	// RequireHTTPS rejects requests without TLS whose X-Forwarded-Proto is not "https" (default true). Set false
+	// only behind a TLS-terminating proxy that strips the header.
 	RequireHTTPS bool
 
-	// MaxPageSize caps the count parameter on list endpoints. Defaults to
-	// 200. RFC 7644 section 3.4.2 lets the server enforce a maximum.
+	// MaxPageSize caps the count parameter on list endpoints (default 200; RFC 7644 section 3.4.2).
 	MaxPageSize int
 }
 
-// WebAuthnConfig wires the Relying Party identity. Field names mirror the
-// upstream go-webauthn/webauthn.Config so consumers reading either set of
-// docs see the same vocabulary.
+// WebAuthnConfig wires the Relying Party identity. Field names mirror go-webauthn/webauthn.Config.
 type WebAuthnConfig struct {
-	// RPID is the Relying Party Server ID. e.g. "glinr.com" (eTLD+1 of the
-	// origin, no scheme, no port). Required.
+	// RPID is the Relying Party ID, the eTLD+1 of the origin (for example "glinr.com"). Required.
 	RPID string
 	// RPDisplayName is shown by browsers and authenticators. Required.
 	RPDisplayName string
-	// RPOrigins is the fully qualified origins permitted to invoke the
-	// API, e.g. ["https://glinr.com"]. At least one required.
+	// RPOrigins lists the origins allowed to call the WebAuthn API, for example ["https://glinr.com"].
 	RPOrigins []string
-	// ChallengeTTL caps how long the in-memory challenge session is valid.
-	// Defaults to 5 minutes; challenges are single-use regardless.
+	// ChallengeTTL caps how long a challenge is valid (default 5 minutes; challenges are single-use).
 	ChallengeTTL time.Duration
-	// RequireUserVerification makes registration and login demand user
-	// verification (PIN or biometric), so a passkey is never a bare
-	// possession factor. Defaults to false (v2 behavior: UV "preferred").
+	// RequireUserVerification makes registration and login demand PIN or biometric verification, so a passkey
+	// is never a bare possession factor. Default false (UV "preferred").
 	RequireUserVerification bool
-	// CloneWarning selects what happens when an assertion's sign count
-	// fails to advance, the signal of a cloned authenticator. The default,
-	// CloneWarningReject, refuses the login; CloneWarningFlag lets it
-	// through and emits a passkey.clone_warning audit event.
+	// CloneWarning picks what happens when an assertion's sign count fails to advance (a cloned authenticator).
+	// The default rejects the login; CloneWarningFlag allows it and emits passkey.clone_warning.
 	CloneWarning CloneWarningPolicy
-	// UserHandleResolver lets passkeys imported from another system sign in
-	// when their authenticator holds a user handle that is not a theauth
-	// handle. It receives the credential id and the handle and must return
-	// the user that handle denotes. The credential's stored owner stays
-	// authoritative: login is refused unless the resolver returns that same
-	// user. Nil (the default) accepts only theauth user handles.
+	// UserHandleResolver lets passkeys imported from another system sign in when their user handle is not a
+	// theauth handle. It must return the user the handle denotes; login is refused unless that matches the
+	// credential's stored owner. Nil accepts only theauth handles.
 	UserHandleResolver func(ctx context.Context, credentialID, userHandle []byte) (ULID, error)
 
-	// AttestationPreference is the attestation conveyance requested from
-	// authenticators: "none" (default), "indirect", "direct" or
-	// "enterprise". The upstream library verifies the statement formats it
-	// supports; trust anchors (FIDO MDS) are not configured here.
+	// AttestationPreference is the attestation conveyance requested: "none" (default), "indirect", "direct" or
+	// "enterprise". Trust anchors (FIDO MDS) are not configured here.
 	AttestationPreference string
 
-	// RequireAttestationStatement rejects registrations whose attestation
-	// format is "none". Pair with AttestationPreference "direct".
+	// RequireAttestationStatement rejects registrations with attestation format "none"; pair with "direct".
 	RequireAttestationStatement bool
 
-	// AAGUIDAllowlist, when non-empty, accepts only these authenticator
-	// models (UUID strings). Registration of anything else fails.
+	// AAGUIDAllowlist, when non-empty, accepts only these authenticator models (UUID strings).
 	AAGUIDAllowlist []string
 
-	// AAGUIDDenylist rejects these authenticator models. It wins over the
-	// allowlist.
+	// AAGUIDDenylist rejects these authenticator models and wins over the allowlist.
 	AAGUIDDenylist []string
 
 	// AuthenticatorNames maps an AAGUID to a display name for UIs.
@@ -245,15 +185,6 @@ const (
 	CloneWarningFlag CloneWarningPolicy = "flag"
 )
 
-// LifecycleHooks lets consumers react to authentication-lifecycle events without forking handlers. All fields are optional; nil hooks are silent no-ops. Hooks run synchronously after the underlying operation succeeds and before the HTTP response is written.
-//
-// OnSignup, OnSignin, OnPasswordChange, OnMFAEnabled and OnOrgSwitch are observe-only, running after the action has committed. A returned error is logged at Warn level and reported to OnHookError when set; it does NOT fail the request. Use them for provisioning, analytics and notifications. To refuse a signup or sign-in before it is committed, gate it at the route wrapper or identity check, not via a hook.
-//
-// Panics in hooks are recovered and logged; the request continues as if the hook returned nil.
-//
-// OnTokenIssued is the only hook permitted to mutate state: it receives the claims map about to be signed into a JWT and returns the updated map. A non-nil error fails token issuance.
-//
-// Wiring status: OnSignup fires from password, magic-link, OAuth, SAML, and a user's first WebAuthn credential. OnSignin fires from password (without second factor), the TOTP/recovery-code step that completes a password sign-in at pending_2fa, magic-link, OAuth, passkey login and SAML. OnMFAEnabled fires when TOTP enrollment is confirmed. OnTokenIssued fires from every OAuth access-token grant. OnOrgSwitch fires from explicit SetActiveOrganization only.
 type OAuthConflictPayload struct {
 	Provider        string
 	ProviderUserID  string
@@ -267,6 +198,12 @@ type OAuthConflictPayload struct {
 	Scope           string
 }
 
+// LifecycleHooks lets consumers react to authentication lifecycle events without forking handlers.
+// All fields are optional and run after the underlying operation succeeds, before the response is
+// written. OnSignup, OnSignin, OnPasswordChange, OnMFAEnabled and OnOrgSwitch are observe-only:
+// errors and panics are logged (and reported to OnHookError) but never fail the request. Gate a
+// signup at the route instead. OnTokenIssued is the only hook that may mutate state: it returns the
+// claims to sign, and an error fails issuance.
 type LifecycleHooks struct {
 	OnSignup         func(ctx context.Context, user *User, method SignupMethod) error
 	OnSignin         func(ctx context.Context, user *User, sess *Session) error
@@ -274,352 +211,217 @@ type LifecycleHooks struct {
 	OnMFAEnabled     func(ctx context.Context, user *User, kind MFAKind) error
 	OnTokenIssued    func(ctx context.Context, claims map[string]any) (map[string]any, error)
 	OnOrgSwitch      func(ctx context.Context, user *User, orgID string) error
-	// OnAccountDeleted fires after an account was deleted (DELETE /account,
-	// DeleteUser). It is observe-only: the delete already committed, user is
-	// the snapshot taken just before it, and an error or panic is only
-	// logged. Use it to clean up host-side data keyed by the user.
+	// OnAccountDeleted runs after the delete committed; user is the snapshot taken just before it. It is
+	// observe-only, so errors and panics are only logged.
 	OnAccountDeleted func(ctx context.Context, user *User) error
-	// OnOAuthConflict fires when a sign-in OAuth email matches an existing user
-	// registered via a different provider. The hook must create a short-lived
-	// verification challenge and return the redirect URL for it. When nil the
-	// sign-in proceeds normally (silent provider linking).
+	// OnOAuthConflict fires when a sign-in email matches a user registered via another provider. It must return
+	// a redirect URL for a short-lived verification challenge; nil silently links the providers.
 	OnOAuthConflict func(ctx context.Context, p OAuthConflictPayload) (redirectURL string, err error)
 
-	// OnHookError, when set, is called with the hook name (for example
-	// "OnSignup") and the error whenever an observe-only hook returns an
-	// error or panics (a panic is wrapped in an error). It runs in addition
-	// to the slog line, never instead of it, so hosts can alert or count
-	// failures instead of only logging them. It runs synchronously on the
-	// request goroutine, so keep it fast; a panic inside it is recovered.
-	// It does not change request outcomes. Nil keeps the default behavior.
+	// OnHookError, when set, receives the hook name and error whenever an observe-only hook fails or panics. It
+	// runs in addition to the slog line, must stay fast, and cannot change request outcomes.
 	OnHookError func(ctx context.Context, hook string, err error)
 }
 
-// TenancyConfig (v2.5) wires opt-in tenant-provisioning behavior so
-// consumers do not need to seed organization_members + roles + active-org
-// SQL on every fresh signup. Only takes effect when Config.Organizations
-// is also non-nil; otherwise auto-provisioning silently no-ops.
+// TenancyConfig (v2.5) opts into tenant provisioning so consumers need not seed organization rows on signup.
+// It takes effect only when Config.Organizations is set.
 type TenancyConfig struct {
-	// AutoCreatePersonalOrg controls whether a personal organization is
-	// created automatically on every signup that goes through the wired
-	// hook paths (password, magic-link, OAuth callback). The user is
-	// added as the organization owner and the session's active
-	// organization is set to it. When false (default) the library does
-	// not touch organizations at signup; consumers wire their own
-	// provisioning logic via LifecycleHooks.OnSignup.
+	// AutoCreatePersonalOrg creates a personal organization (user as owner, set active) on every wired signup
+	// path. Default false; wire custom provisioning via LifecycleHooks.OnSignup instead.
 	AutoCreatePersonalOrg bool
 
-	// PersonalOrgNameFn produces the human-readable organization name.
-	// Default: the user's email address.
+	// PersonalOrgNameFn returns the display name of a personal organization (default: the user's email).
 	PersonalOrgNameFn func(*User) string
 
-	// PersonalOrgSlugFn produces the URL-safe slug. Default: the lowercased
-	// ULID of the user prefixed with "personal-" (e.g. "personal-01h...");
-	// guarantees uniqueness without requiring a slug-conflict retry loop.
+	// PersonalOrgSlugFn returns a URL-safe slug (default "personal-" plus the lowercased ULID, unique without a
+	// conflict-retry loop).
 	PersonalOrgSlugFn func(*User) string
 }
 
-// TOTPConfig wires the second-factor TOTP behavior. Algorithm is fixed at
-// SHA-1 / 30s / 6 digits for compatibility with Google Authenticator, Authy,
-// 1Password, and every other mainstream authenticator app. Skew is fixed at
-// one period before/after (the pquerna/otp default) to absorb client clock
-// drift.
+// TOTPConfig wires second-factor TOTP. Algorithm is fixed at SHA-1, 30s and 6 digits for compatibility with
+// mainstream authenticator apps; skew is one period either side.
 type TOTPConfig struct {
 	// Issuer is shown in the authenticator app, e.g. "GLINR Quarter".
 	Issuer string
-	// RecoveryCodeCount defaults to 10 when zero. Each code is 10 hex chars
-	// (40 bits of entropy) generated via crypto/rand.
+	// RecoveryCodeCount is the number of recovery codes (default 10); each carries 40 bits from crypto/rand.
 	RecoveryCodeCount int
 }
 
-// Clock is the time source used by the introspection cache and the
-// chain-cache TTL. Tests pass a fake clock to assert revocation
-// propagation deterministically instead of sleeping past
-// IntrospectionCacheTTL.
+// Clock is the time source for the introspection cache and chain-cache TTL. Tests inject a fake clock to
+// assert revocation deterministically.
 type Clock interface {
 	Now() time.Time
 }
 
-// AuthorizationServerConfig wires the OAuth 2.1 + MCP authorization
-// server surface. Set on Config.AuthorizationServer to enable
-// /.well-known/ and /oauth/ routes. Leave nil for v1.0 behavior.
-//
-// Phase 1 + 2 scope: authorization_code + refresh_token + revoke +
-// introspect + RFC 7591 dynamic client registration + JWKS rotation.
-// Agents, delegations, and RFC 8693 token exchange land in phase 3 + 4.
+// AuthorizationServerConfig wires the OAuth 2.1 and MCP authorization server. Set it on
+// Config.AuthorizationServer to mount /.well-known/ and /oauth/ routes; nil keeps v1.0 behavior.
 type AuthorizationServerConfig struct {
-	// Issuer is the canonical https URL identifying this authorization
-	// server. Becomes the iss claim on every issued JWT. RFC 8414
-	// mandates no query or fragment; trailing slash is stripped at New().
+	// Issuer is the canonical https URL that becomes the iss claim on every JWT (no query or fragment).
 	Issuer string
 
-	// Resources lists the protected resources advertised by this AS.
-	// Every authorize and token request MUST carry a resource parameter
-	// that matches one of these identifiers; the resulting JWT's aud
-	// claim is set from the resource (RFC 8707 + RFC 9068).
+	// Resources lists the protected resources this AS advertises. Every authorize and token request must carry
+	// a resource parameter matching one of them (RFC 8707, RFC 9068).
 	Resources []ProtectedResource
 
 	// SigningAlg defaults to EdDSA (Ed25519). Phase 1 + 2 ships Ed25519
 	// only.
 	SigningAlg string
 
-	// KeyRotationPeriod defaults to 30 days. The rotation goroutine
-	// promotes next -> current -> previous and generates a fresh next at
-	// every cadence.
+	// KeyRotationPeriod is how often the JWKS rotation goroutine promotes keys (default 30 days).
 	KeyRotationPeriod time.Duration
 
-	// KeyRetention caps how long a retired key remains visible in
-	// /oauth/jwks. Defaults to 90 days.
+	// KeyRetention caps how long a retired key stays in /oauth/jwks (default 90 days).
 	KeyRetention time.Duration
 
-	// AccessTokenTTL caps the lifetime of issued access tokens. Defaults
-	// to 1 hour.
+	// AccessTokenTTL caps the lifetime of access tokens (default 1 hour).
 	AccessTokenTTL time.Duration
 
-	// RefreshTokenTTL caps the lifetime of refresh tokens. Defaults to 30
-	// days. Refresh tokens are rotated on every use; presenting an old
-	// token after rotation revokes the family (RFC 9700 section 4.14).
+	// RefreshTokenTTL caps refresh token lifetime (default 30 days). Refresh tokens rotate on use; reuse of an
+	// old one revokes the family (RFC 9700 section 4.14).
 	RefreshTokenTTL time.Duration
 
-	// AuthorizationCodeTTL caps the lifetime of authorization codes.
-	// Defaults to 60 seconds per OAuth 2.1 guidance.
+	// AuthorizationCodeTTL caps authorization code lifetime (default 60 seconds, per OAuth 2.1).
 	AuthorizationCodeTTL time.Duration
 
-	// RegistrationAccessTokenTTL caps the lifetime of registration access
-	// tokens minted on POST /oauth/register. Defaults to 365 days.
+	// RegistrationAccessTokenTTL caps registration access tokens minted by POST /oauth/register
+	// (default 365 days).
 	RegistrationAccessTokenTTL time.Duration
 
-	// AllowAnonymousRegistration permits POST /oauth/register without an
-	// initial access token. Off by default. When on, the AS hard-pins
-	// the endpoint to 1 request/min/IP and stamps the client row with
-	// AnonymousRegistered = true for operator auditing.
+	// AllowAnonymousRegistration permits POST /oauth/register without an initial access token. Off by
+	// default; when on, the endpoint is pinned to 1 request per minute per IP and clients are stamped
+	// AnonymousRegistered.
 	AllowAnonymousRegistration bool
 
-	// RegistrationTokens is the operator-supplied set of bearer initial
-	// access tokens that POST /oauth/register accepts when DCR is bearer
-	// gated (the default). Each entry is the raw token string; it is
-	// sha256-hashed at New time and the plaintext is dropped, so the
-	// in-memory state never carries the secret value. Token comparisons
-	// run under crypto/subtle.ConstantTimeCompare so token-presence
-	// timing is not observable.
-	//
-	// When AllowAnonymousRegistration is false (the default and the
-	// production-recommended value) and RegistrationTokens is empty,
-	// POST /oauth/register returns 401 access_denied to every caller,
-	// because no operator-issued token can possibly match. Operators
-	// that want a truly open DCR endpoint must flip
-	// AllowAnonymousRegistration to true explicitly (security audit H1,
-	// 2026-06-20).
+	// RegistrationTokens is the operator-supplied set of bearer initial access tokens accepted by POST
+	// /oauth/register while DCR is bearer-gated (the default). Tokens are SHA-256 hashed at New and compared in
+	// constant time. With no tokens and AllowAnonymousRegistration false, every registration gets 401
+	// (security audit H1).
 	RegistrationTokens []string
 
-	// RegistrationRateLimitPerMinute caps POST /oauth/register at this
-	// many requests per source IP per minute. Defaults: 1 when
-	// AllowAnonymousRegistration is true (matches the documented public
-	// MCP profile), 5 otherwise. Set to a negative value to disable the
-	// per-IP cap entirely (operator opt-out; not recommended on a
-	// public-internet bind) (security audit H2, 2026-06-20).
+	// RegistrationRateLimitPerMinute caps POST /oauth/register per source IP. Defaults to 1 with
+	// AllowAnonymousRegistration and 5 otherwise; negative disables the cap, which is not advised on a
+	// public bind (security audit H2).
 	RegistrationRateLimitPerMinute int
 
-	// IntrospectionCacheTTL is the Cache-Control max-age the
-	// introspection endpoint emits. Defaults to 60 seconds. Resource
-	// servers may cache responses up to this duration.
+	// IntrospectionCacheTTL is the Cache-Control max-age emitted by the introspection endpoint
+	// (default 60 seconds).
 	IntrospectionCacheTTL time.Duration
 
-	// SubjectActiveCacheTTL bounds how long a positive "subject is still
-	// active" lookup (agent status, user disabled state) is reused during
-	// introspection. Revocation events for the subject drop the entry at
-	// once, so this only bounds staleness for changes the host makes
-	// without publishing an event. Defaults to 1 second, capped at 2
-	// seconds; a negative value disables the cache.
+	// SubjectActiveCacheTTL bounds how long a positive subject-active lookup (agent status, user disabled state)
+	// is reused during introspection. Revocation events drop the entry at once; default 1 second, capped at 2,
+	// negative disables.
 	SubjectActiveCacheTTL time.Duration
 
-	// Clock is the time source used by the introspection cache and the
-	// chain-cache TTL. Defaults to a wrapper around time.Now when nil.
-	// Tests pass a fake clock to assert revocation propagation
-	// deterministically (e.g. introspecting immediately after revoke)
-	// instead of sleeping past IntrospectionCacheTTL.
+	// Clock overrides the time source; see the Clock type.
 	Clock Clock
 
-	// LoginURL is the path on this origin where unauthenticated
-	// authorize requests are redirected. Defaults to "/auth/login". The
-	// handler appends a `next` query parameter with the original
-	// authorize URL.
+	// LoginURL is where unauthenticated authorize requests redirect, with a next parameter (default
+	// "/auth/login").
 	LoginURL string
 
-	// DisableRotation skips the background JWKS rotation goroutine.
-	// Tests use this to assert key state from a known fixture;
+	// DisableRotation skips the background JWKS rotation goroutine. Tests use it to pin key state;
 	// production must leave it false.
 	DisableRotation bool
 
-	// CIMD wires the Client ID Metadata Documents resolver per the MCP
-	// authorization spec 2025-11-25. When non-nil, incoming
-	// /oauth/authorize and /oauth/token requests whose client_id parses
-	// as an https URL are resolved by fetching that URL and parsing the
-	// JSON metadata document, instead of consulting OAuthServerStorage.
-	// Nil disables CIMD and the AS falls back to RFC 7591 DCR for every
-	// client_id (the pre-CIMD behavior).
-	//
-	// Default policy MUST be DenyAll (fail-closed); operators opt in to
-	// AllowAnyHTTPS or AllowHTTPSHosts explicitly.
+	// CIMD wires Client ID Metadata Documents. When non-nil, client_ids that parse as https URLs are
+	// resolved by fetching their metadata instead of consulting storage. Nil falls back to RFC 7591
+	// DCR. The default policy is DenyAll; operators opt in to AllowAnyHTTPS or AllowHTTPSHosts.
 	CIMD *CIMDConfig
 
-	// DPoP, when non-nil, enables RFC 9449 sender-constrained access
-	// tokens. The token endpoint inspects each request for a DPoP
-	// header, verifies the proof JWT, and embeds an RFC 7800 cnf.jkt
-	// confirmation claim in the issued access token. Resource servers
-	// (mcpresource) re-verify the same proof on every protected call,
-	// so a stolen access token cannot be replayed without the private
-	// key that signed the proof. Leave nil for pre-PR behavior
-	// (Bearer tokens, no sender constraint).
+	// DPoP, when non-nil, enables RFC 9449 sender-constrained tokens: the token endpoint binds cnf.jkt
+	// and resource servers re-verify the proof on every call, so a stolen token cannot be replayed
+	// without the proof key.
 	DPoP *DPoPConfig
 
-	// RequireState, when true, causes the /oauth/authorize endpoint to
-	// reject any request that omits a non-empty state parameter, returning
-	// invalid_request. Default false preserves existing behavior for
-	// backwards compatibility. Operators deploying browser-based clients
-	// should set this to true to enforce CSRF protection for every
-	// authorization request (security re-audit L5, 2026-06-22).
+	// RequireState makes /oauth/authorize reject requests without a non-empty state parameter
+	// (invalid_request). Default false for compatibility; browser clients should enable it for CSRF
+	// protection (security re-audit L5).
 	RequireState bool
 
-	// AccessTokenRevocation enables the store-backed access-token jti
-	// denylist (opt-in). When true and the Storage implements the denylist
-	// capability (memory, sqlite, postgres and mysql do), revoking an access token
-	// at /oauth/revoke, replaying an authorization code, and token
-	// exchange all honor it, and /oauth/introspect reports revoked tokens
-	// inactive. Resource servers that verify JWTs locally never consult
-	// the denylist; they must introspect. Default false keeps access
-	// tokens stateless.
+	// AccessTokenRevocation enables the store-backed access-token jti denylist (opt-in). Revocation,
+	// code replay and token exchange honor it, and introspection reports revoked tokens inactive.
+	// Local JWT verifiers never consult it and must introspect. Default false keeps access tokens
+	// stateless.
 	AccessTokenRevocation bool
 
-	// ClientCompat relaxes individual strictness checks so real-world MCP
-	// clients (Claude Desktop, Cursor, ChatGPT) interoperate: an optional
-	// resource parameter, dropping unknown scopes, port-agnostic loopback
-	// redirect URIs and sub-path audiences. Every switch defaults to false
-	// (strict). LoopbackAnyPort and DropUnknownScopes carry real security
-	// tradeoffs; see docs/client-compat.md before enabling them.
+	// ClientCompat relaxes strictness checks so real-world MCP clients (Claude Desktop, Cursor,
+	// ChatGPT) interoperate. Every switch defaults to strict; LoopbackAnyPort and DropUnknownScopes
+	// carry real tradeoffs (see docs/client-compat.md).
 	ClientCompat ClientCompatConfig
 
-	// ACRValues maps an authentication method set to the acr string put in
-	// access tokens and introspection responses (RFC 9470 step-up). Keys are
-	// the distinct amr methods sorted and joined with "+", for example
-	// "pwd", "otp+pwd" or "hwk". A method set without an entry uses the
-	// default: "urn:theauth:acr:1fa" for one method, "urn:theauth:acr:mfa"
-	// for "mfa" or two or more methods. Non-empty values are advertised as
-	// acr_values_supported. Nil keeps the defaults and advertises nothing.
+	// ACRValues maps a sorted, "+"-joined amr method set (for example "pwd" or "otp+pwd") to the acr
+	// claim (RFC 9470 step-up). Missing entries use urn:theauth:acr:1fa for one method and
+	// urn:theauth:acr:mfa otherwise.
 	ACRValues map[string]string
 
-	// SessionAMR overrides the RFC 8176 authentication methods the session
-	// was established with, for the amr and acr claims. By default amr is
-	// Session.AuthMethods, which the library records at sign-in and extends
-	// on a second factor or step-up (see SessionAuthStorage); sessions with
-	// no record assume ["pwd"]. A non-empty result from this function wins
-	// over both. Called on /oauth/authorize only.
+	// SessionAMR overrides the RFC 8176 methods used for the amr and acr claims. By default it is
+	// Session.AuthMethods (sessions with no record assume ["pwd"]). A non-empty result wins; called on
+	// /oauth/authorize only.
 	SessionAMR func(ctx context.Context, sess *Session) []string
 
-	// PAR wires RFC 9126 Pushed Authorization Requests. When non-nil and
-	// the Storage backend implements PARStorage, POST /oauth/par is
-	// registered and GET /oauth/authorize accepts request_uri. Nil (the
-	// default) disables PAR; existing deployments see no behavior change.
+	// PAR wires RFC 9126 pushed authorization requests. When non-nil and the storage implements PARStorage,
+	// POST /oauth/par is mounted and authorize accepts request_uri. Nil disables PAR.
 	PAR *PARConfig
 
-	// JAR wires RFC 9101 JWT-Secured Authorization Requests. When
-	// non-nil, /oauth/authorize and /oauth/par accept a "request"
-	// parameter containing a signed JWT. Nil (the default) disables JAR.
+	// JAR wires RFC 9101 signed request objects on /oauth/authorize and /oauth/par. Nil disables JAR.
 	JAR *JARConfig
 
-	// JWTBearer, when non-nil, enables two RFC 7523 features:
-	//
-	// (1) private_key_jwt / client_secret_jwt client authentication on the
-	//     token endpoint (RFC 7523 section 2.2). Clients registered with
-	//     token_endpoint_auth_method = "private_key_jwt" or
-	//     "client_secret_jwt" authenticate by presenting a signed JWT as
-	//     client_assertion instead of a client_secret.
-	//
-	// (2) The urn:ietf:params:oauth:grant-type:jwt-bearer grant type (RFC
-	//     7523 section 2.1). A JWT issued by a configured trusted external
-	//     issuer (e.g. Google, k8s OIDC, AWS IAM Roles Anywhere) is
-	//     exchanged for an AS-issued access token.
-	//
-	// When nil both features are disabled and the AS behaves as before
-	// (client_secret_basic / client_secret_post only).
+	// JWTBearer enables RFC 7523 features: private_key_jwt and client_secret_jwt client authentication
+	// at the token endpoint (section 2.2), and the jwt-bearer grant that exchanges JWTs from trusted
+	// external issuers (section 2.1). Nil disables both.
 	JWTBearer *JWTBearerConfig
 
-	// CIBA enables Client-Initiated Backchannel Authentication (RFC 9509)
-	// when non-nil. The storage backend must also implement CIBAStorage;
-	// if it does not, CIBA endpoints are not mounted regardless of this
-	// setting. Default nil disables CIBA.
+	// CIBA enables RFC 9509 backchannel authentication when non-nil. Endpoints mount only if storage
+	// implements CIBAStorage.
 	CIBA *CIBAConfig
 
-	// DeviceAuthorization enables the RFC 8628 device grant when non-nil:
-	// POST /oauth/device_authorization, the device_code grant at
-	// /oauth/token, and a user-code page at /oauth/device. The storage must
-	// also implement DeviceAuthorizationStorage (memory, SQLite, Postgres and
-	// MySQL do). Clients opt in by registering the
-	// urn:ietf:params:oauth:grant-type:device_code grant type. Default nil
-	// disables it.
+	// DeviceAuthorization enables the RFC 8628 device grant when non-nil. Storage must implement
+	// DeviceAuthorizationStorage (memory, SQLite, Postgres and MySQL do); clients opt in by
+	// registering the device_code grant.
 	DeviceAuthorization *DeviceAuthorizationConfig
 
-	// TokenPolicy enables per-client access token policy: extra signing
-	// algorithms (ES256, RS256) and opaque reference tokens. Nil keeps every
-	// client on EdDSA JWTs. Opaque tokens need a storage that implements
-	// OpaqueTokenStorage (memory, SQLite, Postgres and MySQL do).
+	// TokenPolicy enables per-client extra signing algorithms (ES256, RS256) and opaque reference
+	// tokens. Nil keeps every client on EdDSA JWTs. Opaque tokens need OpaqueTokenStorage.
 	TokenPolicy *TokenPolicyConfig
 
-	// RAR enables RFC 9396 Rich Authorization Requests: the
-	// authorization_details parameter on /oauth/authorize, PAR, JAR and the
-	// token endpoint, and the claim in access tokens and introspection. Nil
+	// RAR enables RFC 9396 authorization_details on authorize, PAR, JAR and the token endpoint. Nil
 	// rejects the parameter.
 	RAR *RARConfig
 
-	// IDJAG enables issuing Identity Assertion JWT Authorization Grants
-	// through token exchange, and redeeming them at the jwt-bearer grant
-	// (which also needs JWTBearer with the issuing server as a trusted
-	// issuer). Nil disables both.
+	// IDJAG enables Identity Assertion JWT Authorization Grants through token exchange and their
+	// redemption at the jwt-bearer grant (which also needs JWTBearer). Nil disables both.
 	IDJAG *IDJAGConfig
 
-	// RateLimits tunes the per-IP and per-client limits on /oauth/token,
-	// /oauth/revoke, /oauth/introspect, /oauth/par, /oauth/bc-authorize and
-	// /oauth/device_authorization, and the cap on concurrent Argon2id
-	// client-secret verifications. Nil applies the defaults (120 requests per
-	// IP per minute, 300 secret-bearing requests per client per minute, up to
-	// 8 concurrent verifications). Set a field negative to turn it off.
+	// RateLimits tunes the per-IP and per-client limits on the AS endpoints and the cap on concurrent Argon2id
+	// client-secret verifications. Nil applies the defaults; set a field negative to turn it off.
 	RateLimits *ASRateLimits
 
-	// RegistrationTokenTTL is the default lifetime of an initial access token
-	// created through CreateRegistrationToken or the admin API. Default 24h.
+	// RegistrationTokenTTL is the default lifetime of an initial access token (default 24h).
 	RegistrationTokenTTL time.Duration
 
-	// DeviceTokens enables constrained device identity when non-nil: admin
-	// minted single-use join tokens, enrollment at /oauth/devices/enroll, and
-	// the RFC 7523 jwt-bearer grant for registered devices, which issues
-	// short-lived access tokens with no refresh token. The storage must also
-	// implement DeviceIdentityStorage (memory, Postgres, MySQL and SQLite do).
+	// DeviceTokens enables constrained device identity when non-nil: join tokens, enrollment at
+	// /oauth/devices/enroll, and the jwt-bearer grant for registered devices (short-lived tokens, no
+	// refresh). Storage must implement DeviceIdentityStorage.
 	DeviceTokens *DeviceTokensConfig
 
-	// OIDC turns the server into an OpenID Provider when non-nil: ID tokens
-	// for requests with the openid scope, GET/POST /oauth/userinfo,
-	// /oauth/end_session (RP-initiated logout), back-channel logout and
-	// pairwise subjects. See docs/oidc-provider.md.
+	// OIDC turns the server into an OpenID Provider when non-nil. See docs/oidc-provider.md.
 	OIDC *OIDCConfig
 
-	// ConsentHandler hands the consent decision to the host app. It runs
-	// after the user is authenticated and the authorize request is valid,
-	// and returns Approve (with optionally narrowed scopes and a grant
-	// expiry), Deny or Interact (render the host's own consent page, then
-	// resume with TheAuth.CompleteConsent). Nil keeps auto-approve. See
-	// docs/oauth-consent.md.
+	// ConsentHandler hands the consent decision to the host app, after authentication and request
+	// validation. It returns Approve (optionally with narrowed scopes and a grant expiry), Deny, or
+	// Interact (render the host's consent page, then resume with TheAuth.CompleteConsent). Nil keeps
+	// auto-approve. See docs/oauth-consent.md.
 	ConsentHandler ConsentHandler
 
-	// ConsentMaxGrantTTL caps the lifetime of a grant approved through the
-	// ConsentHandler. Zero means no cap beyond the token TTLs.
+	// ConsentMaxGrantTTL caps the lifetime of a grant approved through ConsentHandler. Zero means no extra cap.
 	ConsentMaxGrantTTL time.Duration
 
-	// ConsentTicketTTL is the validity of a consent_ticket. Default 10m.
+	// ConsentTicketTTL is the validity of a consent_ticket (default 10m).
 	ConsentTicketTTL time.Duration
 }
 
-// ConsentHandler, ConsentRequest, ConsentDecision and friends are the root
-// aliases for the host-owned consent API.
+// ConsentHandler, ConsentRequest, ConsentDecision and friends are the root aliases for the
+// host-owned consent API.
 type (
 	ConsentHandler  = internalas.ConsentHandler
 	ConsentRequest  = internalas.ConsentRequest
@@ -628,7 +430,6 @@ type (
 	ConsentAction   = internalas.ConsentAction
 )
 
-// Consent actions and client metadata sources.
 const (
 	ConsentApprove          = internalas.ConsentApprove
 	ConsentDeny             = internalas.ConsentDeny
@@ -637,7 +438,6 @@ const (
 	ConsentSourceCIMD       = internalas.ConsentSourceCIMD
 )
 
-// Consent errors returned by CompleteConsent.
 var (
 	ErrConsentTicketInvalid   = internalas.ErrConsentTicketInvalid
 	ErrConsentDecisionInvalid = internalas.ErrConsentDecisionInvalid
@@ -673,132 +473,95 @@ type CreateDeviceJoinTokenInput = internalas.CreateDeviceJoinTokenInput
 // CreateRegistrationTokenInput describes an initial access token to mint.
 type CreateRegistrationTokenInput = internalas.CreateRegistrationTokenInput
 
-// JWTBearerConfig controls RFC 7523 JWT client authentication and the
-// JWT Bearer grant type. All fields have safe defaults.
+// JWTBearerConfig controls RFC 7523 client authentication and the JWT Bearer grant. All fields have
+// safe defaults.
 type JWTBearerConfig struct {
-	// TrustedJWTIssuers is the list of external issuers whose JWTs may be
-	// exchanged for AS-issued access tokens via the jwt-bearer grant (RFC
-	// 7523 section 2.1). Each entry must specify Issuer and JWKSURL;
-	// AllowedAlgorithms defaults to ["ES256","RS256","EdDSA"].
+	// TrustedJWTIssuers lists external issuers whose JWTs may be exchanged for AS tokens (RFC 7523 section 2.1).
+	// Each entry needs Issuer and JWKSURL; AllowedAlgorithms defaults to ES256, RS256 and EdDSA.
 	TrustedJWTIssuers []TrustedJWTIssuer
 
-	// ClientAssertionMaxAge bounds how far in the past the client assertion
-	// JWT's iat claim may be. Defaults to 60 seconds (RFC 7523 recommends
-	// short-lived assertions). Operators may tighten but rarely need to
-	// widen this.
+	// ClientAssertionMaxAge bounds how far in the past a client assertion's iat may be (default 60 seconds).
 	ClientAssertionMaxAge time.Duration
 
-	// AssertionMaxAge bounds how far in the past the bearer grant assertion
-	// JWT's iat claim may be. Defaults to 300 seconds.
+	// AssertionMaxAge bounds how far in the past a bearer grant assertion's iat may be (default 300 seconds).
 	AssertionMaxAge time.Duration
 
-	// ReplayCacheTTL is the duration JTIs remain in the replay cache.
-	// Defaults to 600 seconds (covers the maximum assertion lifetime with
-	// comfortable margin). Backed by JWTBearerStorage.InsertJTI; backends
-	// that do not implement JWTBearerStorage fall back to an in-process
-	// sync.Map and lose replay protection across restarts.
+	// ReplayCacheTTL is how long JTIs stay in the replay cache (default 600 seconds, covering the
+	// maximum assertion lifetime). Backends without JWTBearerStorage fall back to an in-process map
+	// and lose replay protection on restart.
 	ReplayCacheTTL time.Duration
 
-	// MaxActorChainDepth caps on-behalf-of actor chains in the RFC 8693
-	// token-exchange grant. Defaults to 5. Values above 10 are not
-	// recommended: each additional link adds a storage round-trip at
-	// token-exchange time.
+	// MaxActorChainDepth caps on-behalf-of actor chains in the RFC 8693 token-exchange grant (default 5).
 	MaxActorChainDepth int
 
-	// JWKSCacheTTL is how long a JWKS fetched from a client jwks_uri or a
-	// TrustedJWTIssuer.JWKSURL is reused before being fetched again, so key
-	// rotation is picked up. Failed fetches are never cached. Defaults to
-	// 5 minutes.
+	// JWKSCacheTTL is how long a fetched JWKS is reused, so key rotation is picked up (default 5
+	// minutes). Failed fetches are never cached.
 	JWKSCacheTTL time.Duration
 
-	// JWKSCacheMaxEntries bounds how many distinct JWKS URLs are cached.
-	// Defaults to 256.
+	// JWKSCacheMaxEntries bounds how many distinct JWKS URLs are cached (default 256).
 	JWKSCacheMaxEntries int
 
-	// JWKSFetchTimeout is the total time allowed for one JWKS fetch.
-	// Defaults to 5 seconds.
+	// JWKSFetchTimeout is the total time allowed for one JWKS fetch (default 5 seconds).
 	JWKSFetchTimeout time.Duration
 
-	// AllowPrivateJWKSNetworks disables the dial-time block on loopback,
-	// private, link-local and cloud metadata addresses when fetching JWKS
-	// documents, and also permits plain http JWKS URLs. Development only:
-	// it re-opens SSRF to internal hosts. Default false.
+	// AllowPrivateJWKSNetworks disables the dial-time block on loopback, private, link-local and
+	// metadata addresses, and permits plain http JWKS URLs. Development only: it re-opens SSRF to
+	// internal hosts.
 	AllowPrivateJWKSNetworks bool
 
-	// JWKSHTTPClient, when non-nil, replaces the default SSRF-guarded
-	// client used for JWKS fetches. It is used as-is, so it must provide
-	// equivalent protection (no redirects, address guard). Intended for
-	// tests that inject an httptest server.
+	// JWKSHTTPClient, when non-nil, replaces the SSRF-guarded client used for JWKS fetches. It is used
+	// as-is, so it must provide the same protection (no redirects, address guard). Intended for tests.
 	JWKSHTTPClient *http.Client
 }
 
 // TrustedJWTIssuer is one entry in JWTBearerConfig.TrustedJWTIssuers.
 type TrustedJWTIssuer struct {
-	// Issuer is the value the trusted issuer places in the iss claim of
-	// its JWTs. Must be an exact string match.
+	// Issuer is the exact iss value this trusted issuer places in its JWTs.
 	Issuer string
 
-	// JWKSURL is the URL of the issuer's JSON Web Key Set document.
-	// Fetched and cached by the AS; rotated on 401 or periodic refresh.
+	// JWKSURL is the URL of the issuer's JSON Web Key Set, fetched and cached by the AS.
 	JWKSURL string
 
-	// AllowedAlgorithms is the set of JWS algorithms the AS will accept
-	// for this issuer. Defaults to ES256, RS256, EdDSA.
+	// AllowedAlgorithms is the set of JWS algorithms accepted for this issuer (default ES256, RS256, EdDSA).
 	AllowedAlgorithms []string
 
-	// SubjectMapper resolves the "sub" claim (and any other claims) of
-	// the external JWT to a local user ULID. When nil the built-in
-	// SubMapper is used: the sub claim is parsed directly as a ULID.
-	// Use EmailMapper to resolve the email claim to a local user.Email
-	// row instead.
+	// SubjectMapper resolves the external JWT's claims to a local user ULID. When nil the built-in
+	// SubMapper is used. Use EmailMapper to resolve the email claim to a local user instead.
 	SubjectMapper SubjectMapper
 
-	// RequiredClaims are matchers that every verified assertion from this
-	// issuer must satisfy (AND) before it is exchanged. A missing claim
-	// fails closed, values are never coerced and matching is case
-	// sensitive. A failure returns invalid_grant with a generic
-	// description and emits a jwt_bearer.claims_denied audit event that
-	// names the failed claims but not their values. With none configured
-	// every validly signed assertion from the issuer is accepted, which is
-	// unsafe for multi-tenant issuers such as GitHub Actions: see
-	// GitHubActionsIssuer.
+	// RequiredClaims are matchers every verified assertion from this issuer must satisfy before it is
+	// exchanged. A missing claim fails closed and matching is case sensitive. With none configured
+	// every validly signed assertion is accepted, which is unsafe for multi-tenant issuers such as
+	// GitHub Actions: see GitHubActionsIssuer.
 	RequiredClaims []ClaimMatcher
 
-	// Audience, when non-empty, is the aud value this issuer's assertions
-	// must carry instead of the authorization server issuer URL.
+	// Audience, when non-empty, is the aud value assertions from this issuer must carry instead of the
+	// AS issuer URL.
 	Audience string
 }
 
-// ClaimMatcher requires one claim of a verified jwt-bearer assertion to
-// satisfy exactly one operator (Equals, OneOf, Pattern or Present). See
-// TrustedJWTIssuer.RequiredClaims.
+// ClaimMatcher requires one claim of a verified jwt-bearer assertion to satisfy exactly one operator (Equals,
+// OneOf, Pattern or Present).
 type ClaimMatcher = internalas.ClaimMatcher
 
-// ErrInvalidClaimMatcher is returned by New (wrapped) for a misconfigured
-// ClaimMatcher.
+// ErrInvalidClaimMatcher is returned by New (wrapped) for a misconfigured ClaimMatcher.
 var ErrInvalidClaimMatcher = internalas.ErrInvalidClaimMatcher
 
-// SubjectMapper resolves claims from a trusted external JWT to a local
-// user ULID. Two built-in implementations are provided:
-//
-//   - SubMapper: treats the "sub" claim as a ULID directly.
-//   - EmailMapper: looks up the user by the "email" claim value.
-//
-// Custom implementations may consult any claim in the map; the AS passes
-// the full decoded payload.
+// SubjectMapper resolves claims from a trusted external JWT to a local user ULID. The built-ins are
+// SubMapper (the sub claim is a ULID) and EmailMapper (the email claim names a user). Custom
+// implementations see the full payload.
 type SubjectMapper interface {
-	// Resolve returns the local user ULID for the supplied claim map, or
-	// ErrStorageNotFound when no mapping exists. Any other error is
-	// treated as a transient failure and returned as server_error.
+	// Resolve returns the local user ULID for the claims, or ErrStorageNotFound when no mapping
+	// exists. Other errors are treated as transient and returned as server_error.
 	Resolve(claims map[string]any) (ULID, error)
 }
 
-// SubMapper is the built-in SubjectMapper that parses the "sub" claim
-// directly as a ULID. Use when the external issuer's subject is the
-// theauth user ID (e.g. for internal workload tokens).
+// SubMapper is the built-in SubjectMapper that parses the "sub" claim as a ULID (for example for
+// internal workload tokens).
 type SubMapper struct{}
 
-// Resolve implements SubjectMapper by parsing claims["sub"] as a ULID.
+// Resolve returns the local user ULID for the supplied claim map, or ErrStorageNotFound when no
+// mapping exists.
 func (SubMapper) Resolve(claims map[string]any) (ULID, error) {
 	sub, _ := claims["sub"].(string)
 	if sub == "" {
@@ -811,17 +574,15 @@ func (SubMapper) Resolve(claims map[string]any) (ULID, error) {
 	return id, nil
 }
 
-// EmailMapper is the built-in SubjectMapper that looks up the user by
-// email. The Lookup function must be provided (the AS wires in
-// Storage.UserByEmail). Returns ErrStorageNotFound when no user with
-// that email exists.
+// EmailMapper is the built-in SubjectMapper that looks up the user by email. Lookup must be set; the AS wires
+// Storage.UserByEmail. Returns ErrStorageNotFound when no such user exists.
 type EmailMapper struct {
-	// Lookup finds a user by their email address. Wire in
-	// Storage.UserByEmail at startup.
+	// Lookup finds a user by email address. Wire in Storage.UserByEmail at startup.
 	Lookup func(email string) (ULID, error)
 }
 
-// Resolve implements SubjectMapper by resolving claims["email"] to a user ID.
+// Resolve returns the local user ULID for the supplied claim map, or ErrStorageNotFound when no
+// mapping exists.
 func (m EmailMapper) Resolve(claims map[string]any) (ULID, error) {
 	email, _ := claims["email"].(string)
 	if email == "" {
@@ -833,72 +594,49 @@ func (m EmailMapper) Resolve(claims map[string]any) (ULID, error) {
 	return m.Lookup(email)
 }
 
-// ClientCompatConfig is the root-package alias for as.ClientCompat. Set it on
-// Config.AuthorizationServer.ClientCompat; the zero value is fully strict.
+// ClientCompatConfig is the root alias for as.ClientCompat. The zero value is fully strict.
 type ClientCompatConfig = internalas.ClientCompat
 
-// PARConfig is the root-package alias for as.PARConfig. Consumers set
-// Config.AuthorizationServer.PAR to enable RFC 9126 support.
+// PARConfig is the root alias for as.PARConfig. Set Config.AuthorizationServer.PAR to enable RFC 9126.
 type PARConfig = internalas.PARConfig
 
-// JARConfig is the root-package alias for as.JARConfig. Consumers set
-// Config.AuthorizationServer.JAR to enable RFC 9101 support.
+// JARConfig is the root alias for as.JARConfig. Set Config.AuthorizationServer.JAR to enable RFC 9101.
 type JARConfig = internalas.JARConfig
 
-// DPoPConfig configures the RFC 9449 DPoP verifier wired into both the
-// authorization server and the mcpresource validator. All fields are
-// optional; New populates sensible defaults when the operator does not
-// override them. The wire shape matches the internal dpop.Config 1:1
-// because every field is operator-visible policy.
+// DPoPConfig configures the RFC 9449 DPoP verifier shared by the authorization server and
+// mcpresource. Fields are optional and defaulted by New; the shape matches the internal
+// dpop.Config.
 type DPoPConfig struct {
-	// RequireDPoPForClients lists OAuth client IDs that MUST present a
-	// DPoP proof on every token request. Clients not on this list may
-	// still opt in by sending DPoP voluntarily; if they do, the issued
-	// token is sender constrained. For clients on this list, the
-	// absence of a proof is a 400 invalid_dpop_proof.
+	// RequireDPoPForClients lists client IDs that must present a DPoP proof on every token request
+	// (400 otherwise).
 	RequireDPoPForClients []string
 
-	// AllowedSignAlgs is the whitelist of signing algorithms a proof
-	// JWT may use. Defaults to ES256, ES384, RS256, PS256, EdDSA. HMAC
-	// algorithms (HS*) and "none" are always rejected per RFC 9449
-	// section 4.2.
+	// AllowedSignAlgs whitelists proof signing algorithms (default ES256, ES384, RS256, PS256, EdDSA).
+	// HMAC and "none" are always rejected per RFC 9449 section 4.2.
 	AllowedSignAlgs []string
 
-	// ProofMaxAge bounds how far in the past or future the proof's iat
-	// claim may be. Defaults to 60 seconds; values much above 5 minutes
-	// substantially weaken the protection.
+	// ProofMaxAge bounds how far from now a proof's iat may be (default 60 seconds; much above 5
+	// minutes weakens protection).
 	ProofMaxAge time.Duration
 
-	// NonceTTL bounds how long an issued DPoP-Nonce remains acceptable.
-	// Defaults to 10 minutes. Increasing this widens the window during
-	// which a captured nonce remains replayable; decreasing it forces
-	// clients to handle the use_dpop_nonce retry path more often.
+	// NonceTTL bounds how long an issued DPoP-Nonce stays acceptable (default 10 minutes).
 	NonceTTL time.Duration
 
-	// RequireNonceForTokens forces the token endpoint to demand a nonce
-	// on every DPoP proof. A first-call proof without a nonce returns
-	// HTTP 400 use_dpop_nonce + a DPoP-Nonce response header for the
-	// retry. Off by default; turn this on when running an AS exposed to
-	// untrusted clients to bound proof replay.
+	// RequireNonceForTokens makes the token endpoint demand a nonce on every proof (400 use_dpop_nonce
+	// on the first call). Off by default; enable it for an AS exposed to untrusted clients to bound
+	// proof replay.
 	RequireNonceForTokens bool
 
-	// NonceSecret is the HMAC-SHA256 secret used to mint + verify
-	// DPoP-Nonce headers. Leave empty to let New generate a fresh
-	// 32-byte secret at startup; supply a stable value here when
-	// running multiple AS instances behind a load balancer so any
-	// instance can verify a nonce issued by any other.
+	// NonceSecret is the HMAC-SHA256 key that mints and verifies DPoP-Nonce values. Empty generates a
+	// random key at startup; set a stable value when several AS instances sit behind a load balancer.
 	NonceSecret []byte
 
-	// JTIReplayWindow caps the in-memory jti LRU size used to reject
-	// replayed proofs within ProofMaxAge. Defaults to 4096; raise for
-	// high-throughput AS deployments and lower for memory-constrained
-	// ones. A value of 0 means default.
+	// JTIReplayWindow caps the in-memory jti LRU used to reject replayed proofs within ProofMaxAge
+	// (default 4096; 0 means default).
 	JTIReplayWindow int
 }
 
-// dpopConfigFromRoot translates the root DPoPConfig into the internal
-// dpop.Config the verifier consumes. Nil-safe; returns nil so the AS
-// service short-circuits DPoP handling.
+// dpopConfigFromRoot translates the root DPoPConfig into the internal dpop.Config. Nil-safe.
 func dpopConfigFromRoot(c *DPoPConfig) *internaldpop.Config {
 	if c == nil {
 		return nil
@@ -914,8 +652,7 @@ func dpopConfigFromRoot(c *DPoPConfig) *internaldpop.Config {
 	}
 }
 
-// jwtBearerConfigFromRoot translates the root JWTBearerConfig into the
-// internal/as JWTBearerConfig. Nil-safe; returns nil to disable JWT bearer.
+// jwtBearerConfigFromRoot translates the root JWTBearerConfig into the internal one. Nil-safe.
 func jwtBearerConfigFromRoot(c *JWTBearerConfig) *internalas.JWTBearerConfig {
 	if c == nil {
 		return nil
@@ -952,17 +689,9 @@ func jwtBearerConfigFromRoot(c *JWTBearerConfig) *internalas.JWTBearerConfig {
 	}
 }
 
-// ProtectedResource is defined in internal/models and re-exported from
-// models_v20.go as a type alias. The struct definition was relocated as
-// part of the arch-A0 models extraction so that every persistent and
-// configuration entity lives in one package.
-
-// validateASConfig applies defaults and screens required fields. PR B
-// architecture reorg (2026-06-20): the validation body lives in
-// internal/as.Validate; this stub mutates the supplied AS config in
-// place (since internal/as.Validate operates on its own Config struct,
-// we re-run validation by translating to the internal struct, calling
-// Validate, then copying the defaults back).
+// validateASConfig applies defaults and screens required fields. The validation body lives in
+// internal/as.Validate; this copies the defaults back onto cfg so root code sees the
+// post-validation state.
 func validateASConfig(cfg *AuthorizationServerConfig, encryptionKey []byte) error {
 	if cfg == nil {
 		return nil
@@ -1007,10 +736,8 @@ func validateASConfig(cfg *AuthorizationServerConfig, encryptionKey []byte) erro
 	if err := internalas.Validate(&internal, encryptionKey); err != nil {
 		return err
 	}
-	// Mirror the populated defaults back so any downstream root code
-	// that reads the original AuthorizationServerConfig pointer
-	// (notably the public exported field at *TheAuth construction time)
-	// sees the post-validation state.
+	// Mirror the populated defaults back so root code reading the AuthorizationServerConfig sees
+	// post-validation state.
 	cfg.Issuer = internal.Issuer
 	cfg.SigningAlg = internal.SigningAlg
 	cfg.KeyRotationPeriod = internal.KeyRotationPeriod
@@ -1026,8 +753,7 @@ func validateASConfig(cfg *AuthorizationServerConfig, encryptionKey []byte) erro
 	cfg.LoginURL = internal.LoginURL
 	cfg.RateLimits = internal.RateLimits
 	cfg.RegistrationTokenTTL = internal.RegistrationTokenTTL
-	// Mirror JWT bearer defaults back (assertion ages, JWKS cache, default
-	// algorithms); without this an omitted AssertionMaxAge rejects every grant.
+	// Mirror JWT bearer defaults back; without this an omitted AssertionMaxAge rejects every grant.
 	if jb, ij := cfg.JWTBearer, internal.JWTBearer; jb != nil && ij != nil {
 		jb.ClientAssertionMaxAge = ij.ClientAssertionMaxAge
 		jb.AssertionMaxAge = ij.AssertionMaxAge
@@ -1042,7 +768,6 @@ func validateASConfig(cfg *AuthorizationServerConfig, encryptionKey []byte) erro
 			}
 		}
 	}
-	// Mirror CIBA defaults back.
 	if cfg.CIBA != nil && internal.CIBA != nil {
 		cfg.CIBA.DefaultExpiry = internal.CIBA.DefaultExpiry
 		cfg.CIBA.DefaultInterval = internal.CIBA.DefaultInterval
@@ -1052,27 +777,14 @@ func validateASConfig(cfg *AuthorizationServerConfig, encryptionKey []byte) erro
 	return nil
 }
 
-// invalidateClientAuthCache removed in PR G (2026-06-21). The previous
-// unexported helper forwarded to a.as.InvalidateClientAuthCache. Every
-// in-tree caller now invokes the internal/as Service method directly
-// (rotation paths inside internal/as wire it themselves), so the root
-// shim became dead. The internal entry point is still public for the
-// extracted package.
-
-// resourceByIdentifier removed in PR F when handlers_oauth_server.go
-// moved into internal/as/handlers, which calls
-// a.as.ResourceByIdentifier directly.
-
 // OAuthState is the per-flow record kept between /start and /callback.
 type OAuthState = internaloauth.State
 
-// OAuthStateStore holds OAuth flow state between /start and /callback.
-// Implement it over a shared store (Redis, SQL) to run several replicas
-// behind a load balancer; the default in-memory store is single-process.
+// OAuthStateStore holds OAuth flow state between /start and /callback. Implement it over a shared
+// store (Redis, SQL) to run several replicas; the default in-memory store is single-process.
 type OAuthStateStore = internaloauth.StateStore
 
-// NewMemoryOAuthStateStore returns the default in-process OAuthStateStore.
-// It sweeps expired entries in the background; call Close when done.
+// NewMemoryOAuthStateStore returns the default in-process OAuthStateStore. Call Close when done.
 func NewMemoryOAuthStateStore() *internaloauth.MemoryStateStore {
 	return internaloauth.NewMemoryStateStore()
 }
@@ -1081,49 +793,33 @@ func NewMemoryOAuthStateStore() *internaloauth.MemoryStateStore {
 type OAuthSignupPolicy string
 
 const (
-	// OAuthSignupOpen lets any provider-authenticated identity create an
-	// account. It is the default so existing v2 deployments are unchanged.
+	// OAuthSignupOpen lets any provider-authenticated identity create an account (the default).
 	OAuthSignupOpen OAuthSignupPolicy = "open"
-	// OAuthSignupClosed refuses to create users from OAuth; only existing
-	// users and linked accounts can sign in.
+	// OAuthSignupClosed refuses to create users from OAuth; only existing users and linked accounts can sign in.
 	OAuthSignupClosed OAuthSignupPolicy = "closed"
-	// OAuthSignupAllowedDomains creates users only when the provider-verified
-	// email domain is listed in OAuthConfig.AllowedEmailDomains.
+	// OAuthSignupAllowedDomains creates users only when the verified email domain is in AllowedEmailDomains.
 	OAuthSignupAllowedDomains OAuthSignupPolicy = "allowed_domains"
-	// OAuthSignupInvite creates users only when OAuthConfig.InviteCheck
-	// approves the verified email.
+	// OAuthSignupInvite creates users only when OAuthConfig.InviteCheck approves the verified email.
 	OAuthSignupInvite OAuthSignupPolicy = "invite"
 )
 
-// OAuthConfig tunes OAuth login hardening. The zero value keeps v2
-// behavior: in-memory state with a 10 minute TTL, no return-to parameter,
-// and open signup.
+// OAuthConfig tunes OAuth login hardening. The zero value keeps v2 behavior: in-memory state, 10 minute TTL,
+// no return-to parameter and open signup.
 type OAuthConfig struct {
-	// StateStore overrides the default in-memory state store.
 	StateStore OAuthStateStore
-	// StateTTL bounds how long a flow may take. Defaults to 10 minutes.
-	StateTTL time.Duration
-	// AllowedReturnTo lists the post-login destinations a caller may request
-	// with ?return_to=. Entries are exact absolute URLs or paths beginning
-	// with "/" (matched as exact path, or prefix when ending in "*").
-	// Anything else is ignored and Config.PostLoginRedirect is used.
-	AllowedReturnTo []string
-	// Signup selects the new-user policy. Defaults to OAuthSignupOpen.
-	Signup OAuthSignupPolicy
-	// AllowedEmailDomains is required for OAuthSignupAllowedDomains.
+	StateTTL   time.Duration
+	// AllowedReturnTo lists post-login destinations a caller may request with ?return_to= (exact URLs,
+	// or "/" paths matched exactly or by a "*" prefix). Anything else falls back to
+	// Config.PostLoginRedirect.
+	AllowedReturnTo     []string
+	Signup              OAuthSignupPolicy
 	AllowedEmailDomains []string
-	// InviteCheck is required for OAuthSignupInvite. It receives the
-	// provider-verified, lower-cased email.
+	// InviteCheck is required for OAuthSignupInvite. It receives the verified, lower-cased email.
 	InviteCheck func(ctx context.Context, email string) (bool, error)
-	// RedirectURI, when set, builds the redirect_uri sent to the provider
-	// instead of BaseURL + prefix + "/providers/{name}/callback". Use it to
-	// keep callback URLs already registered at the provider. r is the
-	// request that began the flow. The value is stored with the state and
-	// reused verbatim at code exchange. It must be an absolute https URL
-	// (http only for loopback or with AllowInsecureRedirectURI) with no
-	// fragment or userinfo; any error fails the start. Deriving the host
-	// from an unvalidated Host or X-Forwarded-Host header is unsafe: set
-	// RedirectURIAllowedHosts. Experimental.
+	// RedirectURI, when set, builds the redirect_uri sent to the provider instead of BaseURL + prefix
+	// + callback, so callback URLs already registered at the provider keep working. It must be an
+	// absolute https URL (http only for loopback or with AllowInsecureRedirectURI) with no fragment or
+	// userinfo. Never derive it from an unvalidated Host header.
 	RedirectURI func(r *http.Request, provider string) (string, error)
 	// RedirectURIAllowedHosts, when non-empty, restricts the host (or
 	// host:port) RedirectURI may return; anything else fails closed.
@@ -1234,13 +930,9 @@ func (c *LoginThrottleConfig) limiter() *throttle.Limiter {
 	})
 }
 
-// BootstrapConfig closes public signup and gates creation of the first user
-// behind a one-time setup token. The storage must implement UserCountStorage.
-//
-// While no user exists, password signup requires the token in the
-// X-Setup-Token header or a "setupToken" body field. After the first user
-// exists, signup is refused with CodeSignupClosed unless
-// OpenSignupAfterFirstUser is set. Magic-link account creation follows the
-// same rule but can never present a token, so the first admin must sign up
-// with a password. Granting the new user an admin role is left to OnFirstUser.
+// BootstrapConfig gates creation of the first user behind a one-time setup token (the storage must
+// implement UserCountStorage). While no user exists, password signup needs the token in the
+// X-Setup-Token header or a "setupToken" body field. Afterwards signup is refused with
+// CodeSignupClosed unless OpenSignupAfterFirstUser is set. Magic-link signup cannot present a
+// token, so the first admin signs up with a password.
 type BootstrapConfig = bootstrap.Config

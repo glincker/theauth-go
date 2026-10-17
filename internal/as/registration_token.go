@@ -11,19 +11,14 @@ import (
 	"github.com/glincker/theauth-go/v2/internal/ulid"
 )
 
-// registration_token.go: initial access tokens for POST /oauth/register
-// (RFC 7591 section 1.2), used to register agents and other clients without
-// opening anonymous registration.
-//
-// A token is created by an admin, shown once, stored only as a SHA-256
-// digest, limited to MaxUses redemptions (default 1), expires, and can cap the
-// scopes and grant types of the client it registers. Every lifecycle step
-// emits an audit event.
+// registration_token.go implements initial access tokens for POST /oauth/register (RFC 7591 section
+// 1.2), so agents and other clients can register without opening anonymous registration. Tokens are
+// shown once, stored as a SHA-256 digest, limited in uses, expire, and can cap the scopes and grant
+// types of the client they register.
 
 const (
 	registrationTokenPrefix = "rt_"
-	// maxRegistrationTokenUses bounds MaxUses so a typo cannot mint a
-	// practically unlimited token.
+	// maxRegistrationTokenUses bounds MaxUses so a typo cannot mint a practically unlimited token.
 	maxRegistrationTokenUses = 1000
 )
 
@@ -31,15 +26,12 @@ const (
 type CreateRegistrationTokenInput struct {
 	Label          string
 	OrganizationID *models.ULID
-	// Scopes and GrantTypes cap what the registered client may declare.
-	// Empty means unrestricted.
+	// Scopes and GrantTypes cap what the registered client may declare. Empty means unrestricted.
 	Scopes     []string
 	GrantTypes []string
-	// MaxUses defaults to 1 (one-time).
-	MaxUses int
-	// TTL defaults to Config.RegistrationTokenTTL.
-	TTL       time.Duration
-	CreatedBy *models.ULID
+	MaxUses    int
+	TTL        time.Duration
+	CreatedBy  *models.ULID
 }
 
 func (s *Service) registrationStore() (RegistrationTokenStorage, bool) {
@@ -50,15 +42,14 @@ func (s *Service) registrationStore() (RegistrationTokenStorage, bool) {
 	return st, ok
 }
 
-// RegistrationTokensEnabled reports whether the storage supports stored
-// registration tokens.
+// RegistrationTokensEnabled reports whether the storage supports stored registration tokens.
 func (s *Service) RegistrationTokensEnabled() bool {
 	_, ok := s.registrationStore()
 	return ok
 }
 
-// CreateRegistrationToken mints a token and returns the stored record plus the
-// plaintext, which is not recoverable afterwards.
+// CreateRegistrationToken mints a token and returns the stored record and the plaintext, which is
+// not recoverable afterwards.
 func (s *Service) CreateRegistrationToken(ctx context.Context, in CreateRegistrationTokenInput) (models.RegistrationToken, string, error) {
 	store, ok := s.registrationStore()
 	if !ok {
@@ -122,7 +113,7 @@ func registrationGrantAllowed(g string) bool {
 	return false
 }
 
-// ListRegistrationTokens lists tokens, newest first. A nil orgID lists all.
+// ListRegistrationTokens lists tokens, newest first.
 func (s *Service) ListRegistrationTokens(ctx context.Context, orgID *models.ULID) ([]models.RegistrationToken, error) {
 	store, ok := s.registrationStore()
 	if !ok {
@@ -131,9 +122,8 @@ func (s *Service) ListRegistrationTokens(ctx context.Context, orgID *models.ULID
 	return store.ListRegistrationTokens(ctx, orgID)
 }
 
-// RevokeRegistrationToken revokes a token. When orgID is non-nil the token
-// must belong to that organization, otherwise ErrStorageNotFound is returned
-// so an admin cannot probe other organizations' token IDs.
+// RevokeRegistrationToken revokes a token. A non-nil orgID must own it, else ErrStorageNotFound, so
+// admins cannot probe other organizations.
 func (s *Service) RevokeRegistrationToken(ctx context.Context, id models.ULID, orgID *models.ULID, actor *models.ULID) error {
 	store, ok := s.registrationStore()
 	if !ok {
@@ -161,13 +151,9 @@ func (s *Service) RevokeRegistrationToken(ctx context.Context, id models.ULID, o
 	return nil
 }
 
-// RedeemRegistrationToken validates raw against the stored tokens and the
-// registration request, then spends one use. The returned token must be passed
-// to RefundRegistrationToken if the registration then fails.
-//
-// Unknown, expired, revoked and exhausted tokens all return
-// ErrRegistrationTokenInvalid. A valid token whose scope does not cover the
-// request returns ErrRegistrationTokenScope without spending a use.
+// RedeemRegistrationToken validates raw against the stored tokens and the request, then spends one
+// use. Pass the token to RefundRegistrationToken if the registration later fails. A scope mismatch
+// returns ErrRegistrationTokenScope without spending.
 func (s *Service) RedeemRegistrationToken(ctx context.Context, raw string, req ClientRegistrationRequest) (*models.RegistrationToken, error) {
 	store, ok := s.registrationStore()
 	if !ok || !strings.HasPrefix(raw, registrationTokenPrefix) {
@@ -201,16 +187,14 @@ func (s *Service) RedeemRegistrationToken(ctx context.Context, raw string, req C
 	return t, nil
 }
 
-// RefundRegistrationToken gives back the use taken by RedeemRegistrationToken
-// when the registration failed afterwards.
+// RefundRegistrationToken gives back the use taken by RedeemRegistrationToken when the registration failed.
 func (s *Service) RefundRegistrationToken(ctx context.Context, id models.ULID) {
 	if store, ok := s.registrationStore(); ok {
 		_ = store.RefundRegistrationToken(ctx, id)
 	}
 }
 
-// RegistrationSucceeded emits the redemption audit event once the client
-// exists.
+// RegistrationSucceeded emits the redemption audit event once the client exists.
 func (s *Service) RegistrationSucceeded(ctx context.Context, t *models.RegistrationToken, clientID string) {
 	s.Audit.EmitAudit(ctx, "oauth.registration_token.redeemed",
 		models.TargetRef{Type: "registration_token", ID: t.ID.String()},

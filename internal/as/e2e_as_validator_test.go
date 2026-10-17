@@ -14,7 +14,7 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
-// e2e_as_validator_test.go closes the headline gap from the 2026-06-20 reliability audit (section 4, scenario E2E-1): 'Today the AS-side delegation exchange is tested in isolation against the AS's own introspection cache; the mcpresource validator is tested in isolation against a hand-rolled fake AS. No single test wires the real AS, mints a real delegated JWT, and validates it through the real mcpresource middleware.'
+// e2e_as_validator_test.go runs the delegation exchange against a real authorization server, not in isolation.
 //
 // This test stands up the real authorization server via httptest.NewServer, performs a real user login (StartAuthorize + ExchangeAuthorizationCode), registers a real agent, performs a real RFC 8693 token exchange, then validates the resulting JWT through a real mcpresource.Validator pointed at the AS's own JWKS + introspection endpoints. A wire-format mismatch between the AS-side serialization and the validator-side parser would fail the principal assertion.
 func TestUserLoginAgentExchangeMcpresourceValidate(t *testing.T) {

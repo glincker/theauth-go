@@ -6,8 +6,7 @@ import (
 	"github.com/glincker/theauth-go/v2"
 )
 
-// service_rbac_catalog_test.go closes the RBAC matrix gap called out in the
-// 2026-06-20 reliability audit (section 2: RBAC permission matrix).
+// service_rbac_catalog_test.go enumerates every permission in the RBAC matrix.
 // Existing tests assert a representative subset; this file enumerates every
 // permission in the seeded catalog against every default role so that a
 // future addition to the catalog without updating the seeded role
@@ -76,11 +75,8 @@ func assertRoleHolds(t *testing.T, fx rbacFixture, roleName, perm string, want b
 	}
 }
 
-// TestSeededPermissionsCoversV20PhaseAdditions guards against a regression
-// where the v2.0 phase 6 permissions (agents:admin + delegations:admin) are
-// removed from the seeded catalog. The audit specifically called out this
-// gap: a new permission added to the catalog without being added to the
-// seeded role still passes the existing matrix tests.
+// TestSeededPermissionsCoversV20PhaseAdditions guards against the v2.0 phase 6 permissions
+// (agents:admin, delegations:admin) being dropped from the seeded catalog.
 func TestSeededPermissionsCoversV20PhaseAdditions(t *testing.T) {
 	required := map[string]bool{
 		theauth.PermissionAgentsAdmin:      true,

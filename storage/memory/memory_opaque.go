@@ -27,7 +27,6 @@ func cloneOpaque(t theauth.OpaqueAccessToken) theauth.OpaqueAccessToken {
 	return t
 }
 
-// InsertOpaqueAccessToken satisfies OpaqueTokenStorage.
 func (s *Store) InsertOpaqueAccessToken(_ context.Context, t theauth.OpaqueAccessToken) error {
 	st := &s.opaque
 	st.mu.Lock()
@@ -45,7 +44,6 @@ func (s *Store) InsertOpaqueAccessToken(_ context.Context, t theauth.OpaqueAcces
 	return nil
 }
 
-// OpaqueAccessTokenByHash satisfies OpaqueTokenStorage.
 func (s *Store) OpaqueAccessTokenByHash(_ context.Context, hash []byte) (*theauth.OpaqueAccessToken, error) {
 	st := &s.opaque
 	st.mu.Lock()
@@ -58,7 +56,6 @@ func (s *Store) OpaqueAccessTokenByHash(_ context.Context, hash []byte) (*theaut
 	return &out, nil
 }
 
-// RevokeOpaqueAccessToken satisfies OpaqueTokenStorage.
 func (s *Store) RevokeOpaqueAccessToken(_ context.Context, hash []byte) error {
 	st := &s.opaque
 	st.mu.Lock()

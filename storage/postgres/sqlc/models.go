@@ -38,9 +38,7 @@ type Session struct {
 	ExpiresAt pgtype.Timestamptz
 	RevokedAt pgtype.Timestamptz
 	AuthLevel string
-	// v0.7. Pgx Scan target; the column is nullable (ON DELETE SET NULL on
-	// organizations). Existing queries that do not SELECT this column leave
-	// the field as zero-value pgtype.UUID{Valid:false}.
+	// Nullable; queries that do not select it leave the field as pgtype.UUID{Valid:false}.
 	ActiveOrganizationID pgtype.UUID
 }
 
@@ -53,8 +51,7 @@ type User struct {
 	CreatedAt       pgtype.Timestamptz
 	UpdatedAt       pgtype.Timestamptz
 	PasswordHash    *string
-	// v0.7 SCIM columns. Added with NOT NULL DEFAULT '' in migration 0008,
-	// so existing reads keep returning empty strings for non-SCIM users.
+	// SCIM columns default to '' (migration 0008), so non-SCIM users read empty strings.
 	ExternalID  string
 	GivenName   string
 	FamilyName  string
@@ -85,12 +82,8 @@ type WebauthnCredential struct {
 	Name         string
 	CreatedAt    pgtype.Timestamptz
 	LastUsedAt   pgtype.Timestamptz
-	// BackupEligible / BackupState were hand-added to this generated file to
-	// match migration 0017 (webauthn backup flags). sqlc cannot regenerate
-	// here: sqlc.yaml only lists migrations 0001-0005 as its schema, so
-	// `sqlc generate` fails against the current schema and the generated files
-	// are hand-maintained mirrors (repo convention). Nullable columns ->
-	// pgtype.Bool (Valid=false means SQL NULL / "never recorded").
+	// BackupEligible and BackupState were hand-added (migration 0017). Nullable columns map to
+	// pgtype.Bool, where Valid=false means never recorded.
 	BackupEligible pgtype.Bool
 	BackupState    pgtype.Bool
 }

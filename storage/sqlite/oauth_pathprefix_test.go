@@ -13,13 +13,9 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
-// TestOAuthMetadataUnderPathPrefix pins how discovery behaves when the host
-// mounts the library under a path prefix with http.StripPrefix. The
-// authorization server routes (/oauth/*, /.well-known/*) are registered at the
-// root of the library router, so the prefix is the host's mount point and the
-// issuer carries it. RFC 8414 and RFC 9728 put the well-known document at the
-// origin root with the path appended, which only works when the host also
-// forwards that origin root path to the library.
+// TestOAuthMetadataUnderPathPrefix pins discovery when the host mounts the library under a path
+// prefix (http.StripPrefix). RFC 8414 and RFC 9728 documents live at the origin root, so they only
+// resolve when the host also forwards that root.
 func TestOAuthMetadataUnderPathPrefix(t *testing.T) {
 	const (
 		prefix   = "/api/v1/auth-lib"

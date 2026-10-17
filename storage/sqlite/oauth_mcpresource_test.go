@@ -14,15 +14,9 @@ import (
 	"github.com/glincker/theauth-go/v2"
 )
 
-// TestMCPResourceServerE2E proves the mcpresource middleware (the path
-// Levelrail's MCP endpoint uses) against a live theauth AS on SQLite: JWKS
-// signature validation, RFC 9728 challenges, scope enforcement, audience
-// binding, RevocationChecker driven revocation and the live act chain recheck.
-//
-// Revocation modes the middleware offers: JWKS-only validation cannot see
-// revocation (it is offline), a RevocationChecker (WithRevocationChecker) can,
-// and tokens carrying act or delegation_grant_id are always rechecked through
-// introspection.
+// TestMCPResourceServerE2E exercises the mcpresource middleware against a live SQLite-backed AS:
+// JWKS validation, RFC 9728 challenges, scopes, audience, and revocation via RevocationChecker.
+// Tokens with act or delegation_grant_id are always rechecked through introspection.
 func TestMCPResourceServerE2E(t *testing.T) {
 	e := newOAuthEnv(t)
 	ctx := context.Background()
@@ -32,8 +26,7 @@ func TestMCPResourceServerE2E(t *testing.T) {
 
 	const cacheTTL = 20 * time.Millisecond
 
-	// mkRS builds an httptest resource server guarded by a validator. The
-	// handler reports the principal the middleware attached.
+	// mkRS builds an httptest resource server guarded by a validator.
 	mkRS := func(t *testing.T, resource string, opts ...mcpresource.Option) (*mcpresource.Validator, *httptest.Server) {
 		t.Helper()
 		base := []mcpresource.Option{
@@ -208,9 +201,7 @@ func TestMCPResourceServerE2E(t *testing.T) {
 		if err := e.a.RevokeDelegation(ctx, grant.ID, "mcpresource e2e"); err != nil {
 			t.Fatalf("RevokeDelegation: %v", err)
 		}
-		// The AS caches chain results on its injected clock. The resource
-		// server honours the AS Cache-Control max-age (IntrospectionCacheTTL,
-		// 1s here) over its own WithCacheTTL, so wait that out in wall time.
+		// The AS caches chain results for IntrospectionCacheTTL (1s here), so wait that out.
 		e.clock.Advance(time.Hour)
 		time.Sleep(1200 * time.Millisecond)
 		st, hdr, body := call(t, rs, "/mcp", agentTok)

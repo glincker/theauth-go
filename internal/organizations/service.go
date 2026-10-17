@@ -1,10 +1,5 @@
-// Package organizations owns the create / read / member-management surface
-// for multi-tenant organizations. Extracted from root service_organizations.go
-// in PR A of the 2026-06 architecture reorg.
-//
-// The package enforces two invariants the storage layer cannot: slug
-// validation (URL-safe lowercase alphanumeric + hyphen) and the
-// "cannot orphan the last owner" guard on both demote and remove paths.
+// Package organizations owns create, read and member management for multi-tenant organizations. It enforces
+// slug rules and never leaves an organization without an owner.
 package organizations
 
 import (
@@ -101,7 +96,7 @@ func (s *Service) ByID(ctx context.Context, id models.ULID) (*models.Organizatio
 // AddMember adds (or updates the role of) a user inside an organization.
 // Roles must be one of "owner", "admin", "member".
 //
-// security audit M2 (2026-06-20): when the upsert would demote the last
+// security audit M2: when the upsert would demote the last
 // remaining owner (role != owner on a user who is currently the sole
 // owner), the call is rejected with models.ErrLastOwner. Without this
 // guard, an admin could orphan the organization by setting the last

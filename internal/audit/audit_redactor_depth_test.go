@@ -11,24 +11,11 @@ import (
 	"github.com/glincker/theauth-go/v2/storage/memory"
 )
 
-// audit_redactor_depth_test.go closes two gaps the 2026-06-20 reliability
-// audit called out in section 2 (audit redactor):
-//
-//  1. DefaultRedactor is exercised at depth 1 and depth 2 only. Production
-//     callers can legitimately produce depth-5 metadata (a nested OAuth
-//     provider response, for example), and the redactor's recursion has
-//     never been asserted at those depths.
-//  2. The []map[string]any typed-slice branch (audit.go:70) is hit by no
-//     existing test; only the untyped []any path is covered.
-//
-// We also stress-test EmitAudit under 4x the existing fan-out to back the
-// audit's "audit emission under realistic concurrency" recommendation
-// (section 4, scenario E2E-4). Deterministic synchronisation: we wait on
-// the store's call counter rather than wall clock.
+// audit_redactor_depth_test.go covers redaction at depth beyond 2, the typed []map[string]any
+// branch, and EmitAudit at 4x fan-out, waiting on the store counter instead of the clock.
 
-// TestDefaultRedactorDeepNesting walks a 5-level map and asserts every
-// secret-flavored key is masked at every level. The test also confirms
-// non-secret keys at every level are preserved untouched.
+// TestDefaultRedactorDeepNesting checks that secret keys are masked at every level of a 5-level
+// map, and other keys are kept.
 func TestDefaultRedactorDeepNesting(t *testing.T) {
 	in := map[string]any{
 		"level1_safe": "ok",
@@ -83,9 +70,8 @@ func TestDefaultRedactorDeepNesting(t *testing.T) {
 	}
 }
 
-// TestDefaultRedactorTypedMapSlice asserts the []map[string]any branch of
-// redactValue (audit.go:70). Existing tests cover []any only, which goes
-// through a different switch arm.
+// TestDefaultRedactorTypedMapSlice covers the []map[string]any arm of redactValue, which the []any
+// tests do not reach.
 func TestDefaultRedactorTypedMapSlice(t *testing.T) {
 	in := map[string]any{
 		"providers": []map[string]any{
@@ -109,9 +95,7 @@ func TestDefaultRedactorTypedMapSlice(t *testing.T) {
 	}
 }
 
-// TestSeededSecretKeysReturnsBlocklist asserts the public SeededSecretKeys
-// helper returns the full blocklist. Trivial but the function is part of
-// the public API and was 0% covered before this test.
+// TestSeededSecretKeysReturnsBlocklist checks the public SeededSecretKeys helper returns the full blocklist.
 func TestSeededSecretKeysReturnsBlocklist(t *testing.T) {
 	keys := theauth.SeededSecretKeys()
 	if len(keys) == 0 {
@@ -132,9 +116,8 @@ func TestSeededSecretKeysReturnsBlocklist(t *testing.T) {
 	}
 }
 
-// countingStore wraps the in-memory store and exposes a deterministic
-// signal whenever InsertAuditEvents fires so concurrency tests can wait on
-// the writer rather than polling a wall clock.
+// countingStore wraps the in-memory store and signals each InsertAuditEvents call, so tests can
+// wait on the writer.
 type countingStore struct {
 	*memory.Store
 	calls  atomic.Uint64
@@ -156,10 +139,9 @@ func (s *countingStore) InsertAuditEvents(ctx context.Context, events []theauth.
 	return err
 }
 
-// TestEmitAuditUnderHighConcurrency emits 4x the existing TestEmitAuditConcurrent
-// fan-out and waits on the store's row counter rather than polling. Asserts
-// the emitted = written + dropped invariant survives realistic load and that
-// no goroutine deadlocks under the larger fan-out.
+// TestEmitAuditUnderHighConcurrency emits 4x the TestEmitAuditConcurrent fan-out and waits on the
+// row counter. It asserts emitted equals written plus dropped and that the larger fan-out does not
+// deadlock.
 func TestEmitAuditUnderHighConcurrency(t *testing.T) {
 	store := newCountingStore()
 	a, err := theauth.New(theauth.Config{
@@ -195,9 +177,7 @@ func TestEmitAuditUnderHighConcurrency(t *testing.T) {
 	}
 	wg.Wait()
 
-	// Deterministic settle: spin until written + dropped + failed >= total,
-	// using a generous wall-clock cap (5s) only as a safety net. The actual
-	// signal we trust is the counter equality.
+	// Settle on the counter equality, with a 5s wall-clock cap only as a safety net.
 	deadline := time.Now().Add(5 * time.Second)
 	for {
 		s := a.Stats()

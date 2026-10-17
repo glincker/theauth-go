@@ -47,24 +47,21 @@ type Config struct {
 	AgentTTL time.Duration
 	// AgentMaxTTL caps agent token lifetimes. Defaults to 24 hours.
 	AgentMaxTTL time.Duration
-	// UserAbilities returns the abilities a user currently holds. Default:
-	// [AbilityRoot] for an admin (see IsAdmin), nothing otherwise. Evaluated
-	// on every request, so a demotion takes effect immediately.
+	// UserAbilities returns the abilities a user holds now. The default is [AbilityRoot] for admins
+	// and nothing otherwise. It runs on every request, so demotion takes effect at once.
 	UserAbilities func(ctx context.Context, u *User) ([]string, error)
 	// IsAdmin reports whether the user may manage other owners' tokens.
 	// Default: holds the system super_admin RBAC role, false without RBAC storage.
 	IsAdmin func(ctx context.Context, u *User) (bool, error)
-	// OwnerActive reports whether an owner (user or service account) may
-	// still use tokens. Use it to model disabled accounts. A user whose row
-	// is gone is always inactive. Default: active.
+	// OwnerActive reports whether an owner (user or service account) may still use tokens. A missing
+	// user row is always inactive. Default: active.
 	OwnerActive func(ctx context.Context, ownerID ULID) (bool, error)
 	// DeviceRequestsAbility is the ability a signed-in session must hold to
 	// list and decide pending device requests by ID. Empty means root.
 	DeviceRequestsAbility string
-	// DeviceRequestsAnySignedInUser lets any signed-in user list and decide
-	// pending requests by ID. Off by default: approving from a list skips the
-	// proof of holding the code shown on the device, which aids phishing in a
-	// multi-user app.
+	// DeviceRequestsAnySignedInUser lets any signed-in user list and decide pending requests by ID.
+	// Off by default: deciding from a list skips the proof of holding the code shown on the device,
+	// which aids phishing.
 	DeviceRequestsAnySignedInUser bool
 	// Device enables /auth/device/*. Nil leaves the device grant off.
 	Device *DeviceConfig
@@ -97,9 +94,8 @@ type Service struct {
 	responder func(w http.ResponseWriter, r *http.Request, status int, code, message string)
 }
 
-// New builds the service from cfg and the raw storage, which must implement
-// APITokenStorage (and DeviceCodeStorage when cfg.Device is set). It returns
-// nil, nil for a nil cfg.
+// New builds the service from cfg and raw storage, which must implement APITokenStorage (and
+// DeviceCodeStorage with Device set). A nil cfg yields nil, nil.
 func New(host Host, cfg *Config, raw any, users UserLookup, baseURL string) (*Service, error) {
 	if cfg == nil {
 		return nil, nil
@@ -363,9 +359,8 @@ type ImportedToken struct {
 	LastUsedAt *time.Time
 }
 
-// Import inserts an existing token by its SHA-256 hash. The hash must
-// cover the full raw secret as presented by clients; tokens lacking the
-// configured prefix authenticate only when Config.AcceptUnprefixed is set.
+// Import inserts an existing token by its SHA-256 hash, which must cover the full raw secret.
+// Unprefixed tokens are accepted only with AcceptUnprefixed.
 func (s *Service) Import(ctx context.Context, in ImportedToken) (APIToken, error) {
 	return importAPIToken(ctx, s.store, s, in, s.now())
 }
@@ -414,8 +409,7 @@ func importAPIToken(ctx context.Context, store APITokenStorage, v *Service, in I
 }
 
 // ImportTo inserts an existing token by hash straight into store, with no TheAuth instance.
-//
-// Abilities are checked for syntax only, since there is no configured allowlist.
+// Abilities are checked for syntax only.
 func ImportTo(ctx context.Context, store APITokenStorage, in ImportedToken) (APIToken, error) {
 	if store == nil {
 		return APIToken{}, errors.New("theauth: nil storage")

@@ -1,16 +1,7 @@
 package account
 
-// handlers_identitylink.go wires the five /account/identities/* HTTP
-// endpoints introduced in v2.3. All routes run through RequireAuth
-// (mounted via Handler.Mount) so the session cookie must carry a full
-// session; the service layer enforces step-up via ErrStepUpRequired.
-//
-// Routes mounted here:
-//   POST   /account/identities/oauth           begin OAuth link flow
-//   GET    /account/identities/oauth/callback  complete OAuth link
-//   POST   /account/identities/password        set / update password
-//   POST   /account/identities/merge           merge two accounts
-//   DELETE /account/identities/{provider}      unlink an OAuth provider
+// handlers_identitylink.go serves the /account/identities/* endpoints: OAuth link, password, merge
+// and unlink. The session must be full; step-up is enforced by the service layer.
 
 import (
 	"context"
@@ -26,9 +17,8 @@ import (
 	"github.com/oklog/ulid/v2"
 )
 
-// IdentityLinkService is the subset of identitylink.Service the handler
-// needs. Declared as an interface so tests can stub it without building a
-// full service.
+// IdentityLinkService is the subset of identitylink.Service the handler needs, declared as an
+// interface so tests can stub it.
 type IdentityLinkService interface {
 	LinkOAuthToCurrentUser(
 		ctx context.Context,
@@ -49,9 +39,8 @@ type OAuthLinkInitiator interface {
 	CallbackLink(ctx context.Context, providerName, code, state, sessionToken string) error
 }
 
-// SessionTokenFromRequest extracts the raw session token from the request
-// cookie. Supplied by root at Mount time so this package does not depend on
-// the cookie name constant.
+// SessionTokenFromRequest extracts the raw session token from the cookie. Root supplies it, so this
+// package need not know the cookie name.
 type SessionTokenFromRequest func(r *http.Request) (string, bool)
 
 // mountIdentityLink wires the five /account/identities/* routes. Called by
@@ -70,10 +59,8 @@ func (h *Handler) mountIdentityLink(r chi.Router, requireAuth func(http.Handler)
 	})
 }
 
-// handleLinkOAuthBegin starts an OAuth link flow: it calls the provider's
-// start endpoint and returns the authorization URL for the client to redirect
-// to. The session cookie must be present so the callback can bind the result
-// to the correct user.
+// handleLinkOAuthBegin starts an OAuth link flow and returns the provider authorization URL. The
+// session cookie must be present, so the callback binds the result to the right user.
 func (h *Handler) handleLinkOAuthBegin(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		Provider string `json:"provider"`
@@ -106,10 +93,8 @@ func (h *Handler) handleLinkOAuthBegin(w http.ResponseWriter, r *http.Request) {
 	httpx.WriteJSON(w, http.StatusOK, map[string]string{"authorizationUrl": authURL})
 }
 
-// handleLinkOAuthCallback completes the OAuth link flow. The OAuth provider
-// redirects back here with code+state; the handler delegates to
-// OAuthLinkInitiator.CallbackLink which exchanges the code, fetches user
-// info, and calls identitylink.Service.LinkOAuthToCurrentUser.
+// handleLinkOAuthCallback completes the OAuth link flow: the code is exchanged and the identity
+// linked to the current user.
 func (h *Handler) handleLinkOAuthCallback(w http.ResponseWriter, r *http.Request) {
 	provider := r.URL.Query().Get("provider")
 	code := r.URL.Query().Get("code")

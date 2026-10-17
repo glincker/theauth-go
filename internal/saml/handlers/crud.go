@@ -10,13 +10,10 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
-// crud.go: per-organization SAML connection CRUD endpoints, mounted
-// under /auth/orgs/{orgId}/saml/connections. Extracted from root
-// handlers_saml.go in PR F of the 2026-06 architecture reorg. The
-// SP-flow endpoints in handlers.go and the CRUD endpoints here share
-// the same internal/saml/handlers.Handler value: CRUD methods read
-// connectionSvc + roleCheck supplied by NewWithCRUD; SP-flow methods
-// read svc + sessionCookie.
+// crud.go: per-organization SAML connection CRUD endpoints, mounted under
+// /auth/orgs/{orgId}/saml/connections. The SP-flow endpoints in handlers.go and the CRUD endpoints
+// here share the same internal/saml/handlers.Handler value: CRUD methods read connectionSvc +
+// roleCheck supplied by NewWithCRUD; SP-flow methods read svc + sessionCookie.
 
 // SAMLConnectionInput is the consumer-facing payload for create /
 // update. Mirrors models.SAMLAttributeMap-typed AttributeMap so the

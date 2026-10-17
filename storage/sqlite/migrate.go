@@ -55,10 +55,8 @@ func RenderMigrations(opts ...Option) ([]Migration, error) {
 	return out, nil
 }
 
-// Migrate applies pending migrations tracked in its own <prefix>schema_migrations table.
-//
-// Each step runs under BEGIN IMMEDIATE so concurrent processes serialize, and
-// is recorded in the same transaction as its DDL.
+// Migrate applies pending migrations tracked in <prefix>schema_migrations. Each step runs under
+// BEGIN IMMEDIATE so concurrent processes serialize, and is recorded in the same transaction as its DDL.
 func Migrate(ctx context.Context, db *sql.DB, opts ...Option) error {
 	c, err := buildConfig(opts)
 	if err != nil {

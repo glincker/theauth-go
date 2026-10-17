@@ -1,8 +1,6 @@
-// Package cimd implements RFC draft 'Client ID Metadata Documents' (CIMD) per the MCP Authorization specification 2025-11-25. CIMD lets an OAuth client publish its RFC 7591 client metadata at a stable https URL whose value IS the client_id; the AS fetches the document, validates it, and uses the resulting metadata in place of a local registration row.
-//
-// CIMD demotes RFC 7591 Dynamic Client Registration (DCR), which remains supported (no breaking change). When the AS receives a token-endpoint or authorize-endpoint request whose client_id parses as an https URL, it routes through this package instead of consulting OAuthServerStorage.
-//
-// Security: CIMD is open by default in the wild but this library fails closed. The default TrustPolicy is DenyAll; operators must opt in with AllowAnyHTTPS or AllowHTTPSHosts. This mirrors security audit H4 (2026-06-20): trust is explicit, never implicit.
+// Package cimd implements Client ID Metadata Documents per the MCP Authorization specification
+// 2025-11-25. CIMD lets a client publish its metadata at an https URL that is also its client_id.
+// The default TrustPolicy is DenyAll, so operators opt in explicitly.
 package cimd
 
 import (
@@ -10,26 +8,16 @@ import (
 	"strings"
 )
 
-// TrustPolicy decides whether an https URL is allowed to be fetched as a
-// client metadata document. Returning false rejects the URL before any
-// network IO; the AS responds with invalid_client.
-//
-// Implementations MUST treat the input as untrusted user data: parse with
-// net/url, lowercase the host for comparison, and reject anything that
-// does not start with "https://" (the cimd.Service short-circuits the
-// non-https case before calling Allow but a defensive policy MAY recheck).
+// TrustPolicy decides whether an https URL may be fetched as a metadata document. Returning false
+// rejects it before any network IO. Implementations must treat the input as untrusted.
 type TrustPolicy interface {
-	// Allow reports whether rawURL is permitted. The Service guarantees
-	// rawURL is a well-formed absolute https URL with no fragment by the
-	// time Allow is called; policies should not need to re-parse for
-	// scheme correctness.
+	// Allow reports whether rawURL is permitted. The Service has already checked that it is a
+	// well-formed https URL.
 	Allow(rawURL string) bool
 }
 
-// denyAllPolicy rejects every URL. It is the default returned by
-// theauth.DenyAll and the implicit default when Config.CIMD.TrustPolicy
-// is left nil at construction time. Fail-closed mirrors the security
-// audit H4 default for trusted proxies.
+// denyAllPolicy rejects every URL. It is the default, and matches the trusted-proxy fail-closed
+// default (security audit H4).
 type denyAllPolicy struct{}
 
 // Allow on denyAllPolicy always returns false.
@@ -39,26 +27,19 @@ func (denyAllPolicy) Allow(string) bool { return false }
 // CIMD resolution falls through to invalid_client without any network IO.
 func DenyAll() TrustPolicy { return denyAllPolicy{} }
 
-// allowAnyHTTPSPolicy permits every absolute https URL the Service hands
-// it. The Service already enforces scheme=="https" before calling Allow,
-// so this is effectively "trust every CIMD document the world publishes",
-// which matches the Bluesky / ATProto baseline. Operators that want
-// stricter posture should prefer AllowHTTPSHost or AllowHTTPSHosts.
+// allowAnyHTTPSPolicy permits every https URL the Service hands it, which matches the open
+// ecosystem baseline. Stricter deployments should prefer AllowHTTPSHost or AllowHTTPSHosts.
 type allowAnyHTTPSPolicy struct{}
 
 // Allow on allowAnyHTTPSPolicy returns true for every non-empty input.
 // The Service has already validated the URL shape; we trust that here.
 func (allowAnyHTTPSPolicy) Allow(raw string) bool { return raw != "" }
 
-// AllowAnyHTTPS returns a policy that accepts every https URL. Use only
-// in deployments that intentionally federate with an open ecosystem of
-// MCP clients (the public MCP profile). Production deployments that know
-// their clients ahead of time should prefer AllowHTTPSHost.
+// AllowAnyHTTPS accepts every https URL. Use it only when federating with the open MCP ecosystem.
 func AllowAnyHTTPS() TrustPolicy { return allowAnyHTTPSPolicy{} }
 
-// allowHostsPolicy permits an explicit allowlist of hostnames. Host
-// comparison is case-insensitive and exact (no suffix wildcards in v1);
-// operators that need wildcards can implement TrustPolicy themselves.
+// allowHostsPolicy permits an exact, case-insensitive host allowlist. Wildcards are not supported;
+// implement TrustPolicy for those.
 type allowHostsPolicy struct {
 	hosts map[string]struct{}
 }
@@ -84,17 +65,13 @@ func (p allowHostsPolicy) Allow(raw string) bool {
 	return ok
 }
 
-// AllowHTTPSHost returns a TrustPolicy that permits one specific host
-// (case-insensitive, exact match). Convenience wrapper around
-// AllowHTTPSHosts for the single-host case.
+// AllowHTTPSHost permits one host, case-insensitively.
 func AllowHTTPSHost(host string) TrustPolicy {
 	return AllowHTTPSHosts(host)
 }
 
-// AllowHTTPSHosts returns a TrustPolicy that permits any of the supplied
-// hosts (case-insensitive, exact match). An empty list produces a
-// permanently-deny policy (a typo by the operator must not silently
-// allow every host).
+// AllowHTTPSHosts permits any listed host, case-insensitively. An empty list denies everything, so
+// a typo cannot allow every host.
 func AllowHTTPSHosts(hosts ...string) TrustPolicy {
 	set := make(map[string]struct{}, len(hosts))
 	for _, h := range hosts {

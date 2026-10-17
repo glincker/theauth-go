@@ -1,10 +1,5 @@
 // Package theauthecho adapts theauth-go middleware and routes to Echo v4.
-//
-// It wraps the net/http middleware of a *theauth.TheAuth as native
-// echo.MiddlewareFunc values and exposes the authenticated user, session and
-// API token principal through echo accessors. Error responses are written by
-// theauth itself, so Config.ErrorResponder (when set) shapes them exactly as
-// it does under net/http; the adapter never writes its own error bodies.
+// Error responses are written by theauth itself, so Config.ErrorResponder shapes them.
 package theauthecho
 
 import (
@@ -45,10 +40,9 @@ func Principal(c echo.Context) (*theauth.Principal, bool) {
 	return theauth.PrincipalFromContext(c.Request().Context())
 }
 
-// Mount serves every theauth route (auth, oauth and well-known) under prefix,
-// for example Mount(a, e, "/api") serves /api/auth/signin. The routes keep
-// Config.PathPrefix below prefix. An empty prefix mounts /auth, /oauth and
-// /.well-known at the router root.
+// Mount serves every theauth route (auth, oauth and well-known) under prefix, e.g.
+// Mount(a, e, "/api") serves /api/auth/signin. The routes keep Config.PathPrefix below prefix.
+// An empty prefix mounts at the router root.
 func Mount(a *theauth.TheAuth, r interface {
 	Any(path string, h echo.HandlerFunc, m ...echo.MiddlewareFunc) []*echo.Route
 }, prefix string) {
@@ -64,10 +58,7 @@ func Mount(a *theauth.TheAuth, r interface {
 	}
 }
 
-// wrap turns a net/http middleware into an echo middleware. The request
-// replaced by the middleware (carrying the user and session in its context)
-// is installed before the next handler runs; a middleware that wrote a
-// response ends the chain.
+// wrap turns a net/http middleware into an echo middleware; a response written by it ends the chain.
 func wrap(mw func(http.Handler) http.Handler) echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {

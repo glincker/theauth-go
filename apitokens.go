@@ -12,7 +12,6 @@ import (
 	"github.com/glincker/theauth-go/v2/internal/revocation"
 )
 
-// Ability, owner, token kind and device status constants.
 const (
 	AbilityRoot             = apitokens.AbilityRoot
 	OwnerKindUser           = apitokens.OwnerKindUser
@@ -25,7 +24,6 @@ const (
 	DeviceStatusRedeemed    = apitokens.DeviceStatusRedeemed
 )
 
-// Principal kinds and actor kinds.
 const (
 	PrincipalSession = apitokens.PrincipalSession
 	PrincipalToken   = apitokens.PrincipalToken
@@ -33,7 +31,6 @@ const (
 	ActorKindAgent   = apitokens.ActorKindAgent
 )
 
-// Token, device and principal types.
 type (
 	APIToken             = apitokens.APIToken
 	DeviceCode           = apitokens.DeviceCode
@@ -60,7 +57,6 @@ type (
 	AgentRegistration    = agent.Registration
 )
 
-// Errors returned by the API token service and the device grant.
 var (
 	ErrAPITokensDisabled          = apitokens.ErrAPITokensDisabled
 	ErrAPITokenInvalid            = apitokens.ErrAPITokenInvalid
@@ -87,8 +83,7 @@ func PrincipalFromContext(ctx context.Context) (*Principal, bool) {
 	return apitokens.PrincipalFromContext(ctx)
 }
 
-// ImportAPITokenTo inserts an existing token by hash straight into store, with no TheAuth instance.
-//
+// ImportAPITokenTo inserts an existing token by hash into store without a TheAuth instance.
 // Abilities are checked for syntax only, since there is no configured allowlist.
 func ImportAPITokenTo(ctx context.Context, store APITokenStorage, in ImportedToken) (APIToken, error) {
 	return apitokens.ImportTo(ctx, store, in)
@@ -141,9 +136,9 @@ func (a *TheAuth) MintAPIToken(ctx context.Context, in MintAPITokenInput) (strin
 	return s.Mint(ctx, in)
 }
 
-// ImportAPIToken inserts an existing token by its SHA-256 hash. The hash must
-// cover the full raw secret as presented by clients; tokens lacking the
-// configured prefix authenticate only when Config.APITokens.AcceptUnprefixed is set.
+// ImportAPIToken inserts an existing token by its SHA-256 hash, which must cover the full raw secret
+// as clients present it. Tokens lacking the configured prefix authenticate only when
+// Config.APITokens.AcceptUnprefixed is set.
 func (a *TheAuth) ImportAPIToken(ctx context.Context, in ImportedToken) (APIToken, error) {
 	s, err := a.apiSvc()
 	if err != nil {
@@ -152,8 +147,8 @@ func (a *TheAuth) ImportAPIToken(ctx context.Context, in ImportedToken) (APIToke
 	return s.Import(ctx, in)
 }
 
-// AuthenticateAPIToken resolves a raw bearer secret to a Principal, re-checking
-// expiry, revocation, owner status and the owner's current abilities.
+// AuthenticateAPIToken resolves a raw bearer secret to a Principal, re-checking expiry, revocation,
+// owner status and the owner's current abilities.
 func (a *TheAuth) AuthenticateAPIToken(ctx context.Context, raw string) (*Principal, error) {
 	s, err := a.apiSvc()
 	if err != nil {
@@ -214,10 +209,8 @@ func (a *TheAuth) RequireAbility(ability string) func(http.Handler) http.Handler
 	return s.RequireAbility(ability)
 }
 
-// AuthenticatePrincipal resolves the request's session or API bearer token
-// into a Principal with its current abilities, writing the 401 or 500
-// response itself when it cannot. The returned request carries the Principal
-// and user in its context. Needs Config.APITokens.
+// AuthenticatePrincipal resolves the request's session or API bearer token into a Principal with its
+// current abilities, writing the 401 or 500 response itself on failure. Needs Config.APITokens.
 func (a *TheAuth) AuthenticatePrincipal(w http.ResponseWriter, r *http.Request) (*http.Request, *Principal, bool) {
 	s, err := a.apiSvc()
 	if err != nil {
@@ -243,9 +236,8 @@ func (a *TheAuth) StartDeviceAuth(ctx context.Context, in StartDeviceAuthInput) 
 	return s.StartDeviceAuth(ctx, in)
 }
 
-// LookupDeviceRequest returns the pending request behind a user code so the
-// approver can review it. Failed lookups count against a per-approver budget
-// (ErrDeviceAttemptsExceeded once spent).
+// LookupDeviceRequest returns the pending request behind a user code so the approver can review it.
+// Failed lookups count against a per-approver budget (ErrDeviceAttemptsExceeded once spent).
 func (a *TheAuth) LookupDeviceRequest(ctx context.Context, approver *User, ip, userCode string) (*DeviceRequestInfo, error) {
 	s, err := a.deviceSvc()
 	if err != nil {
@@ -319,10 +311,9 @@ func (a *TheAuth) MintAgentToken(ctx context.Context, in MintAgentTokenInput) (s
 	return s.MintAgentToken(ctx, in)
 }
 
-// DelegatedAbilities returns the intersection of an agent's allowed scopes
-// and what the user holds right now, for resource servers that authenticate
-// agents by another path (for example an OAuth access token) and want the same
-// per-request cut as agent API tokens. Needs Config.APITokens.
+// DelegatedAbilities returns the intersection of an agent's allowed scopes and what the user holds now,
+// for resource servers that authenticate agents another way (for example an OAuth access token).
+// Needs Config.APITokens.
 func (a *TheAuth) DelegatedAbilities(ctx context.Context, userID ULID, agentScopes []string) ([]string, error) {
 	s, err := a.apiSvc()
 	if err != nil {
@@ -344,7 +335,6 @@ func (a *TheAuth) RegisterAgent(ctx context.Context, in RegisterAgentInput) (Age
 // RevocationKind says what was revoked.
 type RevocationKind = revocation.Kind
 
-// Revocation kinds.
 const (
 	RevocationSession         = revocation.Session
 	RevocationAPIToken        = revocation.APIToken
@@ -354,9 +344,8 @@ const (
 	// RevocationOwner means a user was disabled or deleted: every credential
 	// that user owns or delegated is void.
 	RevocationOwner = revocation.Owner
-	// RevocationOrgMember means a user lost access to one organization (for
-	// example an org-scoped SCIM deactivation). Credentials scoped to that
-	// organization are void; the user's other organizations are unaffected.
+	// RevocationOrgMember means a user lost access to one organization (for example an org-scoped SCIM
+	// deactivation); only credentials scoped to that organization are void.
 	RevocationOrgMember = revocation.OrgMember
 )
 
@@ -420,9 +409,8 @@ func (a *TheAuth) revocationWatcher() revocation.Watcher {
 	return w
 }
 
-// WatchRevocation returns a context cancelled, with an error wrapping
-// ErrCredentialRevoked as its cause, as soon as an event matches target or a
-// poll finds the credential invalid. Call the cancel func when the stream ends.
+// WatchRevocation returns a context cancelled with an error wrapping ErrCredentialRevoked when an event
+// matches target or a poll finds the credential invalid. Call the cancel func when the stream ends.
 func (a *TheAuth) WatchRevocation(ctx context.Context, target RevocationTarget, opts WatchOptions) (context.Context, context.CancelCauseFunc) {
 	return a.revocationWatcher().Watch(ctx, target, opts)
 }

@@ -11,23 +11,12 @@ import (
 	"github.com/glincker/theauth-go/v2/kv"
 )
 
-// service.go: top-level facade that ties proof verification, nonce
-// management, and jti replay protection together. Both the authorization
-// server (internal/as) and the resource-server middleware (mcpresource)
-// embed exactly one *Service per process.
+// service.go is the facade that ties proof verification, nonce management and jti replay protection
+// together. The AS and the resource-server middleware each embed one *Service per process.
 
-// Service holds the runtime state for DPoP proof verification:
-//
-//   - operator-configured policy (AllowedSignAlgs, ProofMaxAge, NonceTTL,
-//     RequireNonceForTokens, RequireDPoPForClients);
-//   - the HMAC secret used to issue + verify DPoP-Nonce headers;
-//   - an LRU jti store sized to ProofMaxAge so a replayed proof inside
-//     the acceptance window is rejected even when the original AS process
-//     has crashed and restarted (the LRU is in-memory only; cross-process
-//     replay protection across restarts is out of scope for this PR and
-//     called out in the deferred list).
-//
-// The zero value is not usable; call New.
+// Service holds DPoP verification state: the policy knobs, the nonce HMAC secret, and the jti
+// replay store sized to ProofMaxAge. The replay store is in memory per process, so replay
+// protection does not survive a restart. The zero value is unusable; call New.
 type Service struct {
 	allowedAlgs           map[string]struct{}
 	proofMaxAge           time.Duration
@@ -49,9 +38,7 @@ type jtiEntry struct {
 	expires time.Time
 }
 
-// Config bundles the constructor inputs. Mirrors the public
-// theauth.DPoPConfig 1:1; the translation happens in
-// theauth.asConfigFromRoot when the AS Service is constructed.
+// Config mirrors the public theauth.DPoPConfig. The translation happens in theauth.asConfigFromRoot.
 type Config struct {
 	// AllowedSignAlgs is the whitelist of signing algorithms a proof JWT
 	// may use. Empty means DefaultAllowedAlgs.
@@ -61,45 +48,32 @@ type Config struct {
 	// claim may be. Defaults to 60 seconds.
 	ProofMaxAge time.Duration
 
-	// ClockSkew widens the acceptance window for the proof iat claim on
-	// top of ProofMaxAge, absorbing clock drift between the client and
-	// this server. Defaults to zero.
+	// ClockSkew widens the iat acceptance window on top of ProofMaxAge, to absorb clock drift. Defaults to zero.
 	ClockSkew time.Duration
 
 	// NonceTTL bounds how long an issued DPoP-Nonce remains acceptable.
 	// Defaults to 10 minutes.
 	NonceTTL time.Duration
 
-	// RequireNonceForTokens forces the token endpoint to demand a nonce
-	// on every DPoP proof. A first-call proof without a nonce returns
-	// HTTP 400 with error=use_dpop_nonce and a DPoP-Nonce header for the
-	// retry. Off by default; operators serving a public AS may want this
-	// on.
+	// RequireNonceForTokens makes the token endpoint demand a nonce on every proof. The first proof
+	// without one gets 400 use_dpop_nonce with a DPoP-Nonce header to retry with. Off by default.
 	RequireNonceForTokens bool
 
-	// RequireDPoPForClients lists OAuth client IDs that MUST present a
-	// DPoP proof on every token request. Token requests from any other
-	// client may opt in by sending DPoP voluntarily; for clients in this
-	// set, the absence of a proof is a hard failure.
+	// RequireDPoPForClients lists client IDs that must present a proof on every token request. Other
+	// clients may opt in by sending one.
 	RequireDPoPForClients []string
 
-	// NonceSecret is the HMAC-SHA256 secret used to mint + verify
-	// DPoP-Nonce headers. Operators normally leave this nil and let New
-	// generate a fresh 32-byte secret; supplying a stable value here lets
-	// multiple AS instances share a nonce pool (sticky sessions not
-	// required).
+	// NonceSecret is the HMAC key for DPoP-Nonce values. Nil lets New generate one; a stable value
+	// lets several AS instances share a nonce pool.
 	NonceSecret []byte
 
-	// ReplayCache, when set, records proof jti values in a store shared by
-	// every replica instead of the per-process LRU. Backend errors fail
-	// closed (the proof is rejected). Nil keeps the in-process LRU.
+	// ReplayCache, when set, records proof jti values in a store shared by every replica. Backend
+	// errors fail closed. Nil keeps the in-process LRU.
 	ReplayCache kv.ReplayCache
 
-	// JTIReplayWindow caps the in-memory jti LRU size. Defaults to 4096.
-	// At 4096 entries and ~60-second ProofMaxAge a single AS can accept
-	// ~68 RPS of DPoP-protected token mints before LRU eviction starts
-	// shadowing the replay protection; that is well above any realistic
-	// token-mint rate.
+	// JTIReplayWindow caps the in-memory jti LRU (default 4096). At that size and a 60 second
+	// ProofMaxAge, one AS accepts about 68 proofs per second before eviction weakens replay
+	// protection.
 	JTIReplayWindow int
 }
 
@@ -161,10 +135,8 @@ func (s *Service) NonceTTL() time.Duration { return s.nonceTTL }
 // nonce on every DPoP proof.
 func (s *Service) RequireNonceForTokens() bool { return s.requireNonceForTokens }
 
-// ClientRequiresDPoP reports whether the supplied OAuth client ID is on
-// the operator-configured RequireDPoPForClients list. Token endpoints
-// call this after authenticating the client and reject the request when
-// the result is true AND no DPoP header was supplied.
+// ClientRequiresDPoP reports whether the client is on the RequireDPoPForClients list. Token
+// endpoints reject a missing proof for such clients.
 func (s *Service) ClientRequiresDPoP(clientID string) bool {
 	if s == nil {
 		return false
@@ -182,13 +154,9 @@ func (s *Service) IssueNonce(now time.Time) string {
 	return issueNonce(s.nonceSecret, now)
 }
 
-// Verify runs every RFC 9449 section 4.3 step against the supplied proof
-// JWT. On success the parsed proof (including the canonical JWK
-// thumbprint) is returned; callers stamp the thumbprint into cnf.jkt of
-// the issued access token.
-//
-// The function never panics on malformed input; every failure mode is a
-// typed error so the handler layer can map onto the right wire response.
+// Verify runs every RFC 9449 section 4.3 check on the proof JWT. On success it returns the parsed
+// proof, whose thumbprint goes into cnf.jkt. It never panics on malformed input; each failure is a
+// typed error.
 func (s *Service) Verify(proofJWT string, params VerifyParams) (*Proof, error) {
 	if s == nil {
 		return nil, errors.New("dpop: service not configured")
@@ -237,9 +205,8 @@ func (s *Service) Verify(proofJWT string, params VerifyParams) (*Proof, error) {
 	if abs(now.Sub(iat)) > s.proofMaxAge+s.clockSkew {
 		return nil, joinErr(ErrProofExpired, "age", now.Sub(iat).String(), "max", s.proofMaxAge.String())
 	}
-	// Check 7: nonce. RequireNonce ALWAYS forces a nonce. When the
-	// proof carries one anyway (without RequireNonce), still verify it
-	// so a client cannot pass an arbitrary string.
+	// Check 7 (nonce): RequireNonce always forces a nonce. A nonce that is present is verified even
+	// when not required.
 	if params.RequireNonce && claims.Nonce == "" {
 		return nil, ErrNonceRequired
 	}
@@ -263,10 +230,8 @@ func (s *Service) Verify(proofJWT string, params VerifyParams) (*Proof, error) {
 	if !fresh {
 		return nil, ErrReplay
 	}
-	// Check 9: ath equals base64url(SHA-256(access_token)) when the
-	// caller supplied an access token. Token endpoints leave AccessToken
-	// empty; resource servers always pass it. The ath claim is REQUIRED
-	// when AccessToken is non-empty (RFC 9449 section 4.2).
+	// Check 9 (ath): when the caller supplies an access token, the ath claim is required and must
+	// match its hash (RFC 9449 section 4.2).
 	if params.AccessToken != "" {
 		if claims.ATH == "" {
 			return nil, ErrATHRequired
@@ -283,11 +248,8 @@ func (s *Service) Verify(proofJWT string, params VerifyParams) (*Proof, error) {
 	return &Proof{Header: hdr, Claims: claims, Thumbprint: thumb}, nil
 }
 
-// VerifyAgainstConfirmation runs Verify and then enforces that the JWK
-// thumbprint of the proof equals the supplied cnf.jkt from a presented
-// access token. Used by resource servers to enforce sender constraint:
-// even a perfectly valid proof signed by a different key than the one the
-// token was minted for is rejected.
+// VerifyAgainstConfirmation runs Verify, then requires the proof's thumbprint to equal the token's
+// cnf.jkt. This enforces sender constraint: a valid proof from a different key is still rejected.
 func (s *Service) VerifyAgainstConfirmation(proofJWT string, params VerifyParams, jkt string) (*Proof, error) {
 	proof, err := s.Verify(proofJWT, params)
 	if err != nil {
@@ -316,9 +278,8 @@ func (s *Service) checkJTI(jti string, expires time.Time) (bool, error) {
 	return !seen, nil
 }
 
-// rememberJTI records jti and returns true when it is new, false when it
-// was already in the window. Expired entries are pruned lazily on every
-// insert; the LRU eviction kicks in when jtiCap is reached.
+// rememberJTI records jti and returns true when it is new. Expired entries are pruned on insert;
+// LRU eviction runs at capacity.
 func (s *Service) rememberJTI(jti string, expires time.Time) bool {
 	s.jtiMu.Lock()
 	defer s.jtiMu.Unlock()
@@ -368,9 +329,7 @@ func abs(d time.Duration) time.Duration {
 	return d
 }
 
-// joinErr wraps a sentinel with structured key=value context. Kept here
-// instead of using fmt.Errorf("%w: ...") so callers using errors.Is land
-// on the sentinel cleanly.
+// joinErr wraps a sentinel with key=value context, so errors.Is still matches the sentinel.
 func joinErr(sentinel error, kv ...string) error {
 	if len(kv) == 0 {
 		return sentinel

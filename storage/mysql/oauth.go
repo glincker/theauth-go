@@ -12,8 +12,6 @@ import (
 	"github.com/glincker/theauth-go/v2/storage"
 )
 
-// OAuth clients
-
 func (s *Store) InsertOAuthClient(ctx context.Context, c theauth.OAuthClient) (theauth.OAuthClient, error) {
 	ownerKind := clientOwnerKind(c)
 	now := c.CreatedAt
@@ -226,8 +224,6 @@ func scanOAuthClient(row interface{ Scan(...interface{}) error }) (theauth.OAuth
 	return out, nil
 }
 
-// Authorization codes
-
 func (s *Store) InsertAuthorizationCode(ctx context.Context, c theauth.AuthorizationCode) error {
 	created := c.CreatedAt
 	if created.IsZero() {
@@ -260,8 +256,8 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 	return err
 }
 
-// ConsumeAuthorizationCode atomically loads and deletes the code row using a
-// SELECT FOR UPDATE + DELETE within a transaction (MySQL has no DELETE...RETURNING).
+// ConsumeAuthorizationCode loads and deletes the row in one transaction (SELECT FOR UPDATE, then
+// DELETE), since MySQL has no DELETE ... RETURNING.
 func (s *Store) ConsumeAuthorizationCode(ctx context.Context, code string) (*theauth.AuthorizationCode, error) {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -331,8 +327,6 @@ FOR UPDATE`,
 	}
 	return out, nil
 }
-
-// Refresh tokens
 
 func (s *Store) InsertRefreshToken(ctx context.Context, t theauth.RefreshToken) error {
 	scopeJSON, _ := json.Marshal(nilToEmptySlice(t.Scope))
@@ -433,9 +427,8 @@ func (s *Store) RevokeRefreshToken(ctx context.Context, hash []byte, reason stri
 	return nil
 }
 
-// RevokeRefreshTokensByAuthCode revokes every live token in the rotation
-// families first issued from the code stored under codeHash and returns the
-// access-token jtis of the tokens it revoked.
+// RevokeRefreshTokensByAuthCode revokes the rotation families of the code under codeHash and
+// returns the revoked access-token jtis.
 func (s *Store) RevokeRefreshTokensByAuthCode(ctx context.Context, codeHash, reason string) ([]string, error) {
 	if codeHash == "" {
 		return nil, nil
@@ -478,8 +471,7 @@ WHERE revoked_at IS NULL AND family_id IN (
 	return jtis, nil
 }
 
-// DenyAccessToken records jti as revoked until expiresAt (opt-in access
-// token revocation).
+// DenyAccessToken records jti as revoked until expiresAt.
 func (s *Store) DenyAccessToken(ctx context.Context, jti string, expiresAt time.Time) error {
 	_, err := s.db.ExecContext(ctx, `
 INSERT INTO oauth_revoked_jtis (jti, expires_at) VALUES (?, ?)
@@ -512,8 +504,6 @@ func (s *Store) RevokeRefreshTokenFamily(ctx context.Context, familyID theauth.U
 	)
 	return err
 }
-
-// JWKS keys
 
 func (s *Store) InsertJWKSKey(ctx context.Context, k theauth.JWKSKey) error {
 	created := k.CreatedAt
@@ -609,8 +599,6 @@ func scanJWKSKey(row interface{ Scan(...interface{}) error }) (theauth.JWKSKey, 
 		RetiredAt:  nullTimeToPtr(retired),
 	}, nil
 }
-
-// helpers
 
 func clientOwnerKind(c theauth.OAuthClient) string {
 	if c.AnonymousRegistered {

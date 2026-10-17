@@ -16,8 +16,7 @@ import (
 	"github.com/glincker/theauth-go/v2/kv"
 )
 
-// Error codes written by the admission middleware. They match the codes the
-// TypeScript library and the client SDKs (IsCSRFRejected, IsRateLimited) key on.
+// Error codes the TypeScript library and client SDKs key on (IsCSRFRejected, IsRateLimited).
 const (
 	// CodeAdmissionRateLimited is the 429 code written by Admission.
 	CodeAdmissionRateLimited = "RATE_LIMITED"
@@ -32,8 +31,7 @@ type AdmissionLimit struct {
 	Window time.Duration
 }
 
-// AdmissionLimits are the per-tier budgets. Defaults: Strict 30, Mutation 120
-// and Read 300 requests per 60 seconds.
+// AdmissionLimits are the per-tier budgets: 30, 120 and 300 requests per 60 seconds by default.
 type AdmissionLimits struct {
 	// Strict covers token, registration and authorization endpoints.
 	Strict AdmissionLimit
@@ -43,14 +41,13 @@ type AdmissionLimits struct {
 	Read AdmissionLimit
 }
 
-// AdmissionOptions configures Admission. The zero value enables the default
-// tiered rate limits and the cross-site check.
+// AdmissionOptions configures Admission. The zero value enables the default tiered limits and the
+// cross-site check.
 type AdmissionOptions struct {
-	// DisableRateLimit turns rate limiting off, for example when a gateway
-	// already does it. The cross-site check still applies.
+	// DisableRateLimit turns rate limiting off (for example when a gateway already does it). The
+	// cross-site check still applies.
 	DisableRateLimit bool
-	// Limits overrides the default per-tier budgets.
-	Limits AdmissionLimits
+	Limits           AdmissionLimits
 	// Skip returns true to leave a request out of rate limiting (health
 	// checks, your own network). The cross-site check still applies.
 	Skip func(r *http.Request) bool
@@ -61,8 +58,7 @@ type AdmissionOptions struct {
 	// cookie-authenticated writes, on top of Config.BaseURL, the request's own
 	// origin and Config.TrustedOrigins.
 	TrustedOrigins []string
-	// DisableCSRF turns the cross-site check off.
-	DisableCSRF bool
+	DisableCSRF    bool
 }
 
 type admissionTier int
@@ -133,13 +129,10 @@ func admissionKey(r *http.Request, ip string) string {
 	return "cred:" + hex.EncodeToString(sum[:8])
 }
 
-// Admission returns net/http middleware that runs before authentication and
-// refuses an anonymous flood cheaply. It applies tiered per-client rate
-// limits (429 with Retry-After) and a cross-site check for
-// cookie-authenticated unsafe methods (403). Counters live in
-// Config.Stores.RateLimiter when set, so replicas share budgets; otherwise a
-// per-process memory limiter is used. A store failure lets the request
-// through. Set Config.Admission to apply it to every route Mount registers.
+// Admission returns net/http middleware that runs before authentication and refuses anonymous floods.
+// It applies tiered per-client rate limits (429 with Retry-After) and a cross-site check for
+// cookie-authenticated unsafe methods (403). Counters use Config.Stores.RateLimiter when set so
+// replicas share budgets; a store failure lets the request through.
 func (a *TheAuth) Admission(opts AdmissionOptions) func(http.Handler) http.Handler {
 	limits := [3]AdmissionLimit{
 		tierStrict:   opts.Limits.Strict.orDefault(30),
@@ -205,10 +198,9 @@ func (a *TheAuth) Admission(opts AdmissionOptions) func(http.Handler) http.Handl
 	}
 }
 
-// admissionSameSite reports whether r may proceed past the cross-site check.
-// Safe methods, bearer callers and cookie-less requests are exempt. Fetch
-// metadata saying same-origin or none is accepted; otherwise Origin (or
-// Referer) must be the request's own origin, BaseURL or a trusted origin.
+// admissionSameSite reports whether r may proceed past the cross-site check. Safe methods, bearer
+// callers and cookie-less requests are exempt; otherwise Origin (or Referer) must match the request
+// origin, BaseURL or a trusted origin.
 func (a *TheAuth) admissionSameSite(r *http.Request, trusted []string) bool {
 	switch strings.ToLower(r.Header.Get("Sec-Fetch-Site")) {
 	case "same-origin", "none":

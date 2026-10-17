@@ -11,10 +11,8 @@ import (
 	"github.com/glincker/theauth-go/v2/storage"
 )
 
-// v2.0 (phase 1 + 2): in-memory OAuth 2.1 authorization server adapter.
-// All state lives in a sidecar so the Store{} literal in tests stays small.
-// Concurrency: each map is guarded by its own RWMutex; ConsumeAuthorizationCode
-// uses a dedicated lock to make the load-and-delete atomic under contention.
+// v2.0 OAuth 2.1 authorization server state for the memory adapter. Each map has its own
+// lock; ConsumeAuthorizationCode uses a dedicated one for an atomic load-and-delete.
 
 type v20State struct {
 	mu sync.RWMutex
@@ -31,8 +29,7 @@ type v20State struct {
 	// deniedJTIs is the opt-in access-token denylist: jti -> token exp.
 	deniedJTIs map[string]time.Time
 
-	// v2.0 phase 3 + 4 state. Each map is guarded by the shared mu lock so
-	// admin / token / introspect paths see a consistent snapshot.
+	// v2.0 phase 3 and 4 state, guarded by the shared mu lock.
 	agents           map[theauth.ULID]theauth.Agent
 	agentsByClientID map[string]theauth.ULID
 	agentCredentials map[theauth.ULID]theauth.AgentCredential
@@ -65,8 +62,6 @@ func (s *Store) ensureV20() *v20State {
 	}
 	return s.v20
 }
-
-// OAuth clients
 
 func (s *Store) InsertOAuthClient(_ context.Context, c theauth.OAuthClient) (theauth.OAuthClient, error) {
 	v := s.ensureV20()
@@ -125,8 +120,6 @@ func (s *Store) DeleteOAuthClient(_ context.Context, clientID string) error {
 	return nil
 }
 
-// authorization codes
-
 func (s *Store) InsertAuthorizationCode(_ context.Context, c theauth.AuthorizationCode) error {
 	v := s.ensureV20()
 	v.mu.Lock()
@@ -138,9 +131,7 @@ func (s *Store) InsertAuthorizationCode(_ context.Context, c theauth.Authorizati
 	return nil
 }
 
-// ConsumeAuthorizationCode is atomic per code: the dedicated authzCodesMu
-// serialises concurrent load-and-delete calls so exactly one caller succeeds
-// per code. Matches the Postgres DELETE ... RETURNING guarantee.
+// ConsumeAuthorizationCode is atomic per code, so exactly one concurrent caller succeeds.
 func (s *Store) ConsumeAuthorizationCode(_ context.Context, code string) (*theauth.AuthorizationCode, error) {
 	v := s.ensureV20()
 	v.authzCodesMu.Lock()
@@ -155,8 +146,6 @@ func (s *Store) ConsumeAuthorizationCode(_ context.Context, code string) (*theau
 	cp := c
 	return &cp, nil
 }
-
-// refresh tokens
 
 func (s *Store) InsertRefreshToken(_ context.Context, t theauth.RefreshToken) error {
 	v := s.ensureV20()
@@ -174,8 +163,7 @@ func (s *Store) RefreshTokenByHash(_ context.Context, hash []byte) (*theauth.Ref
 	defer v.mu.RUnlock()
 	t, ok := v.refreshTokens[bytesHexKey(hash)]
 	if !ok {
-		// Loop in case of theoretical hash key collision; the map key is
-		// hex(hash) so a collision is impossible, but the loop is cheap.
+		// Guards against a theoretical hash key collision.
 		for _, candidate := range v.refreshTokens {
 			if bytes.Equal(candidate.Hash, hash) {
 				cp := candidate
@@ -194,9 +182,7 @@ func (s *Store) RevokeRefreshToken(_ context.Context, hash []byte, reason string
 	defer v.mu.Unlock()
 	key := bytesHexKey(hash)
 	t, ok := v.refreshTokens[key]
-	// Conditional like the SQL backends (WHERE revoked_at IS NULL): an
-	// already-revoked token reports ErrNotFound so exactly one of two
-	// concurrent rotations wins.
+	// Conditional like the SQL backends: exactly one of two concurrent rotations wins.
 	if !ok || t.RevokedAt != nil {
 		return storage.ErrNotFound
 	}
@@ -207,9 +193,8 @@ func (s *Store) RevokeRefreshToken(_ context.Context, hash []byte, reason string
 	return nil
 }
 
-// RevokeRefreshTokensByAuthCode revokes every live token in the rotation
-// families first issued from the authorization code stored under codeHash
-// and returns the access-token jtis (ParentJTI) of the tokens it revoked.
+// RevokeRefreshTokensByAuthCode revokes every live token of the code's rotation families
+// and returns their access-token jtis.
 func (s *Store) RevokeRefreshTokensByAuthCode(_ context.Context, codeHash, reason string) ([]string, error) {
 	v := s.ensureV20()
 	v.mu.Lock()
@@ -259,8 +244,6 @@ func (s *Store) RevokeRefreshTokenFamily(_ context.Context, familyID theauth.ULI
 	return nil
 }
 
-// JWKS keys
-
 func (s *Store) InsertJWKSKey(_ context.Context, k theauth.JWKSKey) error {
 	v := s.ensureV20()
 	v.mu.Lock()
@@ -295,8 +278,7 @@ func (s *Store) JWKSKeysAll(_ context.Context) ([]theauth.JWKSKey, error) {
 	for _, k := range v.jwksKeys {
 		out = append(out, k)
 	}
-	// Deterministic order so callers iterating the snapshot see stable
-	// behavior across runs.
+	// Sorted so snapshot iteration is stable across runs.
 	sort.Slice(out, func(i, j int) bool { return out[i].KID < out[j].KID })
 	return out, nil
 }
@@ -321,8 +303,6 @@ func (s *Store) UpdateJWKSKeyState(_ context.Context, kid, state string, at time
 	v.jwksKeys[kid] = k
 	return nil
 }
-
-// agents (v2.0 phase 3)
 
 func (s *Store) InsertAgent(_ context.Context, a theauth.Agent) (theauth.Agent, error) {
 	v := s.ensureV20()
@@ -413,8 +393,6 @@ func (s *Store) UpdateAgentLastActive(_ context.Context, id theauth.ULID, at tim
 	return nil
 }
 
-// agent credentials
-
 func (s *Store) InsertAgentCredential(_ context.Context, c theauth.AgentCredential) error {
 	v := s.ensureV20()
 	v.mu.Lock()
@@ -471,8 +449,6 @@ func (s *Store) UpdateAgentCredentialLastUsed(_ context.Context, id theauth.ULID
 	return nil
 }
 
-// delegations (v2.0 phase 4)
-
 func (s *Store) InsertDelegationGrant(_ context.Context, g theauth.DelegationGrant) (theauth.DelegationGrant, error) {
 	v := s.ensureV20()
 	v.mu.Lock()
@@ -483,8 +459,7 @@ func (s *Store) InsertDelegationGrant(_ context.Context, g theauth.DelegationGra
 		if existing.RevokedAt == nil {
 			return theauth.DelegationGrant{}, storage.ErrNotFound
 		}
-		// Replace a previously-revoked grant with the fresh one; tuple
-		// uniqueness only constrains live rows.
+		// Replace a previously-revoked grant; tuple uniqueness only constrains live rows.
 		delete(v.delegByTuple, key)
 	}
 	if g.CreatedAt.IsZero() {
@@ -563,8 +538,6 @@ func (s *Store) RevokeDelegationGrant(_ context.Context, id theauth.ULID, at tim
 	return nil
 }
 
-// helpers
-
 const hexAlphabet = "0123456789abcdef"
 
 func bytesHexKey(b []byte) string {
@@ -580,11 +553,8 @@ func delegationTupleKey(userID, agentID theauth.ULID, resource string) string {
 	return userID.String() + "|" + agentID.String() + "|" + resource
 }
 
-// access-token denylist
-
-// DenyAccessToken records jti as revoked until expiresAt. Expired entries
-// are purged opportunistically on each call so the map stays bounded by the
-// number of live revoked tokens.
+// DenyAccessToken records jti as revoked until expiresAt. Expired entries are purged on
+// each call to bound the map.
 func (s *Store) DenyAccessToken(_ context.Context, jti string, expiresAt time.Time) error {
 	v := s.ensureV20()
 	v.mu.Lock()

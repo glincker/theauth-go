@@ -1,9 +1,8 @@
 package as
 
-// iotdevice_grant.go: RFC 7523 jwt-bearer grant for registered devices. The
-// assertion is signed with the device's enrolled key, with iss and sub set to
-// the device ID and aud set to the token endpoint. Tokens are short lived,
-// carry no refresh token, and are DPoP bound when the request has a proof.
+// iotdevice_grant.go is the RFC 7523 jwt-bearer grant for enrolled devices. The assertion is signed
+// with the device key, with iss and sub set to the device ID and aud the token endpoint. Tokens are
+// short lived, carry no refresh token, and are DPoP bound when a proof is sent.
 
 import (
 	"context"
@@ -16,9 +15,8 @@ import (
 	"github.com/glincker/theauth-go/v2/internal/ulid"
 )
 
-// tryDeviceAssertion handles the assertion when its iss names a registered
-// device. handled is false when it does not, so the caller falls through to
-// the trusted issuer path.
+// tryDeviceAssertion handles assertions whose iss names an enrolled device. handled is false
+// otherwise, and the caller falls through.
 func (s *Service) tryDeviceAssertion(ctx context.Context, req TokenRequest, assertion string) (resp TokenResponse, handled bool, err error) {
 	store, ok := s.identityStore()
 	if !ok {
@@ -70,13 +68,12 @@ func (s *Service) deviceAssertionGrant(ctx context.Context, store DeviceIdentity
 	if !verifyWithJWKS([]jwksEntry{key.entry}, header, []byte(signingInput), sig) {
 		return TokenResponse{}, models.ErrOAuthInvalidGrant
 	}
-	// The device is authenticated from here on, so its budget is charged
-	// before anything single use is spent and a limited device can retry.
+	// The device is authenticated from here on, so its budget is charged before anything single use is spent.
 	if err := s.deviceLimit(ctx, "token", dev.ID.String(), cfg.TokenPerMinute); err != nil {
 		return TokenResponse{}, err
 	}
-	// Resource and scope are checked before the proof and jti are spent, so a
-	// bad request does not burn an assertion the device could still use.
+	// Resource and scope are checked before the proof and jti are spent, so a bad request does not
+	// burn the assertion.
 	audience, scope, err := s.deviceResourceScope(req, dev)
 	if err != nil {
 		return TokenResponse{}, err
@@ -85,8 +82,8 @@ func (s *Service) deviceAssertionGrant(ctx context.Context, store DeviceIdentity
 	if err != nil {
 		return TokenResponse{}, err
 	}
-	// The jti is recorded only after the signature verified, so an
-	// unauthenticated caller cannot fill the replay cache.
+	// The jti is recorded only after the signature verifies, so an unauthenticated caller cannot fill
+	// the replay cache.
 	replayUntil := exp.Add(s.jtiReplayTTL())
 	if rerr := s.jtiReplayCheck(ctx, "device:"+dev.ID.String()+":"+claims.Jti, replayUntil); rerr != nil {
 		return TokenResponse{}, models.ErrOAuthInvalidGrant
@@ -127,9 +124,8 @@ func (s *Service) deviceAssertionGrant(ctx context.Context, store DeviceIdentity
 	}, nil
 }
 
-// deviceResourceScope resolves the audience and narrows the scope to the
-// device's enrolled scopes and the resource's scopes. With a single configured
-// resource, the resource parameter is optional.
+// deviceResourceScope resolves the audience and narrows scope to the device's enrolled scopes and
+// the resource's scopes.
 func (s *Service) deviceResourceScope(req TokenRequest, dev *models.Device) (string, []string, error) {
 	raw := req.Resource
 	if raw == "" && len(s.Cfg.Resources) == 1 {

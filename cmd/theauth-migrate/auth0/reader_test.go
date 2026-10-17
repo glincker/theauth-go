@@ -7,10 +7,8 @@ import (
 	auth0pkg "github.com/glincker/theauth-go/v2/cmd/theauth-migrate/auth0"
 )
 
-// sampleAuth0JSON is a minimal Auth0 Management API export with three users:
-// - eve: database user with bcrypt hash
-// - frank: Google social user
-// - grace: database user with Guardian MFA enrolled
+// sampleAuth0JSON is a small Auth0 export: a database user with bcrypt, a social user, and a user
+// with Guardian MFA.
 const sampleAuth0JSON = `[
   {
     "user_id": "auth0|eve",

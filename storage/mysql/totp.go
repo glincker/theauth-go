@@ -147,7 +147,6 @@ VALUES (?, ?, ?, ?)`,
 	return nil
 }
 
-// CountUnusedRecoveryCodes implements theauth.RecoveryCodeStorage.
 func (s *Store) CountUnusedRecoveryCodes(ctx context.Context, userID theauth.ULID) (int, error) {
 	var n int
 	err := s.db.QueryRowContext(ctx,
@@ -156,7 +155,6 @@ func (s *Store) CountUnusedRecoveryCodes(ctx context.Context, userID theauth.ULI
 	return n, err
 }
 
-// ReplaceRecoveryCodes implements theauth.RecoveryCodeStorage.
 func (s *Store) ReplaceRecoveryCodes(ctx context.Context, userID theauth.ULID, codes []theauth.RecoveryCode) error {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {

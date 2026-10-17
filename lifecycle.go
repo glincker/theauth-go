@@ -15,15 +15,15 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
-// accountLifecycle backs sign-in gating, forced password change and trusted
-// device revocation. state or devices may be nil when that feature is off.
+// accountLifecycle backs sign-in gating, forced password change and trusted device revocation.
+// state or devices may be nil.
 type accountLifecycle struct {
 	state   AccountStateStorage
 	devices *trusteddevice.Service
 }
 
-// CheckSignin refuses a disabled account and one that must change its
-// password. A storage error fails closed.
+// CheckSignin refuses disabled accounts and accounts that must change their password. Storage
+// errors fail closed.
 func (l *accountLifecycle) CheckSignin(ctx context.Context, userID ULID) error {
 	if l.state == nil {
 		return nil
@@ -65,9 +65,8 @@ func (l *accountLifecycle) RequireChange(ctx context.Context, userID ULID) error
 	return l.state.SetMustChangePassword(ctx, userID, true)
 }
 
-// setupLifecycle wires the account lifecycle features that Config enables. It
-// runs after the session service exists and before the password and TOTP
-// services are built.
+// setupLifecycle wires the enabled account lifecycle features. It runs after the session service
+// and before password and TOTP.
 func (a *TheAuth) setupLifecycle(cfg *Config) error {
 	l := &accountLifecycle{}
 	if cfg.AccountState {
@@ -145,7 +144,6 @@ func (a *TheAuth) setupSessionPolicy(cfg *Config) error {
 	return nil
 }
 
-// passwordChanged runs the lifecycle follow-ups of a replaced password.
 func (a *TheAuth) passwordChanged(ctx context.Context, userID ULID) {
 	if a.acct == nil {
 		return
@@ -155,10 +153,8 @@ func (a *TheAuth) passwordChanged(ctx context.Context, userID ULID) {
 	}
 }
 
-// SetMustChangePassword flags or unflags userID for a forced password change.
-// Setting the flag also revokes the user's sessions, so the change is felt at
-// once; the user then gets CodePasswordChangeRequired at sign-in until a
-// password reset completes. It needs Config.AccountState.
+// SetMustChangePassword flags or unflags userID for a forced password change. Setting it also
+// revokes the user's sessions. Needs Config.AccountState.
 func (a *TheAuth) SetMustChangePassword(ctx context.Context, userID ULID, required bool) error {
 	if a.acct == nil || a.acct.state == nil {
 		return ErrAccountStateDisabled
@@ -175,9 +171,8 @@ func (a *TheAuth) SetMustChangePassword(ctx context.Context, userID ULID, requir
 	return nil
 }
 
-// DisableUser blocks sign-in for userID and revokes their sessions and API
-// tokens. It needs Config.AccountState. EnableUser reverses the block but not
-// the revocations.
+// DisableUser blocks sign-in and revokes the user's sessions and API tokens. Needs
+// Config.AccountState. EnableUser lifts the block but not the revocations.
 func (a *TheAuth) DisableUser(ctx context.Context, userID ULID) error {
 	if a.acct == nil || a.acct.state == nil {
 		return ErrAccountStateDisabled
@@ -203,7 +198,7 @@ func (a *TheAuth) DisableUser(ctx context.Context, userID ULID) error {
 	return nil
 }
 
-// EnableUser lifts a DisableUser block. It needs Config.AccountState.
+// EnableUser lifts a DisableUser block.
 func (a *TheAuth) EnableUser(ctx context.Context, userID ULID) error {
 	if a.acct == nil || a.acct.state == nil {
 		return ErrAccountStateDisabled
@@ -215,12 +210,9 @@ func (a *TheAuth) EnableUser(ctx context.Context, userID ULID) error {
 	return nil
 }
 
-// DeleteUser permanently deletes userID and everything that belongs to them:
-// sessions, tokens, linked identities, passkeys, TOTP, API tokens, trusted
-// devices, organization memberships and role grants. Audit rows are kept with
-// the actor cleared. It refuses with ErrLastOwner when the user is the only
-// owner of an organization. It fires LifecycleHooks.OnAccountDeleted after
-// the delete committed. It needs a storage implementing AccountDeleteStorage.
+// DeleteUser permanently deletes userID and everything owned by them, keeping audit rows with the
+// actor cleared. It returns ErrLastOwner when the user is the sole owner of an organization.
+// OnAccountDeleted fires after the delete commits.
 func (a *TheAuth) DeleteUser(ctx context.Context, userID ULID) error {
 	return a.deleteUser(ctx, userID, "admin")
 }
@@ -248,8 +240,6 @@ func (a *TheAuth) deleteUser(ctx context.Context, userID ULID, reason string) er
 	return nil
 }
 
-// guardLastOwner returns ErrLastOwner when userID is the sole owner of any
-// organization.
 func (a *TheAuth) guardLastOwner(ctx context.Context, userID ULID) error {
 	if a.orgsCfg == nil {
 		return nil
@@ -279,7 +269,6 @@ func (a *TheAuth) guardLastOwner(ctx context.Context, userID ULID) error {
 	return nil
 }
 
-// fireOnAccountDeleted dispatches LifecycleHooks.OnAccountDeleted.
 func (a *TheAuth) fireOnAccountDeleted(ctx context.Context, user *User) {
 	if a.lifecycle.OnAccountDeleted == nil || user == nil {
 		return
@@ -289,7 +278,6 @@ func (a *TheAuth) fireOnAccountDeleted(ctx context.Context, user *User) {
 	})
 }
 
-// handleAccountDelete serves DELETE /account for the signed-in user.
 func (a *TheAuth) handleAccountDelete(w http.ResponseWriter, r *http.Request) {
 	sess, _ := SessionFromContext(r.Context())
 	if sess == nil {
@@ -308,7 +296,6 @@ func (a *TheAuth) handleAccountDelete(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// withSelfDelete adds DELETE /account to the AccountUX handler.
 func (a *TheAuth) withSelfDelete(h *accounthandlers.Handler) {
 	if a.deletion == nil {
 		return
@@ -316,16 +303,14 @@ func (a *TheAuth) withSelfDelete(h *accounthandlers.Handler) {
 	h.WithSelfDelete(a.handleAccountDelete, a.RequireRecentAuth(a.deletion.RecentAuthMaxAge))
 }
 
-// mountAccountDelete registers DELETE /account when Config.AccountDeletion is
-// set and AccountUX is not mounting the /account subtree itself.
+// mountAccountDelete registers DELETE /account when AccountDeletion is set and AccountUX is not
+// mounting /account itself.
 func (a *TheAuth) mountAccountDelete(r chi.Router) {
 	if a.deletion == nil || a.accountUX {
 		return
 	}
 	r.With(a.RequireRecentAuth(a.deletion.RecentAuthMaxAge)).Delete("/account", a.handleAccountDelete)
 }
-
-// trusted devices
 
 // ListTrustedDevices returns the user's live trusted devices, newest first.
 func (a *TheAuth) ListTrustedDevices(ctx context.Context, userID ULID) ([]TrustedDeviceInfo, error) {
@@ -350,8 +335,8 @@ func (a *TheAuth) ListTrustedDevices(ctx context.Context, userID ULID) ([]Truste
 	return out, nil
 }
 
-// RevokeTrustedDevice revokes one of the user's trusted devices. It returns
-// ErrStorageNotFound when the device is unknown, not theirs or already revoked.
+// RevokeTrustedDevice revokes one of the user's trusted devices. Unknown, foreign or already
+// revoked devices return ErrStorageNotFound.
 func (a *TheAuth) RevokeTrustedDevice(ctx context.Context, userID, id ULID) error {
 	if a.devices == nil {
 		return errors.New("theauth: Config.TrustedDevices is not enabled")
@@ -363,8 +348,7 @@ func (a *TheAuth) RevokeTrustedDevice(ctx context.Context, userID, id ULID) erro
 	return nil
 }
 
-// RevokeTrustedDevices revokes every trusted device of the user and returns
-// how many it revoked.
+// RevokeTrustedDevices revokes every trusted device of the user and returns how many it revoked.
 func (a *TheAuth) RevokeTrustedDevices(ctx context.Context, userID ULID) (int, error) {
 	if a.devices == nil {
 		return 0, errors.New("theauth: Config.TrustedDevices is not enabled")
@@ -415,7 +399,6 @@ func (a *TheAuth) handleTrustedDeviceRevokeAll(w http.ResponseWriter, r *http.Re
 	writeJSON(w, http.StatusOK, map[string]int{"revoked": n})
 }
 
-// mountTrustedDevices registers the trusted-device list under the auth prefix.
 func (a *TheAuth) mountTrustedDevices(r chi.Router) {
 	if a.devices == nil {
 		return
@@ -426,7 +409,6 @@ func (a *TheAuth) mountTrustedDevices(r chi.Router) {
 	r.With(auth).Delete("/trusted-devices", a.handleTrustedDeviceRevokeAll)
 }
 
-// rememberTrustedDevice implements totp handlers' DeviceRemember capability.
 func (a *TheAuth) rememberTrustedDevice(ctx context.Context, userID ULID, userAgent, ip string) (string, time.Time, error) {
 	if a.devices == nil {
 		return "", time.Time{}, errors.New("theauth: Config.TrustedDevices is not enabled")

@@ -6,11 +6,8 @@ import (
 	theauth "github.com/glincker/theauth-go/v2"
 )
 
-// TestAuditRedactorAllocPerOp verifies that key matching is case-insensitive
-// whether the key is lowercase, uppercase, or mixed-case. This behavior test
-// guards the EqualFold refactor (perf re-audit 2026-06-21, item 4): if the
-// key set were accidentally compared with an exact match instead of
-// EqualFold, uppercase variants would slip through unredacted.
+// TestAuditRedactorAllocPerOp checks that redaction matches keys case-insensitively. Guards the
+// EqualFold refactor: an exact match would let uppercase secrets through.
 func TestAuditRedactorAllocPerOp(t *testing.T) {
 	t.Parallel()
 

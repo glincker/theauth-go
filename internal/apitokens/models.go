@@ -140,9 +140,8 @@ type DeviceCodeStorage interface {
 	// DecideDeviceCode moves a pending, unexpired request to approved or
 	// denied in one compare-and-set step; otherwise ErrStorageNotFound.
 	DecideDeviceCode(ctx context.Context, userCode string, d DeviceDecision, now time.Time) error
-	// ClaimDeviceCode atomically moves an approved, unexpired request to
-	// redeemed and returns it. Exactly one concurrent caller succeeds; the
-	// rest get ErrStorageNotFound.
+	// ClaimDeviceCode atomically moves an approved, unexpired request to redeemed. Exactly one
+	// concurrent caller succeeds.
 	ClaimDeviceCode(ctx context.Context, hash []byte, now time.Time) (*DeviceCode, error)
 	RecordDevicePoll(ctx context.Context, hash []byte, at time.Time, intervalSeconds int) error
 	// DeleteExpiredDeviceCodes removes requests that expired before the cutoff.
@@ -156,10 +155,8 @@ type DevicePendingFilter struct {
 	Limit int
 }
 
-// DeviceCodeLister is the optional DeviceCodeStorage extension behind the
-// pending request list. ListPendingDeviceCodes returns pending, unexpired
-// requests newest first with DeviceCodeHash left empty; UserCode is filled for
-// the service layer and must never be sent to clients.
+// DeviceCodeLister is the optional storage extension behind the pending device request list.
+// UserCode is filled for the service layer and must never reach clients.
 type DeviceCodeLister interface {
 	ListPendingDeviceCodes(ctx context.Context, f DevicePendingFilter) ([]DeviceCode, error)
 }

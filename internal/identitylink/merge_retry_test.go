@@ -110,7 +110,7 @@ func newMergeFixture(t *testing.T) *mergeFixture {
 	return &mergeFixture{store: store, primaryID: primaryID, secondaryID: secondaryID, sessionToken: token}
 }
 
-// assertFullyMerged confirms every auth method moved to primaryID.
+// assertFullyMerged confirms
 func (f *mergeFixture) assertFullyMerged(t *testing.T) {
 	t.Helper()
 	ctx := context.Background()

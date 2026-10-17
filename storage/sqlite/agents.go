@@ -11,9 +11,8 @@ import (
 	"github.com/glincker/theauth-go/v2"
 )
 
-// agentStorage is the agent and agent credential subset of
-// theauth.OAuthServerStorage. The assertion below fails the build if any
-// method is missing or drifts from the root interface.
+// agentStorage is the agent subset of theauth.OAuthServerStorage; the assertion below
+// fails the build on drift.
 type agentStorage interface {
 	InsertAgent(ctx context.Context, a theauth.Agent) (theauth.Agent, error)
 	AgentByID(ctx context.Context, id theauth.ULID) (*theauth.Agent, error)
@@ -66,9 +65,8 @@ func scanAgentRow(r scanner) (theauth.Agent, error) {
 	}, nil
 }
 
-// InsertAgent stores a. A duplicate id or client_id returns
-// theauth.ErrStorageNotFound (the shared duplicate signal of the memory
-// adapter). An empty Status defaults to active and a zero CreatedAt to now.
+// InsertAgent stores a. A duplicate id or client_id returns theauth.ErrStorageNotFound.
+// An empty Status defaults to active and a zero CreatedAt to now.
 func (s *Store) InsertAgent(ctx context.Context, a theauth.Agent) (theauth.Agent, error) {
 	if (a.OwnerUserID == nil) == (a.OrganizationID == nil) {
 		return theauth.Agent{}, errors.New("theauth sqlite: insert agent: exactly one of OwnerUserID and OrganizationID is required")
@@ -143,10 +141,8 @@ func (s *Store) AgentsByOwner(ctx context.Context, owner theauth.AgentOwner) ([]
 	return out, wrap("agents by owner", rows.Err())
 }
 
-// UpdateAgentStatus sets the lifecycle status. Like the other adapters any
-// transition is accepted; the service layer owns the state machine. The
-// UPDATE is a single statement, so concurrent changes serialize and the last
-// writer wins with no torn state. A missing agent is ErrStorageNotFound.
+// UpdateAgentStatus sets the lifecycle status. The service layer owns the state machine;
+// a single UPDATE serializes concurrent changes.
 func (s *Store) UpdateAgentStatus(ctx context.Context, id theauth.ULID, status string, _ time.Time) error {
 	switch status {
 	case theauth.AgentStatusActive, theauth.AgentStatusSuspended, theauth.AgentStatusRevoked:
@@ -225,10 +221,8 @@ func (s *Store) AgentCredentialsByAgentID(ctx context.Context, agentID theauth.U
 	return out, wrap("agent credentials", rows.Err())
 }
 
-// RevokeAgentCredential sets revoked_at once. The UPDATE is conditional on
-// revoked_at IS NULL, so a second revoke changes nothing and returns
-// ErrStorageNotFound, as the Postgres and memory adapters do (the service
-// layer treats that as "lost the race").
+// RevokeAgentCredential sets revoked_at once. A repeat revoke returns ErrStorageNotFound,
+// as the other adapters do.
 func (s *Store) RevokeAgentCredential(ctx context.Context, id theauth.ULID, at time.Time) error {
 	res, err := s.db.ExecContext(ctx, s.q(`UPDATE theauth_agent_credentials SET revoked_at = ? WHERE id = ? AND revoked_at IS NULL`), toMicro(at), idStr(id))
 	if err != nil {

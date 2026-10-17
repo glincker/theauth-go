@@ -8,10 +8,7 @@ import (
 	"github.com/glincker/theauth-go/v2/internal/models"
 )
 
-// SCIM 2.0 wire formats and resource mapping. RFC 7643 (Core Schema)
-// and RFC 7644 (Protocol). Lifted from root scim.go in PR F of the
-// 2026-06 architecture reorg so the extracted internal/scim/handlers
-// package can use them without re-implementing the projection layer.
+// SCIM 2.0 wire formats and resource mapping: RFC 7643 (Core Schema) and RFC 7644 (Protocol),
 
 // Wire-level constants and schema URIs.
 const (

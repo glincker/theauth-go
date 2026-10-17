@@ -1,23 +1,5 @@
-// Package otlp provides an AuditSink that exports audit events to an
-// OpenTelemetry collector via the OTLP/HTTP logs endpoint. Each call to
-// Stream marshals the batch into an ExportLogsServiceRequest protobuf
-// message and POSTs it to <endpoint>/v1/logs with Content-Type
-// application/x-protobuf.
-//
-// The OTLP sink lives in a separate Go module
-// (github.com/glincker/theauth-go/audit/sinks/otlp) so that the root
-// theauth-go module does not gain a dependency on the OTLP proto
-// packages. Import this package in your application when you need OTLP
-// log export; all other sink types (Splunk HEC, webhook) are in the
-// root module and require no extra dependencies.
-//
-// Usage:
-//
-//	sink, err := otlp.New("https://otel-collector.example.com:4318")
-//	if err != nil {
-//	    log.Fatal(err)
-//	}
-//	cfg := &theauth.AuditConfig{Sinks: []theauth.AuditSink{sink}}
+// Package otlp provides an AuditSink that exports audit events to an OpenTelemetry collector over
+// OTLP/HTTP logs. It is its own module, so the root does not depend on OTLP protobuf packages.
 package otlp
 
 import (
@@ -64,9 +46,8 @@ func WithRedactor(r func(theauth.AuditEvent) theauth.AuditEvent) Option {
 	return func(s *Sink) { s.redactor = r }
 }
 
-// New constructs an OTLP/HTTP logs sink. endpoint is the base URL of the
-// OpenTelemetry collector (e.g. "https://otel.example.com:4318"); the
-// sink appends "/v1/logs" automatically.
+// New constructs an OTLP/HTTP logs sink. endpoint is the collector base URL; "/v1/logs"
+// is appended automatically.
 func New(endpoint string, opts ...Option) (*Sink, error) {
 	if endpoint == "" {
 		return nil, fmt.Errorf("otlp: endpoint must not be empty")
@@ -84,9 +65,8 @@ func New(endpoint string, opts ...Option) (*Sink, error) {
 // Name returns the sink identifier used in logs and metrics.
 func (s *Sink) Name() string { return "otlp" }
 
-// Stream marshals the batch into an ExportLogsServiceRequest and POSTs
-// it to <endpoint>/v1/logs. Returns an error for any non-2xx response
-// or network/marshaling failure.
+// Stream marshals the batch into an ExportLogsServiceRequest and POSTs it to
+// <endpoint>/v1/logs.
 func (s *Sink) Stream(ctx context.Context, batch []theauth.AuditEvent) error {
 	logRecords := make([]*logsv1.LogRecord, 0, len(batch))
 	for _, evt := range batch {
@@ -144,9 +124,7 @@ func (s *Sink) Stream(ctx context.Context, batch []theauth.AuditEvent) error {
 	return nil
 }
 
-// eventToLogRecord converts an AuditEvent to an OTLP LogRecord. The full
-// event is JSON-encoded into the Body as a string value so OTLP consumers
-// can parse the structured payload. Key fields are also promoted to
+// eventToLogRecord stores the JSON-encoded event as the Body and promotes key fields to
 // Attributes so they are queryable without parsing the body.
 func eventToLogRecord(evt theauth.AuditEvent) (*logsv1.LogRecord, error) {
 	bodyJSON, err := json.Marshal(evt)

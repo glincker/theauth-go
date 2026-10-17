@@ -1,7 +1,5 @@
-// Command theauth-loadtest measures theauth-go against a real Postgres under
-// concurrent HTTP load. It has three subcommands: seed (bulk-load users and
-// sessions), serve (run theauth on Postgres), and run (drive load, report
-// throughput and latency percentiles). See docs/SCALE.md.
+// Command theauth-loadtest measures theauth-go against a real Postgres under concurrent HTTP load.
+// Subcommands: seed, serve and run. See docs/SCALE.md.
 package main
 
 import (

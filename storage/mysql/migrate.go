@@ -19,11 +19,9 @@ const (
 	migrationsLedger = "theauth_schema_migrations"
 )
 
-// Migrate applies every embedded up migration that has not already been
-// recorded in theauth_schema_migrations, in version order, under a MySQL
-// GET_LOCK advisory lock so concurrent replicas do not race on first boot.
-// Returns nil when the schema is at the latest version. Callers should invoke
-// Migrate before constructing a Store.
+// Migrate applies embedded up migrations not yet in theauth_schema_migrations, in version
+// order, under a GET_LOCK advisory lock so replicas do not race on first boot. Call it
+// before constructing a Store.
 func Migrate(ctx context.Context, db *sql.DB) error {
 	files, err := loadMigrationFiles()
 	if err != nil {
@@ -53,8 +51,7 @@ func Migrate(ctx context.Context, db *sql.DB) error {
 		if _, ok := applied[f.version]; ok {
 			continue
 		}
-		// MySQL does not always support multi-statement exec in a single
-		// call. Split on semicolons and execute each statement individually.
+		// Some MySQL drivers reject multi-statement exec, so split on semicolons first.
 		stmts := splitStatements(f.body)
 		for _, stmt := range stmts {
 			if _, err := db.ExecContext(ctx, stmt); err != nil {
@@ -71,12 +68,8 @@ func Migrate(ctx context.Context, db *sql.DB) error {
 	return nil
 }
 
-// splitStatements splits a SQL file into individual statements by
-// semicolon. Comments are stripped a full line at a time before the
-// semicolon split runs, not after: a "--" comment can itself contain a
-// semicolon (e.g. "-- monotonic counter; checked strictly-greater..."),
-// and splitting on ";" first would mistake that for a statement
-// terminator, corrupting both the statement before and after it.
+// splitStatements splits a SQL file on semicolons after stripping full-line comments, since
+// a "--" comment may itself contain a semicolon.
 func splitStatements(body string) []string {
 	lines := strings.Split(body, "\n")
 	var cleaned []string
@@ -142,10 +135,8 @@ func loadApplied(ctx context.Context, db *sql.DB) (map[string]struct{}, error) {
 	return out, rows.Err()
 }
 
-// advisoryLockName derives a short lock key from the input string. MySQL
-// GET_LOCK accepts an arbitrary string; we use a deterministic abbreviation
-// so migrations from multiple theauth instances on the same server do not
-// collide with other application locks.
+// advisoryLockName derives a short deterministic lock key so instances sharing a server do
+// not collide with other application locks.
 func advisoryLockName(name string) string {
 	h := fnv.New64a()
 	_, _ = h.Write([]byte(name))

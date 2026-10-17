@@ -9,18 +9,15 @@ import (
 	"github.com/glincker/theauth-go/v2/internal/rar"
 )
 
-// rar.go: OAuth 2.0 Rich Authorization Requests (RFC 9396). The package
-// internal/rar owns the data model; this file decides which types a server
-// and a client accept and carries the approved details from the authorize
-// request through the code, the access token and the refresh token.
+// rar.go implements RFC 9396 Rich Authorization Requests. internal/rar owns the data model; this
+// file decides which types the server accepts and carries approved details through the code, access
+// token and refresh token.
 
 // RARConfig enables authorization_details handling.
 type RARConfig struct {
-	// Types lists the authorization_details types this server understands.
-	// A request naming any other type is refused. Required and non-empty.
+	// Types lists the authorization_details types this server understands. Any other type is refused.
 	Types []string
 
-	// MaxDetails caps the number of objects in one request. Default 16.
 	MaxDetails int
 }
 
@@ -54,8 +51,7 @@ func rarError(format string, a ...any) error {
 	return fmt.Errorf("%w: %s", models.ErrOAuthInvalidAuthorizationDetails, fmt.Sprintf(format, a...))
 }
 
-// RARTypes returns the supported authorization_details types, or nil when RAR
-// is off. It feeds the authorization_details_types_supported metadata field.
+// RARTypes returns the supported authorization_details types, or nil when RAR is off.
 func (s *Service) RARTypes() []string {
 	if s == nil || s.Cfg.RAR == nil {
 		return nil
@@ -63,8 +59,7 @@ func (s *Service) RARTypes() []string {
 	return append([]string(nil), s.Cfg.RAR.Types...)
 }
 
-// ValidateClientRARTypes checks the authorization_details_types of a client
-// being registered against the server's supported set.
+// ValidateClientRARTypes checks a client's authorization_details_types against the supported set.
 func (s *Service) ValidateClientRARTypes(types []string) error {
 	if len(types) == 0 {
 		return nil
@@ -89,9 +84,8 @@ func stringIn(list []string, v string) bool {
 	return false
 }
 
-// parseAuthorizationDetails parses and vets a raw authorization_details value
-// for client. It returns nil, nil for an empty value. The returned bytes are
-// the canonical JSON to persist.
+// parseAuthorizationDetails parses and vets a raw authorization_details value. It returns nil, nil
+// for an empty value.
 func (s *Service) parseAuthorizationDetails(client *models.OAuthClient, raw string) ([]rar.Detail, []byte, error) {
 	if raw == "" {
 		return nil, nil, nil
@@ -118,9 +112,9 @@ func (s *Service) parseAuthorizationDetails(client *models.OAuthClient, raw stri
 	return list, enc, nil
 }
 
-// narrowAuthorizationDetails applies a token-endpoint authorization_details
-// parameter to the granted details (RFC 9396 section 6.1). An empty request
-// keeps the grant as is. A request for details that were never granted fails.
+// narrowAuthorizationDetails applies a token request's authorization_details to the granted details
+// (RFC 9396 section 6.1). An empty request keeps the grant as is; asking for details never granted
+// fails.
 func (s *Service) narrowAuthorizationDetails(client *models.OAuthClient, requestedRaw string, granted []byte) ([]byte, error) {
 	if requestedRaw == "" {
 		return granted, nil
@@ -140,8 +134,7 @@ func (s *Service) narrowAuthorizationDetails(client *models.OAuthClient, request
 	return rar.Marshal(eff)
 }
 
-// authorizationDetailsClaim turns stored details into the value of the
-// authorization_details claim, nil when there are none.
+// authorizationDetailsClaim turns stored details into the authorization_details claim, or nil.
 func authorizationDetailsClaim(stored []byte) (any, error) {
 	if len(stored) == 0 {
 		return nil, nil
@@ -153,8 +146,7 @@ func authorizationDetailsClaim(stored []byte) (any, error) {
 	return rar.ToAny(list)
 }
 
-// authorizationDetailsRaw returns the claim as JSON for the token response and
-// introspection, nil when absent.
+// authorizationDetailsRaw returns the claim as JSON for token responses and introspection, or nil.
 func authorizationDetailsRaw(extra map[string]any) json.RawMessage {
 	v, ok := extra["authorization_details"]
 	if !ok || v == nil {

@@ -1,10 +1,9 @@
 package as
 
-// jwtbearer.go: RFC 7523 JWT client authentication (section 2.2) and the jwt-bearer grant type (section 2.1).
-//
-// Client authentication path (section 2.2): POST /oauth/token with client_assertion_type=urn:ietf:params:oauth:client-assertion-type:jwt-bearer and client_assertion=<signed JWT>. The client is authenticated when the JWT signature matches a key from the client's registered jwks_uri/inline jwks.
-//
-// JWT Bearer grant (section 2.1): POST /oauth/token with grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer and assertion=<externally-issued JWT>. An external JWT from a TrustedJWTIssuer is exchanged for a local access token. The sub/email claim is resolved to a local user via SubjectMapper.
+// jwtbearer.go implements RFC 7523 JWT client authentication (section 2.2) and the jwt-bearer grant
+// (section 2.1). Client auth verifies a client_assertion against the client's registered keys. The
+// grant exchanges an external JWT from a TrustedJWTIssuer for a local access token, resolving its
+// subject through SubjectMapper.
 
 import (
 	"context"
@@ -29,14 +28,14 @@ import (
 	"github.com/glincker/theauth-go/v2/internal/ulid"
 )
 
-// JWTBearerStorageAdapter is the minimal interface consumed by the AS replay
-// cache when the root Storage also satisfies JWTBearerStorage.
+// JWTBearerStorageAdapter is the minimal replay-cache interface, used when the root Storage
+// implements JWTBearerStorage.
 type JWTBearerStorageAdapter interface {
 	InsertJTI(ctx context.Context, jti string, expiresAt time.Time) error
 }
 
-// allowedClientAssertionAlgs is the set of JWS algorithms the AS accepts
-// for private_key_jwt client authentication (HMAC variants are excluded).
+// allowedClientAssertionAlgs lists the JWS algorithms accepted for private_key_jwt. HMAC variants
+// are excluded.
 var allowedClientAssertionAlgs = map[string]bool{
 	"ES256": true,
 	"ES384": true,
@@ -45,16 +44,14 @@ var allowedClientAssertionAlgs = map[string]bool{
 	"EdDSA": true,
 }
 
-// genericJWTHeader carries only the JOSE header fields we need.
 type genericJWTHeader struct {
 	Alg string `json:"alg"`
 	Typ string `json:"typ"`
 	Kid string `json:"kid"`
 }
 
-// genericJWTClaims is a minimal claim set for parsing RFC 7523 JWTs that
-// may use any supported algorithm. We do not use internal/jwt here because
-// that package is EdDSA-only.
+// genericJWTClaims is a minimal claim set for RFC 7523 JWTs using any supported algorithm.
+// internal/jwt is EdDSA only, so it is not used.
 type genericJWTClaims struct {
 	Iss   string `json:"iss"`
 	Sub   string `json:"sub"`
@@ -64,12 +61,10 @@ type genericJWTClaims struct {
 	Nbf   int64  `json:"nbf"`
 	Jti   string `json:"jti"`
 	Email string `json:"email"`
-	// raw holds the full decoded payload for SubjectMapper claim access.
-	raw map[string]any
+	raw   map[string]any
 }
 
-// parseGenericJWT splits and base64-decodes a compact JWT, unmarshals the
-// header and payload claims. Does not verify the signature.
+// parseGenericJWT splits and decodes a compact JWT. It does not verify the signature.
 func parseGenericJWT(token string) (header genericJWTHeader, claims genericJWTClaims, signingInput string, sig []byte, err error) {
 	parts := strings.Split(token, ".")
 	if len(parts) != 3 {
@@ -101,12 +96,8 @@ func parseGenericJWT(token string) (header genericJWTHeader, claims genericJWTCl
 	return header, claims, signingInput, sig, nil
 }
 
-// AuthenticateClientJWT verifies a client_assertion JWT per RFC 7523
-// section 2.2. Returns the verified OAuthClient on success, or
-// models.ErrOAuthInvalidClient on failure.
-//
-// tokenEndpointURL must be the full canonical token endpoint URL (used as
-// the expected aud value).
+// AuthenticateClientJWT verifies a client_assertion per RFC 7523 section 2.2 and returns the
+// client, or ErrOAuthInvalidClient. tokenEndpointURL is the expected aud.
 func (s *Service) AuthenticateClientJWT(ctx context.Context, clientID, assertion, tokenEndpointURL string) (*models.OAuthClient, error) {
 	if s.Cfg.JWTBearer == nil {
 		return nil, models.ErrOAuthInvalidClient
@@ -121,7 +112,6 @@ func (s *Service) AuthenticateClientJWT(ctx context.Context, clientID, assertion
 	}
 	now := time.Now().UTC()
 
-	// RFC 7523 section 3 required claim validation.
 	if subtle.ConstantTimeCompare([]byte(claims.Iss), []byte(clientID)) != 1 {
 		return nil, models.ErrOAuthInvalidClient
 	}
@@ -159,15 +149,13 @@ func (s *Service) AuthenticateClientJWT(ctx context.Context, clientID, assertion
 			return nil, models.ErrOAuthInvalidClient
 		}
 	case models.ClientAuthClientSecretJWT:
-		// HS256 with the raw client secret as the HMAC key.
-		// client_secret_jwt is a weaker legacy variant; we only accept HS256.
+		// client_secret_jwt (HS256 with the raw secret) is a weaker legacy variant, so only HS256 is accepted.
 		if header.Alg != "HS256" {
 			return nil, models.ErrOAuthInvalidClient
 		}
-		// We cannot invert the Argon2id hash to recover the raw secret.
-		// This path is therefore only usable when the operator registers a
-		// client with a well-known test secret. Return ErrOAuthInvalidClient
-		// for production clients whose hash we cannot reverse.
+		// The Argon2id hash cannot be reversed to the raw secret, so client_secret_jwt works only for
+		// clients with a known secret. Production clients whose hash cannot be reversed get
+		// ErrOAuthInvalidClient.
 		return nil, models.ErrOAuthInvalidClient
 	default:
 		return nil, models.ErrOAuthInvalidClient
@@ -175,16 +163,12 @@ func (s *Service) AuthenticateClientJWT(ctx context.Context, clientID, assertion
 	return client, nil
 }
 
-// JWTBearerGrant implements the RFC 7523 section 2.1 grant type:
-// urn:ietf:params:oauth:grant-type:jwt-bearer.
-//
-// An externally-issued JWT in req's assertion parameter is validated and
-// exchanged for an AS-issued access token.
+// JWTBearerGrant implements the RFC 7523 section 2.1 jwt-bearer grant. The assertion is validated
+// and exchanged for an access token.
 func (s *Service) JWTBearerGrant(ctx context.Context, req TokenRequest, assertion string) (resp TokenResponse, err error) {
 	if s == nil {
 		return TokenResponse{}, errors.New("theauth: authorization server not configured")
 	}
-	// Registered devices assert with their own key; see iotdevice_grant.go.
 	if r, handled, derr := s.tryDeviceAssertion(ctx, req, assertion); handled {
 		return r, derr
 	}
@@ -207,7 +191,6 @@ func (s *Service) JWTBearerGrant(ctx context.Context, req TokenRequest, assertio
 	if !jwtStringIn(header.Alg, issuer.AllowedAlgorithms) {
 		return TokenResponse{}, models.ErrOAuthInvalidGrant
 	}
-	// aud must match the AS issuer URL (or the issuer's configured audience).
 	wantAud := s.Cfg.Issuer
 	if issuer.Audience != "" {
 		wantAud = issuer.Audience
@@ -225,7 +208,6 @@ func (s *Service) JWTBearerGrant(ctx context.Context, req TokenRequest, assertio
 	if claims.Nbf != 0 && time.Unix(claims.Nbf, 0).Add(-s.Cfg.ClockSkew).After(now) {
 		return TokenResponse{}, models.ErrOAuthInvalidGrant
 	}
-	// jti replay prevention.
 	jtiKey := claims.Jti
 	if jtiKey == "" {
 		jtiKey = fmt.Sprintf("%s|%s|%d", claims.Iss, claims.Sub, claims.Iat)
@@ -234,7 +216,6 @@ func (s *Service) JWTBearerGrant(ctx context.Context, req TokenRequest, assertio
 	if rerr := s.jtiReplayCheck(ctx, "grant:"+jtiKey, exp); rerr != nil {
 		return TokenResponse{}, models.ErrOAuthInvalidGrant
 	}
-	// Signature verification.
 	keys, kerr := s.trustedIssuerJWKS(issuer)
 	if kerr != nil {
 		return TokenResponse{}, models.ErrOAuthInvalidGrant
@@ -242,15 +223,14 @@ func (s *Service) JWTBearerGrant(ctx context.Context, req TokenRequest, assertio
 	if !verifyWithJWKS(keys, header, []byte(signingInput), sig) {
 		return TokenResponse{}, models.ErrOAuthInvalidGrant
 	}
-	// Required claims run only on a signature-verified payload. A missing
-	// payload map fails closed when any matcher is configured.
+	// Required claims run only on a verified payload. A missing payload fails closed when any matcher
+	// is configured.
 	if len(issuer.RequiredClaims) > 0 {
 		if failed := failedClaims(issuer.RequiredClaims, claims.raw); len(failed) > 0 {
 			s.auditClaimsDenied(ctx, req, issuer.Issuer, failed)
 			return TokenResponse{}, models.ErrOAuthInvalidGrant
 		}
 	}
-	// Resolve to a local user.
 	if issuer.SubjectMapper == nil {
 		return TokenResponse{}, models.ErrOAuthInvalidGrant
 	}
@@ -265,14 +245,12 @@ func (s *Service) JWTBearerGrant(ctx context.Context, req TokenRequest, assertio
 	if merr != nil {
 		return TokenResponse{}, models.ErrOAuthInvalidGrant
 	}
-	// Resource validation.
 	_, audience, rerr := s.resolveResource(req.Resource)
 	if rerr != nil {
 		return TokenResponse{}, rerr
 	}
 	if req.Resource == "" {
-		// OptionalResource defaulted the audience; the ID-JAG vetting below
-		// compares against req.Resource.
+		// OptionalResource defaulted the audience; the ID-JAG check below compares against req.Resource.
 		req.Resource = audience
 	}
 	grantScope := req.Scope
@@ -281,7 +259,7 @@ func (s *Service) JWTBearerGrant(ctx context.Context, req TokenRequest, assertio
 			return TokenResponse{}, err
 		}
 	}
-	// An agent client's IAM policy and rate limit apply to this mint too.
+	// An agent client's policy and rate limit apply to this mint too.
 	var gated models.AgentMintResult
 	if s.AgentGate != nil && req.ClientID != "" {
 		if ag, lerr := s.Storage.AgentByClientID(ctx, req.ClientID); lerr == nil && ag != nil {
@@ -293,7 +271,6 @@ func (s *Service) JWTBearerGrant(ctx context.Context, req TokenRequest, assertio
 			grantScope = g.Scopes
 		}
 	}
-	// Mint access token (no refresh: the external JWT is the renewable credential).
 	jtiOut := ulid.New().String()
 	accessClaims := jwt.Claims{
 		Iss:      s.Cfg.Issuer,
@@ -334,9 +311,8 @@ func (s *Service) JWTBearerGrant(ctx context.Context, req TokenRequest, assertio
 	}, nil
 }
 
-// auditClaimsDenied records a required-claims denial. It names the issuer,
-// the failed claim names and the agent when the request identifies one; it
-// never carries claim values.
+// auditClaimsDenied records a required-claims denial with the issuer and failed claim names, never
+// their values.
 func (s *Service) auditClaimsDenied(ctx context.Context, req TokenRequest, issuer string, failed []string) {
 	meta := map[string]any{"issuer": issuer, "failed_claims": failed, "grant": models.GrantTypeJWTBearer}
 	if req.ClientID != "" {
@@ -348,14 +324,12 @@ func (s *Service) auditClaimsDenied(ctx context.Context, req TokenRequest, issue
 	s.Audit.EmitAudit(ctx, "jwt_bearer.claims_denied", models.TargetRef{Type: "jwt_issuer", ID: issuer}, meta)
 }
 
-// jtiReplayCheck records a jti and returns an error if it was already seen
-// within the replay window. Uses JWTBearerStorage when available; falls back
-// to an in-process sync.Map (not durable across restarts).
+// jtiReplayCheck records a jti and errors if it was already seen in the replay window. It uses
+// JWTBearerStorage when available, else an in-process map that does not survive restarts.
 func (s *Service) jtiReplayCheck(ctx context.Context, jti string, expiresAt time.Time) error {
 	if s.jwtBearerStorage != nil {
 		return s.jwtBearerStorage.InsertJTI(ctx, jti, expiresAt)
 	}
-	// In-process fallback.
 	now := time.Now()
 	s.jtiCache.Range(func(k, v any) bool {
 		if exp, ok := v.(time.Time); ok && exp.Before(now) {
@@ -369,8 +343,7 @@ func (s *Service) jtiReplayCheck(ctx context.Context, jti string, expiresAt time
 	return nil
 }
 
-// findTrustedIssuer returns the configured TrustedJWTIssuer for the given
-// issuer string, or (zero, false) when not found.
+// findTrustedIssuer returns the configured TrustedJWTIssuer for issuer, or false.
 func (s *Service) findTrustedIssuer(issuer string) (TrustedJWTIssuer, bool) {
 	if s.Cfg.JWTBearer == nil {
 		return TrustedJWTIssuer{}, false
@@ -383,15 +356,13 @@ func (s *Service) findTrustedIssuer(issuer string) (TrustedJWTIssuer, bool) {
 	return TrustedJWTIssuer{}, false
 }
 
-// jwksEntry is one parsed public key from a JWKS document.
 type jwksEntry struct {
 	Kid string
 	Alg string
 	Key crypto.PublicKey
 }
 
-// clientJWKS returns the parsed public keys for a client that uses
-// private_key_jwt authentication, from either inline jwks or jwks_uri.
+// clientJWKS returns the parsed keys of a private_key_jwt client, from inline jwks or jwks_uri.
 func (s *Service) clientJWKS(client *models.OAuthClient) ([]jwksEntry, error) {
 	if len(client.Jwks) > 0 {
 		return parseJWKSBytes(client.Jwks)
@@ -402,14 +373,12 @@ func (s *Service) clientJWKS(client *models.OAuthClient) ([]jwksEntry, error) {
 	return nil, errors.New("client has no jwks_uri or inline jwks")
 }
 
-// trustedIssuerJWKS fetches (and caches) the JWKS for a TrustedJWTIssuer.
+// trustedIssuerJWKS fetches and caches the JWKS of a TrustedJWTIssuer.
 func (s *Service) trustedIssuerJWKS(issuer TrustedJWTIssuer) ([]jwksEntry, error) {
 	return s.jwks.Fetch(context.Background(), issuer.JWKSURL)
 }
 
-// parseJWKSBytes parses a JWKS JSON document into a slice of jwksEntry.
-// Keys with use != "sig" (or omitted use) are included; encryption keys
-// (use = "enc") are skipped.
+// parseJWKSBytes parses a JWKS document. Keys with use "sig" or no use are kept; encryption keys are skipped.
 func parseJWKSBytes(data []byte) ([]jwksEntry, error) {
 	var doc struct {
 		Keys []json.RawMessage `json:"keys"`
@@ -506,7 +475,6 @@ func parseJWKSBytes(data []byte) ([]jwksEntry, error) {
 			if err != nil || len(keyBytes) != 32 {
 				continue
 			}
-			// Use a named type so type assertions in verifySig work.
 			pub = jwksEd25519PublicKey(keyBytes)
 			alg = "EdDSA"
 		default:
@@ -514,22 +482,17 @@ func parseJWKSBytes(data []byte) ([]jwksEntry, error) {
 		}
 		out = append(out, jwksEntry{Kid: base.Kid, Alg: alg, Key: pub})
 	}
-	// Individual unusable keys are skipped, but a document that held keys
-	// and yielded none is a parse failure, not an empty key set. Returning
-	// it as an error keeps it out of the cache and visible to the operator.
+	// A document with keys that yields none is a parse failure, not an empty set. It stays out of the
+	// cache and is visible to the operator.
 	if len(out) == 0 && len(doc.Keys) > 0 {
 		return nil, fmt.Errorf("parse jwks: none of %d keys could be parsed", len(doc.Keys))
 	}
 	return out, nil
 }
 
-// jwksEd25519PublicKey wraps a raw Ed25519 public key so we can type-assert
-// it in verifySig without importing crypto/ed25519 directly.
 type jwksEd25519PublicKey []byte
 
-// verifyWithJWKS tries every matching key in the JWKS until verification
-// succeeds. When the JWT header carries a kid, only keys with the same kid
-// are tried.
+// verifyWithJWKS tries each matching key until one verifies. A kid in the header restricts the keys tried.
 func verifyWithJWKS(keys []jwksEntry, header genericJWTHeader, signingInput, sig []byte) bool {
 	for _, k := range keys {
 		if header.Kid != "" && k.Kid != "" && k.Kid != header.Kid {
@@ -542,7 +505,7 @@ func verifyWithJWKS(keys []jwksEntry, header genericJWTHeader, signingInput, sig
 	return false
 }
 
-// verifySig dispatches to the correct crypto primitive for the given alg.
+// verifySig dispatches to the crypto primitive for alg.
 func verifySig(alg string, pub crypto.PublicKey, signingInput, sig []byte) bool {
 	switch alg {
 	case "ES256":
@@ -600,9 +563,8 @@ func verifySig(alg string, pub crypto.PublicKey, signingInput, sig []byte) bool 
 	return false
 }
 
-// verifyECDSASig checks an ECDSA signature over digest. JOSE (RFC 7518
-// section 3.4) encodes it as fixed-length R||S, which is what every compliant
-// signer emits; ASN.1 DER is still accepted for signers that emitted it.
+// verifyECDSASig checks an ECDSA signature over digest. JOSE uses fixed-length R||S (RFC 7518
+// section 3.4); ASN.1 DER is still accepted.
 func verifyECDSASig(pub *ecdsa.PublicKey, digest, sig []byte, size int) bool {
 	if len(sig) == 2*size {
 		r := new(big.Int).SetBytes(sig[:size])
@@ -612,29 +574,14 @@ func verifyECDSASig(pub *ecdsa.PublicKey, digest, sig []byte, size int) bool {
 	return ecdsa.VerifyASN1(pub, digest, sig)
 }
 
-// verifyEd25519Raw verifies an Ed25519 signature without importing
-// crypto/ed25519 (to avoid import cycle with internal/jwt which already
-// uses it). The Ed25519 signature algorithm is: check len(pub)==32,
-// len(sig)==64, and call ed25519.Verify. We re-implement the check inline
-// using crypto/subtle to avoid the import.
-//
-// In practice tests will use the httptest JWKS endpoint pattern so real
-// Ed25519 key verification is exercised via internal/jwt for the AS signing
-// keys and via crypto/ed25519 for external issuers. The type cast to
-// jwksEd25519PublicKey guarantees we have a 32-byte raw key.
+// verifyEd25519Raw verifies an Ed25519 signature for a raw 32-byte key.
 func verifyEd25519Raw(pub jwksEd25519PublicKey, msg, sig []byte) bool {
 	if len(pub) != 32 || len(sig) != 64 {
 		return false
 	}
-	// Use crypto/ed25519 via the standard library.
-	// We avoid the import by calling it through the crypto.Signer interface.
-	// Instead, use the fact that crypto/ed25519.Verify is reachable through
-	// crypto/ed25519 (no import cycle since this file is in package as, not
-	// in package jwt).
 	return verifyEd25519Impl(pub, msg, sig)
 }
 
-// jwtStringIn reports whether s is present in the list.
 func jwtStringIn(s string, list []string) bool {
 	for _, v := range list {
 		if v == s {

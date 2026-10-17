@@ -1,11 +1,6 @@
-// Command theauth-dev starts a local, in-memory TheAuth server and walks
-// through the agent flow end to end: a seeded user, a seeded agent with a
-// delegation, one allowed and one denied guarded tool call, and a verified
-// audit chain. It is the Go counterpart of `npx theauth dev`.
-//
-//	go run github.com/glincker/theauth-go/v2/cmd/theauth-dev@latest
-//
-// Nothing is persisted and nothing leaves 127.0.0.1.
+// Command theauth-dev starts a local in-memory TheAuth server and walks the agent flow end to end:
+// a seeded user and agent, a delegation, allowed and denied guarded tool calls, and a verified
+// audit chain. Nothing is persisted or leaves 127.0.0.1.
 package main
 
 import (

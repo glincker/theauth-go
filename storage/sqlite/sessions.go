@@ -14,16 +14,12 @@ const sessionBaseCols = `id, user_id, token_hash, user_agent, ip, created_at, ex
 
 const sessionAuthCols = sessionBaseCols + `, auth_methods, auth_time`
 
-// sessionAuthProbeKey keys the cached column probe in Store.cache. Real cache
-// keys are SQL text, so this cannot collide.
+// sessionAuthProbeKey keys the cached column probe; real cache keys are SQL text.
 const sessionAuthProbeKey = "\x00probe:session-auth-columns"
 
-// hasSessionAuthCols reports whether the sessions table carries the
-// auth_methods and auth_time columns of migration 0034. Hosts that upgraded
-// the library without running newer migrations keep working: sessions then
-// read with no auth record. The answer is probed once per Store (a Store made
-// after migrating sees the columns); concurrent first use may probe twice,
-// which is harmless. A failed probe is not cached.
+// hasSessionAuthCols reports whether sessions has the migration 0034 auth_methods and
+// auth_time columns. Hosts that skip newer migrations read sessions with no auth record.
+// The probe runs once per Store; a failed probe is not cached.
 func (s *Store) hasSessionAuthCols(ctx context.Context) (bool, error) {
 	if v, ok := s.cache.Load(sessionAuthProbeKey); ok {
 		return v.(bool), nil

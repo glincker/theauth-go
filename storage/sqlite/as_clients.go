@@ -8,8 +8,7 @@ import (
 	"github.com/glincker/theauth-go/v2"
 )
 
-// as_clients.go: OAuth client storage (RFC 7591 registrations and operator
-// created clients) over migration 0020.
+// as_clients.go: OAuth client storage (RFC 7591 and operator-created clients) over migration 0020.
 
 const asClientCols = `id, client_id, client_secret_hash, client_name, redirect_uris,
 	grant_types, response_types, scope, token_endpoint_auth_method,
@@ -60,7 +59,6 @@ func asClientLists(c theauth.OAuthClient) (redirects, grants, responses, contact
 	return
 }
 
-// InsertOAuthClient implements theauth.OAuthServerStorage.
 func (s *Store) InsertOAuthClient(ctx context.Context, c theauth.OAuthClient) (theauth.OAuthClient, error) {
 	redirects, grants, responses, contacts, detailTypes, err := asClientLists(c)
 	if err != nil {
@@ -150,7 +148,6 @@ func asScanClient(r scanner) (theauth.OAuthClient, error) {
 	return out, nil
 }
 
-// OAuthClientByClientID implements theauth.OAuthServerStorage.
 func (s *Store) OAuthClientByClientID(ctx context.Context, clientID string) (*theauth.OAuthClient, error) {
 	c, err := asScanClient(s.db.QueryRowContext(ctx, s.q(
 		`SELECT `+asClientCols+` FROM theauth_oauth_clients WHERE client_id = ?`), clientID))

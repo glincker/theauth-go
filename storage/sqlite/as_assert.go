@@ -7,10 +7,7 @@ import (
 	"github.com/glincker/theauth-go/v2"
 )
 
-// asServerCoreStorage is the part of theauth.OAuthServerStorage this slice
-// implements: clients, authorization codes, refresh tokens and JWKS keys. The
-// agent and delegation halves of that interface live in their own files, and
-// the full assertion belongs there once both sets land.
+// asServerCoreStorage is the core part of theauth.OAuthServerStorage: clients, codes, refresh tokens and JWKS keys.
 type asServerCoreStorage interface {
 	InsertOAuthClient(ctx context.Context, c theauth.OAuthClient) (theauth.OAuthClient, error)
 	OAuthClientByClientID(ctx context.Context, clientID string) (*theauth.OAuthClient, error)
@@ -28,8 +25,7 @@ type asServerCoreStorage interface {
 	UpdateJWKSKeyState(ctx context.Context, kid, state string, at time.Time) error
 }
 
-// Optional authorization server capabilities the internal/as package probes
-// for by duck typing: JWKS atomic rotation, authorization code replay
+// Optional capabilities probed by duck typing in internal/as: atomic JWKS rotation, code replay
 // revocation and the access token denylist.
 type (
 	asJWKSAtomicRotator interface {

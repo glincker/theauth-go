@@ -1,18 +1,6 @@
-// Package password owns the email + password signup / signin / reset flow,
-// including the Argon2id hash + verify cost (paid even on user-not-found to
-// equalise signin timing per security audit M6), the magic-link-backed
-// reset, and the TOTP-step-up gate that mints a pending_2fa session when
-// the user has a confirmed second factor.
-//
-// Extracted from root service_password.go in PR D of the 2026-06
-// architecture reorg. The root *theauth.TheAuth holds a *Service and
-// exposes signupWithPassword / signinWithPassword /
-// requestPasswordReset / resetPassword / requestPasswordResetForTest as
-// thin forwarders so the v0.2 public surface is unchanged.
-//
-// The dummyPasswordHash is computed once in NewService so the verify cost
-// is paid at startup, not per request. Without it, an attacker can time
-// the signin response and learn which emails are registered.
+// Package password owns the email and password signup, signin and reset flow. The Argon2id cost is paid even
+// for unknown users, so signin timing does not reveal accounts (security audit M6), and a confirmed second
+// factor gates signin with a pending_2fa session.
 package password
 
 import (
@@ -148,7 +136,7 @@ type Service struct {
 
 // NewService constructs a password Service. dummyPasswordHash is computed
 // once here so the verify cost is paid at startup, not per request (see
-// security audit M6 2026-06-20). em may be nil; the constructor swaps in
+// security audit M6). em may be nil; the constructor swaps in
 // audit.NoopEmitter. totpPending may be nil only when cfg.TOTPEnabled is
 // false; Signin would otherwise hit a nil-pointer dereference on the
 // step-up path.
@@ -286,7 +274,7 @@ func (s *Service) Signin(ctx context.Context, emailAddr, password, userAgent, ip
 	}
 	user, hash, err := s.storage.UserByEmailWithPassword(ctx, emailAddr)
 	if errors.Is(err, models.ErrStorageNotFound) {
-		// security audit M6 (2026-06-20): pay the Argon2id verify cost
+		// security audit M6: pay the Argon2id verify cost
 		// on the user-not-found branch too. Without this, an attacker
 		// can time the response and learn which emails are registered.
 		// The dummy hash mints once at NewService time; the verify

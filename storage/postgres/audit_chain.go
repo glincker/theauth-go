@@ -11,8 +11,7 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// ChainSupported reports that this backend keeps a tamper-evident audit hash
-// chain, hashed identically to storage/sqlite (see audit.ChainPayload).
+// ChainSupported reports that this backend keeps the tamper-evident audit hash chain.
 func (s *Store) ChainSupported() bool { return true }
 
 // auditSecret returns the installation secret, creating it on first use.
@@ -33,24 +32,16 @@ func auditSecret(ctx context.Context, tx pgx.Tx) ([]byte, error) {
 ON CONFLICT (id) DO NOTHING`, fresh); err != nil {
 		return nil, err
 	}
-	// Re-read so a concurrent creator's value wins consistently. Under READ
-	// COMMITTED the conflicting insert blocks until the other writer commits.
+	// Re-read so a concurrent creator's value wins; under READ COMMITTED the insert blocks until commit.
 	if err := tx.QueryRow(ctx, `SELECT secret FROM theauth_audit_secrets WHERE id = 1`).Scan(&secret); err != nil {
 		return nil, err
 	}
 	return secret, nil
 }
 
-// lockChainHeads locks the chain head row of every chain the batch touches and
-// returns the current heads.
-//
-// Concurrency choice: a row lock (SELECT ... FOR UPDATE) on a per-chain head
-// row in theauth_audit_chain_heads, held until the batch transaction commits.
-// Writers to the same chain queue behind it, writers to different chains do
-// not block each other, and no advisory-lock key space is shared with the
-// host application. Locks are taken in sorted key order so two batches that
-// touch several chains cannot deadlock. The head row is created on demand with
-// ON CONFLICT DO NOTHING before it is locked.
+// lockChainHeads locks each touched chain's head row (SELECT ... FOR UPDATE) until the batch
+// commits, and returns the heads. A row lock rather than an advisory lock, so no key space is
+// shared with the host app. Locks are taken in sorted key order to avoid deadlock.
 func lockChainHeads(ctx context.Context, tx pgx.Tx, events []theauth.AuditEvent) (map[string]audit.ChainHead, error) {
 	seen := map[string]struct{}{}
 	for _, e := range events {
@@ -77,12 +68,8 @@ WHERE chain_key = $1 FOR UPDATE`, k).Scan(&h.Seq, &h.Hash); err != nil {
 	return heads, nil
 }
 
-// VerifyAuditChain walks every chain in seq order and reports the first row
-// whose link or hash does not match. Rows written before migration 0028 have
-// no chain position and are counted as Unchained, not as failures. Rows whose
-// raw ids were erased still verify through the stored pseudonyms and are
-// counted in Erased. Where a raw id is still present it must match its
-// pseudonym, so editing a raw column is reported as pseudonym_mismatch.
+// VerifyAuditChain walks every chain in seq order and reports the first mismatched row.
+// Pre-0028 rows count as Unchained; erased rows verify via their pseudonyms and count as Erased.
 func (s *Store) VerifyAuditChain(ctx context.Context) (theauth.AuditChainResult, error) {
 	fail := func(err error) (theauth.AuditChainResult, error) {
 		return theauth.AuditChainResult{Supported: true}, fmt.Errorf("postgres: verify audit chain: %w", err)

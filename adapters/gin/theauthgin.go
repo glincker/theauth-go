@@ -1,10 +1,5 @@
 // Package theauthgin adapts theauth-go middleware and routes to Gin.
-//
-// It wraps the net/http middleware of a *theauth.TheAuth as native
-// gin.HandlerFunc values and exposes the authenticated user, session and API
-// token principal through gin accessors. Error responses are written by
-// theauth itself, so Config.ErrorResponder (when set) shapes them exactly as
-// it does under net/http; the adapter never writes its own error bodies.
+// Error responses are written by theauth itself, so Config.ErrorResponder shapes them.
 package theauthgin
 
 import (
@@ -45,10 +40,9 @@ func Principal(c *gin.Context) (*theauth.Principal, bool) {
 	return theauth.PrincipalFromContext(c.Request.Context())
 }
 
-// Mount serves every theauth route (auth, oauth and well-known) under prefix,
-// for example Mount(a, r, "/api") serves /api/auth/signin. The routes keep
-// Config.PathPrefix below prefix. An empty prefix mounts /auth, /oauth and
-// /.well-known at the router root.
+// Mount serves every theauth route (auth, oauth and well-known) under prefix, e.g.
+// Mount(a, r, "/api") serves /api/auth/signin. The routes keep Config.PathPrefix below prefix.
+// An empty prefix mounts at the router root.
 func Mount(a *theauth.TheAuth, r gin.IRoutes, prefix string) {
 	prefix = strings.TrimRight(prefix, "/")
 	h := http.Handler(a.Handler())
@@ -61,10 +55,7 @@ func Mount(a *theauth.TheAuth, r gin.IRoutes, prefix string) {
 	}
 }
 
-// wrap turns a net/http middleware into a gin handler. The request replaced
-// by the middleware (carrying the user and session in its context) is
-// installed before the rest of the chain runs; a middleware that wrote a
-// response aborts the chain.
+// wrap turns a net/http middleware into a gin handler; a response written by it aborts the chain.
 func wrap(mw func(http.Handler) http.Handler) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		passed := false

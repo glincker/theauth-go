@@ -1,8 +1,5 @@
-// Command server is a self-contained demo authorization server for the
-// cli-device-login example: in-memory storage, the RFC 8628 device grant
-// enabled, and a bare sign-in page so the verification flow works end to end
-// in a browser. Do not run it as is in production (memory storage, demo
-// registration token, demo sign-in page).
+// Command server is a self-contained demo authorization server for cli-device-login: in-memory
+// storage, the device grant and a bare sign-in page. Do not run it in production.
 package main
 
 import (

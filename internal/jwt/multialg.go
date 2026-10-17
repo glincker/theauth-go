@@ -18,14 +18,10 @@ import (
 	"time"
 )
 
-// multialg.go: algorithm-agile signing and verification for tokens minted by
-// the authorization server. The original Sign and Verify entry points stay
-// EdDSA only; the functions here add ES256 and RS256 so a client can be
-// issued tokens its resource servers are able to verify.
-//
-// Algorithm confusion is closed by construction: VerifyWith resolves the key
-// by kid, then requires the key type to match the alg named in the header.
-// The "none" alg and HMAC algs are never accepted.
+// multialg.go adds algorithm-agile signing and verification (ES256, RS256) so clients can get
+// tokens their resource servers can verify. The EdDSA-only Sign and Verify entry points are
+// unchanged. VerifyWith looks up the key by kid and requires its type to match the alg, which
+// closes algorithm confusion. "none" and HMAC are never accepted.
 
 const (
 	// AlgES256 is ECDSA over P-256 with SHA-256 (RFC 7518 section 3.4).
@@ -134,9 +130,8 @@ func derToRaw(der []byte, size int) ([]byte, error) {
 	return out, nil
 }
 
-// VerifyWith parses and authenticates a compact JWT signed with any supported
-// algorithm. expectedTyp is the required JOSE typ (TypeAccessToken for access
-// tokens); a missing or different typ is rejected. expectedAud is optional.
+// VerifyWith authenticates a compact JWT signed with any supported algorithm. expectedTyp is
+// required; a missing or different typ fails.
 func VerifyWith(token string, resolve KeyResolver, expectedTyp, expectedAud string, now time.Time, opts VerifyOptions) (Claims, error) {
 	parts := strings.Split(token, ".")
 	if len(parts) != 3 {
@@ -218,11 +213,9 @@ func verifyBytes(alg string, pub crypto.PublicKey, msg, sig []byte) bool {
 	return false
 }
 
-// VerifySignature authenticates a compact JWS signed with any supported
-// algorithm and returns the decoded header and raw payload without
-// interpreting registered claims. expectedTyp is the required JOSE typ.
-// Callers that need array aud or no exp (Security Event Tokens, RFC 8417)
-// use it and validate claims themselves.
+// VerifySignature checks the signature of a compact JWS and returns the header and raw payload
+// without reading registered claims. Security Event Tokens (RFC 8417) use it, since their aud can
+// be an array and they carry no exp.
 func VerifySignature(token string, resolve KeyResolver, expectedTyp string) (Header, []byte, error) {
 	parts := strings.Split(token, ".")
 	if len(parts) != 3 {

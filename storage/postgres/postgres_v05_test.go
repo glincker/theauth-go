@@ -14,9 +14,7 @@ import (
 	"github.com/glincker/theauth-go/v2/storage"
 )
 
-// TestPostgresSessionAuthLevelDefault confirms a CreateSession through the
-// pre-v0.5 code path writes auth_level = 'full' via the DDL default, so
-// older callers keep getting full sessions back.
+// TestPostgresSessionAuthLevelDefault: a session created without an auth level gets 'full' from the DDL default.
 func TestPostgresSessionAuthLevelDefault(t *testing.T) {
 	pool := testPool(t)
 	defer pool.Close()
@@ -78,8 +76,7 @@ func TestPostgresCreateSessionWithAuthLevelPending(t *testing.T) {
 	}
 }
 
-// TestPostgresWebAuthnInsertAndUnique covers happy-path insert plus the
-// UNIQUE(credential_id) constraint enforcement.
+// TestPostgresWebAuthnInsertAndUnique covers insert and the UNIQUE(credential_id) constraint.
 func TestPostgresWebAuthnInsertAndUnique(t *testing.T) {
 	pool := testPool(t)
 	defer pool.Close()
@@ -115,9 +112,8 @@ func TestPostgresWebAuthnInsertAndUnique(t *testing.T) {
 	}
 }
 
-// TestPostgresWebAuthnSignCountReplay exercises the atomic UPDATE filter.
-// We disambiguate ErrReplayDetected (count not strictly greater) from
-// ErrNotFound (missing credential) without leaking either to the wrong path.
+// TestPostgresWebAuthnSignCountReplay exercises the atomic UPDATE filter, distinguishing
+// ErrReplayDetected from ErrNotFound.
 func TestPostgresWebAuthnSignCountReplay(t *testing.T) {
 	pool := testPool(t)
 	defer pool.Close()
@@ -149,8 +145,8 @@ func TestPostgresWebAuthnSignCountReplay(t *testing.T) {
 	}
 }
 
-// TestPostgresTOTPLifecycle covers upsert (pending), confirm, fetch, and
-// the "confirmed secret is preserved against a fresh /enroll/begin" rule.
+// TestPostgresTOTPLifecycle covers pending upsert, confirm, fetch and delete, including that a
+// confirmed secret survives a fresh enrollment.
 func TestPostgresTOTPLifecycle(t *testing.T) {
 	pool := testPool(t)
 	defer pool.Close()
@@ -200,8 +196,7 @@ func TestPostgresTOTPLifecycle(t *testing.T) {
 	}
 }
 
-// TestPostgresRecoveryCodeConsume validates the linear-scan verify pattern:
-// match wins, reuse loses, cross-user mismatch returns ErrNotFound.
+// TestPostgresRecoveryCodeConsume validates the linear-scan verify: a match wins, reuse loses.
 func TestPostgresRecoveryCodeConsume(t *testing.T) {
 	pool := testPool(t)
 	defer pool.Close()

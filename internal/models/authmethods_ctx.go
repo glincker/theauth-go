@@ -15,10 +15,8 @@ type AuthRecord struct {
 	At time.Time
 }
 
-// WithAuthMethods returns a context that makes the session service record
-// methods (RFC 8176 values, see the AMR constants) and an AuthTime of now on
-// the session created from it. Sign-in services wrap the context just before
-// they mint a session; contexts without it create sessions with no record.
+// WithAuthMethods returns a context that records the RFC 8176 methods and an AuthTime of now on the
+// session it creates. Contexts without it create sessions with no record.
 func WithAuthMethods(ctx context.Context, methods ...string) context.Context {
 	return WithAuthRecord(ctx, time.Time{}, methods...)
 }

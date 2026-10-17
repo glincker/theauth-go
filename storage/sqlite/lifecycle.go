@@ -93,8 +93,7 @@ func (s *Store) DeleteUserCascade(ctx context.Context, userID theauth.ULID) erro
 			{`DELETE FROM theauth_account_states WHERE user_id = ?`, []any{uid}},
 			{`DELETE FROM theauth_user_passwords WHERE user_id = ?`, []any{uid}},
 			{`DELETE FROM theauth_api_tokens WHERE owner_id = ? OR delegated_by = ?`, []any{uid, uid}},
-			// Erasure keeps the audit chain valid: the hash covers the keyed
-			// pseudonym columns, which stay. Only the raw ids are blanked.
+			// Blank raw ids only; hashed pseudonym columns stay so the audit chain still verifies.
 			{`UPDATE theauth_audit_events SET actor_user_id = NULL WHERE actor_user_id = ?`, []any{uid}},
 			{`UPDATE theauth_audit_events SET subject_id = '' WHERE subject_id = ? AND chain_seq IS NOT NULL`, []any{uid}},
 			{`UPDATE theauth_audit_events SET actor_id = '' WHERE actor_id = ? AND chain_seq IS NOT NULL`, []any{uid}},

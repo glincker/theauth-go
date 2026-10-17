@@ -1,11 +1,5 @@
-// Package session owns the Issue / Validate primitives for opaque
-// session tokens. Extracted from root service_session.go in PR A of the
-// 2026-06 architecture reorg.
-//
-// Tokens themselves are produced by crypto.NewToken and only the sha256
-// hash is persisted; the raw token is returned to the caller exactly once
-// (typically dropped into a Secure HttpOnly cookie). validate looks up by
-// hash, rejects expired or revoked rows, and returns the bound user.
+// Package session owns the Issue and Validate primitives for opaque session tokens. Only the sha256 hash is
+// persisted; the raw token is returned exactly once.
 package session
 
 import (

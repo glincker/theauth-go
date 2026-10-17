@@ -11,9 +11,8 @@ import (
 	"time"
 )
 
-// nonce.go: server-issued DPoP-Nonce values per RFC 9449 section 8. A nonce is a short opaque string the AS/resource server hands to the client via the DPoP-Nonce response header. The client must echo it back in the nonce claim of the next DPoP proof. Nonces stop a proof captured at time T from being replayable beyond NonceTTL even when the client's private key remains uncompromised.
-//
-// Storage model: stateless. Each nonce is the base64url encoding of (issuedAtUnix || HMAC-SHA256(secret, issuedAtUnix)), keyed by a 32-byte HMAC secret generated at Service.New time. Verification recomputes the HMAC and rejects any nonce older than NonceTTL. No per-nonce server state means there is no growth pressure and no replication concern, at the cost of letting the same nonce be presented twice within the TTL (jti-replay protection on the proof itself catches a duplicate use).
+// nonce.go issues and verifies server DPoP-Nonce values (RFC 9449 section 8). Nonces are stateless:
+// each is a timestamp plus an HMAC over it, keyed by a per-service secret.
 
 // nonceVersion prefixes every issued nonce so the wire format can rev
 // without ambiguity. Version 1: 8-byte BE iat || 32-byte HMAC.
@@ -23,9 +22,7 @@ const nonceVersion byte = 1
 // 8 iat bytes + 32 HMAC bytes.
 const nonceLen = 1 + 8 + sha256.Size
 
-// issueNonce returns a fresh DPoP-Nonce. now defaults to time.Now().UTC()
-// when zero. secret must be the per-service HMAC secret allocated by
-// Service.New (32 random bytes).
+// issueNonce returns a fresh DPoP-Nonce. A zero now means time.Now. secret is the per-service HMAC key.
 func issueNonce(secret []byte, now time.Time) string {
 	if now.IsZero() {
 		now = time.Now().UTC()
@@ -81,7 +78,6 @@ func newNonceSecret() ([]byte, error) {
 	return b, nil
 }
 
-// errNonceSecretRequired is returned when the service has no secret
-// configured; should be impossible in practice because Service.New seeds
-// one, but Verify treats it as a configuration error.
+// errNonceSecretRequired means the service has no nonce secret. New seeds one, so Verify treats
+// this as a configuration error.
 var errNonceSecretRequired = errors.New("dpop: nonce secret not configured")

@@ -1,17 +1,7 @@
-// webauthn-passkey is a runnable demo of v0.5 passkey registration + login.
-//
-// What it does:
-//   - Mounts the full /auth/* route set with WebAuthn enabled
-//   - Serves a single page that registers a passkey and then signs in with it
-//
-// What it expects:
-//   - Run on https://localhost or any origin that the browser permits for
-//     WebAuthn. For a quick local run, use mkcert + a local TLS reverse
-//     proxy, or set HOST=localhost and POINT_BROWSER to an https origin.
-//
-// What it does NOT do:
-//   - Cookies, CSRF, CORS for cross-origin SPA setups: this is a single-page
-//     example and skips that to keep the file readable.
+// Command webauthn-passkey is a runnable demo of passkey registration and login on the /auth/* routes
+// with WebAuthn enabled. It serves one page that registers a passkey and signs in with it.
+// Run it on https://localhost or any origin the browser allows for WebAuthn (mkcert plus a local TLS
+// proxy works). Cookies, CSRF and CORS are skipped to keep the demo readable.
 package main
 
 import (

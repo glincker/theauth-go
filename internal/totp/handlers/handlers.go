@@ -1,10 +1,5 @@
-// Package handlers exposes the /auth/totp/* HTTP endpoints for TOTP
-// 2FA enrollment, verification, recovery, and removal.
-//
-// Extracted from root handlers_totp.go in PR E of the 2026-06
-// architecture reorg. The root *theauth.TheAuth constructs a Handler
-// here and Mount is invoked from a thin mountTOTPHandlers forwarder
-// so the public surface and route shapes are unchanged.
+// Package handlers exposes the /auth/totp/* endpoints for TOTP enrollment, verification, recovery and
+// removal.
 package handlers
 
 import (

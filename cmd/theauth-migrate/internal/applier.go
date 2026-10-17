@@ -16,9 +16,8 @@ import (
 
 const batchSize = 500
 
-// Storage is the subset of theauth.Storage the applier needs. Using a
-// narrower interface makes the applier easier to test and keeps the
-// dependency explicit.
+// Storage is the subset of theauth.Storage the applier needs. A narrow interface keeps the
+// dependency explicit and testable.
 type Storage interface {
 	CreateUser(ctx context.Context, u theauth.User) (theauth.User, error)
 	UserByEmail(ctx context.Context, email string) (*theauth.User, error)
@@ -26,9 +25,8 @@ type Storage interface {
 	UpsertOAuthAccount(ctx context.Context, a theauth.OAuthAccount) (theauth.OAuthAccount, error)
 }
 
-// mustChangeStore is the optional capability (theauth.AccountStateStorage)
-// that lets the applier carry RequiresPasswordReset through as a forced
-// password change instead of only reporting it.
+// mustChangeStore is the optional AccountStateStorage capability that carries RequiresPasswordReset
+// through as a forced password change.
 type mustChangeStore interface {
 	SetMustChangePassword(ctx context.Context, userID theauth.ULID, required bool) error
 }
@@ -47,13 +45,10 @@ type ApplyResult struct {
 	UsersDuplicate        int
 	OAuthAccountsInserted int
 	PasswordsSet          int
-	// MustChangeFlagged counts users flagged MustChangePassword because the
-	// source marked their password as needing a reset. It stays zero when the
-	// storage does not implement AccountStateStorage.
+	// MustChangeFlagged counts users flagged for a forced password change. It stays zero when storage
+	// lacks AccountStateStorage.
 	MustChangeFlagged int
-	// PasswordResets is the list of (email, source_id) pairs for users who
-	// need a password-reset email. The caller should wire this to an email
-	// service.
+	// PasswordResets lists the (email, source_id) pairs of users who need a password reset email.
 	PasswordResets []PasswordResetNeeded
 	Errors         []string
 }
@@ -65,10 +60,9 @@ type PasswordResetNeeded struct {
 	SourceID string
 }
 
-// ApplyBundle writes b into st in batches. It is idempotent: users whose
-// email already exists in storage are skipped (reported in Duplicate) rather
-// than double-inserted. On any hard error the function returns early with a
-// non-nil error; partial writes are noted in the result.
+// ApplyBundle writes b into st in batches. It is idempotent: users whose email already exists are
+// skipped, not double-inserted. A hard error returns early with a non-nil error, and partial writes
+// are reported in the result.
 func ApplyBundle(ctx context.Context, st Storage, b *Bundle, opts ApplyOptions) (ApplyResult, error) {
 	if opts.Out == nil {
 		opts.Out = io.Discard

@@ -1,20 +1,7 @@
-// Example oauth-x demonstrates Sign in with X (formerly Twitter) using
-// OAuth 2.0 with PKCE. PKCE is mandatory for all X OAuth 2.0 flows.
-//
-// Note: X does not expose email via the standard /2/users/me endpoint
-// without elevated API access. This example shows the user's display name.
-//
-// Run:
-//
-//	X_CLIENT_ID=xxx X_CLIENT_SECRET=yyy go run .
-//
-// For public client apps (no client secret), set X_CLIENT_SECRET to empty.
-//
-// Then visit http://localhost:8091 and click "Sign in with X".
-//
-// Prerequisites: create a project and app at https://developer.x.com/en/portal.
-// Set the callback URL to http://localhost:8091/auth/providers/x/callback.
-// Enable OAuth 2.0 under User authentication settings. PKCE must be enabled.
+// Command oauth-x shows Sign in with X (formerly Twitter) via OAuth 2.0 with PKCE, which X requires.
+// X does not expose email on /2/users/me without elevated access, so this shows the display name.
+// Run: X_CLIENT_ID=xxx X_CLIENT_SECRET=yyy go run . (leave the secret empty for public clients),
+// then open http://localhost:8091. The X app needs callback http://localhost:8091/auth/providers/x/callback.
 package main
 
 import (

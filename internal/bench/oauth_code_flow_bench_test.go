@@ -24,17 +24,9 @@ const (
 	codeFlowRedirect = "https://app.example.com/callback"
 )
 
-// BenchmarkOAuthCodeFlow measures the /oauth/token authorization_code grant
-// end-to-end through the full HTTP handler path: client authentication (with
-// the Argon2 cache warm), PKCE S256 verification, authorization code
-// consume, JWT mint, refresh token insert, and response marshal. This is the
-// primary path a first-time user exercises after the browser redirect.
-//
-// Each iteration seeds a new authorization code so the consume is always
-// fresh. Client-secret verification is cache-warm (seeded in setup) so the
-// Argon2 cost does not dominate and we measure the protocol work.
-//
-// gate:include
+// BenchmarkOAuthCodeFlow measures the authorization_code grant at /oauth/token end to end: client
+// auth with a warm Argon2 cache, PKCE S256, code consume, JWT mint, refresh insert and marshal.
+// Each iteration seeds a fresh code. gate:include
 func BenchmarkOAuthCodeFlow(b *testing.B) {
 	store := memory.New()
 	key := make([]byte, 32)
