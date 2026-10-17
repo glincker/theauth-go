@@ -191,6 +191,9 @@ jobs:
     defaults:
       run:
         working-directory: mcpresource
+    env:
+      # The repo go.work needs Go 1.26. Run the module the way a consumer builds it, at its own 1.25 floor.
+      GOWORK: "off"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
