@@ -16,6 +16,69 @@ func RunToolApprovals(t *testing.T, store theauth.ToolApprovalStorage) {
 	t.Run("ToolApprovals", func(t *testing.T) { testToolApprovals(t, store) })
 }
 
+// RunToolApprovalAdmin runs the approvals inbox contract tests (get, list, deny).
+func RunToolApprovalAdmin(t *testing.T, store theauth.ToolApprovalAdminStorage) {
+	t.Helper()
+	t.Run("ToolApprovalAdmin", func(t *testing.T) { testToolApprovalAdmin(t, store) })
+}
+
+func testToolApprovalAdmin(t *testing.T, store theauth.ToolApprovalAdminStorage) {
+	ctx := context.Background()
+	now := time.Now().UTC().Truncate(time.Second)
+	open := func(t *testing.T, expires time.Time) string {
+		t.Helper()
+		id := newID().String()
+		a := theauth.ToolApproval{ID: id, AgentID: "agent-1", Action: "execute", Resource: "tool:pay", OpenedBy: "opener", CreatedAt: now, ExpiresAt: expires}
+		if err := store.OpenToolApproval(ctx, a); err != nil {
+			t.Fatalf("open: %v", err)
+		}
+		return id
+	}
+	t.Run("get and list", func(t *testing.T) {
+		id := open(t, now.Add(time.Hour))
+		a, ok, err := store.GetToolApproval(ctx, id)
+		if err != nil || !ok || a.OpenedBy != "opener" {
+			t.Fatalf("get = %+v, %v, %v", a, ok, err)
+		}
+		if _, ok, _ := store.GetToolApproval(ctx, "nope"); ok {
+			t.Fatal("get unknown returned ok")
+		}
+		list, err := store.ListToolApprovals(ctx, 0)
+		if err != nil || len(list) == 0 {
+			t.Fatalf("list = %d, %v", len(list), err)
+		}
+	})
+	t.Run("deny once", func(t *testing.T) {
+		id := open(t, now.Add(time.Hour))
+		if ok, err := store.DenyToolApproval(ctx, id, "alice", now); err != nil || !ok {
+			t.Fatalf("deny = %v, %v", ok, err)
+		}
+		if ok, _ := store.DenyToolApproval(ctx, id, "bob", now); ok {
+			t.Fatal("second deny succeeded")
+		}
+		if ok, _ := store.ApproveToolApproval(ctx, id, "bob", now); ok {
+			t.Fatal("approve after deny succeeded")
+		}
+		a, _, _ := store.GetToolApproval(ctx, id)
+		if a.DeniedBy != "alice" || a.DeniedAt.IsZero() {
+			t.Fatalf("denied fields = %+v", a)
+		}
+	})
+	t.Run("deny after approve or expiry fails", func(t *testing.T) {
+		id := open(t, now.Add(time.Hour))
+		if ok, _ := store.ApproveToolApproval(ctx, id, "alice", now); !ok {
+			t.Fatal("approve failed")
+		}
+		if ok, _ := store.DenyToolApproval(ctx, id, "bob", now); ok {
+			t.Fatal("deny after approve succeeded")
+		}
+		old := open(t, now.Add(time.Minute))
+		if ok, _ := store.DenyToolApproval(ctx, old, "bob", now.Add(time.Hour)); ok {
+			t.Fatal("deny after expiry succeeded")
+		}
+	})
+}
+
 func testToolApprovals(t *testing.T, store theauth.ToolApprovalStorage) {
 	ctx := context.Background()
 	now := time.Now().UTC().Truncate(time.Second)

@@ -12,6 +12,7 @@ Running it:
 
 - [dev-mode.md](dev-mode.md): `go run .../cmd/theauth-dev@latest` starts a seeded in-memory server and walks through an agent, a delegation, an allowed and a denied tool call, and a verified audit chain.
 - [mcp-oauth-sqlite.md](mcp-oauth-sqlite.md): the OAuth 2.1 authorization server on SQLite for an MCP server, including mounting under a path prefix and revocation with `mcpresource`.
+- [approvals.md](approvals.md): HTTP inbox to list, approve and deny agent tool approvals with four-eyes and audit.
 - [storage-capabilities.md](storage-capabilities.md): which capability interfaces each backend (memory, SQLite, Postgres, MySQL) implements, with migration numbers.
 - [pluggable-stores.md](pluggable-stores.md): shared rate limits, replay cache and document cache across replicas.
 

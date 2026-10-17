@@ -52,6 +52,20 @@ Notion and Atlassian are not preset because their token endpoints are documented
 
 `tokenvault.RefresherFromPreset("github", id, secret, nil)` builds the refresher with the right token URL and `AuthStyle`.
 
+## Check a preset against the real provider
+
+Run one refresh grant with your own test credentials to confirm a preset works against the live provider. The program never prints token values.
+
+```bash
+PROVIDER=github CLIENT_ID=... CLIENT_SECRET=... REFRESH_TOKEN=... go run ./examples/token-vault-smoke
+```
+
+Add `--dry-run` to print the request shape (URL, auth style, header names, body keys) with values masked. Nothing is sent.
+
+On success the output shows the HTTP status, whether an access token came back, `expires_in`, whether the provider rotated the refresh token, and the scope string. On failure it exits 1 and prints `error=<code>`, the provider's OAuth error code such as `invalid_grant`, never the response body.
+
+Run it by hand against a test app. CI never runs it.
+
 ## Key rotation
 
 1. Add the new key to the ring and make it active. Deploy.
