@@ -32,6 +32,10 @@ const (
 	ReasonChainTruncated Reason = "chain_truncated"
 	// ReasonHeadMismatch means the row at the signed seq has a different hash.
 	ReasonHeadMismatch Reason = "head_mismatch"
+	// ReasonHeadNotRetained means the chain is longer than the signed head but the store no longer
+	// holds the row at the signed seq (a ring buffer evicted it, or retention removed it), so the
+	// head cannot be compared. It is not proof of tampering. Check a newer head checkpoint.
+	ReasonHeadNotRetained Reason = "head_not_retained"
 )
 
 // ChainHead is the last position of one chain at signing time.
@@ -76,7 +80,7 @@ type HeadOptions struct {
 // ChainHeads reads the current head of every chain by scanning the chained events of a store.
 // pageSize zero means 500. Unchained events are skipped.
 func ChainHeads(ctx context.Context, st EventQuerier, pageSize int) ([]ChainHead, error) {
-	m, _, err := scanHeads(ctx, st, pageSize, nil)
+	m, _, _, err := scanHeads(ctx, st, pageSize, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -90,17 +94,18 @@ func ChainHeads(ctx context.Context, st EventQuerier, pageSize int) ([]ChainHead
 
 // scanHeads returns the highest row per chain, plus the hash at each seq listed in want (keyed by
 // chain key), so a check needs one pass and no per row memory.
-func scanHeads(ctx context.Context, st EventQuerier, pageSize int, want map[string]int64) (map[string]ChainHead, map[string]string, error) {
+func scanHeads(ctx context.Context, st EventQuerier, pageSize int, want map[string]int64) (map[string]ChainHead, map[string]string, map[string]int64, error) {
 	if pageSize <= 0 {
 		pageSize = 500
 	}
 	heads := map[string]ChainHead{}
 	atSeq := map[string]string{}
+	oldest := map[string]int64{}
 	after := ""
 	for {
 		events, next, err := st.QueryAuditEvents(ctx, models.AuditQuery{Limit: pageSize, After: after})
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, nil, err
 		}
 		for _, e := range events {
 			if e.Hash == "" || e.ChainSeq == 0 {
@@ -110,12 +115,15 @@ func scanHeads(ctx context.Context, st EventQuerier, pageSize int, want map[stri
 			if cur, ok := heads[key]; !ok || seq > cur.Seq {
 				heads[key] = ChainHead{ChainKey: key, Seq: seq, Hash: e.Hash}
 			}
+			if o, ok := oldest[key]; !ok || seq < o {
+				oldest[key] = seq
+			}
 			if w, ok := want[key]; ok && w == seq {
 				atSeq[key] = e.Hash
 			}
 		}
 		if next == "" || next == after || len(events) == 0 {
-			return heads, atSeq, nil
+			return heads, atSeq, oldest, nil
 		}
 		after = next
 	}
@@ -218,13 +226,16 @@ func CheckHeadCheckpoint(ctx context.Context, st EventQuerier, h HeadCheckpoint,
 	for _, c := range h.Heads {
 		want[c.ChainKey] = c.Seq
 	}
-	heads, atSeq, err := scanHeads(ctx, st, 0, want)
+	heads, atSeq, oldest, err := scanHeads(ctx, st, 0, want)
 	if err != nil {
 		return HeadCheck{}, err
 	}
 	for _, c := range h.Heads {
 		if cur, ok := heads[c.ChainKey]; !ok || cur.Seq < c.Seq {
 			return HeadCheck{Outcome: fail(ReasonChainTruncated), ChainKey: c.ChainKey}, nil
+		}
+		if _, ok := atSeq[c.ChainKey]; !ok && oldest[c.ChainKey] > c.Seq {
+			return HeadCheck{Outcome: fail(ReasonHeadNotRetained), ChainKey: c.ChainKey}, nil
 		}
 		if !sameHex(atSeq[c.ChainKey], c.Hash) {
 			return HeadCheck{Outcome: fail(ReasonHeadMismatch), ChainKey: c.ChainKey}, nil

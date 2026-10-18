@@ -131,16 +131,27 @@ func verifySignature(keyID, signature string, msg []byte, keys []PublicKey) Outc
 	if match.PublicKey.Kty != jwkKty || match.PublicKey.Crv != jwkCrv {
 		return fail(ReasonUnsupportedAlg)
 	}
-	pub, err := base64.RawURLEncoding.Strict().DecodeString(match.PublicKey.X)
-	if err != nil || len(pub) != publicKeyBytes {
+	pub, ok := decodeCanonicalB64(match.PublicKey.X)
+	if !ok || len(pub) != publicKeyBytes {
 		return fail(ReasonBadSignature)
 	}
-	sig, err := base64.RawURLEncoding.Strict().DecodeString(signature)
-	if err != nil || len(sig) != signatureBytes {
+	sig, ok := decodeCanonicalB64(signature)
+	if !ok || len(sig) != signatureBytes {
 		return fail(ReasonBadSignature)
 	}
 	if !ed25519.Verify(pub, msg, sig) {
 		return fail(ReasonBadSignature)
 	}
 	return OK()
+}
+
+// decodeCanonicalB64 decodes unpadded base64url and accepts only the one canonical spelling of the
+// bytes. The stdlib decoder skips CR and LF anywhere in the input, so Strict alone would let a
+// signature carry a second, newline laden encoding that still verifies.
+func decodeCanonicalB64(s string) ([]byte, bool) {
+	b, err := base64.RawURLEncoding.Strict().DecodeString(s)
+	if err != nil || base64.RawURLEncoding.EncodeToString(b) != s {
+		return nil, false
+	}
+	return b, true
 }
