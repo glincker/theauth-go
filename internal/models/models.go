@@ -458,6 +458,14 @@ type AuditEvent struct {
 	UserAgent      string         `json:"userAgent,omitempty"`
 	CreatedAt      time.Time      `json:"createdAt"`
 
+	// Event is the shared event name (see internal/audit events and the audit package), empty when
+	// the writer did not set one or the action has no shared name (stored as NULL). RecordedAtUs is
+	// the microsecond write-order stamp assigned by the store inside the append, strictly increasing
+	// per chain key, zero on rows from stores or schemas that predate it. Neither field is part of
+	// the audit chain hash, and a value passed to InsertAuditEvents for RecordedAtUs is ignored.
+	Event        string `json:"event,omitempty"`
+	RecordedAtUs int64  `json:"recordedAtUs,omitempty"`
+
 	// Accountability fields. SubjectID is the principal the action was taken
 	// on behalf of; ActorID is the agent or service that performed it. Token
 	// `sub` semantics are unchanged: these are recorded explicitly instead.
@@ -558,6 +566,11 @@ func (e AuditEvent) MetadataWithAccountability() map[string]any {
 // AuditQuery filters and paginates audit_events reads. Zero-valued fields
 // are ignored. Limit is capped at 200 and defaults to 50; After is the
 // opaque cursor returned by the previous page.
+//
+// Event keeps only rows whose event equals it. Order is AuditOrderDesc (the default, newest
+// write first) or AuditOrderAsc, and applies to stores that declare write order support. A
+// cursor is only valid for the order that produced it. Cursors from before write order existed
+// (no "c1." prefix) keep working for descending reads.
 type AuditQuery struct {
 	OrganizationID *ULID
 	ActorUserID    *ULID
@@ -566,9 +579,17 @@ type AuditQuery struct {
 	TargetID       string
 	Since          *time.Time
 	Until          *time.Time
+	Event          string
+	Order          string
 	Limit          int
 	After          string
 }
+
+// Audit read orders for AuditQuery.Order. The empty value means AuditOrderDesc.
+const (
+	AuditOrderAsc  = "asc"
+	AuditOrderDesc = "desc"
+)
 
 // Stats holds runtime counters useful for ops dashboards and tests. Counters
 // are monotonically non-decreasing; reads are atomic snapshots. AuditFailed

@@ -68,6 +68,8 @@ func RunTOTP(t *testing.T, store TOTPSuiteStorage) {
 func RunAudit(t *testing.T, store AuditSuiteStorage) {
 	t.Helper()
 	t.Run("AuditEvents", func(t *testing.T) { testAuditEvents(t, store) })
+	// Skips with a message for backends that do not declare AuditOrderCapable.
+	RunAuditOrder(t, store)
 }
 
 // RunRBAC runs the role and permission contract tests.

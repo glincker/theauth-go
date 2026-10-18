@@ -100,3 +100,18 @@ func TestVerifyChainRowsDetectsBreaks(t *testing.T) {
 		t.Fatalf("erased = %+v", res)
 	}
 }
+
+// RecordedAtUs and Event are written next to the chain but never hashed, so setting them leaves the
+// golden hash of the v1 chain untouched. Rows written before the columns existed keep verifying.
+func TestChainHashIgnoresEventAndRecordedAtUs(t *testing.T) {
+	ev := goldenEvent(t)
+	ev.Event = EventAuthorize
+	ev.RecordedAtUs = 1760000000999999
+	entry, err := BuildChainEntry(ev, []byte(goldenSecret), ChainHead{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if entry.Hash != goldenHashWant {
+		t.Fatalf("hash changed when Event and RecordedAtUs were set: %s", entry.Hash)
+	}
+}

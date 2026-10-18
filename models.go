@@ -99,6 +99,12 @@ type AuditEvent = models.AuditEvent
 
 type AuditQuery = models.AuditQuery
 
+// Audit read orders for AuditQuery.Order.
+const (
+	AuditOrderAsc  = models.AuditOrderAsc
+	AuditOrderDesc = models.AuditOrderDesc
+)
+
 type Stats = models.Stats
 
 type ClientOwner = models.ClientOwner

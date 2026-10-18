@@ -30,6 +30,9 @@ var (
 	// Handlers match it with errors.Is.
 	ErrBadCursor = errors.New("theauth: invalid pagination cursor")
 
+	// ErrBadAuditOrder is returned when AuditQuery.Order is neither "", "asc" nor "desc".
+	ErrBadAuditOrder = errors.New("theauth: invalid audit order")
+
 	// ErrLastOwner is returned when an org member removal would leave the
 	// organization with zero owners.
 	ErrLastOwner = errors.New("theauth: cannot remove the last owner")

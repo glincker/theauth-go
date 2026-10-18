@@ -26,6 +26,9 @@ var (
 	// ErrBadCursor is returned by storage adapters when a keyset pagination cursor fails to decode.
 	ErrBadCursor = models.ErrBadCursor
 
+	// ErrBadAuditOrder is returned when AuditQuery.Order is neither "", "asc" nor "desc".
+	ErrBadAuditOrder = models.ErrBadAuditOrder
+
 	// ErrReplayDetected is returned by storage when a WebAuthn sign count does not strictly increase.
 	// The library treats it as a clone attempt and refuses the login. Authenticators that never count
 	// stay at zero and are handled by the caller.
