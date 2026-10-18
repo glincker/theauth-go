@@ -63,6 +63,7 @@ func TestMySQLCapabilityContracts(t *testing.T) {
 		{"SessionAuthMethods", func(t *testing.T, s *mysql.Store) { storagetest.RunSessionAuthMethods(t, s) }},
 		{"AccountLifecycle", func(t *testing.T, s *mysql.Store) { storagetest.RunAccountLifecycle(t, s) }},
 		{"AuditChain", func(t *testing.T, s *mysql.Store) { storagetest.RunAuditChain(t, s) }},
+		{"AuditOrder", func(t *testing.T, s *mysql.Store) { storagetest.RunAuditOrder(t, s) }},
 	}
 	for _, tc := range suites {
 		t.Run(tc.name, func(t *testing.T) { tc.run(t, capsStore(t)) })

@@ -42,7 +42,10 @@ ON CONFLICT (id) DO NOTHING`, fresh); err != nil {
 // lockChainHeads locks each touched chain's head row (SELECT ... FOR UPDATE) until the batch
 // commits, and returns the heads. A row lock rather than an advisory lock, so no key space is
 // shared with the host app. Locks are taken in sorted key order to avoid deadlock.
-func lockChainHeads(ctx context.Context, tx pgx.Tx, events []theauth.AuditEvent) (map[string]audit.ChainHead, error) {
+//
+// The second result is each chain's highest issued recorded_at_us, read under the same lock. The
+// writer stamps rows above it, so stamps are strictly increasing per chain even across processes.
+func lockChainHeads(ctx context.Context, tx pgx.Tx, events []theauth.AuditEvent) (map[string]audit.ChainHead, map[string]int64, error) {
 	seen := map[string]struct{}{}
 	for _, e := range events {
 		seen[audit.ChainKey(e)] = struct{}{}
@@ -53,19 +56,22 @@ func lockChainHeads(ctx context.Context, tx pgx.Tx, events []theauth.AuditEvent)
 	}
 	sort.Strings(keys)
 	heads := make(map[string]audit.ChainHead, len(keys))
+	stamps := make(map[string]int64, len(keys))
 	for _, k := range keys {
 		if _, err := tx.Exec(ctx, `INSERT INTO theauth_audit_chain_heads (chain_key, seq, hash)
 VALUES ($1, 0, '') ON CONFLICT (chain_key) DO NOTHING`, k); err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		var h audit.ChainHead
-		if err := tx.QueryRow(ctx, `SELECT seq, hash FROM theauth_audit_chain_heads
-WHERE chain_key = $1 FOR UPDATE`, k).Scan(&h.Seq, &h.Hash); err != nil {
-			return nil, err
+		var us int64
+		if err := tx.QueryRow(ctx, `SELECT seq, hash, recorded_at_us FROM theauth_audit_chain_heads
+WHERE chain_key = $1 FOR UPDATE`, k).Scan(&h.Seq, &h.Hash, &us); err != nil {
+			return nil, nil, err
 		}
 		heads[k] = h
+		stamps[k] = us
 	}
-	return heads, nil
+	return heads, stamps, nil
 }
 
 // VerifyAuditChain walks every chain in seq order and reports the first mismatched row.

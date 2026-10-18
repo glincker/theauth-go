@@ -10,10 +10,15 @@ import (
 	"time"
 
 	"github.com/glincker/theauth-go/v2"
+	"github.com/glincker/theauth-go/v2/internal/audit"
 	"github.com/oklog/ulid/v2"
 )
 
 // Audit events. InsertAuditEvents lives in audit_chain.go with the hash chain.
+
+// AuditOrderSupported declares write order support (storagetest.AuditOrderCapable): the store
+// assigns recorded_at_us, persists event, and serves Order, the Event filter and c1. cursors.
+func (s *Store) AuditOrderSupported() bool { return true }
 
 func (s *Store) QueryAuditEvents(ctx context.Context, q theauth.AuditQuery) ([]theauth.AuditEvent, string, error) {
 	limit := q.Limit
@@ -22,6 +27,15 @@ func (s *Store) QueryAuditEvents(ctx context.Context, q theauth.AuditQuery) ([]t
 	}
 	if limit > 200 {
 		limit = 200
+	}
+
+	order, ok := audit.NormalizeOrder(q.Order)
+	if !ok {
+		return nil, "", theauth.ErrBadAuditOrder
+	}
+	legacy := audit.IsLegacyCursor(q.After)
+	if legacy && order != theauth.AuditOrderDesc {
+		return nil, "", fmt.Errorf("pagination.bad_cursor: %w: legacy cursor needs desc order", theauth.ErrBadCursor)
 	}
 
 	var wheres []string
@@ -47,6 +61,10 @@ func (s *Store) QueryAuditEvents(ctx context.Context, q theauth.AuditQuery) ([]t
 		wheres = append(wheres, "target_id = ?")
 		args = append(args, q.TargetID)
 	}
+	if q.Event != "" {
+		wheres = append(wheres, "event = ?")
+		args = append(args, q.Event)
+	}
 	if q.Since != nil {
 		wheres = append(wheres, "created_at >= ?")
 		args = append(args, timeUTC(*q.Since))
@@ -55,27 +73,51 @@ func (s *Store) QueryAuditEvents(ctx context.Context, q theauth.AuditQuery) ([]t
 		wheres = append(wheres, "created_at <= ?")
 		args = append(args, timeUTC(*q.Until))
 	}
-	if q.After != "" {
+	switch {
+	case legacy:
 		ts, id, err := decodeAuditCursor(q.After)
 		if err != nil {
 			return nil, "", fmt.Errorf("pagination.bad_cursor: %w: %w", theauth.ErrBadCursor, err)
 		}
-		// Keyset: (created_at, id) < (cursor_ts, cursor_id) in DESC order.
+		// Legacy keyset: (created_at, id) < (cursor_ts, cursor_id) in DESC order.
 		wheres = append(wheres,
 			"(created_at < ? OR (created_at = ? AND id < ?))")
 		args = append(args, timeUTC(ts), timeUTC(ts), ulidToBytes(id))
+	case q.After != "":
+		c, err := audit.DecodeCursor(q.After, order)
+		if err != nil {
+			return nil, "", fmt.Errorf("pagination.bad_cursor: %w", err)
+		}
+		// Write order keyset on (recorded_at_us, id), strictly after the cursor row in the
+		// requested direction.
+		cmp := "<"
+		if order == theauth.AuditOrderAsc {
+			cmp = ">"
+		}
+		wheres = append(wheres,
+			"(recorded_at_us "+cmp+" ? OR (recorded_at_us = ? AND id "+cmp+" ?))")
+		args = append(args, c.RecordedAtUs, c.RecordedAtUs, ulidToBytes(c.ID))
 	}
 
 	sqlStr := `SELECT id, organization_id, actor_user_id, actor_session_id,
                       action, target_type, target_id, metadata, ip, user_agent, created_at,
                       subject_id, actor_id, policy_version, approver_id,
                       COALESCE(delegation_chain, '[]'), COALESCE(input_provenance, '{}'),
-                      COALESCE(chain_seq, 0), prev_hash, hash
+                      COALESCE(chain_seq, 0), prev_hash, hash,
+                      event, COALESCE(recorded_at_us, 0)
                FROM audit_events`
 	if len(wheres) > 0 {
 		sqlStr += " WHERE " + strings.Join(wheres, " AND ")
 	}
-	sqlStr += " ORDER BY created_at DESC, id DESC LIMIT " + strconv.Itoa(limit)
+	switch {
+	case legacy:
+		sqlStr += " ORDER BY created_at DESC, id DESC"
+	case order == theauth.AuditOrderAsc:
+		sqlStr += " ORDER BY recorded_at_us ASC, id ASC"
+	default:
+		sqlStr += " ORDER BY recorded_at_us DESC, id DESC"
+	}
+	sqlStr += " LIMIT " + strconv.Itoa(limit)
 
 	rows, err := s.db.QueryContext(ctx, sqlStr, args...)
 	if err != nil {
@@ -96,11 +138,13 @@ func (s *Store) QueryAuditEvents(ctx context.Context, q theauth.AuditQuery) ([]t
 			chain, prov                         string
 			seq                                 int64
 			prev, hash                          string
+			event                               nullableStr
+			recordedUs                          int64
 		)
 		if err := rows.Scan(
 			&idB, &orgIDB, &actorUserB, &actorSessB,
 			&action, &targetType, &targetID, &metaBytes, &ip, &ua, &createdAt,
-			&subject, &actorID, &policy, &approver, &chain, &prov, &seq, &prev, &hash,
+			&subject, &actorID, &policy, &approver, &chain, &prov, &seq, &prev, &hash, &event, &recordedUs,
 		); err != nil {
 			return nil, "", err
 		}
@@ -117,6 +161,7 @@ func (s *Store) QueryAuditEvents(ctx context.Context, q theauth.AuditQuery) ([]t
 			CreatedAt:      createdAt.UTC(),
 			SubjectID:      subject, ActorID: actorID, PolicyVersion: policy, ApproverID: approver,
 			ChainSeq: uint64(seq), PrevHash: prev, Hash: hash,
+			Event: event.value(), RecordedAtUs: recordedUs,
 		}
 		if chain != "" && chain != "[]" {
 			if err := json.Unmarshal([]byte(chain), &e.DelegationChain); err != nil {
@@ -142,7 +187,11 @@ func (s *Store) QueryAuditEvents(ctx context.Context, q theauth.AuditQuery) ([]t
 	var nextCursor string
 	if len(out) == limit {
 		last := out[len(out)-1]
-		nextCursor = encodeAuditCursor(last.CreatedAt, last.ID)
+		if legacy {
+			nextCursor = encodeAuditCursor(last.CreatedAt, last.ID)
+		} else {
+			nextCursor = audit.EncodeCursor(audit.Cursor{RecordedAtUs: last.RecordedAtUs, ID: last.ID, Order: order})
+		}
 	}
 	return out, nextCursor, nil
 }

@@ -113,3 +113,62 @@ func TestAuditChainAcceptsPreMigrationRows(t *testing.T) {
 		t.Fatalf("verify = %+v, %v", res, err)
 	}
 }
+
+// TestAuditChainIgnoresWriteOrderColumns covers rows written before migration 0031 (event and
+// recorded_at_us NULL, as the migration leaves unmapped rows) and rows with arbitrary values:
+// neither column is hashed, so the chain verifies in all three states. Needs a live MySQL.
+func TestAuditChainIgnoresWriteOrderColumns(t *testing.T) {
+	ctx := context.Background()
+	s, db := chainTestStore(t)
+	org := newChainID()
+	if _, err := db.ExecContext(ctx, `INSERT INTO organizations (id, name, slug) VALUES (?, 'o', ?)`, org[:], "o-"+org.String()); err != nil {
+		t.Fatalf("org: %v", err)
+	}
+	var evs []theauth.AuditEvent
+	for i := 0; i < 3; i++ {
+		o := org
+		evs = append(evs, theauth.AuditEvent{ID: newChainID(), OrganizationID: &o, Action: "agent.authorize",
+			Event: "authorize", CreatedAt: time.UnixMicro(1760000000000000 + int64(i)*1000)})
+	}
+	if err := s.InsertAuditEvents(ctx, evs); err != nil {
+		t.Fatalf("insert: %v", err)
+	}
+	verify := func(stage string) {
+		t.Helper()
+		res, err := s.VerifyAuditChain(ctx)
+		if err != nil || !res.OK || res.Checked != 3 {
+			t.Fatalf("%s: verify = %+v, %v", stage, res, err)
+		}
+	}
+	verify("written with columns")
+	if _, err := db.ExecContext(ctx, `UPDATE audit_events SET event = NULL, recorded_at_us = NULL`); err != nil {
+		t.Fatal(err)
+	}
+	verify("pre-migration shape (NULL columns)")
+	if _, err := db.ExecContext(ctx, `UPDATE audit_events SET event = 'other', recorded_at_us = 7`); err != nil {
+		t.Fatal(err)
+	}
+	verify("rewritten columns")
+}
+
+// TestAuditWriteOrderBackfillUTC applies the 0031 backfill expression to a known created_at
+// under a non-UTC session time zone and expects the UTC epoch microseconds. Needs a live MySQL.
+func TestAuditWriteOrderBackfillUTC(t *testing.T) {
+	ctx := context.Background()
+	_, db := chainTestStore(t)
+	conn, err := db.Conn(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = conn.Close() }()
+	if _, err := conn.ExecContext(ctx, `SET time_zone = '+05:30'`); err != nil {
+		t.Fatal(err)
+	}
+	var got int64
+	if err := conn.QueryRowContext(ctx, `SELECT TIMESTAMPDIFF(MICROSECOND, '1970-01-01 00:00:00', '2025-10-09 08:53:20.123456')`).Scan(&got); err != nil {
+		t.Fatal(err)
+	}
+	if want := int64(1760000000123456); got != want {
+		t.Fatalf("backfill expression = %d, want %d", got, want)
+	}
+}

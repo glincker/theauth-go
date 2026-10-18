@@ -20,9 +20,10 @@ INSERT INTO audit_events
      metadata, ip, user_agent, created_at,
      subject_id, actor_id, policy_version, approver_id, delegation_chain, input_provenance,
      actor_user_pseudonym, subject_pseudonym, actor_pseudonym, approver_pseudonym,
-     chain_metadata, chain_ip, chain_session, chain_key, chain_seq, prev_hash, hash)
+     chain_metadata, chain_ip, chain_session, chain_key, chain_seq, prev_hash, hash,
+     recorded_at_us, event)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17,
-        $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28)`
+        $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30)`
 
 // InsertAuditEvents appends a batch in one transaction. Rows are linked into a
 // per-organization hash chain (see VerifyAuditChain); concurrent writers are
@@ -41,7 +42,7 @@ func (s *Store) InsertAuditEvents(ctx context.Context, events []theauth.AuditEve
 	if err != nil {
 		return err
 	}
-	heads, err := lockChainHeads(ctx, tx, events)
+	heads, stamps, err := lockChainHeads(ctx, tx, events)
 	if err != nil {
 		return err
 	}
@@ -61,6 +62,9 @@ func (s *Store) InsertAuditEvents(ctx context.Context, events []theauth.AuditEve
 			}
 		}
 		p := entry.Payload
+		// Assigned under the chain head row lock: above the chain's last stamp, so it is strictly
+		// increasing per chain. A caller supplied RecordedAtUs is ignored. Not part of the hash.
+		stamp := audit.NextRecordedAtUs(stamps[key])
 		if _, err := tx.Exec(ctx, insertChainedAuditSQL,
 			ulidToPgUUID(e.ID), ulidPtrToPgUUID(e.OrganizationID), ulidPtrToPgUUID(e.ActorUserID),
 			ulidPtrToPgUUID(e.ActorSessionID), e.Action, nullableText(e.TargetType), nullableText(e.TargetID),
@@ -68,24 +72,38 @@ func (s *Store) InsertAuditEvents(ctx context.Context, events []theauth.AuditEve
 			timeToTs(time.UnixMicro(entry.CreatedAtMicro).UTC()),
 			e.SubjectID, e.ActorID, e.PolicyVersion, e.ApproverID, entry.DelegationChain, entry.InputProvenance,
 			p.ActorUserPseudo, p.SubjectPseudo, p.ActorPseudo, p.ApproverPseudo,
-			entry.Metadata, e.IP, p.ActorSession, key, p.Seq, p.Prev, entry.Hash); err != nil {
+			entry.Metadata, e.IP, p.ActorSession, key, p.Seq, p.Prev, entry.Hash,
+			stamp, nullableText(e.Event)); err != nil {
 			return err
 		}
+		stamps[key] = stamp
 		heads[key] = audit.ChainHead{Seq: p.Seq, Hash: entry.Hash}
 	}
 	for k, h := range heads {
-		if _, err := tx.Exec(ctx, `UPDATE theauth_audit_chain_heads SET seq = $2, hash = $3 WHERE chain_key = $1`,
-			k, h.Seq, h.Hash); err != nil {
+		if _, err := tx.Exec(ctx, `UPDATE theauth_audit_chain_heads SET seq = $2, hash = $3, recorded_at_us = $4 WHERE chain_key = $1`,
+			k, h.Seq, h.Hash, stamps[k]); err != nil {
 			return err
 		}
 	}
 	return tx.Commit(ctx)
 }
 
-// QueryAuditEvents is hand-built because the filter combinations vary too
-// much for a fixed sqlc query. The query is keyset-paginated on
-// (created_at DESC, id DESC) so it stays efficient as audit_events grows.
+// AuditOrderSupported declares write order support (storagetest.AuditOrderCapable).
+func (s *Store) AuditOrderSupported() bool { return true }
+
+// QueryAuditEvents is hand-built because the filter combinations vary too much for a fixed sqlc
+// query. Rows are ordered by (recorded_at_us, id) in q.Order (default desc) and paged with a "c1."
+// keyset cursor. A cursor from before write order existed keeps the old (created_at DESC, id DESC)
+// keyset, for descending reads only.
 func (s *Store) QueryAuditEvents(ctx context.Context, q theauth.AuditQuery) ([]theauth.AuditEvent, string, error) {
+	order, ok := audit.NormalizeOrder(q.Order)
+	if !ok {
+		return nil, "", theauth.ErrBadAuditOrder
+	}
+	legacy := audit.IsLegacyCursor(q.After)
+	if legacy && order != theauth.AuditOrderDesc {
+		return nil, "", fmt.Errorf("%w: legacy cursor needs desc order", theauth.ErrBadCursor)
+	}
 	limit := q.Limit
 	if limit <= 0 {
 		limit = 50
@@ -110,6 +128,9 @@ func (s *Store) QueryAuditEvents(ctx context.Context, q theauth.AuditQuery) ([]t
 	if q.Action != "" {
 		wheres = append(wheres, "action = "+bind(q.Action))
 	}
+	if q.Event != "" {
+		wheres = append(wheres, "event = "+bind(q.Event))
+	}
 	if q.TargetType != "" {
 		wheres = append(wheres, "target_type = "+bind(q.TargetType))
 	}
@@ -122,7 +143,13 @@ func (s *Store) QueryAuditEvents(ctx context.Context, q theauth.AuditQuery) ([]t
 	if q.Until != nil {
 		wheres = append(wheres, "created_at <= "+bind(timeToTs(*q.Until)))
 	}
-	if q.After != "" {
+	dir, cmp := "DESC", "<"
+	if order == theauth.AuditOrderAsc {
+		dir, cmp = "ASC", ">"
+	}
+	orderBy := " ORDER BY recorded_at_us " + dir + ", id " + dir
+	switch {
+	case legacy:
 		ts, id, err := decodeKeysetCursor(q.After)
 		if err != nil {
 			return nil, "", fmt.Errorf("pagination.bad_cursor: %w: %w", theauth.ErrBadCursor, err)
@@ -132,17 +159,27 @@ func (s *Store) QueryAuditEvents(ctx context.Context, q theauth.AuditQuery) ([]t
 			"(created_at < "+bind(timeToTs(ts))+
 				" OR (created_at = "+bind(timeToTs(ts))+
 				" AND id < "+bind(ulidToPgUUID(id))+"))")
+		orderBy = " ORDER BY created_at DESC, id DESC"
+	case q.After != "":
+		c, err := audit.DecodeCursor(q.After, order)
+		if err != nil {
+			return nil, "", err
+		}
+		wheres = append(wheres,
+			"(recorded_at_us "+cmp+" "+bind(c.RecordedAtUs)+
+				" OR (recorded_at_us = "+bind(c.RecordedAtUs)+
+				" AND id "+cmp+" "+bind(ulidToPgUUID(c.ID))+"))")
 	}
 	sql := `SELECT id, organization_id, actor_user_id, actor_session_id,
                    action, target_type, target_id, metadata,
                    host(ip) AS ip, user_agent, created_at,
                    subject_id, actor_id, policy_version, approver_id, delegation_chain, input_provenance,
-                   COALESCE(chain_seq, 0), prev_hash, hash
+                   COALESCE(chain_seq, 0), prev_hash, hash, recorded_at_us, event
               FROM audit_events`
 	if len(wheres) > 0 {
 		sql += " WHERE " + strings.Join(wheres, " AND ")
 	}
-	sql += " ORDER BY created_at DESC, id DESC LIMIT " + strconv.Itoa(limit)
+	sql += orderBy + " LIMIT " + strconv.Itoa(limit)
 
 	rows, err := s.pool.Query(ctx, sql, args...)
 	if err != nil {
@@ -161,11 +198,13 @@ func (s *Store) QueryAuditEvents(ctx context.Context, q theauth.AuditQuery) ([]t
 			approver, chain, prov           string
 			seq                             int64
 			prev, hash                      string
+			recordedUs                      pgtype.Int8
+			event                           pgtype.Text
 		)
 		if err := rows.Scan(&id, &orgID, &actorUser, &actorSess,
 			&action, &targetType, &targetID, &metaBytes,
 			&ipTxt, &ua, &createdAt,
-			&subject, &actorID, &policy, &approver, &chain, &prov, &seq, &prev, &hash); err != nil {
+			&subject, &actorID, &policy, &approver, &chain, &prov, &seq, &prev, &hash, &recordedUs, &event); err != nil {
 			return nil, "", err
 		}
 		e := theauth.AuditEvent{
@@ -181,6 +220,7 @@ func (s *Store) QueryAuditEvents(ctx context.Context, q theauth.AuditQuery) ([]t
 			CreatedAt:      tsToTime(createdAt),
 			SubjectID:      subject, ActorID: actorID, PolicyVersion: policy, ApproverID: approver,
 			ChainSeq: uint64(seq), PrevHash: prev, Hash: hash,
+			RecordedAtUs: recordedUs.Int64, Event: pgTextString(event),
 		}
 		if chain != "" && chain != "[]" {
 			if err := json.Unmarshal([]byte(chain), &e.DelegationChain); err != nil {
@@ -206,7 +246,11 @@ func (s *Store) QueryAuditEvents(ctx context.Context, q theauth.AuditQuery) ([]t
 	var next string
 	if len(out) == limit {
 		last := out[len(out)-1]
-		next = encodeKeysetCursor(last.CreatedAt, last.ID)
+		if legacy {
+			next = encodeKeysetCursor(last.CreatedAt, last.ID)
+		} else {
+			next = audit.EncodeCursor(audit.Cursor{RecordedAtUs: last.RecordedAtUs, ID: last.ID, Order: order})
+		}
 	}
 	return out, next, nil
 }

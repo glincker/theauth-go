@@ -25,8 +25,9 @@ INSERT INTO audit_events
      metadata, ip, user_agent, created_at,
      subject_id, actor_id, policy_version, approver_id, delegation_chain, input_provenance,
      actor_user_pseudonym, subject_pseudonym, actor_pseudonym, approver_pseudonym,
-     chain_metadata, chain_session, chain_key, chain_seq, prev_hash, hash)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+     chain_metadata, chain_session, chain_key, chain_seq, prev_hash, hash,
+     event, recorded_at_us)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 
 // maxDeadlockRetries bounds replays of a batch picked as InnoDB deadlock victim (1213).
 // Head locks are taken in sorted order, so this is a safety net only.
@@ -89,7 +90,7 @@ func (s *Store) insertChained(ctx context.Context, events []theauth.AuditEvent) 
 	if err != nil {
 		return err
 	}
-	heads, err := lockChainHeads(ctx, tx, events)
+	heads, recorded, err := lockChainHeads(ctx, tx, events)
 	if err != nil {
 		return err
 	}
@@ -102,6 +103,11 @@ func (s *Store) insertChained(ctx context.Context, events []theauth.AuditEvent) 
 		if err != nil {
 			return err
 		}
+		// The write order stamp is assigned here, while this transaction holds the head row
+		// lock for the chain. The floor is the highest stamp the chain issued, so stamps are
+		// strictly increasing per chain even across processes and a stalled clock. Any value
+		// the caller set is ignored. Never hashed.
+		recordedUs := audit.NextRecordedAtUs(recorded[key])
 		var ipVal any
 		if e.IP != "" {
 			ipVal = e.IP
@@ -114,14 +120,16 @@ func (s *Store) insertChained(ctx context.Context, events []theauth.AuditEvent) 
 			timeUTC(time.UnixMicro(entry.CreatedAtMicro)),
 			e.SubjectID, e.ActorID, e.PolicyVersion, e.ApproverID, entry.DelegationChain, entry.InputProvenance,
 			p.ActorUserPseudo, p.SubjectPseudo, p.ActorPseudo, p.ApproverPseudo,
-			entry.Metadata, p.ActorSession, key, p.Seq, p.Prev, entry.Hash); err != nil {
+			entry.Metadata, p.ActorSession, key, p.Seq, p.Prev, entry.Hash,
+			nullStringVal(e.Event), recordedUs); err != nil {
 			return err
 		}
 		heads[key] = audit.ChainHead{Seq: p.Seq, Hash: entry.Hash}
+		recorded[key] = recordedUs
 	}
 	for k, h := range heads {
-		if _, err := tx.ExecContext(ctx, `UPDATE theauth_audit_chain_heads SET seq = ?, hash = ? WHERE chain_key = ?`,
-			h.Seq, h.Hash, k); err != nil {
+		if _, err := tx.ExecContext(ctx, `UPDATE theauth_audit_chain_heads SET seq = ?, hash = ?, recorded_at_us = ? WHERE chain_key = ?`,
+			h.Seq, h.Hash, recorded[k], k); err != nil {
 			return err
 		}
 	}
@@ -168,10 +176,11 @@ func auditSecret(ctx context.Context, tx *sql.Tx) ([]byte, error) {
 	return secret, nil
 }
 
-// lockChainHeads locks the head row of every chain the batch touches and returns the heads.
+// lockChainHeads locks the head row of every chain the batch touches and returns the heads
+// plus the highest write order stamp each chain has issued.
 // A row lock, not GET_LOCK (session scoped, leaks across pooled connections), taken in
 // sorted key order. Head rows already exist, so no gap locks are involved.
-func lockChainHeads(ctx context.Context, tx *sql.Tx, events []theauth.AuditEvent) (map[string]audit.ChainHead, error) {
+func lockChainHeads(ctx context.Context, tx *sql.Tx, events []theauth.AuditEvent) (map[string]audit.ChainHead, map[string]int64, error) {
 	seen := map[string]struct{}{}
 	for _, e := range events {
 		seen[audit.ChainKey(e)] = struct{}{}
@@ -182,15 +191,20 @@ func lockChainHeads(ctx context.Context, tx *sql.Tx, events []theauth.AuditEvent
 	}
 	sort.Strings(keys)
 	heads := make(map[string]audit.ChainHead, len(keys))
+	recorded := make(map[string]int64, len(keys))
 	for _, k := range keys {
-		var h audit.ChainHead
-		if err := tx.QueryRowContext(ctx, `SELECT seq, hash FROM theauth_audit_chain_heads
-WHERE chain_key = ? FOR UPDATE`, k).Scan(&h.Seq, &h.Hash); err != nil {
-			return nil, err
+		var (
+			h  audit.ChainHead
+			us int64
+		)
+		if err := tx.QueryRowContext(ctx, `SELECT seq, hash, recorded_at_us FROM theauth_audit_chain_heads
+WHERE chain_key = ? FOR UPDATE`, k).Scan(&h.Seq, &h.Hash, &us); err != nil {
+			return nil, nil, err
 		}
 		heads[k] = h
+		recorded[k] = us
 	}
-	return heads, nil
+	return heads, recorded, nil
 }
 
 // VerifyAuditChain walks every chain in seq order and reports the first mismatched row.
