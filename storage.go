@@ -77,6 +77,8 @@ type OAuthServerStorage interface {
 	AgentsByOwner(ctx context.Context, owner AgentOwner) ([]Agent, error)
 	UpdateAgentStatus(ctx context.Context, id ULID, status string, at time.Time) error
 	UpdateAgentLastActive(ctx context.Context, id ULID, at time.Time) error
+	// UpdateAgentExpiry sets or clears (nil) the agent expiry. A missing agent is ErrNotFound.
+	UpdateAgentExpiry(ctx context.Context, id ULID, expiresAt *time.Time) error
 
 	// Agent credentials. Rotation inserts a fresh row before revoking the old one; callers filter on
 	// RevokedAt themselves.

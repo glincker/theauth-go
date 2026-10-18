@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/glincker/theauth-go/v2/internal/audit"
@@ -252,29 +253,32 @@ type Finding = doctor.Finding
 type Report = doctor.Report
 
 const (
-	DoctorSignupOpen        = doctor.DoctorSignupOpen
-	DoctorBootstrapOff      = doctor.DoctorBootstrapOff
-	DoctorTrustedProxies    = doctor.DoctorTrustedProxies
-	DoctorSecureCookie      = doctor.DoctorSecureCookie
-	DoctorCSRFDisabled      = doctor.DoctorCSRFDisabled
-	DoctorThrottleDisabled  = doctor.DoctorThrottleDisabled
-	DoctorThrottleLax       = doctor.DoctorThrottleLax
-	DoctorPasswordMinLength = doctor.DoctorPasswordMinLength
-	DoctorPasswordNoBreach  = doctor.DoctorPasswordNoBreach
-	DoctorAdminNoTOTP       = doctor.DoctorAdminNoTOTP
-	DoctorNoSecondFactor    = doctor.DoctorNoSecondFactor
-	DoctorSessionTTLLong    = doctor.DoctorSessionTTLLong
-	DoctorSessionNoIdle     = doctor.DoctorSessionNoIdle
-	DoctorTokenNoExpiry     = doctor.DoctorTokenNoExpiry
-	DoctorTokenLongExpiry   = doctor.DoctorTokenLongExpiry
-	DoctorTokenRoot         = doctor.DoctorTokenRoot
-	DoctorAgentTokenLong    = doctor.DoctorAgentTokenLong
-	DoctorTokensUnpruned    = doctor.DoctorTokensUnpruned
-	DoctorSessionsUnpruned  = doctor.DoctorSessionsUnpruned
-	DoctorEncryptionKey     = doctor.DoctorEncryptionKey
-	DoctorAuditSink         = doctor.DoctorAuditSink
-	DoctorWebAuthnRPID      = doctor.DoctorWebAuthnRPID
-	DoctorRedirectAllowList = doctor.DoctorRedirectAllowList
+	DoctorSignupOpen         = doctor.DoctorSignupOpen
+	DoctorBootstrapOff       = doctor.DoctorBootstrapOff
+	DoctorTrustedProxies     = doctor.DoctorTrustedProxies
+	DoctorSecureCookie       = doctor.DoctorSecureCookie
+	DoctorCSRFDisabled       = doctor.DoctorCSRFDisabled
+	DoctorThrottleDisabled   = doctor.DoctorThrottleDisabled
+	DoctorThrottleLax        = doctor.DoctorThrottleLax
+	DoctorPasswordMinLength  = doctor.DoctorPasswordMinLength
+	DoctorPasswordNoBreach   = doctor.DoctorPasswordNoBreach
+	DoctorAdminNoTOTP        = doctor.DoctorAdminNoTOTP
+	DoctorNoSecondFactor     = doctor.DoctorNoSecondFactor
+	DoctorSessionTTLLong     = doctor.DoctorSessionTTLLong
+	DoctorSessionNoIdle      = doctor.DoctorSessionNoIdle
+	DoctorTokenNoExpiry      = doctor.DoctorTokenNoExpiry
+	DoctorTokenLongExpiry    = doctor.DoctorTokenLongExpiry
+	DoctorTokenRoot          = doctor.DoctorTokenRoot
+	DoctorAgentTokenLong     = doctor.DoctorAgentTokenLong
+	DoctorTokensUnpruned     = doctor.DoctorTokensUnpruned
+	DoctorSessionsUnpruned   = doctor.DoctorSessionsUnpruned
+	DoctorEncryptionKey      = doctor.DoctorEncryptionKey
+	DoctorAuditSink          = doctor.DoctorAuditSink
+	DoctorWebAuthnRPID       = doctor.DoctorWebAuthnRPID
+	DoctorRedirectAllowList  = doctor.DoctorRedirectAllowList
+	DoctorCookieDomain       = doctor.DoctorCookieDomain
+	DoctorCookieNoneOpen     = doctor.DoctorCookieNoneOpen
+	DoctorSecurityHeadersOff = doctor.DoctorSecurityHeadersOff
 )
 
 // DoctorFindingIDs lists every finding ID a check can emit.
@@ -313,6 +317,7 @@ func (a *TheAuth) gatherDoctorInput(ctx context.Context, now time.Time) doctor.I
 		UserCount:         doctor.UnknownCount,
 		HasProviders:      len(cfg.Providers) > 0,
 		HasSAML:           cfg.SAML != nil,
+		SAMLTrackerMemory: cfg.SAML != nil && cfg.Stores.Cache == nil,
 		TOTPEnabled:       cfg.TOTP != nil,
 		WebAuthnEnabled:   cfg.WebAuthn != nil,
 		AdminCount:        doctor.UnknownCount,
@@ -323,6 +328,11 @@ func (a *TheAuth) gatherDoctorInput(ctx context.Context, now time.Time) doctor.I
 		EncryptionKeyLen:  len(cfg.EncryptionKey),
 		EncryptionNeeded:  len(cfg.Providers) > 0 || cfg.TOTP != nil,
 		AuditConfigured:   cfg.Audit != nil,
+		CookieName:        cfg.CookieName,
+		CookieDomain:      cfg.Cookies.Domain,
+		CookieSameSite:    strings.ToLower(cfg.Cookies.SameSite),
+		CookiePartitioned: cfg.Cookies.Partitioned,
+		SecurityHeaders:   cfg.SecurityHeaders,
 	}
 	if in.PasswordMinLength <= 0 {
 		in.PasswordMinLength = 12

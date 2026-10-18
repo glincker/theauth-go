@@ -20,6 +20,7 @@ import (
 	internalas "github.com/glincker/theauth-go/v2/internal/as"
 	internalaudit "github.com/glincker/theauth-go/v2/internal/audit"
 	"github.com/glincker/theauth-go/v2/internal/delegation"
+	"github.com/glincker/theauth-go/v2/internal/httpsec"
 	"github.com/glincker/theauth-go/v2/internal/identitylink"
 	"github.com/glincker/theauth-go/v2/internal/magiclink"
 	"github.com/glincker/theauth-go/v2/internal/models"
@@ -98,6 +99,10 @@ func validateConfig(cfg *Config) (providers map[string]Provider, sp samlParsed, 
 
 	if err := pathprefix.Validate(cfg.PathPrefix); err != nil {
 		return nil, samlParsed{}, nil, errors.New("theauth: Config.PathPrefix " + strconv.Quote(cfg.PathPrefix) + ": " + err.Error())
+	}
+
+	if err := applyCookiesConfig(cfg); err != nil {
+		return nil, samlParsed{}, nil, err
 	}
 
 	// SecureCookie false is a security warning (security audit M3).
@@ -431,6 +436,9 @@ func wireServices(a *TheAuth, cfg Config, providers map[string]Provider, sp saml
 	samlCfg := samlConfigFromRoot(cfg.SAML, sp.cert, sp.key)
 	if samlCfg != nil {
 		samlCfg.Email = a.emailNorm
+		if cfg.Stores.Cache != nil {
+			samlCfg.Tracker = internalsaml.NewKVTracker(cfg.Stores.Cache)
+		}
 	}
 	a.samlSvc = internalsaml.NewService(cfg.Storage, a.sessionSvc, a, samlCfg)
 
@@ -639,4 +647,49 @@ func rbacConfigFromValidated(cfg *RBACConfig, catalog []Permission, index map[st
 		return nil
 	}
 	return &rbac.Config{PermCatalog: catalog, PermIndex: index, DefaultRoleSeeds: seeds}
+}
+
+// applyCookiesConfig validates Config.Cookies, prefixes the session cookie name per Cookies.Prefix
+// and checks the resulting cookie policy, so an invalid combination fails New rather than a
+// request.
+func applyCookiesConfig(cfg *Config) error {
+	prefix := ""
+	switch strings.ToLower(strings.TrimSpace(cfg.Cookies.Prefix)) {
+	case "":
+	case "secure":
+		prefix = httpsec.SecurePrefix
+	case "host":
+		prefix = httpsec.HostPrefix
+	default:
+		return errors.New("theauth: Config.Cookies.Prefix " + strconv.Quote(cfg.Cookies.Prefix) + " is not one of \"\", \"secure\", \"host\"")
+	}
+	if _, err := httpsec.ParseSameSite(cfg.Cookies.SameSite); err != nil {
+		return errors.New("theauth: Config.Cookies." + err.Error())
+	}
+	if prefix != "" {
+		name := cfg.CookieName
+		switch {
+		case strings.HasPrefix(name, prefix):
+		case strings.HasPrefix(name, httpsec.HostPrefix) || strings.HasPrefix(name, httpsec.SecurePrefix):
+			return errors.New("theauth: Config.CookieName " + strconv.Quote(name) + " already carries a different prefix than Config.Cookies.Prefix")
+		default:
+			cfg.CookieName = prefix + name
+		}
+	}
+	p := cookiePolicyOf(cfg)
+	if err := p.Validate(cfg.CookieName, "/"); err != nil {
+		return errors.New("theauth: Config.Cookies: " + err.Error() + " (Secure needs Config.SecureCookie or an https BaseURL)")
+	}
+	return nil
+}
+
+// cookiePolicyOf builds the shared cookie policy from a validated Config.
+func cookiePolicyOf(cfg *Config) httpsec.CookiePolicy {
+	ss, _ := httpsec.ParseSameSite(cfg.Cookies.SameSite)
+	return httpsec.CookiePolicy{
+		Secure:      cfg.SecureCookie || strings.HasPrefix(strings.ToLower(cfg.BaseURL), "https://"),
+		Domain:      strings.TrimSpace(cfg.Cookies.Domain),
+		SameSite:    ss,
+		Partitioned: cfg.Cookies.Partitioned,
+	}
 }

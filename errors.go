@@ -181,6 +181,13 @@ var (
 	// ErrAgentInactive is returned when an operation depends on an agent that is suspended or revoked.
 	ErrAgentInactive = models.ErrAgentInactive
 
+	// ErrAgentExpired is returned when the agent is past its ExpiresAt. It matches ErrAgentInactive
+	// under errors.Is; the wire code is agent_expired.
+	ErrAgentExpired = models.ErrAgentExpired
+
+	// ErrAgentExpiryInvalid is returned when a requested agent expiry is in the past or too far ahead.
+	ErrAgentExpiryInvalid = models.ErrAgentExpiryInvalid
+
 	// ErrDelegationNotFound is returned when no delegation grant matches the user, agent and resource.
 	// Token exchange surfaces it as access_denied.
 	ErrDelegationNotFound = models.ErrDelegationNotFound

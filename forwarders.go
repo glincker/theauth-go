@@ -776,6 +776,13 @@ func (a *TheAuth) ResumeAgent(ctx context.Context, agentID ULID) error {
 	return a.agentSvc.ResumeAgent(ctx, agentID)
 }
 
+// SetAgentExpiry sets the agent's expiry, or clears it with nil. A non-nil value must be in the
+// future and no more than 10 years ahead (ErrAgentExpiryInvalid otherwise). Past the expiry the
+// agent is denied with ErrAgentExpired, which matches ErrAgentInactive.
+func (a *TheAuth) SetAgentExpiry(ctx context.Context, agentID ULID, expiresAt *time.Time) error {
+	return a.agentSvc.SetAgentExpiry(ctx, agentID, expiresAt)
+}
+
 // RevokeAgent is terminal: a revoked agent cannot be resumed.
 func (a *TheAuth) RevokeAgent(ctx context.Context, agentID ULID, reason string) error {
 	return a.agentSvc.RevokeAgent(ctx, agentID, reason)
@@ -931,7 +938,7 @@ func (a *TheAuth) OAuthStart(r *http.Request, provider, returnTo string) (OAuthS
 // same hooks as the built-in callback; the caller sets the session cookie from SessionToken and
 // clears the binding cookie.
 func (a *TheAuth) OAuthCallback(r *http.Request, provider, code, state, binding string) (OAuthCallbackResult, *User, error) {
-	return a.callbackOAuth(r.Context(), provider, code, state, binding, r.UserAgent(), httpx.ClientIP(r))
+	return a.callbackOAuth(r.Context(), provider, code, state, binding, r.UserAgent(), a.clientIPOf(r))
 }
 
 // CreateRegistrationToken mints an initial access token for POST /oauth/register. The plaintext is

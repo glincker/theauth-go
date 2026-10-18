@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/glincker/theauth-go/v2/internal/httpsec"
 	"github.com/glincker/theauth-go/v2/internal/httpx"
 	"github.com/glincker/theauth-go/v2/internal/models"
 	"github.com/glincker/theauth-go/v2/internal/totp"
@@ -46,6 +47,8 @@ type CookieConfig struct {
 	Name       string
 	SecureFlag bool
 	TTL        time.Duration
+	// Policy carries Domain, SameSite and Partitioned. Secure is SecureFlag OR Policy.Secure.
+	Policy httpsec.CookiePolicy
 	// DeviceCookieName, when set together with a Service that implements
 	// DeviceRemember, enables the rememberDevice body flag on verify and
 	// recovery.
@@ -59,6 +62,7 @@ type Handler struct {
 	svc         Service
 	cookie      CookieConfig
 	userFromCtx func(r *http.Request) (*models.User, bool)
+	clientIP    func(*http.Request) string
 }
 
 // New constructs a Handler. userFromCtx is invoked on requests that
@@ -66,6 +70,22 @@ type Handler struct {
 // pull the user out of the chi-attached request context.
 func New(svc Service, cookie CookieConfig, userFromCtx func(r *http.Request) (*models.User, bool)) *Handler {
 	return &Handler{svc: svc, cookie: cookie, userFromCtx: userFromCtx}
+}
+
+// SetClientIP installs the function that derives the client address for throttling, audit and
+// session records. The default is the connection address; the root installs a resolver that
+// honors Config.TrustedProxies. A nil fn is ignored.
+func (h *Handler) SetClientIP(fn func(*http.Request) string) {
+	if fn != nil {
+		h.clientIP = fn
+	}
+}
+
+func (h *Handler) ipOf(r *http.Request) string {
+	if h.clientIP != nil {
+		return h.clientIP(r)
+	}
+	return httpx.ClientIP(r)
 }
 
 // Mount registers /totp/* under r. The caller supplies the ipLimit
@@ -182,15 +202,7 @@ func (h *Handler) handleDelete(w http.ResponseWriter, r *http.Request) {
 // setSessionCookie writes the same session cookie shape root uses so
 // /auth/me works identically regardless of which signin path was used.
 func (h *Handler) setSessionCookie(w http.ResponseWriter, token string) {
-	http.SetCookie(w, &http.Cookie{
-		Name:     h.cookie.Name,
-		Value:    token,
-		Path:     "/",
-		HttpOnly: true,
-		Secure:   h.cookie.SecureFlag,
-		SameSite: http.SameSiteLaxMode,
-		Expires:  time.Now().Add(h.cookie.TTL),
-	})
+	h.cookie.Policy.WithSecure(h.cookie.SecureFlag).Set(w, h.cookie.Name, token, "/", time.Now().Add(h.cookie.TTL))
 }
 
 // rememberDevice sets the trusted-device cookie after a successful second
@@ -204,22 +216,18 @@ func (h *Handler) rememberDevice(w http.ResponseWriter, r *http.Request, want bo
 	if !ok {
 		return
 	}
-	val, exp, err := dr.RememberDevice(r.Context(), userID, r.UserAgent(), httpx.ClientIP(r))
+	val, exp, err := dr.RememberDevice(r.Context(), userID, r.UserAgent(), h.ipOf(r))
 	if err != nil {
 		slog.Warn("theauth: remember device failed", "user_id", userID.String(), "err", err.Error())
 		return
 	}
-	http.SetCookie(w, &http.Cookie{ // NOSONAR go:S2092 Secure follows the configured session cookie policy
-		Name:     h.cookie.DeviceCookieName,
-		Value:    val,
-		Path:     "/",
-		HttpOnly: true,
-		// SecureFlag is the same setting the session cookie uses. It is true
-		// whenever BaseURL is https, and false only for plain http development.
-		Secure:   h.cookie.SecureFlag,
-		SameSite: http.SameSiteLaxMode,
-		Expires:  exp,
-	})
+	h.setDeviceCookie(w, val, exp)
+}
+
+func (h *Handler) setDeviceCookie(w http.ResponseWriter, val string, exp time.Time) {
+	// Secure follows the same policy as the session cookie: true whenever BaseURL is https, false
+	// only for plain http development.
+	h.cookie.Policy.WithSecure(h.cookie.SecureFlag).Set(w, h.cookie.DeviceCookieName, val, "/", exp)
 }
 
 func (h *Handler) handleStatus(w http.ResponseWriter, r *http.Request) {

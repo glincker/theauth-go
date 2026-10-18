@@ -231,16 +231,25 @@ func (a *TheAuth) Handler() http.Handler {
 	return r
 }
 
-// securityMiddleware derives the Secure cookie flag per request and runs the Origin check ahead of
-// every route.
+// securityMiddleware derives the Secure cookie flag per request, runs the Origin check ahead of
+// every route, and sets Cache-Control: no-store on the auth routes and, when enabled, the security headers.
 func (a *TheAuth) securityMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !a.csrfDisabled && !httpsec.OriginAllowed(r, a.baseURL, a.trustedOrigins) {
 			a.jsonError(w, r, http.StatusForbidden, "csrf_origin_rejected", "request origin is not trusted")
 			return
 		}
-		if a.requestIsSecure(r) {
+		secure := a.requestIsSecure(r)
+		if secure {
 			w = httpsec.NewCookieWriter(w)
+		}
+		if a.securityHeaders {
+			httpsec.ApplySecurityHeaders(w.Header(), secure)
+		}
+		// Session and credential JSON (/auth/me, sign in, sign up, session list) must not be cached.
+		// A handler that sets its own Cache-Control overrides this default.
+		if httpsec.NoStorePath(r.URL.Path, a.pathPrefix) {
+			w.Header().Set("Cache-Control", "no-store")
 		}
 		next.ServeHTTP(w, r)
 	})
@@ -272,6 +281,12 @@ func firstToken(v string) string {
 }
 
 var extractClientIPTrusting = ratelimit.ClientIP
+
+// clientIPOf resolves the client address honoring Config.TrustedProxies. Handlers use it for
+// throttle keys, audit and session records so they match the rate limiter behind a proxy.
+func (a *TheAuth) clientIPOf(r *http.Request) string {
+	return extractClientIPTrusting(r, a.trustedProxies)
+}
 
 // newAllower returns the per-key limiter behind RateLimitByIP and RateLimitByEmail. With a shared
 // limiter, keys carry a rule name and a per-call sequence so separate middleware instances keep

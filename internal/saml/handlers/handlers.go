@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/glincker/theauth-go/v2/internal/httpsec"
 	"github.com/glincker/theauth-go/v2/internal/httpx"
 	"github.com/glincker/theauth-go/v2/internal/models"
 	internaloauth "github.com/glincker/theauth-go/v2/internal/oauth"
@@ -31,6 +32,8 @@ type SessionCookieConfig struct {
 	Name       string
 	SecureFlag bool
 	TTL        time.Duration
+	// Policy carries Domain, SameSite and Partitioned. Secure is SecureFlag OR Policy.Secure.
+	Policy httpsec.CookiePolicy
 }
 
 // Handler owns the three SAML SP HTTP endpoints, plus (when AttachCRUD
@@ -130,16 +133,13 @@ func (h *Handler) handleACS(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
-	http.SetCookie(w, &http.Cookie{
-		Name:     h.sessionCookie.Name,
-		Value:    token,
-		Path:     "/",
-		HttpOnly: true,
-		Secure:   h.sessionCookie.SecureFlag,
-		SameSite: http.SameSiteLaxMode,
-		Expires:  time.Now().Add(h.sessionCookie.TTL),
-	})
+	h.setSessionCookie(w, token)
 	http.Redirect(w, r, h.safeRelay(relayState), http.StatusFound)
+}
+
+func (h *Handler) setSessionCookie(w http.ResponseWriter, token string) {
+	h.sessionCookie.Policy.WithSecure(h.sessionCookie.SecureFlag).
+		Set(w, h.sessionCookie.Name, token, "/", time.Now().Add(h.sessionCookie.TTL))
 }
 
 func (h *Handler) handleMetadata(w http.ResponseWriter, r *http.Request) {

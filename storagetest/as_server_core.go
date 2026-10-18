@@ -111,6 +111,10 @@ func (coreOnlyOAuth) UpdateAgentStatus(context.Context, theauth.ULID, string, ti
 	return errNotInCoreSuite
 }
 
+func (coreOnlyOAuth) UpdateAgentExpiry(context.Context, theauth.ULID, *time.Time) error {
+	return errNotInCoreSuite
+}
+
 func (coreOnlyOAuth) UpdateAgentLastActive(context.Context, theauth.ULID, time.Time) error {
 	return errNotInCoreSuite
 }

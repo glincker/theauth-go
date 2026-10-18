@@ -73,6 +73,13 @@ type Config struct {
 	// SuppressSecureCookieWarning silences the startup WARN logged when SecureCookie is false. Use it
 	// only for local dev without TLS.
 	SuppressSecureCookieWarning bool
+	// Cookies tunes the attributes of every cookie the library writes (session, trusted device, OAuth
+	// state, WebAuthn challenge). The zero value keeps the historic behavior. See CookiesConfig.
+	Cookies CookiesConfig
+	// SecurityHeaders adds Strict-Transport-Security (https requests only), X-Content-Type-Options,
+	// Referrer-Policy and X-Frame-Options to every response served through Mount or Handler. It is off
+	// by default so an embedding application keeps control of its own headers.
+	SecurityHeaders bool
 	// RateLimitPerIP is the per-IP per-minute budget for credential endpoints (default 5).
 	RateLimitPerIP int
 	// RateLimitPerEmail is the per-email per-minute budget for signin and forgot (default 3).
@@ -274,6 +281,8 @@ type TheAuth struct {
 	magicLinkTTL      time.Duration
 	cookieName        string
 	secureCookie      bool
+	cookiePolicy      httpsec.CookiePolicy
+	securityHeaders   bool
 	rateLimitPerIP    int
 	rateLimitPerEmail int
 	trustedProxies    []netip.Prefix
@@ -422,6 +431,8 @@ func New(cfg Config) (*TheAuth, error) {
 		cookieName:                 cfg.CookieName,
 		revocations:                cfg.RevocationBus,
 		secureCookie:               cfg.SecureCookie || strings.HasPrefix(strings.ToLower(cfg.BaseURL), "https://"),
+		cookiePolicy:               cookiePolicyOf(&cfg),
+		securityHeaders:            cfg.SecurityHeaders,
 		rateLimitPerIP:             cfg.RateLimitPerIP,
 		rateLimitPerEmail:          cfg.RateLimitPerEmail,
 		trustedProxies:             append([]netip.Prefix(nil), cfg.TrustedProxies...),

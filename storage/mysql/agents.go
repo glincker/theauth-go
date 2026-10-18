@@ -26,8 +26,8 @@ func (s *Store) InsertAgent(ctx context.Context, a theauth.Agent) (theauth.Agent
 	_, err := s.db.ExecContext(ctx, `
 INSERT INTO agents
     (id, owner_user_id, organization_id, name, description, status,
-     client_id, scope_grant, created_at, last_active_at)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+     client_id, scope_grant, created_at, last_active_at, expires_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		ulidToBytes(a.ID),
 		ulidPtrToBytes(a.OwnerUserID),
 		ulidPtrToBytes(a.OrganizationID),
@@ -38,6 +38,7 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		scopeJSON,
 		timeUTC(created),
 		timePtrToNull(a.LastActiveAt),
+		timePtrToNull(a.ExpiresAt),
 	)
 	if err != nil {
 		return theauth.Agent{}, err
@@ -52,7 +53,7 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 func (s *Store) AgentByID(ctx context.Context, id theauth.ULID) (*theauth.Agent, error) {
 	a, err := scanAgent(s.db.QueryRowContext(ctx, `
 SELECT id, owner_user_id, organization_id, name, description, status,
-       client_id, scope_grant, created_at, last_active_at
+       client_id, scope_grant, created_at, last_active_at, expires_at
 FROM agents WHERE id = ?`, ulidToBytes(id)))
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, storage.ErrNotFound
@@ -66,7 +67,7 @@ FROM agents WHERE id = ?`, ulidToBytes(id)))
 func (s *Store) AgentByClientID(ctx context.Context, clientID string) (*theauth.Agent, error) {
 	a, err := scanAgent(s.db.QueryRowContext(ctx, `
 SELECT id, owner_user_id, organization_id, name, description, status,
-       client_id, scope_grant, created_at, last_active_at
+       client_id, scope_grant, created_at, last_active_at, expires_at
 FROM agents WHERE client_id = ?`, clientID))
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, storage.ErrNotFound
@@ -84,12 +85,12 @@ func (s *Store) AgentsByOwner(ctx context.Context, owner theauth.AgentOwner) ([]
 	case owner.UserID != nil:
 		rows, err = s.db.QueryContext(ctx, `
 SELECT id, owner_user_id, organization_id, name, description, status,
-       client_id, scope_grant, created_at, last_active_at
+       client_id, scope_grant, created_at, last_active_at, expires_at
 FROM agents WHERE owner_user_id = ? ORDER BY created_at ASC`, ulidToBytes(*owner.UserID))
 	case owner.OrganizationID != nil:
 		rows, err = s.db.QueryContext(ctx, `
 SELECT id, owner_user_id, organization_id, name, description, status,
-       client_id, scope_grant, created_at, last_active_at
+       client_id, scope_grant, created_at, last_active_at, expires_at
 FROM agents WHERE organization_id = ? ORDER BY created_at ASC`, ulidToBytes(*owner.OrganizationID))
 	default:
 		return nil, errors.New("mysql: AgentsByOwner requires a non-nil owner field")
@@ -124,6 +125,21 @@ func (s *Store) UpdateAgentStatus(ctx context.Context, id theauth.ULID, status s
 	return nil
 }
 
+func (s *Store) UpdateAgentExpiry(ctx context.Context, id theauth.ULID, expiresAt *time.Time) error {
+	res, err := s.db.ExecContext(ctx,
+		`UPDATE agents SET expires_at = ? WHERE id = ?`,
+		timePtrToNull(expiresAt), ulidToBytes(id),
+	)
+	if err != nil {
+		return err
+	}
+	n, _ := res.RowsAffected()
+	if n == 0 {
+		return storage.ErrNotFound
+	}
+	return nil
+}
+
 func (s *Store) UpdateAgentLastActive(ctx context.Context, id theauth.ULID, at time.Time) error {
 	res, err := s.db.ExecContext(ctx,
 		`UPDATE agents SET last_active_at = ? WHERE id = ?`,
@@ -147,10 +163,11 @@ func scanAgent(row interface{ Scan(...interface{}) error }) (theauth.Agent, erro
 		scopeJSON               []byte
 		createdAt               time.Time
 		lastActiveAt            sql.NullTime
+		expiresAt               sql.NullTime
 	)
 	if err := row.Scan(
 		&idB, &ownerUserB, &orgIDB, &name, &desc, &status,
-		&clientID, &scopeJSON, &createdAt, &lastActiveAt,
+		&clientID, &scopeJSON, &createdAt, &lastActiveAt, &expiresAt,
 	); err != nil {
 		return theauth.Agent{}, err
 	}
@@ -167,6 +184,7 @@ func scanAgent(row interface{ Scan(...interface{}) error }) (theauth.Agent, erro
 		Scope:          scope,
 		CreatedAt:      createdAt.UTC(),
 		LastActiveAt:   nullTimeToPtr(lastActiveAt),
+		ExpiresAt:      nullTimeToPtr(expiresAt),
 	}, nil
 }
 

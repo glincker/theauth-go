@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/glincker/theauth-go/v2/internal/httpsec"
 	"github.com/glincker/theauth-go/v2/internal/httpx"
 	"github.com/glincker/theauth-go/v2/internal/models"
 	"github.com/glincker/theauth-go/v2/internal/oauth"
@@ -44,6 +45,8 @@ type SessionCookieConfig struct {
 	Name       string
 	SecureFlag bool
 	TTL        time.Duration
+	// Policy carries Domain, SameSite and Partitioned. Secure is SecureFlag OR Policy.Secure.
+	Policy httpsec.CookiePolicy
 }
 
 // Handler owns the two OAuth user-login endpoints.
@@ -51,12 +54,29 @@ type Handler struct {
 	svc               Service
 	sessionCookie     SessionCookieConfig
 	postLoginRedirect string
+	clientIP          func(*http.Request) string
 }
 
 // New constructs a Handler. postLoginRedirect is the URL the browser
 // is sent to after a successful callback.
 func New(svc Service, sessionCookie SessionCookieConfig, postLoginRedirect string) *Handler {
 	return &Handler{svc: svc, sessionCookie: sessionCookie, postLoginRedirect: postLoginRedirect}
+}
+
+// SetClientIP installs the function that derives the client address for throttling, audit and
+// session records. The default is the connection address; the root installs a resolver that
+// honors Config.TrustedProxies. A nil fn is ignored.
+func (h *Handler) SetClientIP(fn func(*http.Request) string) {
+	if fn != nil {
+		h.clientIP = fn
+	}
+}
+
+func (h *Handler) ipOf(r *http.Request) string {
+	if h.clientIP != nil {
+		return h.clientIP(r)
+	}
+	return httpx.ClientIP(r)
 }
 
 // Mount registers /providers/{name}/start and
@@ -98,16 +118,23 @@ func (h *Handler) handleStart(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
-	http.SetCookie(w, &http.Cookie{
-		Name:     oauthStateCookieName,
-		Value:    res.Binding,
-		Path:     "/",
-		HttpOnly: true,
-		Secure:   h.sessionCookie.SecureFlag,
-		SameSite: http.SameSiteLaxMode,
-		Expires:  time.Now().Add(oauthStateCookieTTL),
-	})
+	h.setStateCookie(w, res.Binding)
 	http.Redirect(w, r, res.AuthURL, http.StatusFound)
+}
+
+func (h *Handler) setStateCookie(w http.ResponseWriter, binding string) {
+	h.stateCookiePolicy().
+		Set(w, oauthStateCookieName, binding, "/", time.Now().Add(oauthStateCookieTTL))
+}
+
+// stateCookiePolicy is the session policy with Strict relaxed to Lax: the provider redirects back
+// with a cross-site navigation that would not carry a Strict state cookie.
+func (h *Handler) stateCookiePolicy() httpsec.CookiePolicy {
+	return h.sessionCookie.Policy.WithSecure(h.sessionCookie.SecureFlag).ForCrossSiteReturn()
+}
+
+func (h *Handler) clearStateCookie(w http.ResponseWriter) {
+	h.stateCookiePolicy().Clear(w, oauthStateCookieName, "/")
 }
 
 func (h *Handler) handleCallback(w http.ResponseWriter, r *http.Request) {
@@ -131,17 +158,9 @@ func (h *Handler) handleCallback(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "state mismatch", http.StatusBadRequest)
 		return
 	}
-	http.SetCookie(w, &http.Cookie{
-		Name:     oauthStateCookieName,
-		Value:    "",
-		Path:     "/",
-		MaxAge:   -1,
-		HttpOnly: true,
-		Secure:   h.sessionCookie.SecureFlag,
-		SameSite: http.SameSiteLaxMode,
-	})
+	h.clearStateCookie(w)
 
-	res, err := h.svc.Callback(r.Context(), name, code, state, cookie.Value, r.UserAgent(), httpx.ClientIP(r))
+	res, err := h.svc.Callback(r.Context(), name, code, state, cookie.Value, r.UserAgent(), h.ipOf(r))
 	if err != nil {
 		var conflictRedirect *models.OAuthConflictRedirectError
 		if errors.As(err, &conflictRedirect) {
@@ -160,13 +179,6 @@ func (h *Handler) handleCallback(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) setSessionCookie(w http.ResponseWriter, token string) {
-	http.SetCookie(w, &http.Cookie{
-		Name:     h.sessionCookie.Name,
-		Value:    token,
-		Path:     "/",
-		HttpOnly: true,
-		Secure:   h.sessionCookie.SecureFlag,
-		SameSite: http.SameSiteLaxMode,
-		Expires:  time.Now().Add(h.sessionCookie.TTL),
-	})
+	h.sessionCookie.Policy.WithSecure(h.sessionCookie.SecureFlag).
+		Set(w, h.sessionCookie.Name, token, "/", time.Now().Add(h.sessionCookie.TTL))
 }

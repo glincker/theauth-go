@@ -379,6 +379,24 @@ func (s *Store) UpdateAgentStatus(_ context.Context, id theauth.ULID, status str
 	return nil
 }
 
+func (s *Store) UpdateAgentExpiry(_ context.Context, id theauth.ULID, expiresAt *time.Time) error {
+	v := s.ensureV20()
+	v.mu.Lock()
+	defer v.mu.Unlock()
+	a, ok := v.agents[id]
+	if !ok {
+		return storage.ErrNotFound
+	}
+	if expiresAt == nil {
+		a.ExpiresAt = nil
+	} else {
+		t := *expiresAt
+		a.ExpiresAt = &t
+	}
+	v.agents[id] = a
+	return nil
+}
+
 func (s *Store) UpdateAgentLastActive(_ context.Context, id theauth.ULID, at time.Time) error {
 	v := s.ensureV20()
 	v.mu.Lock()

@@ -33,6 +33,7 @@ type Storage interface {
 	AgentByID(ctx context.Context, id models.ULID) (*models.Agent, error)
 	AgentsByOwner(ctx context.Context, owner models.AgentOwner) ([]models.Agent, error)
 	UpdateAgentStatus(ctx context.Context, id models.ULID, status string, at time.Time) error
+	UpdateAgentExpiry(ctx context.Context, id models.ULID, expiresAt *time.Time) error
 
 	InsertAgentCredential(ctx context.Context, c models.AgentCredential) error
 	AgentCredentialsByAgentID(ctx context.Context, agentID models.ULID) ([]models.AgentCredential, error)
@@ -64,6 +65,7 @@ type Service struct {
 	invalidate      CacheInvalidator
 	invalidateChain ChainCacheInvalidator
 	hooks           *obs.Hooks
+	now             func() time.Time
 }
 
 // New constructs an agent Service. Nil cfg makes every method return the "agent identity not
@@ -83,6 +85,7 @@ func New(storage Storage, cfg *Config, em audit.Emitter, invalidate CacheInvalid
 		invalidate:      invalidate,
 		invalidateChain: func(string) {},
 		hooks:           &obs.Hooks{},
+		now:             time.Now,
 	}
 }
 
@@ -145,6 +148,9 @@ func (s *Service) CreateAgent(ctx context.Context, in models.CreateAgentInput) (
 	if name == "" {
 		return models.Agent{}, models.AgentSecret{}, errors.New("theauth: agent name is required")
 	}
+	if verr := s.validateExpiry(in.ExpiresAt); verr != nil {
+		return models.Agent{}, models.AgentSecret{}, verr
+	}
 	clientID := "agent-" + ulid.New().String()
 	secret, err := crypto.NewToken()
 	if err != nil {
@@ -184,6 +190,7 @@ func (s *Service) CreateAgent(ctx context.Context, in models.CreateAgentInput) (
 		ClientID:       clientID,
 		Scope:          append([]string(nil), in.Scope...),
 		CreatedAt:      now,
+		ExpiresAt:      cloneTime(in.ExpiresAt),
 	}
 	stored, err := s.storage.InsertAgent(ctx, agent)
 	if err != nil {
@@ -336,6 +343,59 @@ func (s *Service) ListAgentsByOwner(ctx context.Context, owner models.AgentOwner
 		return nil, err
 	}
 	return s.storage.AgentsByOwner(ctx, owner)
+}
+
+// validateExpiry accepts nil (no expiry) or a time in the future that is no more than
+// models.MaxAgentLifetime ahead.
+func (s *Service) validateExpiry(at *time.Time) error {
+	if at == nil {
+		return nil
+	}
+	now := s.now()
+	if !at.After(now) || at.After(now.Add(models.MaxAgentLifetime)) {
+		return models.ErrAgentExpiryInvalid
+	}
+	return nil
+}
+
+func cloneTime(t *time.Time) *time.Time {
+	if t == nil {
+		return nil
+	}
+	c := t.UTC()
+	return &c
+}
+
+// SetAgentExpiry sets the agent's expiry, or clears it with nil. A non-nil value must be in the
+// future and within models.MaxAgentLifetime. Extending an expired agent revives it, unless it was
+// suspended or revoked. It emits agent.expiry_changed.
+func (s *Service) SetAgentExpiry(ctx context.Context, agentID models.ULID, expiresAt *time.Time) error {
+	if s == nil || s.cfg == nil {
+		return errNotConfigured
+	}
+	if err := s.validateExpiry(expiresAt); err != nil {
+		return err
+	}
+	cur, err := s.storage.AgentByID(ctx, agentID)
+	if err != nil {
+		return models.ErrAgentNotFound
+	}
+	expiresAt = cloneTime(expiresAt)
+	if err := s.storage.UpdateAgentExpiry(ctx, agentID, expiresAt); err != nil {
+		return fmt.Errorf("update agent expiry: %w", err)
+	}
+	// A shortened expiry must take effect on the next authenticate and introspection, not after the
+	// cached entries age out.
+	s.invalidate(cur.ClientID)
+	s.invalidateChain(cur.ID.String())
+	meta := map[string]any{"agent_id": agentID.String()}
+	if expiresAt != nil {
+		meta["expires_at"] = expiresAt.Format(time.RFC3339)
+	} else {
+		meta["expires_at"] = nil
+	}
+	s.emitAgentEvent(ctx, "agent.expiry_changed", *cur, meta)
+	return nil
 }
 
 // GetAgent returns the agent record by ID.

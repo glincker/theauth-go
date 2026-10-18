@@ -469,6 +469,7 @@ func (a *TheAuth) newSAMLHandler() *samlhandlers.Handler {
 		samlhandlers.SessionCookieConfig{
 			Name:       a.cookieName,
 			SecureFlag: a.secureCookie,
+			Policy:     a.cookiePolicy,
 			TTL:        a.sessionTTL,
 		},
 		a.postLoginRedirect,

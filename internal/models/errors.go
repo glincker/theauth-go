@@ -2,6 +2,7 @@ package models
 
 import (
 	"errors"
+	"fmt"
 	"time"
 )
 
@@ -124,6 +125,13 @@ var (
 	// ErrAgentInactive is returned when an operation depends on an agent
 	// whose status is suspended or revoked.
 	ErrAgentInactive = errors.New("theauth: agent inactive")
+
+	// ErrAgentExpired is returned when an operation depends on an agent whose ExpiresAt has passed.
+	// It wraps ErrAgentInactive so existing inactive checks keep matching; the code is agent_expired.
+	ErrAgentExpired = fmt.Errorf("%w: agent_expired", ErrAgentInactive)
+
+	// ErrAgentExpiryInvalid is returned when a requested agent expiry is in the past or too far ahead.
+	ErrAgentExpiryInvalid = errors.New("theauth: agent expiry must be in the future and within the maximum agent lifetime")
 
 	// ErrDelegationNotFound is returned when no delegation_grants row
 	// matches the (user, agent, resource) tuple.

@@ -61,6 +61,7 @@ The audit hash chain is what `VerifyAuditChain` and the `audit/checkpoint` packa
 | Device authorization grant (RFC 8628) | `DeviceAuthorizationStorage` | Yes | Yes (0027) | Yes (0020) | Yes (0020) |
 | Registration tokens | `RegistrationTokenStorage` | Yes | Yes (0028) | Yes (0020) | Yes (0020) |
 | Agents and credentials | `InsertAgent` and friends | Yes | Yes (0030) | Yes (0012) | Yes (0012) |
+| Agent expiry (`UpdateAgentExpiry`, `Agent.ExpiresAt`) | Part of `OAuthServerStorage` | Yes | Yes (0035) | Yes (0031) | Yes (0030) |
 | Delegation grants | `InsertDelegationGrant` and friends | Yes | Yes (0031) | Yes (0013) | Yes (0013) |
 | jwt-bearer `jti` cache | `JWTBearerStorage` | Yes | Yes (0032) | No | No |
 | CIBA requests | `CIBAStorage` | Yes | Yes (0033) | Yes (0016) | No |

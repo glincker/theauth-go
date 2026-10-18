@@ -23,7 +23,7 @@ Authorization server:
 Agents and audit:
 
 - [ai-assistants.md](ai-assistants.md).
-- [agent-policies.md](agent-policies.md) and [policy-shrink.md](policy-shrink.md).
+- [agent-expiry.md](agent-expiry.md), [agent-policies.md](agent-policies.md) and [policy-shrink.md](policy-shrink.md).
 - [shared-signals.md](shared-signals.md).
 
 Other guides: [otp.md](otp.md), [enumeration-safe-passwordless.md](enumeration-safe-passwordless.md), [passkey-attestation.md](passkey-attestation.md), [hooks.md](hooks.md), [provider-catalog.md](provider-catalog.md), [cli.md](cli.md) and [MIGRATING-FROM-KEYCLOAK.md](MIGRATING-FROM-KEYCLOAK.md).

@@ -122,6 +122,7 @@ type Gate struct {
 	audit   audit.Emitter
 	hooks   *obs.Hooks
 	def     ratelimit.Window
+	now     func() time.Time
 }
 
 // NewGate builds a Gate. It returns nil when neither an engine nor a rate limit is configured, so
@@ -134,7 +135,11 @@ func NewGate(cfg GateConfig) *Gate {
 	if em == nil {
 		em = audit.NoopEmitter{}
 	}
-	g := &Gate{storage: cfg.Storage, engine: cfg.Engine, audit: em, hooks: cfg.Hooks, def: cfg.RateLimit}
+	now := cfg.Now
+	if now == nil {
+		now = time.Now
+	}
+	g := &Gate{storage: cfg.Storage, engine: cfg.Engine, audit: em, hooks: cfg.Hooks, def: cfg.RateLimit, now: now}
 	g.limiter = ratelimit.NewWindowLimiter(cfg.RateLimit, cfg.MaxKeys, cfg.Now)
 	return g
 }
@@ -200,6 +205,9 @@ func (g *Gate) AuthorizeMint(ctx context.Context, ag models.Agent, req models.Ag
 	res := models.AgentMintResult{Scopes: slices.Clone(req.Scopes)}
 	if g == nil {
 		return res, nil
+	}
+	if ag.AgentExpired(g.clock()) {
+		return models.AgentMintResult{}, models.ErrAgentExpired
 	}
 	if g.engine == nil {
 		if err := g.spend(ctx, ag.ID.String(), nil); err != nil {
@@ -292,6 +300,10 @@ func (g *Gate) refuse(ctx context.Context, ag models.Agent, req models.AgentMint
 // ErrAgentNotActive is returned by Authorize for an unknown or inactive agent.
 var ErrAgentNotActive = errors.New("theauth: agent not active")
 
+// ErrAgentExpired is returned by Authorize when the agent is past its ExpiresAt. It wraps
+// ErrAgentNotActive, so callers that only test for inactivity keep matching.
+var ErrAgentExpired = fmt.Errorf("%w: agent_expired", ErrAgentNotActive)
+
 // Authorize answers whether the agent may perform action on resource under its policies, spending
 // one rate unit. With no policy it permits the call. Resolver failures and unknown agents fail
 // closed.
@@ -300,6 +312,9 @@ func (g *Gate) Authorize(ctx context.Context, agentID, action, resource string) 
 		return nil
 	}
 	if g.engine == nil {
+		if err := g.checkExpiry(ctx, agentID); err != nil {
+			return err
+		}
 		return g.spend(ctx, agentID, nil)
 	}
 	if g.storage == nil {
@@ -312,6 +327,9 @@ func (g *Gate) Authorize(ctx context.Context, agentID, action, resource string) 
 	ag, err := g.storage.AgentByID(ctx, id)
 	if err != nil || ag == nil || ag.Status != models.AgentStatusActive {
 		return fmt.Errorf("%w: %s", ErrAgentNotActive, agentID)
+	}
+	if ag.AgentExpired(g.clock()) {
+		return fmt.Errorf("%w: %s", ErrAgentExpired, agentID)
 	}
 	dec, err := g.engine.Decide(ctx, *ag, []PolicyQuery{{Action: action, Resource: resource}})
 	if err != nil {
@@ -342,4 +360,32 @@ func (g *Gate) Authorize(ctx context.Context, agentID, action, resource string) 
 	return &models.AgentPolicyDeniedError{
 		Action: action, Resource: resource, PolicyID: v.PolicyID, StatementID: v.StatementID, Reason: v.Reason,
 	}
+}
+
+// clock returns the gate time, defaulting to the wall clock for a zero-value Gate.
+func (g *Gate) clock() time.Time {
+	if g.now == nil {
+		return time.Now()
+	}
+	return g.now()
+}
+
+// checkExpiry refuses an agent that is past its expiry. It is best effort on the no-engine path:
+// without storage or with an unknown agent it passes, as that path always has.
+func (g *Gate) checkExpiry(ctx context.Context, agentID string) error {
+	if g.storage == nil {
+		return nil
+	}
+	id, err := oklogulid.Parse(agentID)
+	if err != nil {
+		return nil
+	}
+	ag, err := g.storage.AgentByID(ctx, id)
+	if err != nil || ag == nil {
+		return nil
+	}
+	if ag.AgentExpired(g.clock()) {
+		return fmt.Errorf("%w: %s", ErrAgentExpired, agentID)
+	}
+	return nil
 }

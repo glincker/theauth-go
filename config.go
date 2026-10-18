@@ -41,6 +41,12 @@ type AgentConfig struct {
 	// RateLimit bounds how often each agent (keyed by agent id) may mint tokens or call AuthorizeAgent.
 	// Over the limit the mint gets HTTP 429 with Retry-After. The zero value disables it.
 	RateLimit AgentRateLimit
+
+	// BeforeAuthorize, when set, runs an external guard or in process hook on every AuthorizeAgent
+	// call the policy engine and rate limit allowed. A deny refuses the call with decision code
+	// hook_denied, an escalate with approval_required, and a timeout (default 2s) or failure with
+	// hook_timeout or hook_error: it fails closed. Nil, the default, changes nothing. See docs/hooks.md.
+	BeforeAuthorize *AgentHookRunner
 }
 
 // RBACConfig configures organization-scoped roles and permissions. The zero
@@ -936,3 +942,26 @@ func (c *LoginThrottleConfig) limiter() *throttle.Limiter {
 // CodeSignupClosed unless OpenSignupAfterFirstUser is set. Magic-link signup cannot present a
 // token, so the first admin signs up with a password.
 type BootstrapConfig = bootstrap.Config
+
+// CookiesConfig tunes the attributes of every cookie the library writes. HttpOnly and Path are
+// not configurable, and Secure follows Config.SecureCookie and BaseURL. The zero value keeps the
+// historic behavior: host-only, SameSite=Lax, not Partitioned, no name prefix. New rejects an
+// invalid combination at startup.
+type CookiesConfig struct {
+	// Domain shares the cookies with every subdomain of the given host (for example "example.com").
+	// Empty keeps them host-only. A Domain cookie can be overwritten by any sibling subdomain, so
+	// prefer leaving it empty. It cannot be combined with Prefix "host".
+	Domain string
+	// SameSite is "lax" (default), "strict" or "none". "none" requires Secure. "strict" is applied
+	// to the session, device and WebAuthn cookies; the OAuth state cookie stays Lax because the
+	// provider callback is a cross-site navigation that Strict would not carry the cookie on.
+	SameSite string
+	// Partitioned adds the CHIPS Partitioned attribute (cookies keyed to the top-level site). It
+	// requires Secure and is meant for SameSite "none" in embedded third-party contexts.
+	Partitioned bool
+	// Prefix adds a browser-enforced name prefix to the session cookie: "secure" gives __Secure-,
+	// "host" gives __Host- (Secure, Path=/, no Domain). Empty adds none. A CookieName that already
+	// starts with the prefix is left alone, and the prefix rules are enforced either way. Both
+	// modes require Secure (Config.SecureCookie or an https BaseURL).
+	Prefix string
+}

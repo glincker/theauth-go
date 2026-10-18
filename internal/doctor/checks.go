@@ -31,24 +31,27 @@ const (
 	DoctorAuditSink         = "audit.no_sink"
 	DoctorWebAuthnRPID      = "webauthn.rpid_mismatch"
 	DoctorRedirectAllowList = "redirect.allowlist_empty"
+	DoctorSAMLTracker       = "saml.tracker_in_memory"
 )
 
 // DoctorFindingIDs lists every finding ID a check can emit.
 func DoctorFindingIDs() []string {
-	return []string{
+	return append([]string{
 		DoctorSignupOpen, DoctorBootstrapOff, DoctorTrustedProxies, DoctorSecureCookie,
 		DoctorCSRFDisabled, DoctorThrottleDisabled, DoctorThrottleLax, DoctorPasswordMinLength,
 		DoctorPasswordNoBreach, DoctorAdminNoTOTP, DoctorNoSecondFactor, DoctorSessionTTLLong,
 		DoctorSessionNoIdle, DoctorTokenNoExpiry, DoctorTokenLongExpiry, DoctorTokenRoot,
 		DoctorAgentTokenLong, DoctorTokensUnpruned, DoctorSessionsUnpruned, DoctorEncryptionKey,
 		DoctorAuditSink, DoctorWebAuthnRPID, DoctorRedirectAllowList,
-	}
+		DoctorSAMLTracker,
+	}, cookieFindingIDs()...)
 }
 
 var doctorChecks = []func(Input) []Finding{
 	checkSignupOpen, checkBootstrap, checkTrustedProxies, checkSecureCookie, checkCSRF,
 	checkThrottle, checkPasswordPolicy, checkMFA, checkSessionLifetime, checkTokens,
 	checkUnpruned, checkEncryptionKey, checkAudit, checkWebAuthnRPID, checkRedirects,
+	checkSAMLTracker, checkCookies, checkSecurityHeaders,
 }
 
 func checkSignupOpen(in Input) []Finding {
@@ -290,4 +293,14 @@ func checkRedirects(in Input) []Finding {
 		"No post-login redirect allow-list",
 		"OAuthConfig.AllowedReturnTo is empty, so every login lands on PostLoginRedirect and return_to is ignored.",
 		"List permitted destinations in OAuthConfig.AllowedReturnTo if you need return_to support.")}
+}
+
+func checkSAMLTracker(in Input) []Finding {
+	if !in.HasSAML || !in.SAMLTrackerMemory {
+		return nil
+	}
+	return []Finding{fnd(DoctorSAMLTracker, SeverityLow,
+		"SAML request tracker is in process memory",
+		"AuthnRequest ids and assertion ids are tracked per process. With more than one replica a response that lands on another replica is rejected and replay protection does not span replicas.",
+		"Set Config.Stores.Cache (kv/redis or kv/sqlkv) when running several replicas. Ignore this on a single instance.")}
 }

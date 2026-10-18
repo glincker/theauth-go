@@ -644,6 +644,10 @@ func (s *noCIBAStore) AgentByClientID(ctx context.Context, clientID string) (*th
 func (s *noCIBAStore) AgentsByOwner(ctx context.Context, owner theauth.AgentOwner) ([]theauth.Agent, error) {
 	return s.inner.AgentsByOwner(ctx, owner)
 }
+func (s *noCIBAStore) UpdateAgentExpiry(ctx context.Context, id theauth.ULID, expiresAt *time.Time) error {
+	return s.inner.UpdateAgentExpiry(ctx, id, expiresAt)
+}
+
 func (s *noCIBAStore) UpdateAgentStatus(ctx context.Context, id theauth.ULID, status string, at time.Time) error {
 	return s.inner.UpdateAgentStatus(ctx, id, status, at)
 }

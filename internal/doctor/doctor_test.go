@@ -19,6 +19,7 @@ func secureInput() Input {
 		TokensKnown: true, SessionsExpired: UnknownCount,
 		EncryptionKeyLen: 32, AuditConfigured: true, AuditSinkCount: 1,
 		HasProviders: true, OAuthReturnTo: 1,
+		CookieName: "theauth_session", SecurityHeaders: true,
 	}
 }
 
@@ -56,6 +57,10 @@ func TestDoctorChecks(t *testing.T) {
 		{"audit no sink", DoctorAuditSink, SeverityLow, func(i *Input) { i.AuditSinkCount = 0 }},
 		{"rpid mismatch", DoctorWebAuthnRPID, SeverityHigh, func(i *Input) { i.WebAuthnConfigured = true; i.WebAuthnRPID = "other.com" }},
 		{"redirect allowlist", DoctorRedirectAllowList, SeverityInfo, func(i *Input) { i.OAuthReturnTo = 0 }},
+		{"cookie domain without prefix", DoctorCookieDomain, SeverityMedium, func(i *Input) { i.CookieDomain = "example.com" }},
+		{"samesite none unpartitioned", DoctorCookieNoneOpen, SeverityLow, func(i *Input) { i.CookieSameSite = "none" }},
+		{"security headers off on https", DoctorSecurityHeadersOff, SeverityInfo, func(i *Input) { i.SecurityHeaders = false }},
+		{"saml tracker in memory", DoctorSAMLTracker, SeverityLow, func(i *Input) { i.HasSAML = true; i.SAMLTrackerMemory = true }},
 	}
 	covered := map[string]bool{}
 	for _, tc := range cases {
