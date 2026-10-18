@@ -15,7 +15,8 @@ func testAuthorizationCodes(t *testing.T, store theauth.OAuthServerStorage) {
 	t.Helper()
 	ctx := context.Background()
 
-	userID := newID()
+	userID := ensureUser(t, store, "code")
+	ensureOAuthClient(t, store, "st-code-client")
 
 	t.Run("InsertAndConsumeOnce", func(t *testing.T) {
 		code := theauth.AuthorizationCode{

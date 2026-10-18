@@ -15,7 +15,8 @@ func testRefreshTokens(t *testing.T, store theauth.OAuthServerStorage) {
 	t.Helper()
 	ctx := context.Background()
 
-	userID := newID()
+	userID := ensureUser(t, store, "rt")
+	ensureOAuthClient(t, store, "st-rt-client")
 
 	makeToken := func(hash []byte, familyID theauth.ULID) theauth.RefreshToken {
 		return theauth.RefreshToken{
