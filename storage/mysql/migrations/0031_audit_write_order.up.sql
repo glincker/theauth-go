@@ -29,7 +29,8 @@ ALTER TABLE audit_events
     ADD COLUMN event          VARCHAR(255) NULL;
 
 UPDATE audit_events
-   SET recorded_at_us = TIMESTAMPDIFF(MICROSECOND, '1970-01-01 00:00:00', created_at);
+   SET recorded_at_us = TIMESTAMPDIFF(MICROSECOND, '1970-01-01 00:00:00', created_at)
+ WHERE recorded_at_us IS NULL;
 
 UPDATE audit_events SET event = CASE action
     WHEN 'agent.authorize'        THEN 'authorize'
@@ -63,7 +64,8 @@ ALTER TABLE theauth_audit_chain_heads ADD COLUMN recorded_at_us BIGINT NOT NULL 
 
 UPDATE theauth_audit_chain_heads h
    SET h.recorded_at_us = COALESCE(
-       (SELECT MAX(a.recorded_at_us) FROM audit_events a WHERE a.chain_key = h.chain_key), 0);
+       (SELECT MAX(a.recorded_at_us) FROM audit_events a WHERE a.chain_key = h.chain_key), 0)
+ WHERE h.recorded_at_us = 0;
 
 CREATE INDEX idx_audit_recorded ON audit_events (recorded_at_us, id);
 

@@ -11,7 +11,8 @@ ALTER TABLE audit_events
 -- Backfill the stamp from created_at in microseconds. The column default stamped
 -- existing rows with the migration time, so every row is overwritten.
 UPDATE audit_events
-   SET recorded_at_us = floor(extract(epoch FROM created_at) * 1000000)::bigint;
+   SET recorded_at_us = floor(extract(epoch FROM created_at) * 1000000)::bigint
+ WHERE recorded_at_us IS DISTINCT FROM floor(extract(epoch FROM created_at) * 1000000)::bigint;
 
 -- Backfill the event from the documented action mapping. Actions that do not
 -- map stay NULL.
@@ -37,7 +38,8 @@ WHERE event IS NULL;
 -- Highest stamp issued per chain, read under the head row lock by the writer.
 ALTER TABLE theauth_audit_chain_heads ADD COLUMN recorded_at_us bigint NOT NULL DEFAULT 0;
 UPDATE theauth_audit_chain_heads h
-   SET recorded_at_us = COALESCE((SELECT max(e.recorded_at_us) FROM audit_events e WHERE e.chain_key = h.chain_key), 0);
+   SET recorded_at_us = COALESCE((SELECT max(e.recorded_at_us) FROM audit_events e WHERE e.chain_key = h.chain_key), 0)
+ WHERE h.recorded_at_us = 0;
 
 -- Keyset paging indexes, global, per organization and per event.
 CREATE INDEX idx_audit_recorded ON audit_events (recorded_at_us, id);

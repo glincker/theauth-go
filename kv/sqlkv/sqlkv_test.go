@@ -116,3 +116,14 @@ func TestValidIdent(t *testing.T) {
 		}
 	}
 }
+
+func TestNewRejectsHostileTableName(t *testing.T) {
+	for _, name := range []string{"", "t; DROP TABLE users", "a b", "a-b", "1abc", "t\"x", "t`x", "t'--", "a.b", strings.Repeat("a", 64)} {
+		if _, err := New(nil, SQLite, WithTable(name)); err == nil {
+			t.Errorf("table %q accepted, want error", name)
+		}
+	}
+	if _, err := New(nil, SQLite, WithTable("ok_Table1")); err != nil {
+		t.Errorf("valid table rejected: %v", err)
+	}
+}

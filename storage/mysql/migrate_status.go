@@ -36,7 +36,8 @@ func Status(ctx context.Context, db *sql.DB) ([]MigrationStatus, error) {
 	}
 	applied := map[string]time.Time{}
 	if n > 0 {
-		rows, err := db.QueryContext(ctx, fmt.Sprintf(`SELECT version, applied_at FROM %s`, migrationsLedger))
+		// migrationsLedger is a package constant, not input.
+		rows, err := db.QueryContext(ctx, `SELECT version, applied_at FROM `+migrationsLedger)
 		if err != nil {
 			return nil, fmt.Errorf("theauth mysql migrate status: read ledger: %w", err)
 		}

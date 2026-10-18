@@ -194,6 +194,7 @@ func (s *Store) maybePrune(ctx context.Context) {
 func (s *Store) Prune(ctx context.Context) (int64, error) {
 	scope, scopeArgs := s.scope()
 	args := append([]any{s.now().UnixMilli()}, scopeArgs...)
+	// The table name is validated by validIdent at construction; values use placeholders.
 	res, err := s.db.ExecContext(ctx, s.q("DELETE FROM "+s.table+" WHERE expires_at <= ?"+scope), args...)
 	if err != nil {
 		return 0, err
@@ -221,6 +222,7 @@ func (s *Store) Set(ctx context.Context, key string, value []byte, ttl time.Dura
 		value = []byte{}
 	}
 	var query string
+	// The table name is validated by validIdent at construction; values use placeholders.
 	if s.dialect == MySQL {
 		query = "INSERT INTO " + s.table + " (k, v, n, expires_at) VALUES (?, ?, 0, ?) " +
 			"ON DUPLICATE KEY UPDATE v = VALUES(v), n = 0, expires_at = VALUES(expires_at)"
@@ -264,6 +266,7 @@ func (s *Store) SetNX(ctx context.Context, key string, value []byte, ttl time.Du
 
 // Delete implements kv.Cache.
 func (s *Store) Delete(ctx context.Context, key string) error {
+	// The table name is validated by validIdent at construction; values use placeholders.
 	_, err := s.db.ExecContext(ctx, s.q("DELETE FROM "+s.table+" WHERE k = ?"), s.key(key))
 	return err
 }
