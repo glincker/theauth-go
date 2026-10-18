@@ -2,6 +2,8 @@ package mqttauth
 
 import (
 	"bytes"
+	"crypto/sha256"
+	"crypto/subtle"
 	"net/http"
 	"strconv"
 )
@@ -11,6 +13,22 @@ import (
 // its default "status" response mode and reads {"Ok": bool} in "json" mode, so a deny is a 403
 // with Ok false, which satisfies both. Username is the device ID.
 
+// fromMosquitto authorizes the caller of a mosquitto-go-auth route. The plugin has no option to
+// send request headers (its HTTP backend options are the host, port, URIs, method, params mode,
+// response mode, timeout, user agent and TLS flag), so besides the bearer header the broker secret
+// is accepted as the "secret" query parameter of the configured URIs. Keep the plugin to this
+// service on a private network or over TLS, since a URI can end up in access logs.
+func (h *Handler) fromMosquitto(r *http.Request) bool {
+	if h.fromBroker(r) {
+		return true
+	}
+	if h.cfg.BrokerSecret == "" {
+		return false
+	}
+	g := sha256.Sum256([]byte(r.URL.Query().Get("secret")))
+	return subtle.ConstantTimeCompare(g[:], h.secret[:]) == 1
+}
+
 func mosquittoDeny(w http.ResponseWriter) {
 	writeJSON(w, http.StatusForbidden, map[string]any{"Ok": false, "Error": "denied"})
 }
@@ -19,7 +37,7 @@ func mosquittoAllow(w http.ResponseWriter) { writeJSON(w, http.StatusOK, map[str
 
 func (h *Handler) mosquittoUser(w http.ResponseWriter, r *http.Request) {
 	req, ok := readRequest(w, r)
-	if !ok || !h.fromBroker(r) {
+	if !ok || !h.fromMosquitto(r) {
 		mosquittoDeny(w)
 		return
 	}
@@ -48,7 +66,7 @@ func (h *Handler) mosquittoSuperuser(w http.ResponseWriter, _ *http.Request) { m
 
 func (h *Handler) mosquittoACL(w http.ResponseWriter, r *http.Request) {
 	req, ok := readRequest(w, r)
-	if !ok || !h.fromBroker(r) {
+	if !ok || !h.fromMosquitto(r) {
 		mosquittoDeny(w)
 		return
 	}

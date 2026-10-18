@@ -567,3 +567,26 @@ func TestMemoryStoreConflicts(t *testing.T) {
 		t.Fatal("SetStatus on a missing device")
 	}
 }
+
+// mosquitto-go-auth cannot send request headers, so the secret may ride in the URI query.
+func TestMosquittoSecretQuery(t *testing.T) {
+	f := newFixture(t, nil)
+	body := map[string]any{"username": "dev1", "password": "tok-1", "clientid": "dev1"}
+	noHeader := map[string]string{"Authorization": ""}
+	for _, c := range []struct {
+		name, path string
+		want       int
+	}{
+		{"correct query secret", "/mosquitto/user?secret=" + brokerSecret, 200},
+		{"wrong query secret", "/mosquitto/user?secret=nope", 403},
+		{"no secret", "/mosquitto/user", 403},
+	} {
+		if got, _ := f.post(c.path, body, noHeader); got != c.want {
+			t.Errorf("%s: status %d, want %d", c.name, got, c.want)
+		}
+	}
+	// The query secret is for the mosquitto routes only, the EMQX routes still need the header.
+	if _, res := f.post("/authn?secret="+brokerSecret, body, noHeader); res["result"] != "deny" {
+		t.Errorf("EMQX route accepted the query secret: %v", res)
+	}
+}
