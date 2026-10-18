@@ -2,13 +2,70 @@ package main
 
 import (
 	"encoding/base64"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
+
+	"github.com/glincker/theauth-go/v2/internal/emailnorm"
+	"github.com/glincker/theauth-go/v2/internal/password"
 )
+
+// seedUser is the optional user created by the generated main.go through TheAuth.CreateUser.
+type seedUser struct {
+	Email string
+	Name  string
+}
+
+// muxLine marks where the seed block is inserted in the generated main.go.
+const muxLine = "\tmux := http.NewServeMux()\n"
+
+// validateSeedEmail applies the library's own normalization (emailnorm, the function CreateUser
+// uses with the default config) and its address parser. It rejects only input that is obviously not
+// a bare address; CreateUser performs the authoritative validation at runtime.
+func validateSeedEmail(raw string) (string, error) {
+	canonical := emailnorm.Normalizer{}.Normalize(raw)
+	if canonical == "" || len(canonical) > 320 {
+		return "", errors.New("must be 1 to 320 characters")
+	}
+	parsed, err := password.ValidateEmail(canonical)
+	if err != nil || parsed != canonical {
+		return "", errors.New("must be a bare address such as ada@example.com")
+	}
+	return canonical, nil
+}
+
+// seedNotice is printed whenever --seed-email is used.
+const seedNotice = "note: the seed user is written to main.go as a commented-out CreateUser call. " +
+	"CreateUser makes a user with no credential, and any existing user closes the Bootstrap gate, " +
+	"so enabling it would leave nobody able to set a password with the setup token. " +
+	"Uncomment it only after you add another sign-in method (passkey, OAuth or a reset email flow)."
+
+// seedBlock renders the CreateUser call placed after theauth.New. It is empty without a seed email.
+// The call is commented out: the generated config signs in through Bootstrap and a password, and a
+// user created by CreateUser has no credential and counts as an existing user, which closes the
+// Bootstrap gate (signup then returns signup closed). Leaving it active would lock the operator out.
+func seedBlock(s seedUser) string {
+	if s.Email == "" {
+		return ""
+	}
+	in := "Email: " + strconv.Quote(s.Email)
+	if s.Name != "" {
+		in += ", Name: " + strconv.Quote(s.Name)
+	}
+	return "\t// Seed user (disabled). CreateUser is idempotent but creates NO password, passkey or session,\n" +
+		"\t// and a user that exists closes the Bootstrap gate: the setup token no longer allows signup,\n" +
+		"\t// so this address could never get a password. Enable it only when you add another way to sign\n" +
+		"\t// in (passkey, OAuth, or a password reset email flow), and remove Bootstrap or sign up first.\n" +
+		"\t//\n" +
+		"\t// seed, err := a.CreateUser(ctx, theauth.CreateUserInput{" + in + "})\n" +
+		"\t// if err != nil {\n\t// \tlog.Fatalf(\"seed user: %v\", err)\n\t// }\n" +
+		"\t// slog.Info(\"seed user ready\", \"user_id\", seed.ID.String())\n\n"
+}
 
 // mainTemplate pieces. The scaffold never touches the network: the go get command is printed.
 const (
@@ -114,7 +171,7 @@ volumes:
 `
 )
 
-func renderMain(storage string) string {
+func renderMain(storage string, seed seedUser) string {
 	var b strings.Builder
 	b.WriteString(mainHead)
 	switch storage {
@@ -125,7 +182,7 @@ func renderMain(storage string) string {
 	default:
 		b.WriteString(mainMemoryImport)
 	}
-	b.WriteString(mainBody)
+	b.WriteString(strings.Replace(mainBody, muxLine, seedBlock(seed)+muxLine, 1))
 	switch storage {
 	case "postgres":
 		b.WriteString(storagePostgres)
@@ -177,6 +234,8 @@ func cmdInit(args []string, stdout, stderr io.Writer, entropy io.Reader) int {
 	storage := fs.String("storage", "memory", "memory, postgres or mysql")
 	printOnly := fs.Bool("print", false, "print main.go to stdout and write nothing")
 	force := fs.Bool("force", false, "overwrite existing files")
+	seedEmail := fs.String("seed-email", "", "write a commented-out CreateUser call for this user into main.go (a seeded user has no credential and closes the Bootstrap gate, see docs/cli.md)")
+	seedName := fs.String("seed-name", "", "display name for --seed-email")
 	withPG := fs.Bool("with-postgres", false, "also write docker-compose.yml with a postgres service (implies --storage postgres)")
 	if err := fs.Parse(args); err != nil {
 		return 2
@@ -190,7 +249,26 @@ func cmdInit(args []string, stdout, stderr io.Writer, entropy io.Reader) int {
 		_, _ = fmt.Fprintf(stderr, "unknown --storage %q (memory, postgres or mysql)\n", *storage)
 		return 2
 	}
-	mainSrc := renderMain(*storage)
+	var seed seedUser
+	if *seedEmail != "" {
+		canonical, err := validateSeedEmail(*seedEmail)
+		if err != nil {
+			_, _ = fmt.Fprintf(stderr, "invalid --seed-email: %v\n", err)
+			return 2
+		}
+		seed = seedUser{Email: canonical, Name: strings.TrimSpace(*seedName)}
+	} else if *seedName != "" {
+		_, _ = fmt.Fprintln(stderr, "--seed-name needs --seed-email")
+		return 2
+	}
+	mainSrc := renderMain(*storage, seed)
+	if seed.Email != "" {
+		notice := stdout
+		if *printOnly {
+			notice = stderr // keep stdout clean so it can be redirected to main.go
+		}
+		_, _ = fmt.Fprintln(notice, seedNotice)
+	}
 	if *printOnly {
 		_, _ = fmt.Fprint(stdout, mainSrc)
 		return 0

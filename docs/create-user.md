@@ -19,6 +19,12 @@ u, err := a.CreateUser(ctx, theauth.CreateUserInput{
 - Two concurrent calls with the same email yield one user and no error for the loser. In one process a mutex serializes the check and insert. Across processes the storage unique email constraint decides, and the loser re-reads the winner's row.
 - Works on every storage backend through the existing `Storage` interface.
 
+## What a created user can and cannot do
+
+A user from `CreateUser` has no credential. It can sign in only through a method you add yourself: a passkey registered by a trusted flow, an OAuth link, or a password reset email flow if you configure one. It cannot sign in with a password, and no setup token can give it one.
+
+`Config.Bootstrap` counts users. Once any user exists, including one from `CreateUser`, the gate is closed: password signup returns `SIGNUP_CLOSED` (unless `OpenSignupAfterFirstUser` is set, and then it needs no token), the setup token is cleared, and a restart issues no new token. Signup for the seeded address is therefore refused with `SIGNUP_CLOSED`, not with an email-taken error, and the setup token does not set a first password on an existing user. This is deliberate: it keeps the token from taking over an account that someone else created or linked. If Bootstrap is your only sign-in path, create the first admin with signup and the setup token, not with `CreateUser`.
+
 ## Errors
 
 The returned error is a `*UserError` with a `Code` using the TypeScript names. Match with `errors.Is`:

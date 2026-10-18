@@ -10,7 +10,7 @@ go install github.com/glincker/theauth-go/v2/cmd/theauth-go@latest
 | `theauth-go openapi` | Print an OpenAPI 3.1 document for the default route set. Flags: `--base-url`, `--title`, `--version`, `--out` |
 | `theauth-go db status` | List applied and pending migrations. Flags: `--driver postgres\|mysql`, `--dsn` (or `$THEAUTH_DATABASE_URL`), `--json`, `--exit-code` |
 | `theauth-go db migrate` | Apply pending migrations through the backend's own `Migrate`. Flags: `--driver`, `--dsn`, `--dry-run` (print the pending SQL), `--json` |
-| `theauth-go init` | Scaffold `main.go` and `.env.example`. Flags: `--dir`, `--storage memory\|postgres\|mysql`, `--print`, `--force`, `--with-postgres` |
+| `theauth-go init` | Scaffold `main.go` and `.env.example`. Flags: `--dir`, `--storage memory\|postgres\|mysql`, `--print`, `--force`, `--with-postgres`, `--seed-email`, `--seed-name` |
 | `theauth-go policy test <suite.json>` | Run a policy test suite and print failures with their explanation. Exit 1 on failure. See [policy-explain.md](policy-explain.md) |
 
 ## Database migrations
@@ -42,7 +42,17 @@ theauth-go init --storage postgres --with-postgres
 go get github.com/glincker/theauth-go/v2@latest && go mod tidy
 ```
 
+To record an operator address in `main.go`, pass the seed address:
+
+```
+theauth-go init --seed-email ada@example.com --seed-name "Ada Lovelace"
+```
+
 `init` writes `main.go` (theauth.New with the chosen storage and `Bootstrap` gating the first signup behind `THEAUTH_SETUP_TOKEN`), `.env.example` with a generated encryption key and setup token (mode 0600), and with `--with-postgres` a `docker-compose.yml` postgres service plus a matching password and URL. It makes no network calls and never runs `go get`: the command is printed. Existing files are skipped unless `--force`. `--print` writes `main.go` to stdout and touches nothing. A missing `go.mod` is reported with the `go mod init` command to run.
+
+`--seed-email` writes a commented-out `TheAuth.CreateUser` call into `main.go`, right after `theauth.New`, with a comment that explains why it is off. The address is normalized with the library's email normalization and must be a bare address (`Ada <ada@example.com>` is rejected). Invalid input exits 2 before any file is written. `--seed-name` requires `--seed-email`. The address is written only into `main.go`, never into `.env.example`.
+
+The call is disabled on purpose. The generated `main.go` signs in through `Bootstrap` and a password. A seeded user has no password, passkey or session, and any existing user closes the Bootstrap gate, so with the call enabled the setup token stops working and signup returns `SIGNUP_CLOSED`. Nobody could then set a password for that address. The setup token does not set a first credential on an existing user, by design. Uncomment the call only after you add another way to sign in (passkey, OAuth, or a password reset email flow), or if you only need the user record.
 
 Related binaries: `theauth-doctor` fetches the security report of a running server, and `theauth-migrate` imports users from Auth0 and Cognito.
 
