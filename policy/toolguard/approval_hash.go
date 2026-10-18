@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"strings"
 )
 
@@ -26,9 +27,15 @@ func reservedArgKey(k string) bool {
 // that cannot be encoded (a channel, a cycle) returns an error, and callers must never treat an
 // error as a match.
 //
-// The digest is stable across runs and nodes of this library. It is not promised byte for byte
-// equal to the TypeScript hash for every input (string escaping and number formatting differ at
-// the edges), so compare hashes only between servers of the same library.
+// Number text is canonicalized: an integer keeps its exact digits, any other number (a fraction, an
+// exponent, "-0") is parsed as float64 and written the way encoding/json writes a float64. So
+// 1, 1.0 and 1e0 hash the same whether the caller decoded with UseNumber or not.
+//
+// The digest equals the TypeScript hash (packages/core/src/approval/canonical.ts) for JSON shaped
+// arguments, checked against shared vectors (tests/fixtures/approval-hash-vectors.json in the
+// TypeScript repo). One edge stays: an integer beyond 2^53 is exact here but a JavaScript number has
+// already lost its low digits before it is hashed, so such a value cannot match across languages
+// unless the TypeScript caller passes a bigint.
 func HashApprovalAction(action, resource string, args any) (string, error) {
 	norm, err := normalizeArgs(args)
 	if err != nil {
@@ -56,6 +63,10 @@ func normalizeArgs(args any) (any, error) {
 	if err := dec.Decode(&v); err != nil {
 		return nil, fmt.Errorf("toolguard: decode approval arguments: %w", err)
 	}
+	v, err = canonNumbers(v)
+	if err != nil {
+		return nil, err
+	}
 	switch m := v.(type) {
 	case nil:
 		return map[string]any{}, nil
@@ -68,4 +79,46 @@ func normalizeArgs(args any) (any, error) {
 		return m, nil
 	}
 	return v, nil
+}
+
+// canonNumbers rewrites every json.Number in a decoded value to its canonical text.
+func canonNumbers(v any) (any, error) {
+	switch x := v.(type) {
+	case json.Number:
+		return canonNumber(x)
+	case []any:
+		for i := range x {
+			c, err := canonNumbers(x[i])
+			if err != nil {
+				return nil, err
+			}
+			x[i] = c
+		}
+	case map[string]any:
+		for k := range x {
+			c, err := canonNumbers(x[k])
+			if err != nil {
+				return nil, err
+			}
+			x[k] = c
+		}
+	}
+	return v, nil
+}
+
+func canonNumber(n json.Number) (json.Number, error) {
+	s := n.String()
+	digits := strings.TrimPrefix(s, "-")
+	if s != "-0" && strings.Trim(digits, "0123456789") == "" {
+		return n, nil
+	}
+	f, err := strconv.ParseFloat(s, 64)
+	if err != nil {
+		return "", fmt.Errorf("toolguard: approval argument number %q is out of range", s)
+	}
+	raw, err := json.Marshal(f)
+	if err != nil {
+		return "", fmt.Errorf("toolguard: encode approval argument number: %w", err)
+	}
+	return json.Number(raw), nil
 }
