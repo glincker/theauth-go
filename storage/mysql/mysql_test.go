@@ -156,6 +156,7 @@ func dropTables(t *testing.T, ctx context.Context, db *sql.DB) {
 	t.Helper()
 
 	tables := []string{
+		"theauth_device_purge_events",
 		"theauth_tool_approvals",
 		"device_join_tokens",
 		"iot_devices",

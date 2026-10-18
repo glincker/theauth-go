@@ -17,6 +17,7 @@ import (
 	"github.com/glincker/theauth-go/v2/internal/agent"
 	"github.com/glincker/theauth-go/v2/internal/ratelimit"
 	"github.com/glincker/theauth-go/v2/policy"
+	"github.com/glincker/theauth-go/v2/policy/pathmatch"
 	"github.com/oklog/ulid/v2"
 )
 
@@ -72,6 +73,12 @@ type Config struct {
 	// Evaluator evaluates requests. The zero value is ready; set Now, Risk or
 	// Taint to customize.
 	Evaluator policy.Evaluator
+	// ResourceMatching selects how statement resources compare to the requested resource:
+	// pathmatch.Colon (the zero value, unchanged behavior) or pathmatch.Path, the opt in path
+	// aware matcher shared with the TypeScript core's resourceMatching "path". It overrides
+	// Evaluator.ResourceMatching when set. Keep it equal to the mode your other enforcement
+	// points use (device bundles, delegation subset checks) so they never disagree.
+	ResourceMatching pathmatch.Mode
 }
 
 // Engine evaluates agents against their attached policies. It implements
@@ -87,6 +94,9 @@ type Engine struct {
 // with no allow statement, unless a resolver could add one.
 func New(cfg Config) (*Engine, error) {
 	e := &Engine{mode: cfg.Mode, eval: cfg.Evaluator}
+	if cfg.ResourceMatching != "" {
+		e.eval.ResourceMatching = pathmatch.Resolve(string(cfg.ResourceMatching))
+	}
 	switch {
 	case cfg.ResolverV2 != nil:
 		e.resolver = cfg.ResolverV2

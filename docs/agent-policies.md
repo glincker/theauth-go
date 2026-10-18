@@ -119,6 +119,23 @@ guard := &toolguard.Guard{
 }
 ```
 
+## Resource matching
+
+By default a statement resource is compared with the `policy` package glob. Set `Config.ResourceMatching` to `pathmatch.Path` to use the path aware matcher shared with the TypeScript core option `resourceMatching: "path"` (package `policy/pathmatch`): inside one colon segment `/` separates path segments, `*` is exactly one segment, `**` is one or more, wildcards never match an empty, `.` or `..` segment, and a partial glob such as `r*` is literal. It overrides `Evaluator.ResourceMatching`. Keep the mode equal on every enforcement point (policy engine, device bundles, delegation checks) so they cannot disagree.
+
+```go
+eng, err := agentpolicy.New(agentpolicy.Config{
+    Policies:         docs,
+    ResourceMatching: pathmatch.Path,
+})
+```
+
+The default is unchanged.
+
+### Delegation subset check
+
+`pathmatch.PermissionSubset(mode, parent, child)` is the Go twin of the TypeScript `isPermissionSubset`: every child permission needs a parent permission whose resource covers it and whose actions include the child's (or `*`). `ResourceSubset` applies the runtime matcher to the child as a pattern, so a child wildcard fits only under an equal or broader wildcard, and a parent that is a shorter exact prefix (`a:b` over `a:b:c`) does not cover the child. The TypeScript code once said yes there (`parentParts.length <= childParts.length`); the Go function never did, and `LegacyContains` keeps the old test only for deciding which rules constrain a child. Shared vectors generated from the TypeScript code (`policy/pathmatch/testdata/subset_vectors.json`, regenerate with `docs-local/vectors/gen-subset-vectors.mjs`) are replayed by the tests.
+
 ## Decision codes
 
 Every `policy.Decision` carries a machine-readable `Code` (type `policy.DecisionCode`), set on every path the evaluator takes. Branch on it instead of parsing `Reason`. The same code appears in the JSON of a decision (`code`), on `toolguard` errors (`DeniedError.Code`, `ApprovalRequiredError.Code`, `TaintViolationError.Code`), in the audit metadata of policy decisions (`decision_code`) and in the 403 and 500 bodies of `RequirePolicy` (`decision_code`, next to the existing `code`). All of these are additive: `Reason` strings and existing keys are unchanged.

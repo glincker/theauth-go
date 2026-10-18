@@ -243,7 +243,11 @@ purge.Bind(h)
 go purge.Run(ctx) // every replica runs this, the publisher included
 ```
 
-`OnRevoke` and `OnStatusChange` purge locally at once and then publish, so the other replicas drop the device as soon as their listener hears it. `postgres.PurgeBroadcaster` uses LISTEN and NOTIFY on the existing pool, with no table or migration, and it holds one pooled connection per `Subscribe`. NOTIFY reaches only connected listeners, so after a reconnect the subscriber reports a purge of everything. A lost message is still bounded by `CacheTTL`. `mqttauth.MemoryPurgeBroadcaster` is the in process version for one replica and for tests. Use a separate channel per environment when they share a database. Implement the interface over Redis, NATS or your bus the same way.
+`OnRevoke` and `OnStatusChange` purge locally at once and then publish, so the other replicas drop the device as soon as their listener hears it. `postgres.PurgeBroadcaster` uses LISTEN and NOTIFY on the existing pool, with no table or migration, and it holds one pooled connection per `Subscribe`. NOTIFY reaches only connected listeners, so after a reconnect the subscriber reports a purge of everything. A lost message is still bounded by `CacheTTL`. `mqttauth.MemoryPurgeBroadcaster` is the in process version for one replica and for tests. Use a separate channel per environment when they share a database. Implement the interface over NATS or your own bus the same way, or use one of the two below.
+
+**MySQL.** `mysql.NewPurgeBroadcaster(db, interval, retention)` has no LISTEN to use, so `Publish` inserts a row into `theauth_device_purge_events` (migration 0038) and each subscriber polls for rows after its cursor. Zero values mean a 500 ms poll and 10 minutes of retention. Latency is the poll interval. A subscriber starts at the end of the table and never replays old rows. If a poll fails, the next one that works reports a purge of everything, because pruned rows cannot be recovered.
+
+**Redis.** `redispurge.New(redispurge.Config{Addr: "redis:6379", Password: pw, TLS: tlsCfg, Channel: ""})` (package `iot/mqttauth/redispurge`) uses PUBLISH and SUBSCRIBE over a small RESP2 client in the standard library, so it adds no dependency. It supports AUTH with or without an ACL user, and TLS. Redis pub/sub drops messages for disconnected subscribers, so every reconnect reports a purge of everything. Redis Cluster and Sentinel failover are not handled: point `Addr` at one node or a proxy.
 
 ## Path matching
 
