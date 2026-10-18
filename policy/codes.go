@@ -56,6 +56,10 @@ const (
 	// CodeApprovalArgumentsMismatch means the arguments presented at spend
 	// time differ from the ones the human approved.
 	CodeApprovalArgumentsMismatch DecisionCode = "approval_arguments_mismatch"
+	// CodeApprovalStepUpInsufficient means the approval was granted under a
+	// weaker step-up rule than the policy demands now. Reserved here: the Go
+	// approvals do not record a step-up rule yet.
+	CodeApprovalStepUpInsufficient DecisionCode = "approval_step_up_insufficient"
 	// CodeApprovalGranted is the code of the decision event emitted when a
 	// human approves a request. It is not a spend: the spend reports
 	// approval_consumed.
@@ -70,6 +74,21 @@ const (
 	// CodeInvalidToken means the presented token failed verification.
 	// Reserved for the token layer; policy never sees an invalid token.
 	CodeInvalidToken DecisionCode = "invalid_token"
+	// CodeConfirmationRequired means the token is sender constrained (DPoP or
+	// mTLS, RFC 7800) and the request carried no proof of the key. Reserved
+	// until the resource server side checks land.
+	CodeConfirmationRequired DecisionCode = "confirmation_required"
+	// CodeConfirmationFailed means the proof of possession does not match the
+	// key or certificate the token is bound to. Reserved, see above.
+	CodeConfirmationFailed DecisionCode = "confirmation_failed"
+	// CodeDeviceNotFound means the device id is unknown (IoT devices).
+	CodeDeviceNotFound DecisionCode = "device_not_found"
+	// CodeDeviceSuspended means the device is suspended. Reversible.
+	CodeDeviceSuspended DecisionCode = "device_suspended"
+	// CodeDeviceRevoked means the device was revoked.
+	CodeDeviceRevoked DecisionCode = "device_revoked"
+	// CodeDeviceExpired means the device passed its expiry.
+	CodeDeviceExpired DecisionCode = "device_expired"
 	// CodeOwnerMismatch means the caller does not own the agent. Reserved.
 	CodeOwnerMismatch DecisionCode = "owner_mismatch"
 	// CodeHookDenied means a before authorize hook refused the call. Reserved.
@@ -95,8 +114,10 @@ func AllDecisionCodes() []DecisionCode {
 		CodeApprovalRequired, CodeApprovalInvalid, CodeApprovalNotFound,
 		CodeApprovalPending, CodeApprovalDenied, CodeApprovalExpired,
 		CodeApprovalAlreadyUsed, CodeApprovalMismatch, CodeApprovalArgumentsMismatch,
-		CodeApprovalGranted, CodeAgentNotFound,
-		CodeAgentRevoked, CodeAgentExpired, CodeInvalidToken, CodeOwnerMismatch,
+		CodeApprovalStepUpInsufficient, CodeApprovalGranted, CodeAgentNotFound,
+		CodeAgentRevoked, CodeAgentExpired, CodeInvalidToken,
+		CodeConfirmationRequired, CodeConfirmationFailed,
+		CodeDeviceNotFound, CodeDeviceSuspended, CodeDeviceRevoked, CodeDeviceExpired, CodeOwnerMismatch,
 		CodeHookDenied, CodeHookTimeout, CodeHookError, CodeTaintViolation,
 		CodeRiskEscalation, CodePolicyIndeterminate,
 	}

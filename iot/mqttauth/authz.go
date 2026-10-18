@@ -27,14 +27,14 @@ func (h *Handler) authorize(ctx context.Context, req brokerRequest, action Actio
 	d, err := h.loadDevice(ctx, id)
 	if err != nil {
 		if errors.Is(err, ErrDeviceNotFound) {
-			return Decision{Reason: "unknown device"}, nil, false
+			return Decision{Reason: "unknown device", Code: CodeDeviceNotFound}, nil, false
 		}
 		h.metrics.inc("theauth_mqtt_errors_total", "store")
-		return Decision{Reason: "store error"}, nil, false
+		return Decision{Reason: "store error", Code: CodeIndeterminate}, nil, false
 	}
-	if !d.Active(h.now()) {
+	if code := d.InactiveCode(h.now()); code != "" {
 		h.cache.purge(d.ID)
-		return Decision{Reason: "device not active"}, d, false
+		return Decision{Reason: "device not active", Code: code}, d, false
 	}
 	key := string(action) + "\x00" + topic
 	if dec, ok := h.cache.decision(d.ID, key); ok {
@@ -104,7 +104,7 @@ func (h *Handler) serveAuthz(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) recordAuthz(r *http.Request, req brokerRequest, action string, dec Decision, d *Device, cached bool) {
 	ev := AuditEvent{Kind: "authz", Allowed: dec.Allowed, ClientID: req.ClientID, Action: action, Topic: req.Topic,
-		Reason: dec.Reason, RemoteAddr: req.PeerHost, Cached: cached}
+		Reason: dec.Reason, Code: dec.code(), RemoteAddr: req.PeerHost, Cached: cached}
 	if d != nil {
 		ev.DeviceID, ev.OrgID = d.ID, d.OrgID
 	}

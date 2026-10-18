@@ -447,6 +447,7 @@ func TestDeviceAssertionValidation(t *testing.T) {
 		}),
 		"wrong audience":        h.assertion(t, key, devID, func(o *assertionOpts) { o.aud = devIssuer }),
 		"missing jti":           h.assertion(t, key, devID, func(o *assertionOpts) { o.jti = "" }),
+		"short jti":             h.assertion(t, key, devID, func(o *assertionOpts) { o.jti = "0123456789abcde" }),
 		"signed by another key": h.assertion(t, other, devID, nil),
 	}
 	for name, a := range cases {

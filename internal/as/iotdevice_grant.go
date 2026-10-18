@@ -15,6 +15,11 @@ import (
 	"github.com/glincker/theauth-go/v2/internal/ulid"
 )
 
+// minDeviceJTILen is the shortest jti accepted on a device assertion. The TypeScript device module
+// requires the same, so a fleet gets one rule on both servers (a short jti is cheap to guess and
+// collides in the replay cache).
+const minDeviceJTILen = 16
+
 // tryDeviceAssertion handles assertions whose iss names an enrolled device. handled is false
 // otherwise, and the caller falls through.
 func (s *Service) tryDeviceAssertion(ctx context.Context, req TokenRequest, assertion string) (resp TokenResponse, handled bool, err error) {
@@ -50,7 +55,7 @@ func (s *Service) deviceAssertionGrant(ctx context.Context, store DeviceIdentity
 	if !dev.Active() {
 		return TokenResponse{}, models.ErrOAuthInvalidGrant
 	}
-	if claims.Aud != s.tokenEndpointURL() || claims.Exp == 0 || claims.Iat == 0 || claims.Jti == "" {
+	if claims.Aud != s.tokenEndpointURL() || claims.Exp == 0 || claims.Iat == 0 || len(claims.Jti) < minDeviceJTILen {
 		return TokenResponse{}, models.ErrOAuthInvalidGrant
 	}
 	exp, iat := time.Unix(claims.Exp, 0), time.Unix(claims.Iat, 0)

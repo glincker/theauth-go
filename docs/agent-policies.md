@@ -152,11 +152,18 @@ The values match the TypeScript library's `DECISION_CODES` one for one, so a cli
 | `approval_already_used` | The approval was already spent. Approvals are single use. |
 | `approval_mismatch` | The approval was issued for another agent, action or resource. |
 | `approval_arguments_mismatch` | The arguments presented at spend time differ from the ones the human approved. |
+| `approval_step_up_insufficient` | Reserved. The approval was granted under a weaker step-up rule than the policy demands now. |
 | `approval_granted` | A human approved a request (the `approval.approved` event). Not a spend: the spend is `approval_consumed`. |
 | `agent_not_found` | The agent id is unknown (reported when the limit check fails with `ErrAgentNotFound`). |
 | `agent_revoked` | Reserved. The agent was revoked or suspended. |
 | `agent_expired` | Reserved. The agent passed its expiry. |
 | `invalid_token` | Reserved. The presented token failed verification. |
+| `confirmation_required` | Reserved. The token is sender constrained (DPoP or mTLS, RFC 7800) and the request carried no proof of the key. |
+| `confirmation_failed` | Reserved. The proof of possession does not match the key or certificate the token is bound to. |
+| `device_not_found` | The device id is unknown (the MQTT broker backend in [mqtt-auth.md](mqtt-auth.md) reports it). |
+| `device_suspended` | The device is suspended. Reversible. |
+| `device_revoked` | The device was revoked. |
+| `device_expired` | The device passed its expiry. |
 | `owner_mismatch` | Reserved. The caller does not own the agent. |
 | `hook_denied` | A before authorize hook refused the call (see [hooks.md](hooks.md)). |
 | `hook_timeout` | A before authorize hook did not answer within its timeout. The call is refused. |

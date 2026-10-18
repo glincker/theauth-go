@@ -10,6 +10,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/glincker/theauth-go/v2/policy"
 )
 
 // ErrDeviceNotFound is returned by a DeviceStore when no device matches.
@@ -70,12 +72,42 @@ type Device struct {
 	ExpiresAt time.Time `json:"expiresAt,omitempty"`
 }
 
+// Decision codes carried on Decision.Code and AuditEvent.Code. They are the wire values of the
+// TypeScript DECISION_CODES (and policy.DecisionCode) where one exists, so an audit consumer reads
+// Go and TypeScript rows the same way. CodeInvalidCredential is the TypeScript device
+// authenticator's answer to every credential problem, which keeps a caller from probing which
+// device IDs or keys exist.
+const (
+	CodeAllowed           = string(policy.CodeAllowed)
+	CodeNoPermission      = string(policy.CodeNoPermission)
+	CodeIndeterminate     = string(policy.CodePolicyIndeterminate)
+	CodeDeviceNotFound    = string(policy.CodeDeviceNotFound)
+	CodeDeviceSuspended   = string(policy.CodeDeviceSuspended)
+	CodeDeviceRevoked     = string(policy.CodeDeviceRevoked)
+	CodeDeviceExpired     = string(policy.CodeDeviceExpired)
+	CodeInvalidCredential = "invalid_credential"
+)
+
 // Active reports whether the device may authenticate or be authorized at now.
-func (d *Device) Active(now time.Time) bool {
-	if d == nil || d.Status != StatusActive {
-		return false
+func (d *Device) Active(now time.Time) bool { return d.InactiveCode(now) == "" }
+
+// InactiveCode is empty for a device that may act at now, else device_suspended, device_revoked or
+// device_expired. A nil device or an unknown status counts as revoked (fail closed). Revoked wins
+// over expired, like the TypeScript registry.
+func (d *Device) InactiveCode(now time.Time) string {
+	switch {
+	case d == nil:
+		return CodeDeviceRevoked
+	case d.Status == StatusRevoked:
+		return CodeDeviceRevoked
+	case d.Status == StatusSuspended:
+		return CodeDeviceSuspended
+	case d.Status != StatusActive:
+		return CodeDeviceRevoked
+	case !d.ExpiresAt.IsZero() && !now.Before(d.ExpiresAt):
+		return CodeDeviceExpired
 	}
-	return d.ExpiresAt.IsZero() || now.Before(d.ExpiresAt)
+	return ""
 }
 
 // ValidateIdentifier checks a value that is substituted into a topic filter: no MQTT wildcard,

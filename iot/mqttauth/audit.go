@@ -10,16 +10,19 @@ import (
 
 // AuditEvent is one broker decision.
 type AuditEvent struct {
-	Time       time.Time
-	Kind       string // "authn" or "authz"
-	Allowed    bool
-	Method     string // cert, token, jwt for authn, "" for authz
-	DeviceID   string
-	OrgID      string
-	ClientID   string
-	Action     string
-	Topic      string
-	Reason     string
+	Time     time.Time
+	Kind     string // "authn" or "authz"
+	Allowed  bool
+	Method   string // cert, token, jwt for authn, "" for authz
+	DeviceID string
+	OrgID    string
+	ClientID string
+	Action   string
+	Topic    string
+	Reason   string
+	// Code is the machine readable outcome (see the Code constants). Empty for a deny that
+	// happened before any device or credential was looked at.
+	Code       string
 	RemoteAddr string
 	Cached     bool
 }
@@ -46,7 +49,7 @@ func SlogSink(l *slog.Logger) AuditSink {
 		l.LogAttrs(ctx, level, "mqtt "+e.Kind,
 			slog.Bool("allowed", e.Allowed), slog.String("method", e.Method), slog.String("device_id", e.DeviceID),
 			slog.String("client_id", e.ClientID), slog.String("action", e.Action), slog.String("topic", e.Topic),
-			slog.String("reason", e.Reason), slog.String("remote", e.RemoteAddr))
+			slog.String("reason", e.Reason), slog.String("code", e.Code), slog.String("remote", e.RemoteAddr))
 	})
 }
 
@@ -60,14 +63,17 @@ func TheAuthSink(a *theauth.TheAuth) AuditSink {
 		}
 		a.EmitAudit(ctx, "mqtt."+e.Kind+"."+verdict, theauth.TargetRef{Type: "device", ID: e.DeviceID}, map[string]any{
 			"principalType": "device",
-			"orgId":         e.OrgID,
-			"method":        e.Method,
-			"clientId":      e.ClientID,
-			"action":        e.Action,
-			"topic":         e.Topic,
-			"reason":        e.Reason,
-			"remote":        e.RemoteAddr,
-			"cached":        e.Cached,
+			// Same marker the TypeScript device module writes, so one query finds both.
+			"theauthPrincipal": map[string]string{"type": "device", "id": e.DeviceID},
+			"code":             e.Code,
+			"orgId":            e.OrgID,
+			"method":           e.Method,
+			"clientId":         e.ClientID,
+			"action":           e.Action,
+			"topic":            e.Topic,
+			"reason":           e.Reason,
+			"remote":           e.RemoteAddr,
+			"cached":           e.Cached,
 		})
 	})
 }

@@ -31,13 +31,13 @@ func (h *Handler) mosquittoUser(w http.ResponseWriter, r *http.Request) {
 	p, reason := h.authenticate(r.Context(), r, brokerRequest{
 		Username: req.Username, Password: req.Password, ClientID: req.ClientID,
 	})
-	ev := AuditEvent{Kind: "authn", ClientID: req.ClientID, Reason: reason}
+	ev := AuditEvent{Kind: "authn", ClientID: req.ClientID, Reason: reason, Code: authnCode(reason)}
 	if p == nil {
 		h.record(r.Context(), ev)
 		mosquittoDeny(w)
 		return
 	}
-	ev.Allowed, ev.Method, ev.DeviceID, ev.OrgID, ev.Reason = true, p.method, p.dev.ID, p.dev.OrgID, "ok"
+	ev.Allowed, ev.Method, ev.DeviceID, ev.OrgID, ev.Reason, ev.Code = true, p.method, p.dev.ID, p.dev.OrgID, "ok", CodeAllowed
 	h.record(r.Context(), ev)
 	h.cache.putDevice(p.dev)
 	mosquittoAllow(w)

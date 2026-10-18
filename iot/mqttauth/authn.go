@@ -68,6 +68,19 @@ func tokenMatches(d *Device, password string) bool {
 	return ok == 1 && d != nil
 }
 
+// authnCode maps an authenticate failure reason to a decision code. Every credential problem is
+// invalid_credential, as in the TypeScript authenticator. Only a device whose credential verified
+// and that is blocked reports its own state.
+func authnCode(reason string) string {
+	if code, ok := strings.CutPrefix(reason, "device not active: "); ok {
+		return code
+	}
+	if reason == "store error" {
+		return CodeIndeterminate
+	}
+	return CodeInvalidCredential
+}
+
 func (h *Handler) lookupReason(err error, notFound string) string {
 	if errors.Is(err, ErrDeviceNotFound) {
 		return notFound
@@ -77,8 +90,8 @@ func (h *Handler) lookupReason(err error, notFound string) string {
 }
 
 func (h *Handler) finish(d *Device, method string, exp time.Time, req brokerRequest, now time.Time) (*principal, string) {
-	if !d.Active(now) {
-		return nil, "device not active"
+	if code := d.InactiveCode(now); code != "" {
+		return nil, "device not active: " + code
 	}
 	if !h.cfg.AllowAnyClientID && !clientIDBound(req.ClientID, d.ID) {
 		return nil, "client id not bound to device"
@@ -130,13 +143,13 @@ func (h *Handler) serveAuthn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	p, reason := h.authenticate(r.Context(), r, req)
-	ev := AuditEvent{Kind: "authn", ClientID: req.ClientID, RemoteAddr: req.PeerHost, Reason: reason}
+	ev := AuditEvent{Kind: "authn", ClientID: req.ClientID, RemoteAddr: req.PeerHost, Reason: reason, Code: authnCode(reason)}
 	if p == nil {
 		h.record(r.Context(), ev)
 		emqxDeny(w)
 		return
 	}
-	ev.Allowed, ev.Method, ev.DeviceID, ev.OrgID, ev.Reason = true, p.method, p.dev.ID, p.dev.OrgID, "ok"
+	ev.Allowed, ev.Method, ev.DeviceID, ev.OrgID, ev.Reason, ev.Code = true, p.method, p.dev.ID, p.dev.OrgID, "ok", CodeAllowed
 	h.record(r.Context(), ev)
 	h.cache.putDevice(p.dev)
 	resp := map[string]any{

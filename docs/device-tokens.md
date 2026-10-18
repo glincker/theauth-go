@@ -88,7 +88,7 @@ scope=telemetry:write                  (optional, defaults to the device's scope
 DPoP: <proof>                          (optional)
 ```
 
-Assertion claims: `iss` and `sub` equal to the device ID, `aud` equal to the token endpoint URL (`{issuer}/oauth/token`), `iat`, `exp` no more than `AssertionMaxLifetime` after `iat`, and a unique `jti`. The server verifies the signature against the enrolled key, then records the `jti` for replay protection. The replay record is only written after the signature verifies, so unauthenticated callers cannot fill it.
+Assertion claims: `iss` and `sub` equal to the device ID, `aud` equal to the token endpoint URL (`{issuer}/oauth/token`), `iat`, `exp` no more than `AssertionMaxLifetime` after `iat`, and a unique `jti` of at least 16 characters (the TypeScript device module requires the same). The server verifies the signature against the enrolled key, then records the `jti` for replay protection. The replay record is only written after the signature verifies, so unauthenticated callers cannot fill it.
 
 Response:
 
@@ -109,6 +109,8 @@ err := auth.RevokeDevice(ctx, deviceID)
 ```
 
 From then on the device's assertions fail with `invalid_grant`, and `/oauth/introspect` reports every token already issued to it as `active: false`, including answers that would otherwise come from the introspection cache.
+
+`DeviceTokensConfig.OnRevoke` is called with the device ID after every successful revoke, from the Go method and from the admin route. Use it to drop caches in your own services. For an MQTT broker, `mqttauth.Purger` plugs in here (see [mqtt-auth.md](mqtt-auth.md)), together with `mqtt:<action>:<levels>` scopes that become the device's topic ACL.
 
 Resource servers that verify JWTs offline (`mcpresource` with a JWKS URL) do not see revocation until the token expires. The 10 minute default bounds that window; shorten `AccessTokenTTL` or add a revocation check.
 

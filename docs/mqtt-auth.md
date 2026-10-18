@@ -2,7 +2,7 @@
 
 The `iot/mqttauth` package answers the two questions an MQTT broker asks over HTTP: may this client connect, and may it publish to or subscribe to this topic. It speaks the EMQX 5 HTTP authenticator and authorizer contracts and, behind a flag, the mosquitto-go-auth HTTP backend contract. HiveMQ is covered by the same endpoints through its HTTP extension or a small extension that calls them.
 
-Devices are principals from a `DeviceStore`. The package ships a memory store and a `database/sql` store for SQLite and PostgreSQL. It does not issue credentials: tokens come from [device tokens](device-tokens.md) or your own provisioning, and the broker only asks.
+Devices are principals from a `DeviceStore`. The package ships a memory store, a `database/sql` store for SQLite and PostgreSQL, and `IdentityStore`, which reads the device registry of the authorization server (see [Devices from the registry](#devices-from-the-registry)). It does not issue credentials: tokens come from [device tokens](device-tokens.md) or your own provisioning, and the broker only asks.
 
 ## Run it
 
@@ -99,9 +99,61 @@ Matching follows MQTT 5.0 section 4.7:
 
 Rules are validated when stored: unknown placeholders, `#` before the last level and `$share/` inside a rule are rejected.
 
+## Devices from the registry
+
+Devices enrolled through [device tokens](device-tokens.md) live in the storage that implements `theauth.DeviceIdentityStorage`. `IdentityStore` serves the broker from them, read only:
+
+```go
+var purge mqttauth.Purger
+
+a, err := theauth.New(theauth.Config{
+    Storage: store,
+    AuthorizationServer: &theauth.AuthorizationServerConfig{
+        // ...
+        DeviceTokens: &theauth.DeviceTokensConfig{OnRevoke: purge.OnRevoke},
+    },
+})
+// ...
+h, err := mqttauth.New(mqttauth.Config{
+    Store:        mqttauth.NewIdentityStore(store),
+    BrokerSecret: os.Getenv("MQTT_AUTH_BROKER_SECRET"),
+    Audit:        mqttauth.TheAuthSink(a),
+    JWT:          &mqttauth.JWTConfig{ /* your issuer JWKS, audience, methods */ },
+})
+purge.Bind(h)
+```
+
+How a registry device maps onto the broker model:
+
+| Broker field | Registry source |
+| --- | --- |
+| `Device.ID` | the device ULID string |
+| `Device.OrgID` | the organization ULID, empty when the device has none |
+| `Device.Subject` | the access token `sub`: the SPIFFE ID when set, else `device:<id>` |
+| `Device.Status` | `active`, or `revoked` for any device that is not active |
+| `Device.Rules` | allow rules built from the device's enrolled scopes (below) |
+
+The registry device holds a public key, not a certificate or an opaque token. The MQTT credential is therefore the access token the device got from the token endpoint with its signed assertion, sent as the password and checked through `Config.JWT`. A certificate fingerprint never matches a registry device. A subject of the form `device:<id>` is a direct lookup. A SPIFFE subject scans `ListDevices`, so on a large fleet leave the SPIFFE ID empty.
+
+The ACL comes from the device's enrolled scopes, not from the `scope` claim of the token it presents. A scope that starts with `mqtt:` is `mqtt:<action>:<level>:<level>...` where the action is `publish`, `subscribe` or `*`. The levels are the colon segments of the resource naming below, and a final `*` means the rest of the topic:
+
+| Scope | Allow rule |
+| --- | --- |
+| `mqtt:publish:sensors:temp:*` | publish on `sensors/temp/#` |
+| `mqtt:subscribe:devices:{device_id}:cmd:*` | subscribe to `devices/<id>/cmd/#` |
+| `mqtt:*:shared:*` | publish and subscribe on `shared/#` |
+
+`{device_id}` and `{org_id}` are replaced when a rule is applied. Other scopes are ignored, and a malformed `mqtt:` scope (a `/`, `+` or `#` inside a level, an empty level, an unknown action) grants nothing. There are no deny rules in this form. To use your own source, set `IdentityStore.Rules`.
+
+### Revocation
+
+`DeviceTokensConfig.OnRevoke` runs after every successful `TheAuth.RevokeDevice` and after the admin revoke route, including a revoke of an already revoked device. `Purger.OnRevoke` drops that device from the handler cache, so the next decision reads the registry and denies with `device_revoked`, without waiting for `CacheTTL`. `Purger.Bind` also clears the cache once, so a revoke that happened before the handler existed is not missed. The purge is per process; with several replicas call `POST /purge` on each or keep the TTL short. A client that is already connected still stays connected until the broker rechecks or you kick it.
+
 ## Policy engine instead of rules
 
-`PolicyAuthorizer` evaluates [theAuth policies](agent-policies.md) with resource `mqtt:topic/<name or filter>` and action `publish` or `subscribe`; the attributes `device_id` and `org_id` are available to `{var}` substitution.
+`PolicyAuthorizer` evaluates [theAuth policies](agent-policies.md) with the resource names of the device identity design: topic levels are colon segments, so the topic `sensors/temp/42` is `mqtt:sensors:temp:42`, the CoAP and ROS 2 resources use the same shape, and the filter `sensors/#` is `mqtt:sensors:*`. The action is `publish` or `subscribe`; the attributes `device_id` and `org_id` are available to `{var}` substitution. `mqttauth.TopicResource` does the conversion.
+
+A topic level that contains a colon cannot be told from a level boundary, so it is denied. The single level wildcard `+` has no resource form, so it is written as `*`, which means a subscription to `a/+` is allowed only by a statement that covers everything under `a`. The TypeScript matcher lets `mqtt:a:*` match `mqtt:a`, as MQTT lets `a/#` match `a`; the authorizer evaluates the resource with and without a trailing colon to get the same result, and a deny on either wins.
 
 ```go
 Authorizer: mqttauth.PolicyAuthorizer{
@@ -109,7 +161,7 @@ Authorizer: mqttauth.PolicyAuthorizer{
 },
 ```
 
-The policy glob `*` matches the MQTT wildcards as text, so an allow on `mqtt:topic/fleet/*` covers the filter `fleet/#`. A glob cannot tell that the filter `#` overlaps a deny on `mqtt:topic/fleet/secret/*`, so for wildcard subscriptions the authorizer also converts every deny and escalate resource into a filter and refuses on overlap. A policy source error denies.
+The policy glob `*` matches the MQTT wildcards as text, so an allow on `mqtt:fleet:*` covers the filter `fleet/#`. A glob cannot tell that the filter `#` overlaps a deny on `mqtt:fleet:secret:*`, so for wildcard subscriptions the authorizer also converts every deny and escalate resource into a filter and refuses on overlap. A policy source error denies with `policy_indeterminate`.
 
 ## Revocation and caching
 
@@ -121,7 +173,7 @@ Revocation does not reach a device that cannot be reached, it only stops new dec
 
 ## Audit
 
-Every decision goes to `Config.Audit`. Denies are always recorded. Allows are sampled at `AllowSampleRate` (default 0.1, 1 records all, negative none) because a publish heavy fleet makes allows the bulk of the volume. Events carry the device, client ID, action, topic, method, a reason and the peer address, never a password or token. `TheAuthSink(auth)` writes `mqtt.authn.allow`, `mqtt.authn.deny`, `mqtt.authz.allow` and `mqtt.authz.deny` rows to the theAuth audit log with `principalType: "device"`. `SlogSink` writes log records.
+Every decision goes to `Config.Audit`, with a `Code` that uses the same values as the TypeScript decision codes: `allowed`, `no_permission`, `policy_indeterminate` (policy or store failure), `device_not_found`, `device_suspended`, `device_revoked`, `device_expired`, and `invalid_credential` for any authentication failure. As in the TypeScript device authenticator, a wrong key, token or unknown certificate all report `invalid_credential`, and only a device whose credential verified reports its blocked state. Denies are always recorded. Allows are sampled at `AllowSampleRate` (default 0.1, 1 records all, negative none) because a publish heavy fleet makes allows the bulk of the volume. Events carry the device, client ID, action, topic, method, a reason, the code and the peer address, never a password or token. `TheAuthSink(auth)` writes `mqtt.authn.allow`, `mqtt.authn.deny`, `mqtt.authz.allow` and `mqtt.authz.deny` rows to the theAuth audit log with `principalType: "device"`, the `code`, and `theauthPrincipal: {"type": "device", "id": ...}`, the marker the TypeScript device module puts on its rows. `SlogSink` writes log records.
 
 ## Mosquitto
 

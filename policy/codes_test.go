@@ -83,8 +83,8 @@ func TestDecisionCodeSetHasUniqueValues(t *testing.T) {
 		}
 		seen[c] = true
 	}
-	if len(seen) != 28 {
-		t.Fatalf("got %d codes, TypeScript defines 28", len(seen))
+	if len(seen) != 35 {
+		t.Fatalf("got %d codes, TypeScript defines 35", len(seen))
 	}
 }
 

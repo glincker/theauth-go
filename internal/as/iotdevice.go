@@ -52,6 +52,12 @@ type DeviceTokensConfig struct {
 	// TokenPerMinute caps assertion grants per device per minute, counted only after the signature
 	// verified. Negative disables (default 60).
 	TokenPerMinute int
+	// OnRevoke is called with the device ID after RevokeDevice succeeded, on every revoke path
+	// (the Go method and the HTTP route). It also runs when the device was already revoked, so a
+	// purge that failed earlier can be repeated. Use it to drop caches that would otherwise keep
+	// serving the device, for example mqttauth.Purger. It must return quickly and its panics are
+	// recovered and logged.
+	OnRevoke func(ctx context.Context, deviceID string)
 }
 
 func applyDeviceTokenDefaults(c *DeviceTokensConfig) {
@@ -470,7 +476,21 @@ func (s *Service) RevokeDevice(ctx context.Context, id models.ULID, orgID *model
 		}
 		s.Audit.EmitAudit(ctx, "device.revoked", models.TargetRef{Type: "device", ID: id.String()}, meta)
 	}
+	s.notifyDeviceRevoked(ctx, id)
 	return nil
+}
+
+func (s *Service) notifyDeviceRevoked(ctx context.Context, id models.ULID) {
+	fn := s.Cfg.DeviceTokens.OnRevoke
+	if fn == nil {
+		return
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			slog.Error("theauth: DeviceTokens.OnRevoke panicked", "device", id.String(), "panic", fmt.Sprint(r))
+		}
+	}()
+	fn(ctx, id.String())
 }
 
 // RevokeDeviceJoinToken revokes an unspent join token, scoped like RevokeDevice.
