@@ -250,9 +250,9 @@ UPDATE scim_tokens SET last_used_at = $2 WHERE id = $1;
 SELECT u.* FROM users u
   JOIN organization_members m ON m.user_id = u.id
  WHERE m.organization_id = $1
-   AND ($2::text = '' OR u.email = $2)
+   AND ($2::text = '' OR u.email = $2::citext)
    AND ($3::text = '' OR u.external_id = $3)
-   AND ($4::text = '' OR u.email = $4)
+   AND ($4::text = '' OR u.email = $4::citext)
  ORDER BY u.created_at ASC
  OFFSET $5 LIMIT $6;
 
@@ -260,9 +260,9 @@ SELECT u.* FROM users u
 SELECT count(*) FROM users u
   JOIN organization_members m ON m.user_id = u.id
  WHERE m.organization_id = $1
-   AND ($2::text = '' OR u.email = $2)
+   AND ($2::text = '' OR u.email = $2::citext)
    AND ($3::text = '' OR u.external_id = $3)
-   AND ($4::text = '' OR u.email = $4);
+   AND ($4::text = '' OR u.email = $4::citext);
 
 -- name: UserByExternalIDInOrg :one
 SELECT u.* FROM users u

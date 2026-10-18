@@ -94,11 +94,11 @@ func (s *Store) DeleteOAuthAccountByProvider(ctx context.Context, userID theauth
 }
 
 // UserPasswordHashByID returns the stored Argon2id PHC string for the user,
-// or "" when no password row exists.
+// or "" when the user has no password (or does not exist). Hashes live in users.password_hash.
 func (s *Store) UserPasswordHashByID(ctx context.Context, userID theauth.ULID) (string, error) {
 	var hash string
 	err := s.pool.QueryRow(ctx,
-		`SELECT password_hash FROM user_passwords WHERE user_id = $1`,
+		`SELECT COALESCE(password_hash, '') FROM users WHERE id = $1`,
 		ulidToPgUUID(userID),
 	).Scan(&hash)
 	if err != nil {
@@ -121,10 +121,10 @@ func (s *Store) MovePasswordHash(ctx context.Context, primaryID, secondaryID the
 
 	var hash string
 	err = tx.QueryRow(ctx,
-		`SELECT password_hash FROM user_passwords WHERE user_id = $1`,
+		`SELECT COALESCE(password_hash, '') FROM users WHERE id = $1`,
 		ulidToPgUUID(secondaryID),
 	).Scan(&hash)
-	if errors.Is(err, pgx.ErrNoRows) {
+	if errors.Is(err, pgx.ErrNoRows) || (err == nil && hash == "") {
 		return nil // no-op: secondary has no password
 	}
 	if err != nil {
@@ -132,9 +132,7 @@ func (s *Store) MovePasswordHash(ctx context.Context, primaryID, secondaryID the
 	}
 
 	_, err = tx.Exec(ctx,
-		`INSERT INTO user_passwords (user_id, password_hash)
-		      VALUES ($1, $2)
-		 ON CONFLICT (user_id) DO UPDATE SET password_hash = EXCLUDED.password_hash`,
+		`UPDATE users SET password_hash = $2, updated_at = now() WHERE id = $1`,
 		ulidToPgUUID(primaryID), hash,
 	)
 	if err != nil {
@@ -142,7 +140,7 @@ func (s *Store) MovePasswordHash(ctx context.Context, primaryID, secondaryID the
 	}
 
 	_, err = tx.Exec(ctx,
-		`DELETE FROM user_passwords WHERE user_id = $1`,
+		`UPDATE users SET password_hash = NULL, updated_at = now() WHERE id = $1`,
 		ulidToPgUUID(secondaryID),
 	)
 	if err != nil {

@@ -44,7 +44,7 @@ func oauthClientTestPool(t *testing.T) *pgxpool.Pool {
 	if err != nil {
 		t.Fatalf("parse dsn: %v", err)
 	}
-	cfg.ConnConfig.RuntimeParams["search_path"] = schema
+	cfg.ConnConfig.RuntimeParams["search_path"] = schema + ", public" // public keeps a shared citext reachable
 	if pool, err = pgxpool.NewWithConfig(ctx, cfg); err != nil {
 		t.Fatalf("reconnect: %v", err)
 	}

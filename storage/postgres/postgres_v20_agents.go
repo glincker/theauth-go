@@ -39,7 +39,7 @@ RETURNING id, created_at`
 		a.Description,
 		status,
 		a.ClientID,
-		a.Scope,
+		nonNilStrings(a.Scope),
 		timeToTs(created),
 		timePtrToTs(a.LastActiveAt),
 		timePtrToTs(a.ExpiresAt),
@@ -226,7 +226,7 @@ RETURNING id, created_at`
 		ulidToPgUUID(g.UserID),
 		ulidToPgUUID(g.AgentID),
 		ulidPtrToPgUUID(g.OrganizationID),
-		g.Scope,
+		nonNilStrings(g.Scope),
 		g.Resource,
 		g.MaxDurationSeconds,
 		timeToTs(created),
@@ -262,7 +262,8 @@ FROM delegation_grants WHERE id = $1`
 func (s *Store) DelegationGrantByUserAgentResource(ctx context.Context, userID, agentID theauth.ULID, resource string) (*theauth.DelegationGrant, error) {
 	const q = `
 SELECT id, user_id, agent_id, organization_id, scope_grant, resource, max_duration_seconds, created_at, expires_at, revoked_at, revocation_note
-FROM delegation_grants WHERE user_id = $1 AND agent_id = $2 AND resource = $3`
+FROM delegation_grants WHERE user_id = $1 AND agent_id = $2 AND resource = $3
+ORDER BY (revoked_at IS NULL) DESC, created_at DESC, id DESC LIMIT 1`
 	g, err := scanDelegationGrant(s.pool.QueryRow(ctx, q, ulidToPgUUID(userID), ulidToPgUUID(agentID), resource))
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -389,4 +390,13 @@ func scanDelegationGrant(row pgRowScanner) (theauth.DelegationGrant, error) {
 		RevokedAt:          tsToTimePtr(revokedAt),
 		RevocationNote:     note,
 	}, nil
+}
+
+// nonNilStrings returns an empty, non-nil slice for nil so pgx encodes an empty
+// array instead of NULL into NOT NULL text[] columns.
+func nonNilStrings(v []string) []string {
+	if v == nil {
+		return []string{}
+	}
+	return v
 }

@@ -172,21 +172,26 @@ func (s *Store) UserByID(ctx context.Context, id theauth.ULID) (*theauth.User, e
 }
 
 func (s *Store) MarkEmailVerified(ctx context.Context, userID theauth.ULID) error {
-	if err := s.q.MarkEmailVerified(ctx, ulidToPgUUID(userID)); err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return storage.ErrNotFound
-		}
+	tag, err := s.pool.Exec(ctx,
+		`UPDATE users SET email_verified_at = now(), updated_at = now() WHERE id = $1`,
+		ulidToPgUUID(userID))
+	if err != nil {
 		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return storage.ErrNotFound
 	}
 	return nil
 }
 
 func (s *Store) RevokeSession(ctx context.Context, id theauth.ULID) error {
-	if err := s.q.RevokeSession(ctx, ulidToPgUUID(id)); err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return storage.ErrNotFound
-		}
+	tag, err := s.pool.Exec(ctx,
+		`UPDATE sessions SET revoked_at = now() WHERE id = $1`, ulidToPgUUID(id))
+	if err != nil {
 		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return storage.ErrNotFound
 	}
 	return nil
 }
@@ -224,15 +229,14 @@ func (s *Store) ConsumeMagicLink(ctx context.Context, tokenHash []byte) (*theaut
 }
 
 func (s *Store) SetUserPassword(ctx context.Context, userID theauth.ULID, passwordHash string) error {
-	ph := passwordHash
-	if err := s.q.SetUserPassword(ctx, sqlcgen.SetUserPasswordParams{
-		ID:           ulidToPgUUID(userID),
-		PasswordHash: &ph,
-	}); err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return storage.ErrNotFound
-		}
+	tag, err := s.pool.Exec(ctx,
+		`UPDATE users SET password_hash = $2, updated_at = now() WHERE id = $1`,
+		ulidToPgUUID(userID), passwordHash)
+	if err != nil {
 		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return storage.ErrNotFound
 	}
 	return nil
 }
@@ -384,7 +388,7 @@ func (s *Store) InsertWebAuthnCredential(ctx context.Context, c theauth.WebAuthn
 		PublicKey:      c.PublicKey,
 		SignCount:      int64(c.SignCount),
 		Transports:     transports,
-		Aaguid:         c.AAGUID,
+		Aaguid:         nonNilBytes(c.AAGUID),
 		Name:           c.Name,
 		CreatedAt:      timeToTs(c.CreatedAt),
 		LastUsedAt:     timePtrToTs(c.LastUsedAt),

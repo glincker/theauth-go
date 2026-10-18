@@ -32,7 +32,7 @@ func TestMigrate(t *testing.T) {
 	defer func() {
 		_, _ = pool.Exec(ctx, "DROP SCHEMA "+schema+" CASCADE")
 	}()
-	if _, err := pool.Exec(ctx, "SET search_path TO "+schema); err != nil {
+	if _, err := pool.Exec(ctx, "SET search_path TO "+schema+", public"); err != nil {
 		t.Fatalf("search_path: %v", err)
 	}
 
