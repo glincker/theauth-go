@@ -117,7 +117,7 @@ func TestPasswordHandlersResolveClientIPBehindTrustedProxy(t *testing.T) {
 			if err != nil || len(sessions) == 0 {
 				t.Fatalf("sessions: %v %v", sessions, err)
 			}
-			// Signup issues a session without an IP; the signin session must carry the client IP.
+			// Signup and signin sessions must both carry the client IP.
 			matched := false
 			for _, s := range sessions {
 				if s.IP == tc.want {
@@ -129,6 +129,91 @@ func TestPasswordHandlersResolveClientIPBehindTrustedProxy(t *testing.T) {
 			if !matched {
 				t.Errorf("no session recorded IP %q", tc.want)
 			}
+		})
+	}
+}
+
+// TestPasswordSignupRecordsClientIPAndUserAgent proves that sign up records the same client
+// address and user agent on the session row and the audit event as sign in does.
+func TestPasswordSignupRecordsClientIPAndUserAgent(t *testing.T) {
+	proxyNet := []netip.Prefix{netip.MustParsePrefix("10.0.0.0/8")}
+	tests := []struct {
+		name    string
+		trusted []netip.Prefix
+		remote  string
+		xff     string
+		want    string
+	}{
+		{"behind trusted proxy", proxyNet, "10.0.0.5:4444", "198.51.100.9", "198.51.100.9"},
+		{"without trusted proxy", nil, "203.0.113.7:4444", "198.51.100.9", "203.0.113.7"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			store := memory.New()
+			sink := &auditCapture{}
+			a, err := theauth.New(theauth.Config{
+				Storage:        store,
+				BaseURL:        "http://localhost",
+				SessionTTL:     time.Hour,
+				TrustedProxies: tc.trusted,
+				Audit:          &theauth.AuditConfig{FlushInterval: 10 * time.Millisecond, Sinks: []theauth.AuditSink{sink}},
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(a.Close)
+			r := chi.NewRouter()
+			a.Mount(r)
+
+			const email = "signupip@example.com"
+			const agent = "signup-agent/1.0"
+			req := httptest.NewRequest(http.MethodPost, "/auth/email-password/signup",
+				bytes.NewBufferString(`{"email":"`+email+`","password":"correct-horse-battery-1"}`))
+			req.Header.Set("Content-Type", "application/json")
+			req.Header.Set("User-Agent", agent)
+			req.Header.Set("X-Forwarded-For", tc.xff)
+			req.RemoteAddr = tc.remote
+			w := httptest.NewRecorder()
+			r.ServeHTTP(w, req)
+			if w.Code != http.StatusCreated {
+				t.Fatalf("signup: %d %s", w.Code, w.Body.String())
+			}
+
+			user, err := store.UserByEmail(context.Background(), email)
+			if err != nil {
+				t.Fatal(err)
+			}
+			sessions, err := store.ListUserSessions(context.Background(), user.ID)
+			if err != nil || len(sessions) != 1 {
+				t.Fatalf("sessions: %v %v", sessions, err)
+			}
+			if sessions[0].IP != tc.want {
+				t.Errorf("session IP = %q, want %q", sessions[0].IP, tc.want)
+			}
+			if sessions[0].UserAgent != agent {
+				t.Errorf("session user agent = %q, want %q", sessions[0].UserAgent, agent)
+			}
+
+			deadline := time.Now().Add(3 * time.Second)
+			for time.Now().Before(deadline) {
+				sink.mu.Lock()
+				for _, ev := range sink.events {
+					if ev.Action != "user.login" {
+						continue
+					}
+					defer sink.mu.Unlock()
+					if ev.IP != tc.want || ev.UserAgent != agent {
+						t.Errorf("audit ip/ua = %q/%q, want %q/%q", ev.IP, ev.UserAgent, tc.want, agent)
+					}
+					if ev.ActorUserID == nil || *ev.ActorUserID != user.ID {
+						t.Errorf("audit actor = %v, want %v", ev.ActorUserID, user.ID)
+					}
+					return
+				}
+				sink.mu.Unlock()
+				time.Sleep(20 * time.Millisecond)
+			}
+			t.Fatal("no user.login audit event for signup")
 		})
 	}
 }

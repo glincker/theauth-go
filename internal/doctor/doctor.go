@@ -104,6 +104,13 @@ type Input struct {
 	SAMLTrackerMemory bool
 	OAuthReturnTo     int
 
+	// CORSPublicWildcard is true when "*" is allowed on Discovery or JWKS. CORSCredentials mirrors
+	// AllowCredentials. CORSTokenEnabled and CORSTokenOrigins describe the token endpoint opt in.
+	CORSPublicWildcard bool
+	CORSCredentials    bool
+	CORSTokenEnabled   bool
+	CORSTokenOrigins   int
+
 	TOTPEnabled     bool
 	WebAuthnEnabled bool
 	AdminCount      int

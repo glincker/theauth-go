@@ -337,6 +337,7 @@ func (a *TheAuth) gatherDoctorInput(ctx context.Context, now time.Time) doctor.I
 	if in.PasswordMinLength <= 0 {
 		in.PasswordMinLength = 12
 	}
+	fillCORSDoctorInput(&in, cfg.AuthorizationServer)
 	if cfg.Bootstrap != nil {
 		in.BootstrapOpen = cfg.Bootstrap.OpenSignupAfterFirstUser
 	}
@@ -431,4 +432,30 @@ func (a *TheAuth) handleDoctor(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "no-store")
 	_ = json.NewEncoder(w).Encode(a.Doctor(r.Context()))
+}
+
+// fillCORSDoctorInput copies the authorization server CORS posture into the doctor input.
+func fillCORSDoctorInput(in *doctor.Input, c *AuthorizationServerConfig) {
+	if c == nil {
+		return
+	}
+	cors := c.CORS
+	publicList := cors.PublicOrigins
+	if len(publicList) == 0 {
+		publicList = cors.AllowedOrigins
+	}
+	if cors.Discovery || cors.JWKS {
+		for _, o := range publicList {
+			if o == "*" {
+				in.CORSPublicWildcard = true
+			}
+		}
+	}
+	in.CORSCredentials = cors.AllowCredentials
+	in.CORSTokenEnabled = cors.Token
+	for _, o := range cors.AllowedOrigins {
+		if o != "*" {
+			in.CORSTokenOrigins++
+		}
+	}
 }

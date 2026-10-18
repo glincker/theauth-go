@@ -116,7 +116,7 @@ func (h *Handler) handleSignup(w http.ResponseWriter, r *http.Request) {
 	if hdr := r.Header.Get(SetupTokenHeader); hdr != "" {
 		setupToken = hdr
 	}
-	ctx := password.WithSignupMeta(r.Context(), password.SignupMeta{SetupToken: setupToken, IP: h.ipOf(r)})
+	ctx := password.WithSignupMeta(r.Context(), password.SignupMeta{SetupToken: setupToken, IP: h.ipOf(r), UserAgent: r.UserAgent()})
 	_, sessToken, err := h.svc.Signup(ctx, email, pw)
 	if err != nil {
 		httpx.ErrToHTTP(w, err)

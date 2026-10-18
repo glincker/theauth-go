@@ -242,7 +242,8 @@ func (s *Service) Signup(ctx context.Context, emailAddr, password string) (creat
 		return nil, "", err
 	}
 
-	sessToken, _, err := s.sessions.Issue(models.WithAuthMethods(ctx, models.AMRPassword), user, "", "")
+	meta := SignupMetaFromContext(ctx)
+	sessToken, _, err := s.sessions.Issue(models.WithAuthMethods(ctx, models.AMRPassword), user, meta.UserAgent, meta.IP)
 	if err != nil {
 		return nil, "", err
 	}
@@ -254,10 +255,11 @@ func (s *Service) Signup(ctx context.Context, emailAddr, password string) (creat
 		slog.Warn("theauth: signup verification email failed", "email_ref", emailnorm.LogRef(emailAddr), "err", err.Error())
 	}
 
-	s.auditEm.EmitAudit(ctx, "user.login", models.TargetRef{Type: "user", ID: user.ID.String()}, map[string]any{
-		"auth_method": "password",
-		"email_hash":  hashEmailForAudit(emailAddr),
-	})
+	s.auditEm.EmitAudit(audit.WithAuditMetadata(ctx, audit.AuditMetadata{ActorUserID: &user.ID, IP: meta.IP, UserAgent: meta.UserAgent}),
+		"user.login", models.TargetRef{Type: "user", ID: user.ID.String()}, map[string]any{
+			"auth_method": "password",
+			"email_hash":  hashEmailForAudit(emailAddr),
+		})
 	slog.Info("theauth: password signup", "user_id", user.ID.String())
 	return &user, sessToken, nil
 }

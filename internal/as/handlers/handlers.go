@@ -29,6 +29,8 @@ type Handler struct {
 	// auth_time, acr and amr.
 	authContext  func(r *http.Request) (internalas.AuthContext, bool)
 	sessionEnder func(w http.ResponseWriter, r *http.Request)
+	// cors holds the opt-in CORS policy, built in Mount from the AS config. Inert for the zero config.
+	cors *internalas.CORSPolicy
 }
 
 // New constructs a Handler. userFromCtx reads the user the Authn middleware attached. bearerHashes
@@ -38,26 +40,49 @@ func New(svc *internalas.Service, userFromCtx func(r *http.Request) (*models.Use
 	return &Handler{svc: svc, userFromCtx: userFromCtx, bearerHashes: bearerHashes}
 }
 
+// corsPreflight registers OPTIONS on each path when CORS is enabled for g. It sits outside the
+// authn and rate limit middleware so a preflight never needs credentials.
+func (h *Handler) corsPreflight(r chi.Router, g internalas.CORSGroup, paths ...string) {
+	if !h.cors.Enabled(g) {
+		return
+	}
+	for _, p := range paths {
+		r.Options(p, h.cors.Preflight(g))
+	}
+}
+
 // Mount registers the AS routes on r. authn guards /oauth/authorize, and rateLimit (may be nil)
 // caps /oauth/register.
 func (h *Handler) Mount(r chi.Router, authn func(http.Handler) http.Handler, registerLimit func(http.Handler) http.Handler) {
-	r.Get("/.well-known/oauth-authorization-server", h.handleASMetadata)
+	h.cors = internalas.NewCORSPolicy(h.svc.Cfg.CORS)
+	disc := h.cors.Middleware(internalas.CORSDiscovery)
+	h.corsPreflight(r, internalas.CORSDiscovery,
+		"/.well-known/oauth-authorization-server", "/.well-known/oauth-authorization-server/*",
+		"/.well-known/openid-configuration", "/.well-known/openid-configuration/*",
+		"/.well-known/oauth-protected-resource", "/.well-known/oauth-protected-resource/*")
+	h.corsPreflight(r, internalas.CORSJWKS, "/oauth/jwks")
+	h.corsPreflight(r, internalas.CORSToken, "/oauth/token")
+	h.corsPreflight(r, internalas.CORSRevoke, "/oauth/revoke")
+	h.corsPreflight(r, internalas.CORSIntrospect, "/oauth/introspect")
+	h.corsPreflight(r, internalas.CORSRegister, "/oauth/register")
+	r.With(disc).Get("/.well-known/oauth-authorization-server", h.handleASMetadata)
 	// RFC 8414 section 3.1: with an issuer path, the well-known segment goes between host and path.
 	// The OIDC discovery name is served too, since MCP clients probe both.
-	r.Get("/.well-known/oauth-authorization-server/*", h.handleASMetadataPath)
-	r.Get("/.well-known/openid-configuration", h.handleASMetadata)
-	r.Get("/.well-known/openid-configuration/*", h.handleASMetadataPath)
-	r.Get("/.well-known/oauth-protected-resource", h.handleProtectedResourceMetadata)
-	r.Get("/.well-known/oauth-protected-resource/*", h.handleProtectedResourceMetadata)
-	r.Get("/oauth/jwks", h.handleJWKS)
+	r.With(disc).Get("/.well-known/oauth-authorization-server/*", h.handleASMetadataPath)
+	r.With(disc).Get("/.well-known/openid-configuration", h.handleASMetadata)
+	r.With(disc).Get("/.well-known/openid-configuration/*", h.handleASMetadataPath)
+	r.With(disc).Get("/.well-known/oauth-protected-resource", h.handleProtectedResourceMetadata)
+	r.With(disc).Get("/.well-known/oauth-protected-resource/*", h.handleProtectedResourceMetadata)
+	r.With(h.cors.Middleware(internalas.CORSJWKS)).Get("/oauth/jwks", h.handleJWKS)
 	r.With(authn).Get("/oauth/authorize", h.handleAuthorize)
-	r.With(h.limited).Post("/oauth/token", h.handleToken)
-	r.With(h.limited).Post("/oauth/revoke", h.handleRevoke)
-	r.With(h.limited).Post("/oauth/introspect", h.handleIntrospect)
+	r.With(h.cors.Middleware(internalas.CORSToken), h.limited).Post("/oauth/token", h.handleToken)
+	r.With(h.cors.Middleware(internalas.CORSRevoke), h.limited).Post("/oauth/revoke", h.handleRevoke)
+	r.With(h.cors.Middleware(internalas.CORSIntrospect), h.limited).Post("/oauth/introspect", h.handleIntrospect)
+	regCORS := h.cors.Middleware(internalas.CORSRegister)
 	if registerLimit != nil {
-		r.With(registerLimit).Post("/oauth/register", h.handleRegister)
+		r.With(regCORS, registerLimit).Post("/oauth/register", h.handleRegister)
 	} else {
-		r.Post("/oauth/register", h.handleRegister)
+		r.With(regCORS).Post("/oauth/register", h.handleRegister)
 	}
 	// PAR (RFC 9126) is registered only when enabled and supported, so unknown routes get a 405 rather
 	// than a handler error.

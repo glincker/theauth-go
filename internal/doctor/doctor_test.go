@@ -61,6 +61,8 @@ func TestDoctorChecks(t *testing.T) {
 		{"samesite none unpartitioned", DoctorCookieNoneOpen, SeverityLow, func(i *Input) { i.CookieSameSite = "none" }},
 		{"security headers off on https", DoctorSecurityHeadersOff, SeverityInfo, func(i *Input) { i.SecurityHeaders = false }},
 		{"saml tracker in memory", DoctorSAMLTracker, SeverityLow, func(i *Input) { i.HasSAML = true; i.SAMLTrackerMemory = true }},
+		{"cors wildcard with credentials", DoctorCORSLoose, SeverityLow, func(i *Input) { i.CORSPublicWildcard = true; i.CORSCredentials = true }},
+		{"cors token without origins", DoctorCORSLoose, SeverityLow, func(i *Input) { i.CORSTokenEnabled = true }},
 	}
 	covered := map[string]bool{}
 	for _, tc := range cases {

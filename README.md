@@ -277,6 +277,14 @@ RFC 8628 device authorization on the server and the `clientauth` package in your
 
 SAML 2.0 single sign-on, SCIM 2.0 user provisioning, organizations, RBAC and an append-only audit log with Splunk, webhook and OTLP sinks. Needs memory, SQLite, Postgres or MySQL storage. Guide: [Splunk audit streaming](https://docs.theauth.dev/go/guides/audit-log-splunk).
 
+### Create a user for an existing identity
+
+`CreateUser` adds a user row without sending email or creating a credential or session. It is idempotent on the normalized email, so calling it on every login of an external identity provider is safe, even concurrently. Typed errors match `ErrUserInvalidInput`, `ErrUserEmailConflict` and `ErrUserIDConflict` with `errors.Is`. Details: [docs/create-user.md](docs/create-user.md).
+
+```go
+u, err := a.CreateUser(ctx, theauth.CreateUserInput{Email: "ada@example.com", Name: "Ada"})
+```
+
 ### Agent identity and delegation
 
 Give an AI agent its own credential and let it act for a user with a narrower scope. See the [agent quick start](#quick-start-agent-identity-and-delegation).

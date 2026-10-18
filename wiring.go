@@ -628,6 +628,7 @@ func asConfigFromRoot(c *AuthorizationServerConfig) internalas.Config {
 		ConsentHandler:                 c.ConsentHandler,
 		ConsentMaxGrantTTL:             c.ConsentMaxGrantTTL,
 		ConsentTicketTTL:               c.ConsentTicketTTL,
+		CORS:                           c.CORS,
 	}
 }
 

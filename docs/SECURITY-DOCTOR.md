@@ -58,6 +58,7 @@ Optional storage capabilities: `UserCountStorage`, `DoctorAdminLister`,
 | `webauthn.rpid_mismatch` | high | WebAuthn RP ID does not match BaseURL host | RPID is neither the host nor a parent domain of it |
 | `redirect.allowlist_empty` | info | No post-login redirect allow-list | Providers or SAML set and OAuthConfig.AllowedReturnTo empty |
 | `saml.tracker_in_memory` | low | SAML request tracker is in process memory | Config.SAML set and Config.Stores.Cache nil |
+| `oauth.cors_loose` | low | Authorization server CORS is loosely configured | `AuthorizationServer.CORS` allows `*` on Discovery or JWKS together with `AllowCredentials`, or has `Token` on with no exact origin in `AllowedOrigins` |
 | `cookie.domain_no_prefix` | medium | Session cookie is shared across subdomains without a name prefix | Config.Cookies.Domain set and the session cookie name has neither `__Secure-` nor `__Host-` |
 | `cookie.samesite_none_unpartitioned` | low | SameSite=None session cookie is not Partitioned | Config.Cookies.SameSite is none and Config.Cookies.Partitioned is false |
 | `headers.security_off_https` | info | Security response headers are off on an https deployment | BaseURL is https and Config.SecurityHeaders is false |
@@ -86,6 +87,7 @@ Optional storage capabilities: `UserCountStorage`, `DoctorAdminLister`,
 <a id="webauthn-rpid_mismatch"></a>
 <a id="redirect-allowlist_empty"></a>
 <a id="saml-tracker_in_memory"></a>
+<a id="oauth-cors_loose"></a>
 <a id="cookie-domain_no_prefix"></a>
 <a id="cookie-samesite_none_unpartitioned"></a>
 <a id="headers-security_off_https"></a>

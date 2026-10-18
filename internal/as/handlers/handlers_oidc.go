@@ -19,8 +19,10 @@ func (h *Handler) SetSessionEnder(fn func(w http.ResponseWriter, r *http.Request
 }
 
 func (h *Handler) mountOIDC(r chi.Router, authn func(http.Handler) http.Handler) {
-	r.With(h.limited).Get("/oauth/userinfo", h.handleUserInfo)
-	r.With(h.limited).Post("/oauth/userinfo", h.handleUserInfo)
+	h.corsPreflight(r, internalas.CORSUserInfo, "/oauth/userinfo")
+	ui := h.cors.Middleware(internalas.CORSUserInfo)
+	r.With(ui, h.limited).Get("/oauth/userinfo", h.handleUserInfo)
+	r.With(ui, h.limited).Post("/oauth/userinfo", h.handleUserInfo)
 	r.With(authn).Get("/oauth/end_session", h.handleEndSession)
 	r.With(authn).Post("/oauth/end_session", h.handleEndSession)
 }

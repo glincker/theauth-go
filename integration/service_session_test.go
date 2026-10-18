@@ -5,9 +5,11 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/cookiejar"
 	"net/http/httptest"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -736,5 +738,100 @@ func TestLifecycleHooksFireThroughRealHTTPMount(t *testing.T) {
 	defer mu.Unlock()
 	if mfaEnabledCount != 1 || mfaEnabledKind != theauth.MFAKindTOTP {
 		t.Fatalf("OnMFAEnabled via Mount(): want count=1 kind=totp; got count=%d kind=%q", mfaEnabledCount, mfaEnabledKind)
+	}
+}
+
+func TestCreateUser(t *testing.T) {
+	ctx := context.Background()
+	fixedID := ulid.New()
+	otherID := ulid.New()
+	tests := []struct {
+		name    string
+		first   theauth.CreateUserInput
+		second  theauth.CreateUserInput
+		wantErr error
+		sameAs  bool
+	}{
+		{"normalizes email and keeps name", theauth.CreateUserInput{Email: "  Ada@Example.COM ", Name: " Ada "}, theauth.CreateUserInput{Email: "ada@example.com"}, nil, true},
+		{"same email with matching id is idempotent", theauth.CreateUserInput{Email: "a@x.test", ID: fixedID}, theauth.CreateUserInput{Email: "A@X.test", ID: fixedID}, nil, true},
+		{"same email with empty id returns existing", theauth.CreateUserInput{Email: "a@x.test", ID: fixedID}, theauth.CreateUserInput{Email: "a@x.test"}, nil, true},
+		{"same email with other id conflicts", theauth.CreateUserInput{Email: "a@x.test", ID: fixedID}, theauth.CreateUserInput{Email: "a@x.test", ID: otherID}, theauth.ErrUserEmailConflict, false},
+		{"same id with other email conflicts", theauth.CreateUserInput{Email: "a@x.test", ID: fixedID}, theauth.CreateUserInput{Email: "b@x.test", ID: fixedID}, theauth.ErrUserIDConflict, false},
+		{"empty email is invalid", theauth.CreateUserInput{Email: "a@x.test"}, theauth.CreateUserInput{Email: "  "}, theauth.ErrUserInvalidInput, false},
+		{"malformed email is invalid", theauth.CreateUserInput{Email: "a@x.test"}, theauth.CreateUserInput{Email: "not-an-email"}, theauth.ErrUserInvalidInput, false},
+		{"display name form is invalid", theauth.CreateUserInput{Email: "a@x.test"}, theauth.CreateUserInput{Email: "Ada <ada@x.test>"}, theauth.ErrUserInvalidInput, false},
+		{"overlong name is invalid", theauth.CreateUserInput{Email: "a@x.test"}, theauth.CreateUserInput{Email: "c@x.test", Name: strings.Repeat("n", 257)}, theauth.ErrUserInvalidInput, false},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			a, store := newTestAuth(t)
+			first, err := a.CreateUser(ctx, tc.first)
+			if err != nil {
+				t.Fatalf("first create: %v", err)
+			}
+			if first.Email != strings.ToLower(strings.TrimSpace(tc.first.Email)) || first.Name != strings.TrimSpace(tc.first.Name) {
+				t.Errorf("stored user = %+v", first)
+			}
+			if tc.first.ID != (theauth.ULID{}) && first.ID != tc.first.ID {
+				t.Errorf("id = %v, want %v", first.ID, tc.first.ID)
+			}
+			second, err := a.CreateUser(ctx, tc.second)
+			if tc.wantErr != nil {
+				if !errors.Is(err, tc.wantErr) {
+					t.Fatalf("err = %v, want %v", err, tc.wantErr)
+				}
+				var ue *theauth.UserError
+				if !errors.As(err, &ue) || ue.Code != tc.wantErr.(*theauth.UserError).Code {
+					t.Errorf("not a typed UserError with matching code: %v", err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("second create: %v", err)
+			}
+			if tc.sameAs && second.ID != first.ID {
+				t.Errorf("second id %v != first %v", second.ID, first.ID)
+			}
+			if second.Name != first.Name {
+				t.Errorf("existing user was modified: %q", second.Name)
+			}
+			// No credential and no session are created.
+			if _, hash, err := store.UserByEmailWithPassword(ctx, first.Email); err == nil && hash != "" {
+				t.Error("CreateUser stored a password hash")
+			}
+			if sessions, err := store.ListUserSessions(ctx, first.ID); err != nil || len(sessions) != 0 {
+				t.Errorf("sessions = %v, %v", sessions, err)
+			}
+		})
+	}
+}
+
+func TestCreateUserConcurrentSameEmailYieldsOneUser(t *testing.T) {
+	a, store := newTestAuth(t)
+	ctx := context.Background()
+	const workers = 32
+	ids := make([]theauth.ULID, workers)
+	errs := make([]error, workers)
+	var wg sync.WaitGroup
+	for i := 0; i < workers; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			u, err := a.CreateUser(ctx, theauth.CreateUserInput{Email: "Race@Example.com"})
+			ids[i], errs[i] = u.ID, err
+		}(i)
+	}
+	wg.Wait()
+	for i := range ids {
+		if errs[i] != nil {
+			t.Fatalf("worker %d: %v", i, errs[i])
+		}
+		if ids[i] != ids[0] {
+			t.Fatalf("worker %d got id %v, want %v", i, ids[i], ids[0])
+		}
+	}
+	stored, err := store.UserByEmail(ctx, "race@example.com")
+	if err != nil || stored.ID != ids[0] {
+		t.Fatalf("stored user = %v, %v; want id %v", stored, err, ids[0])
 	}
 }

@@ -178,6 +178,9 @@ type Config struct {
 
 	// SessionAMR reports a session's authentication methods. Nil assumes ["pwd"].
 	SessionAMR func(ctx context.Context, sess *models.Session) []string
+
+	// CORS opts endpoints in to browser cross-origin access. The zero value sends no CORS headers.
+	CORS CORSConfig
 }
 
 // JWTBearerConfig is the internal mirror of the root JWTBearerConfig, populated once at New.
@@ -238,6 +241,9 @@ func Validate(cfg *Config, encryptionKey []byte) error {
 		}
 	}
 	if err := validateIDJAG(cfg); err != nil {
+		return err
+	}
+	if err := ValidateCORS(&cfg.CORS); err != nil {
 		return err
 	}
 	if cfg.KeyRotationPeriod <= 0 {

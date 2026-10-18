@@ -32,6 +32,7 @@ const (
 	DoctorWebAuthnRPID      = "webauthn.rpid_mismatch"
 	DoctorRedirectAllowList = "redirect.allowlist_empty"
 	DoctorSAMLTracker       = "saml.tracker_in_memory"
+	DoctorCORSLoose         = "oauth.cors_loose"
 )
 
 // DoctorFindingIDs lists every finding ID a check can emit.
@@ -43,7 +44,7 @@ func DoctorFindingIDs() []string {
 		DoctorSessionNoIdle, DoctorTokenNoExpiry, DoctorTokenLongExpiry, DoctorTokenRoot,
 		DoctorAgentTokenLong, DoctorTokensUnpruned, DoctorSessionsUnpruned, DoctorEncryptionKey,
 		DoctorAuditSink, DoctorWebAuthnRPID, DoctorRedirectAllowList,
-		DoctorSAMLTracker,
+		DoctorSAMLTracker, DoctorCORSLoose,
 	}, cookieFindingIDs()...)
 }
 
@@ -51,7 +52,7 @@ var doctorChecks = []func(Input) []Finding{
 	checkSignupOpen, checkBootstrap, checkTrustedProxies, checkSecureCookie, checkCSRF,
 	checkThrottle, checkPasswordPolicy, checkMFA, checkSessionLifetime, checkTokens,
 	checkUnpruned, checkEncryptionKey, checkAudit, checkWebAuthnRPID, checkRedirects,
-	checkSAMLTracker, checkCookies, checkSecurityHeaders,
+	checkSAMLTracker, checkCORS, checkCookies, checkSecurityHeaders,
 }
 
 func checkSignupOpen(in Input) []Finding {
@@ -303,4 +304,20 @@ func checkSAMLTracker(in Input) []Finding {
 		"SAML request tracker is in process memory",
 		"AuthnRequest ids and assertion ids are tracked per process. With more than one replica a response that lands on another replica is rejected and replay protection does not span replicas.",
 		"Set Config.Stores.Cache (kv/redis or kv/sqlkv) when running several replicas. Ignore this on a single instance.")}
+}
+
+func checkCORS(in Input) []Finding {
+	wildcardWithCreds := in.CORSPublicWildcard && in.CORSCredentials
+	tokenNoList := in.CORSTokenEnabled && in.CORSTokenOrigins == 0
+	if !wildcardWithCreds && !tokenNoList {
+		return nil
+	}
+	detail := "AuthorizationServer.CORS allows a wildcard origin on the public documents while AllowCredentials is on for the other endpoints."
+	if !wildcardWithCreds {
+		detail = "AuthorizationServer.CORS.Token is on but AllowedOrigins is empty, so no browser origin can call the token endpoint and the setting does nothing useful."
+	}
+	return []Finding{fnd(DoctorCORSLoose, SeverityLow,
+		"Authorization server CORS is loosely configured",
+		detail,
+		"List exact origins in AuthorizationServer.CORS.AllowedOrigins for token and the other endpoints. Keep \"*\" to PublicOrigins for Discovery and JWKS, and leave AllowCredentials off unless an exact origin needs it.")}
 }

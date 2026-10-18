@@ -365,6 +365,10 @@ type AuthorizationServerConfig struct {
 	// /oauth/authorize only.
 	SessionAMR func(ctx context.Context, sess *Session) []string
 
+	// CORS opts the discovery and OAuth endpoints in to browser cross-origin access (allow list,
+	// exact origin match). The zero value sends no CORS headers. See docs/oauth-cors.md.
+	CORS CORSConfig
+
 	// PAR wires RFC 9126 pushed authorization requests. When non-nil and the storage implements PARStorage,
 	// POST /oauth/par is mounted and authorize accepts request_uri. Nil disables PAR.
 	PAR *PARConfig
@@ -600,6 +604,9 @@ func (m EmailMapper) Resolve(claims map[string]any) (ULID, error) {
 	return m.Lookup(email)
 }
 
+// CORSConfig is the root alias for as.CORSConfig. The zero value sends no CORS headers.
+type CORSConfig = internalas.CORSConfig
+
 // ClientCompatConfig is the root alias for as.ClientCompat. The zero value is fully strict.
 type ClientCompatConfig = internalas.ClientCompat
 
@@ -738,6 +745,7 @@ func validateASConfig(cfg *AuthorizationServerConfig, encryptionKey []byte) erro
 		ConsentHandler:                 cfg.ConsentHandler,
 		ConsentMaxGrantTTL:             cfg.ConsentMaxGrantTTL,
 		ConsentTicketTTL:               cfg.ConsentTicketTTL,
+		CORS:                           cfg.CORS,
 	}
 	if err := internalas.Validate(&internal, encryptionKey); err != nil {
 		return err
@@ -757,6 +765,7 @@ func validateASConfig(cfg *AuthorizationServerConfig, encryptionKey []byte) erro
 	cfg.SubjectActiveCacheTTL = internal.SubjectActiveCacheTTL
 	cfg.Clock = internal.Clock
 	cfg.LoginURL = internal.LoginURL
+	cfg.CORS = internal.CORS
 	cfg.RateLimits = internal.RateLimits
 	cfg.RegistrationTokenTTL = internal.RegistrationTokenTTL
 	// Mirror JWT bearer defaults back; without this an omitted AssertionMaxAge rejects every grant.

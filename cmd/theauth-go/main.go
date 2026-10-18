@@ -1,5 +1,5 @@
-// Command theauth-go is a small developer CLI for theauth-go projects: secret generation and
-// OpenAPI export. For the security report use theauth-doctor; for user imports use theauth-migrate.
+// Command theauth-go is a small developer CLI for theauth-go projects: secret generation,
+// OpenAPI export, policy tests, database migrations and project scaffolding. For the security report use theauth-doctor; for user imports use theauth-migrate.
 package main
 
 import (
@@ -35,6 +35,10 @@ func run(args []string, stdout, stderr io.Writer, entropy io.Reader) int {
 		return cmdOpenAPI(args[1:], stdout, stderr)
 	case "policy":
 		return cmdPolicy(args[1:], stdout, stderr)
+	case "db":
+		return cmdDB(args[1:], stdout, stderr)
+	case "init":
+		return cmdInit(args[1:], stdout, stderr, entropy)
 	case "help", "-h", "--help":
 		usage(stdout)
 		return 0
@@ -46,7 +50,7 @@ func run(args []string, stdout, stderr io.Writer, entropy io.Reader) int {
 }
 
 func usage(w io.Writer) {
-	_, _ = fmt.Fprintln(w, "usage: theauth-go <command> [flags]\n\ncommands:\n  secret   print a random secret (session, OTP or signing key material)\n  openapi  print an OpenAPI 3.1 document for the default route set\n  policy   run a policy test suite: theauth-go policy test <suite.json>")
+	_, _ = fmt.Fprintln(w, "usage: theauth-go <command> [flags]\n\ncommands:\n  secret   print a random secret (session, OTP or signing key material)\n  openapi  print an OpenAPI 3.1 document for the default route set\n  policy   run a policy test suite: theauth-go policy test <suite.json>\n  db       migration ledger: theauth-go db status|migrate --driver <postgres|mysql> --dsn <dsn>\n  init     scaffold main.go and .env.example in a project directory")
 }
 
 func cmdSecret(args []string, stdout, stderr io.Writer, entropy io.Reader) int {
