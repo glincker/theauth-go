@@ -32,7 +32,7 @@ If you write your own backend, run the matching suite from `storagetest` against
 | SCIM | `SCIMStorage` | Yes | Yes (0015) | Yes (0008) | Yes (0008) |
 | RBAC | `RBACStorage` | Yes | Yes (0016) | Yes (0009) | Yes (0009) |
 | Audit log | `AuditStorage` | Yes | Yes (0005) | Yes (0010) | Yes (0010) |
-| Audit write order (`recorded_at_us`, `event`, `Order`, `c1.` cursors) | `storagetest.AuditOrderCapable` (`AuditOrderSupported() bool`) | Yes | Pending (0036) | Pending (0032) | Yes (0031) |
+| Audit write order (`recorded_at_us`, `event`, `Order`, `c1.` cursors) | `storagetest.AuditOrderCapable` (`AuditOrderSupported() bool`) | Yes | Yes (0036) | Yes (0032) | Yes (0031) |
 | Audit hash chain | `VerifyAuditChain`, `ChainSupported` | No (reports unsupported) | Yes (0017) | Yes (0028) | Yes (0027) |
 | Shared signals store | `SignalsStore()` | Use `signals.NewMemoryStore` | Yes (0012) | Yes (0026) | No |
 | API tokens | `APITokenStorage` | Yes | Yes (0007) | Yes (0018) | Yes (0018) |
@@ -43,7 +43,7 @@ If you write your own backend, run the matching suite from `storagetest` against
 | Agent tool approvals (single use, used by `toolguard.NewStorageApprovals`) | `ToolApprovalStorage` | Yes | Yes (0019) | Yes (0029) | Yes (0028) |
 | Approvals inbox (get, list, deny; used by the `approvals` package) | `ToolApprovalAdminStorage` | Yes | No | No | No |
 
-Audit write order is a flag, not an interface: a store declares it by returning true from `AuditOrderSupported()`. It means the store assigns `AuditEvent.RecordedAtUs` (microseconds, strictly increasing per chain key, a caller value is ignored), stores and filters `AuditEvent.Event` (nullable, empty on old rows), serves `AuditQuery.Order` (`asc` or `desc`, default `desc`) and pages with the opaque `c1.` keyset cursor on `(recorded_at_us, id)`. Neither new column is part of the audit chain hash, so chains written before keep verifying. Cursors from before this existed keep working for descending reads. `storagetest.RunAudit` runs the write order cases for stores that declare the flag and skips them with a message for the rest. The migration numbers in the Pending cells are the next free ones at the time of writing and are re-checked when each backend lands.
+Audit write order is a flag, not an interface: a store declares it by returning true from `AuditOrderSupported()`. It means the store assigns `AuditEvent.RecordedAtUs` (microseconds, strictly increasing per chain key, a caller value is ignored), stores and filters `AuditEvent.Event` (nullable, empty on old rows), serves `AuditQuery.Order` (`asc` or `desc`, default `desc`) and pages with the opaque `c1.` keyset cursor on `(recorded_at_us, id)`. Neither new column is part of the audit chain hash, so chains written before keep verifying. Cursors from before this existed keep working for descending reads. `storagetest.RunAudit` runs the write order cases for stores that declare the flag and skips them with a message for the rest.
 
 MySQL migration `0031_audit_write_order` (up only, like every MySQL migration) adds `audit_events.recorded_at_us BIGINT` and `event VARCHAR(255)`, a `recorded_at_us` column on `theauth_audit_chain_heads`, and three keyset indexes: `(recorded_at_us, id)`, `(organization_id, recorded_at_us, id)` and `(event, recorded_at_us, id)`. Existing rows are backfilled in the migration: `recorded_at_us` from `created_at` read as UTC (independent of the session time zone) and `event` from the action table in `internal/audit/events.go`, with unmapped actions left NULL. The column default uses an expression, so it needs MySQL 8.0.13 or later. `InsertAuditEvents` stamps `recorded_at_us` while it holds the `FOR UPDATE` lock on the chain head row, as `max(now, head stamp + 1)`, so stamps are strictly increasing per organization (and for the global chain) across processes. On a very large `audit_events` table, run the backfill and index builds with your own online tooling before `Migrate`, since the embedded statements scan the table once each.
 
@@ -88,6 +88,10 @@ SQLite also has `0029_oauth_cascade_triggers`, which removes a client's codes an
 - Consent tickets and rate limits are not part of the storage interfaces. They use `Config.Stores` (`kv.ReplayCache`, `kv.RateLimiter`, `kv.Cache`), which is in memory by default. The `kv/sqlkv` adapter runs on SQLite, Postgres and MySQL, and `kv/redis` is available too. See [pluggable-stores.md](pluggable-stores.md).
 
 Per backend notes: [storage/sqlite/README.md](../storage/sqlite/README.md). For running the OAuth server on SQLite, see [mcp-oauth-sqlite.md](mcp-oauth-sqlite.md).
+
+## Writing foreign key safe contract cases
+
+Memory and SQLite do not enforce foreign keys by default, Postgres and MySQL do, so a `storagetest` case that references a row it never created passes on the first two and fails on the others. When a case sets an actor, owner, user, agent or OAuth client id, create that row first through the store's own API. Use the helpers in `storagetest/helpers.go`: `ensureUser` (users), `ensureOAuthClient` (clients, needed by authorization codes, refresh tokens and agents) and `ensureAgent` (delegation grants). Use a nil pointer instead where the schema allows it (for example `ActorUserID`). Never invent a random id for a column that has a foreign key. Create the rows inside the case or helper that needs them, using the subtest's own `t`.
 
 ## Migrations and the CLI
 

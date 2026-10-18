@@ -30,6 +30,7 @@ go get github.com/glincker/theauth-go/storage/sqlite
 | jwt-bearer `jti` cache | 0032 |
 | CIBA backchannel requests | 0033 |
 | Session authentication methods (`amr`, `auth_time`) | 0034 |
+| Audit write order: `recorded_at_us`, `event`, `Order`, `c1.` cursors | 0036 (needs 0017) |
 
 `Migrate` applies every pending file. If you own the schema, use `Migrations` or `RenderMigrations` and apply the files you need in order. The OAuth 2.1 authorization server (0020 to 0029) runs on this store alone, together with agents and delegation grants (0030, 0031), the jwt-bearer cache (0032) and CIBA (0033). See [docs/mcp-oauth-sqlite.md](../../docs/mcp-oauth-sqlite.md) for a guide, and [docs/storage-capabilities.md](../../docs/storage-capabilities.md) for how this store compares with the others.
 
@@ -39,6 +40,7 @@ A database that has not run every migration keeps working for the features it al
 
 - **Sessions without 0034.** Sessions are read and written without an authentication record (`AuthMethods` is nil and `AuthTime` is zero), and `AppendSessionAuthMethods` returns `ErrStorageMissingCapability`. Tokens fall back to `amr: ["pwd"]`. Apply 0034 and create a new `Store` to turn the record on.
 - **Audit without 0017.** Events are written and read in the old shape and are not chained. Rows written before the migration stay unchained and are never rewritten.
+- **Audit without 0036.** Chained writes keep working without `recorded_at_us` and `event`. Reads fall back to `created_at` as the paging stamp and `Event` is empty, and the `Event` filter matches nothing. Migration 0036 backfills `recorded_at_us` from `created_at` (microseconds) and `event` from the action mapping (unmapped actions stay NULL), and a trigger stamps rows written by an older binary. Neither column is hashed, so chains written before 0036 verify unchanged. The writer stamps `recorded_at_us` inside the append transaction, above the chain's last stamp, and ignores a caller supplied value.
 - **OAuth server tables (0020 to 0029).** Apply them before you enable `Config.AuthorizationServer`.
 
 ## Enable SAML and SCIM
