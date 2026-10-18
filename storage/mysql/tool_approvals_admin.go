@@ -53,7 +53,7 @@ func (s *Store) queryToolApprovals(ctx context.Context, op, query string, args .
 	if err != nil {
 		return nil, fmt.Errorf("mysql: %s: %w", op, err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	out := []theauth.ToolApproval{}
 	for rows.Next() {
 		a, err := scanToolApproval(rows)

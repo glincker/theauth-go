@@ -137,7 +137,7 @@ func FilterCovers(grant, req string) bool {
 	r := strings.Split(req, "/")
 	for i := 0; ; i++ {
 		if i < len(g) && g[i] == "#" {
-			return !(i == 0 && dollarLiteral(r[0]))
+			return i != 0 || !dollarLiteral(r[0])
 		}
 		if i >= len(r) {
 			return i >= len(g)

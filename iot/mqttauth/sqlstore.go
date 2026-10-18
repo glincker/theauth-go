@@ -172,7 +172,7 @@ func (s *SQLStore) one(ctx context.Context, query string, arg string) (*Device, 
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	for rows.Next() {
 		var fp string
 		if err := rows.Scan(&fp); err != nil {

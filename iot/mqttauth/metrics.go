@@ -53,7 +53,7 @@ func (h *Handler) MetricsHandler() http.Handler {
 		sort.Strings(keys)
 		w.Header().Set("Content-Type", "text/plain; version=0.0.4; charset=utf-8")
 		for _, k := range keys {
-			fmt.Fprintf(w, "%s %d\n", k, snap[k])
+			_, _ = fmt.Fprintf(w, "%s %d\n", k, snap[k])
 		}
 	})
 }
