@@ -93,12 +93,12 @@ func newFakeAS(t *testing.T) *fakeAS {
 
 const testResource = "https://mcp.example.com"
 
-func newValidatorAgainst(f *fakeAS) *Validator {
-	return New(testResource,
+func newValidatorAgainst(f *fakeAS, extra ...Option) *Validator {
+	return New(testResource, append([]Option{
 		WithJWKS(f.jwksServer.URL),
 		WithIntrospection(f.introspectServer.URL, "client-1", "secret-1"),
-		WithCacheTTL(60*time.Second),
-	)
+		WithCacheTTL(60 * time.Second),
+	}, extra...)...)
 }
 
 func TestMiddleware_SignaturePass(t *testing.T) {
