@@ -1,0 +1,65 @@
+name: mysql-contract
+
+# Runs the MySQL storage contract (storagetest suites, capability suites, audit chain, kv adapter,
+# concurrent claim races and the 0034 upgrade test) against a real MySQL 8.4 server. The tests skip
+# unless THEAUTH_MYSQL_CONTRACT=1, so the ordinary unit job never needs a database.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "storage/mysql/**"
+      - "storagetest/**"
+      - "kv/**"
+      - "otp/**"
+      - "go.mod"
+      - ".github/workflows/mysql-contract.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "storage/mysql/**"
+      - "storagetest/**"
+      - "kv/**"
+      - "otp/**"
+      - "go.mod"
+      - ".github/workflows/mysql-contract.yml"
+  schedule:
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  mysql:
+    name: mysql 8.4
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      GOWORK: off
+      THEAUTH_MYSQL_CONTRACT: "1"
+      THEAUTH_TEST_MYSQL_DSN: root:my-${{ github.run_id }}@tcp(127.0.0.1:3306)/theauth_test?parseTime=true&loc=UTC
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: my-${{ github.run_id }}
+          MYSQL_DATABASE: theauth_test
+        ports: ["3306:3306"]
+        options: >-
+          --health-cmd "mysqladmin ping -h 127.0.0.1"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 12
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version: "1.25"
+      # -p 1 and -count=1: every test in the package resets the same schema, so packages and
+      # cached results must not overlap.
+      - name: MySQL contract
+        run: go test -race -count=1 -p 1 -timeout=900s ./storage/mysql/...

@@ -23,6 +23,13 @@ const (
 // order, under a GET_LOCK advisory lock so replicas do not race on first boot. Call it
 // before constructing a Store.
 func Migrate(ctx context.Context, db *sql.DB) error {
+	return migrateBefore(ctx, db, "")
+}
+
+// migrateBefore is Migrate that stops before the migration whose version equals stopBefore (an empty
+// stopBefore applies everything). Tests use it to build a database as an older release left it and
+// then run the real upgrade over existing data.
+func migrateBefore(ctx context.Context, db *sql.DB, stopBefore string) error {
 	files, err := loadMigrationFiles()
 	if err != nil {
 		return fmt.Errorf("theauth mysql migrate: load embedded migrations: %w", err)
@@ -48,6 +55,9 @@ func Migrate(ctx context.Context, db *sql.DB) error {
 	}
 
 	for _, f := range files {
+		if stopBefore != "" && strings.HasPrefix(f.version, stopBefore) {
+			break
+		}
 		if _, ok := applied[f.version]; ok {
 			continue
 		}
