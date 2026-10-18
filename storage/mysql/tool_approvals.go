@@ -35,10 +35,10 @@ func oneRow(res sql.Result, err error, op string) (bool, error) {
 
 func (s *Store) OpenToolApproval(ctx context.Context, a theauth.ToolApproval) error {
 	_, err := s.db.ExecContext(ctx, `
-INSERT INTO theauth_tool_approvals (id, agent_id, action, resource, requirement, tier, reason, opened_by, arguments_hash, created_at, expires_at)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+INSERT INTO theauth_tool_approvals (id, agent_id, action, resource, requirement, tier, reason, opened_by, arguments_hash, created_at, expires_at, required_approvals)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		a.ID, a.AgentID, a.Action, a.Resource, a.Requirement, a.Tier, a.Reason, a.OpenedBy, a.ArgumentsHash,
-		a.CreatedAt.UTC(), toolApprovalExpiry(a.ExpiresAt))
+		a.CreatedAt.UTC(), toolApprovalExpiry(a.ExpiresAt), max(a.RequiredApprovals, 1))
 	if err != nil {
 		return fmt.Errorf("mysql: open tool approval: %w", err)
 	}
@@ -49,7 +49,7 @@ func (s *Store) ApproveToolApproval(ctx context.Context, id, approver string, no
 	res, err := s.db.ExecContext(ctx, `
 UPDATE theauth_tool_approvals SET approved_at = ?, approver = ?
 WHERE id = ? AND approved_at IS NULL AND consumed_at IS NULL AND denied_at IS NULL AND expired_at IS NULL
-  AND (expires_at IS NULL OR expires_at > ?)`,
+  AND required_approvals <= 1 AND (expires_at IS NULL OR expires_at > ?)`,
 		now.UTC(), approver, id, now.UTC())
 	return oneRow(res, err, "approve tool approval")
 }

@@ -25,11 +25,18 @@ type ToolApproval struct {
 	// edited after the request is opened. Empty means the request is not argument bound (a row
 	// opened before the column existed), which any presented arguments satisfy.
 	ArgumentsHash string
-	CreatedAt     time.Time
-	ExpiresAt     time.Time
-	ApprovedAt    time.Time
-	ConsumedAt    time.Time
-	DeniedAt      time.Time
+	// RequiredApprovals is how many distinct approvers the request needs before ApprovedAt is
+	// set. 0 and 1 both mean one approver, the ordinary flow. Above 1 only VoteToolApproval can
+	// approve the request: ApproveToolApproval refuses it, so the quorum cannot be skipped.
+	RequiredApprovals int
+	// Approvers lists the approvers counted so far, oldest first. Only the stores fill it, and
+	// only for a request with RequiredApprovals above 1.
+	Approvers  []string
+	CreatedAt  time.Time
+	ExpiresAt  time.Time
+	ApprovedAt time.Time
+	ConsumedAt time.Time
+	DeniedAt   time.Time
 	// ExpiredAt is set once by ExpireToolApproval, the first time an overdue undecided request
 	// is noticed. Expiry is also derived from ExpiresAt, so a request past ExpiresAt is expired
 	// whether or not this is set.
@@ -70,4 +77,40 @@ type ToolApprovalExpiryStorage interface {
 	// ListOverdueToolApprovals returns undecided, unmarked requests past ExpiresAt, oldest first,
 	// at most limit (0 means 100).
 	ListOverdueToolApprovals(ctx context.Context, now time.Time, limit int) ([]ToolApproval, error)
+}
+
+// ToolApprovalVoteOutcome is what VoteToolApproval did with one approver's approval.
+type ToolApprovalVoteOutcome string
+
+// Vote outcomes.
+const (
+	// VoteCounted means the approval was recorded and the quorum is not complete yet.
+	VoteCounted ToolApprovalVoteOutcome = "counted"
+	// VoteCompleted means the approval was recorded and the request is now approved.
+	VoteCompleted ToolApprovalVoteOutcome = "completed"
+	// VoteDuplicate means this approver already approved the request. Nothing was recorded.
+	VoteDuplicate ToolApprovalVoteOutcome = "duplicate"
+	// VoteRequester means the approver opened the request. Nothing was recorded.
+	VoteRequester ToolApprovalVoteOutcome = "requester"
+	// VoteNotPending means the request is unknown, decided, spent, expired, or needs only one
+	// approver (use ApproveToolApproval for those). Nothing was recorded.
+	VoteNotPending ToolApprovalVoteOutcome = "not_pending"
+)
+
+// ToolApprovalVote is the result of VoteToolApproval. Approvers lists every approver counted
+// after the call, oldest first.
+type ToolApprovalVote struct {
+	Outcome   ToolApprovalVoteOutcome
+	Approvers []string
+}
+
+// ToolApprovalQuorumStorage is the optional capability behind quorum (two person) approvals.
+// Every built in store implements it. VoteToolApproval counts approver's approval toward a
+// request with RequiredApprovals above 1 and approves it when the last one lands. It must be
+// atomic: each approver counts once even under concurrent calls (a primary key on
+// (approval_id, approver)), a vote is accepted only while the request is undecided, unspent and
+// unexpired (so expiry covers the whole quorum), the requester (OpenedBy, when set) never counts,
+// and exactly one concurrent caller completes the quorum.
+type ToolApprovalQuorumStorage interface {
+	VoteToolApproval(ctx context.Context, id, approver string, now time.Time) (ToolApprovalVote, error)
 }

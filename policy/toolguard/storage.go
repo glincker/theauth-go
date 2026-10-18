@@ -33,6 +33,7 @@ type StorageApprovals struct {
 	now     func() time.Time
 	audit   AuditFunc
 	onEvent func(ApprovalEvent)
+	quorum  func(Call, policy.Escalation) int
 }
 
 // StorageApprovalsOption configures NewStorageApprovals.
@@ -65,6 +66,17 @@ func WithApprovalEvents(fn func(ApprovalEvent)) StorageApprovalsOption {
 	return func(a *StorageApprovals) { a.onEvent = fn }
 }
 
+// MaxRequiredApprovals is the largest quorum WithApprovalQuorum accepts.
+const MaxRequiredApprovals = 10
+
+// WithApprovalQuorum sets how many distinct approvers a request needs, chosen per call, for
+// example two for a dangerous robot command and one for everything else. A result below 1 reads
+// as 1. A result above MaxRequiredApprovals makes Open fail, because a quorum that large is almost
+// always a mistake. The default is one approver, which is the ordinary flow.
+func WithApprovalQuorum(fn func(Call, policy.Escalation) int) StorageApprovalsOption {
+	return func(a *StorageApprovals) { a.quorum = fn }
+}
+
 // NewStorageApprovals returns an Approvals over store. Use the sqlite,
 // postgres, mysql or memory Store, all of which implement the capability.
 func NewStorageApprovals(store theauth.ToolApprovalStorage, opts ...StorageApprovalsOption) *StorageApprovals {
@@ -87,9 +99,17 @@ func (a *StorageApprovals) Open(ctx context.Context, c Call, e policy.Escalation
 		return "", err
 	}
 	now := a.now().UTC()
+	required := 1
+	if a.quorum != nil {
+		required = max(a.quorum(c, e), 1)
+	}
+	if required > MaxRequiredApprovals {
+		return "", fmt.Errorf("toolguard: quorum of %d is above the maximum of %d", required, MaxRequiredApprovals)
+	}
 	req := theauth.ToolApproval{
 		ID: hex.EncodeToString(b[:]), AgentID: c.AgentID, Action: c.action(), Resource: c.resource(),
 		Requirement: string(e.Requirement), Tier: e.Tier, Reason: e.Reason, ArgumentsHash: hash, CreatedAt: now,
+		OpenedBy: c.OpenedBy, RequiredApprovals: required,
 	}
 	if a.ttl > 0 {
 		req.ExpiresAt = now.Add(a.ttl)
@@ -116,6 +136,11 @@ var (
 	ErrApprovalExpired    = errors.New("toolguard: approval has expired")
 	ErrDecidedByRequired  = errors.New("toolguard: decidedBy is required")
 	ErrDecisionInvalid    = errors.New("toolguard: decision must be approve or deny")
+	// ErrRequesterCannotApprove means the approver opened the request (or is the agent), which a
+	// quorum request never allows.
+	ErrRequesterCannotApprove = errors.New("toolguard: the requester cannot approve a request that needs a quorum")
+	// ErrDuplicateApprover means this approver already approved the request.
+	ErrDuplicateApprover = errors.New("toolguard: this approver already approved the request")
 	// ErrStoreUnsupported means the store lacks theauth.ToolApprovalAdminStorage.
 	ErrStoreUnsupported = errors.New("toolguard: store does not implement ToolApprovalAdminStorage")
 )
@@ -159,6 +184,9 @@ func (a *StorageApprovals) Decide(ctx context.Context, id string, in DecideInput
 	now := a.now().UTC()
 	if err := a.undecided(ctx, cur, now); err != nil {
 		return cur, err
+	}
+	if in.Decision == DecisionApprove && cur.RequiredApprovals > 1 {
+		return a.voteQuorum(ctx, admin, cur, in.DecidedBy, now)
 	}
 	var won bool
 	if in.Decision == DecisionApprove {

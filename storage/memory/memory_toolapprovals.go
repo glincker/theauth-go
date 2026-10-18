@@ -13,6 +13,7 @@ var (
 	_ theauth.ToolApprovalStorage       = (*Store)(nil)
 	_ theauth.ToolApprovalAdminStorage  = (*Store)(nil)
 	_ theauth.ToolApprovalExpiryStorage = (*Store)(nil)
+	_ theauth.ToolApprovalQuorumStorage = (*Store)(nil)
 )
 
 func (s *Store) OpenToolApproval(_ context.Context, a theauth.ToolApproval) error {
@@ -24,6 +25,7 @@ func (s *Store) OpenToolApproval(_ context.Context, a theauth.ToolApproval) erro
 	if _, dup := s.toolApprovals[a.ID]; dup {
 		return fmt.Errorf("memory: tool approval %s already exists", a.ID)
 	}
+	a.Approvers = nil
 	s.toolApprovals[a.ID] = a
 	return nil
 }
@@ -36,7 +38,7 @@ func (s *Store) ApproveToolApproval(_ context.Context, id, approver string, now 
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	a, ok := s.toolApprovals[id]
-	if !ok || !a.ApprovedAt.IsZero() || !toolApprovalLive(a, now) {
+	if !ok || !a.ApprovedAt.IsZero() || !toolApprovalLive(a, now) || a.RequiredApprovals > 1 {
 		return false, nil
 	}
 	a.ApprovedAt, a.Approver = now, approver
@@ -63,7 +65,41 @@ func (s *Store) GetToolApproval(_ context.Context, id string) (theauth.ToolAppro
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	a, ok := s.toolApprovals[id]
-	return a, ok, nil
+	return copyApprovers(a), ok, nil
+}
+
+// copyApprovers returns a with its own Approvers slice, so a caller cannot edit the stored one.
+func copyApprovers(a theauth.ToolApproval) theauth.ToolApproval {
+	if a.Approvers != nil {
+		a.Approvers = append([]string(nil), a.Approvers...)
+	}
+	return a
+}
+
+// VoteToolApproval implements theauth.ToolApprovalQuorumStorage under the store mutex.
+func (s *Store) VoteToolApproval(_ context.Context, id, approver string, now time.Time) (theauth.ToolApprovalVote, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	a, ok := s.toolApprovals[id]
+	if !ok || a.RequiredApprovals <= 1 || !a.ApprovedAt.IsZero() || !toolApprovalLive(a, now) {
+		return theauth.ToolApprovalVote{Outcome: theauth.VoteNotPending, Approvers: append([]string(nil), a.Approvers...)}, nil
+	}
+	if a.OpenedBy != "" && a.OpenedBy == approver {
+		return theauth.ToolApprovalVote{Outcome: theauth.VoteRequester, Approvers: append([]string(nil), a.Approvers...)}, nil
+	}
+	for _, have := range a.Approvers {
+		if have == approver {
+			return theauth.ToolApprovalVote{Outcome: theauth.VoteDuplicate, Approvers: append([]string(nil), a.Approvers...)}, nil
+		}
+	}
+	a.Approvers = append(append([]string(nil), a.Approvers...), approver)
+	outcome := theauth.VoteCounted
+	if len(a.Approvers) >= a.RequiredApprovals {
+		a.ApprovedAt, a.Approver = now, approver
+		outcome = theauth.VoteCompleted
+	}
+	s.toolApprovals[id] = a
+	return theauth.ToolApprovalVote{Outcome: outcome, Approvers: append([]string(nil), a.Approvers...)}, nil
 }
 
 func (s *Store) ListToolApprovals(_ context.Context, limit int) ([]theauth.ToolApproval, error) {
@@ -73,7 +109,7 @@ func (s *Store) ListToolApprovals(_ context.Context, limit int) ([]theauth.ToolA
 	s.mu.Lock()
 	out := make([]theauth.ToolApproval, 0, len(s.toolApprovals))
 	for _, a := range s.toolApprovals {
-		out = append(out, a)
+		out = append(out, copyApprovers(a))
 	}
 	s.mu.Unlock()
 	sort.Slice(out, func(i, j int) bool {

@@ -38,6 +38,7 @@ func TestPostgresCapabilityContracts(t *testing.T) {
 		{"ToolApprovals", func(t *testing.T, s *Store) { storagetest.RunToolApprovals(t, s) }},
 		{"ToolApprovalAdmin", func(t *testing.T, s *Store) { storagetest.RunToolApprovalAdmin(t, s) }},
 		{"ApprovalFlow", func(t *testing.T, s *Store) { storagetest.RunApprovalFlow(t, s) }},
+		{"ToolApprovalQuorum", func(t *testing.T, s *Store) { storagetest.RunToolApprovalQuorum(t, s) }},
 		{"DeviceCodes", func(t *testing.T, s *Store) { storagetest.RunDeviceCodes(t, s) }},
 		{"DeviceAuthorizations", func(t *testing.T, s *Store) { storagetest.RunDeviceAuthorizations(t, s) }},
 		{"RegistrationTokens", func(t *testing.T, s *Store) { storagetest.RunRegistrationTokens(t, s) }},

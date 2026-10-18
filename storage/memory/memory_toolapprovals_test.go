@@ -11,3 +11,5 @@ func TestToolApprovalContract(t *testing.T) { storagetest.RunToolApprovals(t, Ne
 func TestToolApprovalAdminContract(t *testing.T) { storagetest.RunToolApprovalAdmin(t, New()) }
 
 func TestApprovalFlowContract(t *testing.T) { storagetest.RunApprovalFlow(t, New()) }
+
+func TestToolApprovalQuorumContract(t *testing.T) { storagetest.RunToolApprovalQuorum(t, New()) }

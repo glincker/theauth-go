@@ -10,7 +10,7 @@ import (
 )
 
 const toolApprovalColumns = `id, agent_id, action, resource, requirement, tier, reason, approver, opened_by,
-denied_by, arguments_hash, created_at, expires_at, approved_at, consumed_at, denied_at, expired_at`
+denied_by, arguments_hash, created_at, expires_at, approved_at, consumed_at, denied_at, expired_at, required_approvals`
 
 type rowScanner interface{ Scan(dest ...any) error }
 
@@ -21,7 +21,8 @@ func scanToolApproval(r rowScanner) (theauth.ToolApproval, error) {
 		approved, consumed, denied, expiredAtMicro sql.NullInt64
 	)
 	err := r.Scan(&a.ID, &a.AgentID, &a.Action, &a.Resource, &a.Requirement, &a.Tier, &a.Reason, &a.Approver,
-		&a.OpenedBy, &a.DeniedBy, &a.ArgumentsHash, &created, &expires, &approved, &consumed, &denied, &expiredAtMicro)
+		&a.OpenedBy, &a.DeniedBy, &a.ArgumentsHash, &created, &expires, &approved, &consumed, &denied, &expiredAtMicro,
+		&a.RequiredApprovals)
 	if err != nil {
 		return a, err
 	}
@@ -45,7 +46,13 @@ func (s *Store) GetToolApproval(ctx context.Context, id string) (theauth.ToolApp
 	if errors.Is(err, sql.ErrNoRows) {
 		return theauth.ToolApproval{}, false, nil
 	}
-	return a, err == nil, wrap("get tool approval", err)
+	if err != nil {
+		return theauth.ToolApproval{}, false, wrap("get tool approval", err)
+	}
+	if err := s.fillApprovers(ctx, &a); err != nil {
+		return theauth.ToolApproval{}, false, err
+	}
+	return a, true, nil
 }
 
 // ListToolApprovals implements theauth.ToolApprovalAdminStorage.
@@ -58,6 +65,19 @@ func (s *Store) ListToolApprovals(ctx context.Context, limit int) ([]theauth.Too
 }
 
 func (s *Store) queryToolApprovals(ctx context.Context, op, query string, args ...any) ([]theauth.ToolApproval, error) {
+	out, err := s.queryToolApprovalRows(ctx, op, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	for i := range out {
+		if err := s.fillApprovers(ctx, &out[i]); err != nil {
+			return nil, err
+		}
+	}
+	return out, nil
+}
+
+func (s *Store) queryToolApprovalRows(ctx context.Context, op, query string, args ...any) ([]theauth.ToolApproval, error) {
 	rows, err := s.db.QueryContext(ctx, s.q(query), args...)
 	if err != nil {
 		return nil, wrap(op, err)

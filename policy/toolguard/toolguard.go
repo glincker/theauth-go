@@ -147,6 +147,9 @@ func limitCode(err error) policy.DecisionCode {
 type Call struct {
 	AgentID string
 	Tool    string
+	// OpenedBy is the human or service that asked for the action. It is stored on an approval
+	// request and never counts as an approver of a quorum request. Empty means unknown.
+	OpenedBy string
 	// Action defaults to "execute". Resource defaults to "tool:<Tool>".
 	Action   string
 	Resource string

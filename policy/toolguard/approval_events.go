@@ -25,6 +25,8 @@ const (
 	EventApprovalApproved = "approval.approved"
 	EventApprovalDenied   = "approval.denied"
 	EventApprovalExpired  = "approval.expired"
+	// EventApprovalVote is sent after each approval that does not complete a quorum.
+	EventApprovalVote = "approval.vote"
 )
 
 // Audit actions StorageApprovals writes through its audit function. The first three also exist
@@ -51,9 +53,13 @@ type ApprovalEvent struct {
 	ArgumentsHash string
 	// DecidedBy is the human who approved or denied. Empty for pending and expired.
 	DecidedBy string
-	ExpiresAt time.Time
-	CreatedAt time.Time
-	At        time.Time
+	// RequiredApprovals is how many distinct approvers the request needs (1 for the ordinary
+	// flow). ApprovalsReceived is how many are counted so far.
+	RequiredApprovals int
+	ApprovalsReceived int
+	ExpiresAt         time.Time
+	CreatedAt         time.Time
+	At                time.Time
 }
 
 // eventCodes mirrors the TypeScript decision event shape: pending is approval_pending, an
@@ -63,6 +69,7 @@ var eventCodes = map[string]policy.DecisionCode{
 	EventApprovalApproved: policy.CodeApprovalGranted,
 	EventApprovalDenied:   policy.CodeApprovalDenied,
 	EventApprovalExpired:  policy.CodeApprovalExpired,
+	EventApprovalVote:     policy.CodeApprovalPending,
 }
 
 // AuditFunc records one audit row. (*theauth.TheAuth).EmitAudit fits.
@@ -75,6 +82,7 @@ func (a *StorageApprovals) emit(typ string, ap theauth.ToolApproval, decidedBy s
 	ev := ApprovalEvent{
 		Type: typ, Code: eventCodes[typ], ApprovalID: ap.ID, AgentID: ap.AgentID, Action: ap.Action,
 		Resource: ap.Resource, ArgumentsHash: ap.ArgumentsHash, DecidedBy: decidedBy,
+		RequiredApprovals: max(ap.RequiredApprovals, 1), ApprovalsReceived: len(ap.Approvers),
 		ExpiresAt: ap.ExpiresAt, CreatedAt: ap.CreatedAt, At: a.now().UTC(),
 	}
 	defer func() {
@@ -88,6 +96,11 @@ func (a *StorageApprovals) emit(typ string, ap theauth.ToolApproval, decidedBy s
 // record writes one audit row. A failed or missing audit never fails the approval step, which
 // is already committed in the store.
 func (a *StorageApprovals) record(ctx context.Context, action string, ap theauth.ToolApproval, actor, approver string) {
+	a.recordWith(ctx, action, ap, actor, approver, nil)
+}
+
+// recordWith is record with extra metadata keys, used for quorum progress.
+func (a *StorageApprovals) recordWith(ctx context.Context, action string, ap theauth.ToolApproval, actor, approver string, extra map[string]any) {
 	if a.audit == nil {
 		return
 	}
@@ -102,6 +115,9 @@ func (a *StorageApprovals) record(ctx context.Context, action string, ap theauth
 		md.ApproverID = approver
 	}
 	meta := map[string]any{"approval_id": ap.ID, "action": ap.Action, "resource": ap.Resource}
+	for k, v := range extra {
+		meta[k] = v
+	}
 	defer func() {
 		if r := recover(); r != nil {
 			slog.Error("toolguard: approval audit function panicked", "action", action, "panic", r)
@@ -139,6 +155,9 @@ type webhookPayload struct {
 	DecidedBy     string `json:"decidedBy,omitempty"`
 	ExpiresAt     string `json:"expiresAt,omitempty"`
 	CreatedAt     string `json:"createdAt"`
+	// RequiredApprovals and ApprovalsReceived show quorum progress (1 and 0 for the ordinary flow).
+	RequiredApprovals int `json:"requiredApprovals"`
+	ApprovalsReceived int `json:"approvalsReceived"`
 }
 
 // ErrWebhookURL is returned by NewApprovalWebhook for a missing or non http(s) URL.
@@ -176,7 +195,8 @@ func deliverWebhook(client *http.Client, target string, secret []byte, ev Approv
 	p := webhookPayload{
 		ApprovalID: ev.ApprovalID, AgentID: ev.AgentID, Action: ev.Action, Resource: ev.Resource,
 		ArgumentsHash: ev.ArgumentsHash, Code: string(ev.Code), DecidedBy: ev.DecidedBy,
-		CreatedAt: ev.CreatedAt.UTC().Format(time.RFC3339Nano),
+		CreatedAt:         ev.CreatedAt.UTC().Format(time.RFC3339Nano),
+		RequiredApprovals: ev.RequiredApprovals, ApprovalsReceived: ev.ApprovalsReceived,
 	}
 	if !ev.ExpiresAt.IsZero() {
 		p.ExpiresAt = ev.ExpiresAt.UTC().Format(time.RFC3339Nano)

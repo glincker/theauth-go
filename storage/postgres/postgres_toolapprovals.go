@@ -24,10 +24,10 @@ func nullableTime(t time.Time) pgtype.Timestamptz {
 
 func (s *Store) OpenToolApproval(ctx context.Context, a theauth.ToolApproval) error {
 	_, err := s.pool.Exec(ctx, `
-INSERT INTO theauth_tool_approvals (id, agent_id, action, resource, requirement, tier, reason, opened_by, arguments_hash, created_at, expires_at)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+INSERT INTO theauth_tool_approvals (id, agent_id, action, resource, requirement, tier, reason, opened_by, arguments_hash, created_at, expires_at, required_approvals)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
 		a.ID, a.AgentID, a.Action, a.Resource, a.Requirement, a.Tier, a.Reason, a.OpenedBy, a.ArgumentsHash,
-		a.CreatedAt.UTC(), nullableTime(a.ExpiresAt))
+		a.CreatedAt.UTC(), nullableTime(a.ExpiresAt), max(a.RequiredApprovals, 1))
 	if err != nil {
 		return fmt.Errorf("postgres: open tool approval: %w", err)
 	}
@@ -38,7 +38,7 @@ func (s *Store) ApproveToolApproval(ctx context.Context, id, approver string, no
 	tag, err := s.pool.Exec(ctx, `
 UPDATE theauth_tool_approvals SET approved_at = $1, approver = $2
 WHERE id = $3 AND approved_at IS NULL AND consumed_at IS NULL AND denied_at IS NULL AND expired_at IS NULL
-  AND (expires_at IS NULL OR expires_at > $1)`,
+  AND required_approvals <= 1 AND (expires_at IS NULL OR expires_at > $1)`,
 		now.UTC(), approver, id)
 	if err != nil {
 		return false, fmt.Errorf("postgres: approve tool approval: %w", err)

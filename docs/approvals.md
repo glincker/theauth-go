@@ -20,10 +20,10 @@ The handler does not invent a session system. `Authenticate` and `IsAdmin` are y
 | Route | Result |
 | --- | --- |
 | `GET /approvals?status=pending` | `{"approvals":[...]}`. Status is `pending`, `approved`, `denied`, `expired` or `consumed`; empty means all. |
-| `POST /approvals/{id}/approve` | 200 with the updated approval |
+| `POST /approvals/{id}/approve` | 200 with the updated approval. For a quorum request the status stays `pending` until the last approver (see Quorum approvals below) |
 | `POST /approvals/{id}/deny` | 200 with the updated approval |
 
-Errors are RFC 7807 problem+json: 401 unauthenticated, 403 not an admin or self-approval, 404 unknown id, 409 already decided, spent or expired.
+Errors are RFC 7807 problem+json: 401 unauthenticated, 403 not an admin or self-approval, 404 unknown id, 409 already decided, spent or expired (or, for a quorum request, this admin already approved).
 
 ## Rules
 
@@ -105,9 +105,42 @@ With `WithApprovalAudit`, each step writes a row: `approval.request`, `tool_appr
 
 With `WithApprovalEvents`, a sink sees `approval.pending`, `approval.approved`, `approval.denied` and `approval.expired`, each with a decision code (`approval_pending`, `approval_granted`, `approval_denied`, `approval_expired`) and the hash of the arguments, never the arguments. `NewApprovalWebhook` posts `approval.pending` to a URL (pass `Types` to send more). Delivery is asynchronous and best effort, and the optional secret signs the body in the `X-TheAuth-Signature` header as `sha256=<hex>`. The URL is operator configuration: do not build it from request data.
 
+### Quorum approvals (two person rule)
+
+A request can need several distinct approvers before it is approved. The default is one, so nothing changes until you ask. Choose the quorum per call with `WithApprovalQuorum`, for example two approvers for a dangerous robot command:
+
+```go
+ap := toolguard.NewStorageApprovals(store,
+    toolguard.WithApprovalTTL(2*time.Minute),
+    toolguard.WithApprovalQuorum(func(c toolguard.Call, _ policy.Escalation) int {
+        if c.Tool == "arm.move" || c.Tool == "brake.release" {
+            return 2
+        }
+        return 1
+    }))
+
+// Set Call.OpenedBy to the human or service that asked, so it can never be an approver.
+id, _ := ap.Open(ctx, toolguard.Call{AgentID: "robot-1", Tool: "arm.move", OpenedBy: "fleet-owner"}, esc)
+
+_ = ap.Approve(ctx, id, "operator-a") // counted, the request is still pending
+_ = ap.Approve(ctx, id, "operator-b") // quorum complete, the request is approved
+```
+
+The rules:
+
+- Approvers must differ from the requester (`Call.OpenedBy`), from the agent, and from each other. `Decide` returns `ErrRequesterCannotApprove` or `ErrDuplicateApprover`.
+- One denial ends the request, so any approver can veto.
+- Expiry covers the whole quorum. A request that expires before the last approver acts is expired, and the earlier approvals do nothing.
+- Each approval writes its own `tool_approval.approved` audit row with `approvals_received`, `approvals_required` and `quorum_complete`, and sends `approval.vote` (code `approval_pending`) until the last one lands, then `approval.approved`. The webhook payload carries `requiredApprovals` and `approvalsReceived`. Pass `Types` to `NewApprovalWebhook` to receive `approval.vote`.
+- Until the quorum is complete, `Spend` answers `approval_pending`. After it, the usual rules hold: one spend, bound to the arguments, same expiry.
+- In the HTTP inbox, `POST /approvals/{id}/approve` answers 200 with `status: "pending"` and `approvalsReceived` until the last approver. A repeat approver gets 409 `approvals.duplicate_approver`, and the requester gets 403 whatever `AllowSelfApproval` says.
+
+Stores implement `theauth.ToolApprovalQuorumStorage`. `VoteToolApproval` is two conditional statements: an INSERT that only lands while the request is live and the approver is not the requester, with a primary key on (approval_id, approver) that refuses a second vote from the same approver, then an UPDATE that approves the request only when the vote count has reached `required_approvals`. `ApproveToolApproval` refuses a quorum request, so the single approver path cannot skip it. `storagetest.RunToolApprovalQuorum` checks all of this, including races, against every store.
+
 ### Upgrading
 
 - `StorageApprovals` and `MemoryApprovals` no longer report `approval_invalid`. Code that matched it should match the specific codes, or `toolguard.CodeOf(err).Permits()` and the `ApprovalRequiredError` type.
 - A retry must pass the same arguments as the first call. A flow that put a timestamp or nonce in the arguments needs to keep it out of `Call.Args`.
 - A pending id no longer opens a second request, and a denied id opens none.
 - Run the SQL migration before deploying: SQLite 0037, Postgres 0034, MySQL 0032.
+- Quorum approvals need the SQL migration too: SQLite 0040, Postgres 0037, MySQL 0037 (a `required_approvals` column and the `theauth_tool_approval_votes` table). They are additive and default to one approver.
