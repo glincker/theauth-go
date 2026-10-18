@@ -33,6 +33,11 @@ var (
 	// ErrBadAuditOrder is returned when AuditQuery.Order is neither "", "asc" nor "desc".
 	ErrBadAuditOrder = errors.New("theauth: invalid audit order")
 
+	// ErrAuditOrderUnsupported is returned when an audit query asks for ascending order, an event
+	// filter or a write-order cursor and the storage backend does not declare write order support
+	// (AuditOrderSupported() bool). The query is refused instead of silently ignoring the filter.
+	ErrAuditOrderUnsupported = errors.New("theauth: audit storage backend does not support write order, event filters or c1 cursors")
+
 	// ErrLastOwner is returned when an org member removal would leave the
 	// organization with zero owners.
 	ErrLastOwner = errors.New("theauth: cannot remove the last owner")

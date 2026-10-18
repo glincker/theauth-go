@@ -451,9 +451,15 @@ func (a *TheAuth) VerifyAuditChain(ctx context.Context) (AuditChainResult, error
 }
 
 // QueryAudit returns up to q.Limit events and a cursor for the next page. It performs no
-// authorization; callers check.
+// authorization; callers check. q.Order is "desc" (default) or "asc" and q.Event filters by shared
+// event name; both, and "c1." cursors, need a backend that declares AuditOrderSupported() true,
+// otherwise it returns ErrAuditOrderUnsupported. An unknown order returns ErrBadAuditOrder and a
+// cursor that does not decode for the order returns ErrBadCursor.
 func (a *TheAuth) QueryAudit(ctx context.Context, q AuditQuery) ([]AuditEvent, string, error) {
 	if a.auditSvc == nil {
+		if err := audit.CheckQuery(a.storage, q); err != nil {
+			return nil, "", err
+		}
 		return a.storage.QueryAuditEvents(ctx, q)
 	}
 	return a.auditSvc.Query(ctx, q)

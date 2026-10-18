@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/glincker/theauth-go/v2/internal/audit"
 	"github.com/oklog/ulid/v2"
 )
 
@@ -40,4 +41,21 @@ func DecodeCursor(s string) (time.Time, ulid.ULID, error) {
 		return time.Time{}, ulid.ULID{}, fmt.Errorf("cursor ulid: %w", err)
 	}
 	return time.UnixMicro(micros), id, nil
+}
+
+// EncodeAuditCursor returns the write-order keyset cursor for the audit endpoint: the opaque
+// "c1." string for the last row of a page, bound to order ("asc" or "desc"). Clients treat it as
+// opaque and send it back as the cursor query parameter.
+func EncodeAuditCursor(recordedAtUs int64, id ulid.ULID, order string) string {
+	return audit.EncodeCursor(audit.Cursor{RecordedAtUs: recordedAtUs, ID: id, Order: order})
+}
+
+// DecodeAuditCursor reverses EncodeAuditCursor and requires the cursor to belong to order. Every
+// failure wraps theauth.ErrBadCursor, which handlers map to a 400 with code "pagination.bad_cursor".
+func DecodeAuditCursor(s, order string) (recordedAtUs int64, id ulid.ULID, err error) {
+	c, err := audit.DecodeCursor(s, order)
+	if err != nil {
+		return 0, ulid.ULID{}, err
+	}
+	return c.RecordedAtUs, c.ID, nil
 }

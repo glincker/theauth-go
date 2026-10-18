@@ -6,6 +6,7 @@ package audit
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"strings"
 	"sync"
@@ -111,6 +112,11 @@ type AuditMetadata struct {
 	ApproverID      string
 	DelegationChain []string
 	InputProvenance map[string]any
+
+	// Event overrides the event derived from the action (EventForAction) when it is a name in the
+	// closed vocabulary. An unknown name is ignored, not stored, so a typo cannot create a value no
+	// filter finds; tests catch it through ValidateEvent.
+	Event string
 }
 
 type ctxKeyAuditMetadataT struct{}
@@ -350,6 +356,8 @@ func (s *Service) emit(ctx context.Context, action string, target models.TargetR
 		TargetID:   target.ID,
 		Metadata:   metadata,
 		CreatedAt:  time.Now(),
+		// Not hashed. Unmapped actions keep an empty event; a context Event overrides below.
+		Event: EventForAction(action),
 	}
 	// The custom redactor sees the raw metadata first. The default redactor runs afterwards unconditionally.
 	if s.cfg.CustomRedactor != nil {
@@ -392,6 +400,9 @@ func (s *Service) emit(ctx context.Context, action string, target models.TargetR
 		evt.ActorID = md.ActorID
 		evt.PolicyVersion = md.PolicyVersion
 		evt.ApproverID = md.ApproverID
+		if ValidEvent(md.Event) {
+			evt.Event = md.Event
+		}
 		if len(md.DelegationChain) > 0 {
 			evt.DelegationChain = append([]string(nil), md.DelegationChain...)
 		}
@@ -428,7 +439,43 @@ func (s *Service) Query(ctx context.Context, q models.AuditQuery) ([]models.Audi
 	if q.Limit > 200 {
 		q.Limit = 200
 	}
+	if err := CheckQuery(s.storage, q); err != nil {
+		return nil, "", err
+	}
 	return s.storage.QueryAuditEvents(ctx, q)
+}
+
+// orderCapable is the optional flag a storage backend implements once it serves write order
+// (storagetest.AuditOrderCapable).
+type orderCapable interface{ AuditOrderSupported() bool }
+
+// CheckQuery validates q before it reaches store: it returns ErrBadAuditOrder for an unknown order,
+// ErrBadCursor for a "c1." cursor that does not decode for the query's order (or a legacy cursor
+// combined with asc), and ErrAuditOrderUnsupported when the query needs write order support
+// (asc, an Event filter or a "c1." cursor) and store does not declare AuditOrderSupported() true.
+// A plain descending query with no event filter works on every backend.
+func CheckQuery(store any, q models.AuditQuery) error {
+	order, ok := NormalizeOrder(q.Order)
+	if !ok {
+		return models.ErrBadAuditOrder
+	}
+	legacy := IsLegacyCursor(q.After)
+	if legacy && order != models.AuditOrderDesc {
+		return fmt.Errorf("%w: legacy cursor needs desc order", models.ErrBadCursor)
+	}
+	if q.After != "" && !legacy {
+		if _, err := DecodeCursor(q.After, order); err != nil {
+			return err
+		}
+	}
+	needs := order == models.AuditOrderAsc || q.Event != "" || (q.After != "" && !legacy)
+	if !needs {
+		return nil
+	}
+	if c, ok := store.(orderCapable); ok && c.AuditOrderSupported() {
+		return nil
+	}
+	return models.ErrAuditOrderUnsupported
 }
 
 // Counters snapshots the four runtime counters. The root Stats() forwarder
@@ -569,6 +616,7 @@ func (s *Service) gapMarker(n uint64) models.AuditEvent {
 		ID:         ulid.New(),
 		Action:     GapMarkerAction,
 		TargetType: "audit",
+		Event:      EventForAction(GapMarkerAction),
 		Metadata: map[string]any{
 			"dropped":         n,
 			"firstDropped":    first.Format(time.RFC3339Nano),

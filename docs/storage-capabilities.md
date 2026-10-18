@@ -51,6 +51,23 @@ Postgres migration 0032 (`audit_write_order`) adds nullable `recorded_at_us bigi
 
 The audit hash chain is what `VerifyAuditChain` and the `audit/checkpoint` package read. The memory store returns an explicit unsupported result, never a pass.
 
+### Test vectors for other implementations
+
+`internal/audit/testdata/chain-vectors.json` pins the Go chain hash (format `go-v1`, payload `v` 1) so another implementation can check itself without this library. Chain rows are exported as the JSON of `AuditEvent` (camelCase keys, `createdAt` as RFC 3339, `chainSeq`, `prevHash`, `hash`). The hashed bytes are not that JSON: they are built as follows.
+
+1. Take the row's pseudonyms: `HMAC-SHA256(secret, "theauth.audit.pseudonym.v1:" + id)` in lowercase hex for the actor user id, subject, actor and approver ids, and `""` for an empty id. The actor session id is hashed raw.
+2. Build a JSON object with these 21 keys in this exact order: `v`, `chainKey`, `seq`, `prev`, `id`, `org`, `actorUserPseudonym`, `actorSession`, `action`, `targetType`, `targetId`, `metadata`, `ip`, `userAgent`, `createdAt`, `subjectPseudonym`, `actorPseudonym`, `policyVersion`, `approverPseudonym`, `delegationChain`, `inputProvenance`. `v` is 1, `seq` and `createdAt` are JSON integers (`createdAt` is microseconds since the Unix epoch in UTC), `chainKey` and `org` are the organization id (empty for the global chain), `prev` is the previous row's hash (empty for seq 1), and every other value is a string. A missing value is `""`, never null.
+3. `metadata`, `delegationChain` and `inputProvenance` are strings holding compact JSON text: object keys sorted, no whitespace, and `<`, `>`, `&`, U+2028 and U+2029 written as `<`, `>`, `&`, ` `, ` ` (Go `encoding/json`). Null or empty values become `{}`, `[]` and `{}`. The same escaping applies when that text is embedded in the outer object. Non-ASCII characters are otherwise written as raw UTF-8.
+4. The hash is the lowercase hex SHA-256 of the object's bytes. Rows chain by `seq` 1, 2, 3 per `chainKey` and `prev` equal to the previous hash.
+
+Each vector row carries the exact `payload` string next to its `hash`, so a failing verifier can compare bytes. Large `seq` values appear only inside `payload` and in the `hashOnly` rows. The `negative` vectors list the rows to hand a verifier and the `FirstBreak.Reason` it must return (`hash_mismatch`, `prev_hash_mismatch`, `seq_gap`, `pseudonym_mismatch`). Worked example, the first row of the `org-b-no-actors` chain, with the file's secret (bytes `00` to `1f`) not needed because no ids are pseudonymized:
+
+```
+{"v":1,"chainKey":"010000004V000000000000005G","seq":1,"prev":"","id":"010000004V000000000000000H","org":"010000004V000000000000005G","actorUserPseudonym":"","actorSession":"","action":"org.updated","targetType":"org","targetId":"b","metadata":"{\"plan\":\"pro\",\"seats\":5}","ip":"","userAgent":"","createdAt":0,"subjectPseudonym":"","actorPseudonym":"","policyVersion":"","approverPseudonym":"","delegationChain":"[]","inputProvenance":"{}"}
+```
+
+hashes to `382c15bdef785ddc66b146684db6490b5a1ab48ddc48b42a7d0f16fe49b5153e`. The tests never regenerate the file by default; `THEAUTH_UPDATE_VECTORS=1 go test ./internal/audit -run TestChainVectors` rewrites it after an intentional, versioned change.
+
 ## OAuth 2.1 authorization server
 
 `OAuthServerStorage` is one interface that covers clients, authorization codes, refresh tokens, JWKS keys, agents and delegation grants. All four backends implement it. The rows below split it up so you can see where the migrations land.

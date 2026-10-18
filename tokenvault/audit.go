@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/glincker/theauth-go/v2"
+	"github.com/glincker/theauth-go/v2/audit"
 	"github.com/oklog/ulid/v2"
 )
 
@@ -59,6 +60,7 @@ func (s AuditStorageSink) Record(ctx context.Context, e Event) error {
 	return s.Store.InsertAuditEvents(ctx, []theauth.AuditEvent{{
 		ID:         ulid.Make(),
 		Action:     e.Action,
+		Event:      audit.EventForAction(e.Action),
 		TargetType: "vault_credential",
 		TargetID:   e.Provider,
 		SubjectID:  e.UserID,

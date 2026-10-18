@@ -1,10 +1,12 @@
 package admin_test
 
 import (
+	"errors"
 	"testing"
 	"time"
 
 	"github.com/glincker/theauth-go/v2/admin"
+	"github.com/glincker/theauth-go/v2/internal/models"
 	"github.com/oklog/ulid/v2"
 )
 
@@ -68,4 +70,46 @@ func FuzzCursorRoundTrip(f *testing.F) {
 			t.Errorf("id mismatch: %x != %x", id, id2)
 		}
 	})
+}
+
+func TestAuditCursorRoundTrip(t *testing.T) {
+	t.Parallel()
+	id := ulid.Make()
+	for _, order := range []string{"asc", "desc"} {
+		t.Run("order "+order, func(t *testing.T) {
+			c := admin.EncodeAuditCursor(1_700_000_000_123_456, id, order)
+			us, gotID, err := admin.DecodeAuditCursor(c, order)
+			if err != nil {
+				t.Fatalf("DecodeAuditCursor(%q): %v", c, err)
+			}
+			if us != 1_700_000_000_123_456 || gotID != id {
+				t.Fatalf("got (%d, %v)", us, gotID)
+			}
+		})
+	}
+}
+
+func TestAuditCursorRejects(t *testing.T) {
+	t.Parallel()
+	id := ulid.Make()
+	asc := admin.EncodeAuditCursor(10, id, "asc")
+	tests := []struct {
+		name   string
+		cursor string
+		order  string
+	}{
+		{"asc cursor used for desc", asc, "desc"},
+		{"asc cursor used for default order", asc, ""},
+		{"garbage", "not-a-cursor", "desc"},
+		{"legacy cursor", admin.EncodeCursor(time.Unix(1, 0), id), "desc"},
+		{"truncated", asc[:len(asc)-3], "asc"},
+		{"empty", "", "asc"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if _, _, err := admin.DecodeAuditCursor(tc.cursor, tc.order); !errors.Is(err, models.ErrBadCursor) {
+				t.Fatalf("err = %v, want ErrBadCursor", err)
+			}
+		})
+	}
 }
