@@ -109,9 +109,18 @@ func VerifyCheckpoint(c Checkpoint, keys ...PublicKey) Outcome {
 	if c.Alg != algEd25519 {
 		return fail(ReasonUnsupportedAlg)
 	}
+	msg, err := signedBytes(c)
+	if err != nil {
+		return fail(ReasonMalformed)
+	}
+	return verifySignature(c.KeyID, c.Signature, msg, keys)
+}
+
+// verifySignature checks an Ed25519 signature made by the key published under keyID.
+func verifySignature(keyID, signature string, msg []byte, keys []PublicKey) Outcome {
 	var match *PublicKey
 	for i := range keys {
-		if subtle.ConstantTimeCompare([]byte(keys[i].KeyID), []byte(c.KeyID)) == 1 {
+		if subtle.ConstantTimeCompare([]byte(keys[i].KeyID), []byte(keyID)) == 1 {
 			match = &keys[i]
 			break
 		}
@@ -126,13 +135,9 @@ func VerifyCheckpoint(c Checkpoint, keys ...PublicKey) Outcome {
 	if err != nil || len(pub) != publicKeyBytes {
 		return fail(ReasonBadSignature)
 	}
-	sig, err := base64.RawURLEncoding.Strict().DecodeString(c.Signature)
+	sig, err := base64.RawURLEncoding.Strict().DecodeString(signature)
 	if err != nil || len(sig) != signatureBytes {
 		return fail(ReasonBadSignature)
-	}
-	msg, err := signedBytes(c)
-	if err != nil {
-		return fail(ReasonMalformed)
 	}
 	if !ed25519.Verify(pub, msg, sig) {
 		return fail(ReasonBadSignature)

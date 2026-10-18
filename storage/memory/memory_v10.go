@@ -12,6 +12,7 @@ import (
 
 	"github.com/glincker/theauth-go/v2"
 	"github.com/glincker/theauth-go/v2/audit"
+	iaudit "github.com/glincker/theauth-go/v2/internal/audit"
 	"github.com/glincker/theauth-go/v2/storage"
 	"github.com/oklog/ulid/v2"
 )
@@ -30,8 +31,11 @@ type v10State struct {
 	rolePerms         map[theauth.ULID]map[theauth.ULID]struct{} // roleID -> set of permID
 	userRoles         map[memberKey]theauth.UserRole             // {userID, roleID} -> ur (memberKey re-used for the same 2-tuple shape)
 	auditRing         []theauth.AuditEvent
-	auditHead         int  // next write position
-	auditWrapped      bool // ring has wrapped at least once
+	auditHead         int                         // next write position
+	auditWrapped      bool                        // ring has wrapped at least once
+	auditChain        []iaudit.ChainEntry         // chain payload per ring slot, index aligned with auditRing
+	auditHeads        map[string]iaudit.ChainHead // last position per chain key, kept after eviction
+	auditSecret       []byte                      // pseudonym secret, created on first write
 
 	mu sync.Mutex // protects audit ring writes only (Store.mu protects everything else)
 }
@@ -353,13 +357,19 @@ func (s *Store) InsertAuditEvents(_ context.Context, events []theauth.AuditEvent
 			e.CreatedAt = time.Now()
 		}
 		// The store assigns the write-order stamp; a caller value is ignored. The process counter
-		// is enough here because memory keeps no chain heads.
+		// is enough here because one process owns every chain head.
 		e.RecordedAtUs = audit.NextRecordedAtUs(0)
+		ce, err := v.chainEvent(&e)
+		if err != nil {
+			return err
+		}
 		if len(v.auditRing) < auditRingCap {
 			v.auditRing = append(v.auditRing, e)
+			v.auditChain = append(v.auditChain, ce)
 			v.auditHead = len(v.auditRing) % auditRingCap
 			continue
 		}
+		v.auditChain[v.auditHead] = ce
 		v.auditRing[v.auditHead] = e
 		v.auditHead = (v.auditHead + 1) % auditRingCap
 		v.auditWrapped = true

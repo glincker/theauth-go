@@ -45,6 +45,13 @@ func TestPostgresCapabilityContracts(t *testing.T) {
 		{"SessionAuthMethods", func(t *testing.T, s *Store) { storagetest.RunSessionAuthMethods(t, s) }},
 		{"AccountLifecycle", func(t *testing.T, s *Store) { storagetest.RunAccountLifecycle(t, s) }},
 		{"AuditChain", func(t *testing.T, s *Store) { storagetest.RunAuditChain(t, s) }},
+		{"AuditHeadCheckpoint", func(t *testing.T, s *Store) {
+			storagetest.RunAuditHeadCheckpoint(t, s, func(ctx context.Context) error {
+				_, err := s.pool.Exec(ctx, `DELETE FROM audit_events WHERE chain_key = '' AND chain_seq =
+(SELECT max(chain_seq) FROM audit_events WHERE chain_key = '')`)
+				return err
+			})
+		}},
 	}
 	for _, tc := range suites {
 		t.Run(tc.name, func(t *testing.T) { tc.run(t, capsStore(t)) })

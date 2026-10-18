@@ -174,6 +174,18 @@ type ChainRow struct {
 // VerifyChainRows walks rows ordered by (chain key, seq). unchained counts the pre-chain rows.
 // secret may be nil when no chained write happened.
 func VerifyChainRows(next func() (ChainRow, bool, error), secret []byte, unchained int) (models.AuditChainResult, error) {
+	return verifyChainRows(next, secret, unchained, false)
+}
+
+// VerifyChainRowsAnchored is VerifyChainRows for a store that may have dropped the oldest rows of a
+// chain (the memory ring buffer). The first row seen for each chain is trusted for seq and prev, and
+// every later row must link to it. Dropped history is not reported as a break; use a signed head
+// checkpoint to detect loss at the tail.
+func VerifyChainRowsAnchored(next func() (ChainRow, bool, error), secret []byte, unchained int) (models.AuditChainResult, error) {
+	return verifyChainRows(next, secret, unchained, true)
+}
+
+func verifyChainRows(next func() (ChainRow, bool, error), secret []byte, unchained int, anchored bool) (models.AuditChainResult, error) {
 	res := models.AuditChainResult{Supported: true, Unchained: unchained, OK: true}
 	var (
 		curKey   string
@@ -192,6 +204,9 @@ func VerifyChainRows(next func() (ChainRow, bool, error), secret []byte, unchain
 		p := r.Payload
 		if !started || p.ChainKey != curKey {
 			curKey, started, wantSeq, wantPrev = p.ChainKey, true, 1, ""
+			if anchored {
+				wantSeq, wantPrev = p.Seq, p.Prev
+			}
 		}
 		res.Checked++
 		brk := func(reason string) (models.AuditChainResult, error) {

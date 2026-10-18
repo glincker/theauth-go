@@ -33,7 +33,7 @@ If you write your own backend, run the matching suite from `storagetest` against
 | RBAC | `RBACStorage` | Yes | Yes (0016) | Yes (0009) | Yes (0009) |
 | Audit log | `AuditStorage` | Yes | Yes (0005) | Yes (0010) | Yes (0010) |
 | Audit write order (`recorded_at_us`, `event`, `Order`, `c1.` cursors) | `storagetest.AuditOrderCapable` (`AuditOrderSupported() bool`) | Yes | Yes (0036) | Yes (0032) | Yes (0031) |
-| Audit hash chain | `VerifyAuditChain`, `ChainSupported` | No (reports unsupported) | Yes (0017) | Yes (0028) | Yes (0027) |
+| Audit hash chain | `VerifyAuditChain`, `ChainSupported` | Yes (ring buffer, see below) | Yes (0017) | Yes (0028) | Yes (0027) |
 | Shared signals store | `SignalsStore()` | Use `signals.NewMemoryStore` | Yes (0012) | Yes (0026) | No |
 | API tokens | `APITokenStorage` | Yes | Yes (0007) | Yes (0018) | Yes (0018) |
 | Agent id on API tokens | `APITokenAgentStorage` | Yes | Yes (0018) | Yes (0027) | Yes (0026) |
@@ -49,7 +49,17 @@ MySQL migration `0031_audit_write_order` (up only, like every MySQL migration) a
 
 Postgres migration 0032 (`audit_write_order`) adds nullable `recorded_at_us bigint` and `event text` to `audit_events`, a `recorded_at_us` high-water column on `theauth_audit_chain_heads`, and keyset indexes on `(recorded_at_us, id)`, `(organization_id, recorded_at_us, id)` and `(event, recorded_at_us, id)`. The writer assigns `recorded_at_us` inside the append transaction while it holds the chain head row lock: `max(now in microseconds, head stamp + 1, process counter + 1)`, so the stamp is strictly increasing per chain key and a caller supplied value is ignored. The migration backfills `recorded_at_us` from `created_at` in microseconds and `event` from the action mapping (actions without a shared event stay NULL). The column default stamps rows inserted by an older binary during a rolling deploy. Neither column is hashed, so chains written before 0032 verify unchanged. On a very large `audit_events` table you can run the backfill `UPDATE` in batches and create the indexes with `CREATE INDEX CONCURRENTLY` yourself before running `Migrate`, then record the version in `theauth_schema_migrations`.
 
-The audit hash chain is what `VerifyAuditChain` and the `audit/checkpoint` package read. The memory store returns an explicit unsupported result, never a pass.
+The audit hash chain is what `VerifyAuditChain` and the `audit/checkpoint` package read. All four stores use the same row format (`internal/audit` `BuildChainEntry`) and the same verifier. A store that keeps no chain returns an explicit unsupported result, never a pass.
+
+The memory store chains in process. Its audit log is a ring buffer of 10000 rows, so on a busy process the oldest rows are evicted. Verification then anchors on the first retained row of each chain and checks every later link, and eviction is not reported as a break. The pseudonym secret lives in process memory and is lost on restart, so use a SQL store where the chain must outlive the process.
+
+### Head checkpoints (tail truncation)
+
+A verifier that walks rows cannot see rows cut off the end of a chain, since every remaining row still links to the one before. `checkpoint.CreateHeadCheckpoint(ctx, store, checkpoint.HeadOptions{Signer: signer})` signs the last position of every chain (`chainKey`, `seq`, `hash`) with an Ed25519 key, the same `Signer` and public key a Merkle `Checkpoint` uses. Store the result where the log writer cannot rewrite it. Later, `checkpoint.CheckHeadCheckpoint(ctx, store, head, publicKey)` verifies the signature and then reports `chain_truncated` (a chain is shorter than signed or gone) or `head_mismatch` (the row at the signed seq has another hash). Rows and chains added after signing are fine. `VerifyHeadCheckpoint` checks only the signature, offline. Run `VerifyAuditChain` as well, since the head check looks only at the signed positions. On the memory store, a signed seq that has since been evicted from the ring reports `head_mismatch`.
+
+Wire format: JSON `{version: 1, alg: "Ed25519", keyId, timestamp (ms), heads: [{chainKey, seq, hash}], signature}`, heads sorted by `chainKey`. The signature is base64url without padding over the bytes `theauth.audit.head.v1\n` followed by the canonical JSON (sorted keys, no whitespace) of `{version, alg, keyId, timestamp, heads}`. The TypeScript SDK has no verifier for this object yet, so it still cannot see tail truncation of a Go chain. The format is fixed so one can be added without a change here.
+
+The Postgres (0028) and MySQL (0027) chain migrations already exist, and a head checkpoint reads the chain through `QueryAuditEvents`, so no new migration is needed.
 
 ### Test vectors for other implementations
 
@@ -98,7 +108,7 @@ SQLite also has `0029_oauth_cascade_triggers`, which removes a client's codes an
 - MySQL has no CIBA storage and no pushed authorization requests. If you set `AuthorizationServerConfig.CIBA` or `PAR` on a backend without the interface, the endpoints are not mounted and `New` does not fail, so check the metadata document (`backchannel_authentication_endpoint`, `pushed_authorization_request_endpoint`) after startup. The MySQL migration list has no files for either.
 - Postgres and MySQL have no `JWTBearerStorage`. The jwt-bearer grant still works: the server falls back to an in-process `jti` cache. That cache is per process and is lost on restart, so with several replicas a replayed assertion can be accepted by a different node inside its lifetime. Use a backend with the interface (SQLite or memory) or keep assertion lifetimes short.
 - Without `BackchannelRedeemer` (MySQL has no CIBA at all), the server serializes redemption with an in-process lock, which does not hold across nodes.
-- The memory store has no hash-linked audit chain. `VerifyAuditChain` returns `ErrAuditChainUnsupported`. Do not use it where you need tamper evidence.
+- The memory audit chain lives in a 10000 row ring buffer and a per process secret. It detects edits to retained rows, not eviction or a restart. Use a SQL store where you need durable tamper evidence.
 - Postgres migration 0033 (`delegation_live_unique`) replaces the full `UNIQUE (user_id, agent_id, resource)` on `delegation_grants` with a partial unique index on live rows (`revoked_at IS NULL`), as SQLite and memory already behave, so a grant can be re-issued after a revoke. Password hashes on Postgres live in `users.password_hash`; there is no separate password table. The shared `storagetest` contract passes on Postgres when `THEAUTH_PG_CONTRACT=1` and `THEAUTH_TEST_PG_DSN` are set (checked on PostgreSQL 14), but CI does not set them yet. The contract test resets the `public` schema, so point it at a scratch database.
 - Postgres has two migrations numbered 0016 (`backchannel_requests` and `pushed_authorization_requests`). Both apply; the numbering is historical.
 - MySQL session auth methods (0029) has a contract test (`storagetest.RunSessionAuthMethods` in `storage/mysql/mysql_caps_test.go`) that needs `THEAUTH_TEST_MYSQL_DSN`. It is not run by a plain `go test`, and this page was not checked against a live MySQL server.

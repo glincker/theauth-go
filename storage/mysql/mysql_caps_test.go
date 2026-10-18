@@ -18,6 +18,12 @@ import (
 
 func capsStore(t *testing.T) *mysql.Store {
 	t.Helper()
+	s, _ := capsStoreDB(t)
+	return s
+}
+
+func capsStoreDB(t *testing.T) (*mysql.Store, *sql.DB) {
+	t.Helper()
 	if os.Getenv("THEAUTH_MYSQL_CONTRACT") != "1" {
 		t.Skip("THEAUTH_MYSQL_CONTRACT not set to 1; skipping MySQL capability tests")
 	}
@@ -35,7 +41,7 @@ func capsStore(t *testing.T) *mysql.Store {
 	if err := mysql.Migrate(ctx, db); err != nil {
 		t.Fatalf("Migrate: %v", err)
 	}
-	return mysql.New(db)
+	return mysql.New(db), db
 }
 
 func mkCapsUser(t *testing.T, s *mysql.Store, email string) theauth.User {
@@ -63,6 +69,13 @@ func TestMySQLCapabilityContracts(t *testing.T) {
 		{"SessionAuthMethods", func(t *testing.T, s *mysql.Store) { storagetest.RunSessionAuthMethods(t, s) }},
 		{"AccountLifecycle", func(t *testing.T, s *mysql.Store) { storagetest.RunAccountLifecycle(t, s) }},
 		{"AuditChain", func(t *testing.T, s *mysql.Store) { storagetest.RunAuditChain(t, s) }},
+		{"AuditHeadCheckpoint", func(t *testing.T, _ *mysql.Store) {
+			s, db := capsStoreDB(t)
+			storagetest.RunAuditHeadCheckpoint(t, s, func(ctx context.Context) error {
+				_, err := db.ExecContext(ctx, `DELETE FROM audit_events WHERE chain_key = '' ORDER BY chain_seq DESC LIMIT 1`)
+				return err
+			})
+		}},
 		{"AuditOrder", func(t *testing.T, s *mysql.Store) { storagetest.RunAuditOrder(t, s) }},
 	}
 	for _, tc := range suites {
