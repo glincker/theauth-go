@@ -119,6 +119,44 @@ guard := &toolguard.Guard{
 }
 ```
 
+## Decision codes
+
+Every `policy.Decision` carries a machine-readable `Code` (type `policy.DecisionCode`), set on every path the evaluator takes. Branch on it instead of parsing `Reason`. The same code appears in the JSON of a decision (`code`), on `toolguard` errors (`DeniedError.Code`, `ApprovalRequiredError.Code`, `TaintViolationError.Code`), in the audit metadata of policy decisions (`decision_code`) and in the 403 and 500 bodies of `RequirePolicy` (`decision_code`, next to the existing `code`). All of these are additive: `Reason` strings and existing keys are unchanged.
+
+```go
+err := guard.Authorize(ctx, call)
+switch toolguard.CodeOf(err) { // finds the code with errors.As anywhere in the chain
+case policy.CodeNoPermission, policy.CodeIPNotAllowed: // forbidden
+case policy.CodeRateLimited: // retry later
+case policy.CodeApprovalRequired, policy.CodeRiskEscalation: // ask a human
+}
+```
+
+The values match the TypeScript library's `DECISION_CODES` one for one, so a client that handles both servers needs one vocabulary. Go defines no codes of its own. A "Reserved" code is defined for parity and is not produced yet; handle it anyway.
+
+| Code | Meaning |
+| --- | --- |
+| `allowed` | An allow statement matched and nothing narrowed it. |
+| `approval_consumed` | An escalated call went through because a human approval was spent (toolguard audit record). |
+| `no_permission` | No allow statement matched (default deny), an explicit deny matched, or a permission boundary refused. |
+| `rate_limited` | The per agent rate limit refused the call (`toolguard.Guard.Limit`). |
+| `ip_not_allowed` | An allow statement covered the action and resource but its source IP condition failed. |
+| `time_restricted` | An allow statement covered the action and resource but its time window condition failed. |
+| `argument_rejected` | Reserved. A call argument was refused. |
+| `approval_required` | A statement escalated the call and no valid approval was presented. |
+| `approval_invalid` | An approval id was presented but could not be spent (unknown, pending, used or issued for another call). |
+| `agent_not_found` | The agent id is unknown (reported when the limit check fails with `ErrAgentNotFound`). |
+| `agent_revoked` | Reserved. The agent was revoked or suspended. |
+| `agent_expired` | Reserved. The agent passed its expiry. |
+| `invalid_token` | Reserved. The presented token failed verification. |
+| `owner_mismatch` | Reserved. The caller does not own the agent. |
+| `hook_denied` | A before authorize hook refused the call (see [hooks.md](hooks.md)). |
+| `hook_timeout` | A before authorize hook did not answer within its timeout. The call is refused. |
+| `hook_error` | A before authorize hook failed: an error, a panic, a malformed verdict, or a guard response that did not verify. The call is refused. |
+| `taint_violation` | A taint rule refused or escalated the call. |
+| `risk_escalation` | A risk tier turned an allow into an escalation. |
+| `policy_indeterminate` | No decision could be reached (policies or subjects failed to load, no policy source, no agent id). Fail closed. |
+
 ## Rate limit
 
 `RateLimit{Requests, Per, Burst}` is a token bucket per agent id: `Requests` per `Per`, with `Burst` as the bucket size (default `Requests`; `Per` defaults to one minute). It is spent by every mint, by `AuthorizeAgent` and by `CheckAgentRate`.

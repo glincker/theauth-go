@@ -148,8 +148,11 @@ func TestRequirePolicy(t *testing.T) {
 	uid := e.user.ID.String()
 
 	code, body, _ := e.call("POST", "/projects/p1/deploy", raw)
-	if code != 403 || body["code"] != "policy.denied" {
+	if code != 403 || body["code"] != "policy.denied" || body["decision_code"] != "no_permission" {
 		t.Fatalf("default deny: %d %v", code, body)
+	}
+	if d, _ := body["decision"].(map[string]any); d["code"] != "no_permission" {
+		t.Fatalf("decision body code: %v", body)
 	}
 
 	e.put("deploy-p1", deployP1)
@@ -236,7 +239,13 @@ func TestRequirePolicy(t *testing.T) {
 			if ev["_action"] != policy.AuditActionDecision || ev["reason"] == nil || ev["resource"] == nil {
 				t.Fatalf("bad audit event: %v", ev)
 			}
+			if ev["decision_code"] == nil || ev["decision_code"] == "" {
+				t.Fatalf("audit event without decision_code: %v", ev)
+			}
 			if ev["allowed"] == true {
+				if ev["decision_code"] != "allowed" {
+					t.Fatalf("allow event code = %v", ev["decision_code"])
+				}
 				allows++
 			} else {
 				denies++

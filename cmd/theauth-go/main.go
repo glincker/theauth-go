@@ -14,6 +14,7 @@ import (
 
 	"github.com/glincker/theauth-go/v2"
 	"github.com/glincker/theauth-go/v2/openapi"
+	"github.com/glincker/theauth-go/v2/policy/policytest"
 	"github.com/glincker/theauth-go/v2/storage/memory"
 	"github.com/go-chi/chi/v5"
 )
@@ -32,6 +33,8 @@ func run(args []string, stdout, stderr io.Writer, entropy io.Reader) int {
 		return cmdSecret(args[1:], stdout, stderr, entropy)
 	case "openapi":
 		return cmdOpenAPI(args[1:], stdout, stderr)
+	case "policy":
+		return cmdPolicy(args[1:], stdout, stderr)
 	case "help", "-h", "--help":
 		usage(stdout)
 		return 0
@@ -43,7 +46,7 @@ func run(args []string, stdout, stderr io.Writer, entropy io.Reader) int {
 }
 
 func usage(w io.Writer) {
-	_, _ = fmt.Fprintln(w, "usage: theauth-go <command> [flags]\n\ncommands:\n  secret   print a random secret (session, OTP or signing key material)\n  openapi  print an OpenAPI 3.1 document for the default route set")
+	_, _ = fmt.Fprintln(w, "usage: theauth-go <command> [flags]\n\ncommands:\n  secret   print a random secret (session, OTP or signing key material)\n  openapi  print an OpenAPI 3.1 document for the default route set\n  policy   run a policy test suite: theauth-go policy test <suite.json>")
 }
 
 func cmdSecret(args []string, stdout, stderr io.Writer, entropy io.Reader) int {
@@ -113,6 +116,29 @@ func cmdOpenAPI(args []string, stdout, stderr io.Writer) int {
 	}
 	if err := os.WriteFile(*out, append(doc, '\n'), 0o644); err != nil {
 		_, _ = fmt.Fprintf(stderr, "write: %v\n", err)
+		return 1
+	}
+	return 0
+}
+
+// cmdPolicy runs `policy test <file>`: it loads a JSON suite, prints one line
+// per failing case with the explanation, and exits 1 when any case fails.
+func cmdPolicy(args []string, stdout, stderr io.Writer) int {
+	if len(args) != 2 || args[0] != "test" {
+		_, _ = fmt.Fprintln(stderr, "usage: theauth-go policy test <suite.json>")
+		return 2
+	}
+	s, err := policytest.LoadSuiteFile(args[1])
+	if err != nil {
+		_, _ = fmt.Fprintln(stderr, err)
+		return 2
+	}
+	fails := policytest.Run(s)
+	for _, f := range fails {
+		_, _ = fmt.Fprintln(stderr, f.Error())
+	}
+	_, _ = fmt.Fprintf(stdout, "%d cases, %d failed\n", len(s.Cases), len(fails))
+	if len(fails) > 0 {
 		return 1
 	}
 	return 0

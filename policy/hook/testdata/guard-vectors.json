@@ -1,0 +1,205 @@
+{
+	"protocol": "2026-10",
+	"generator": "sdk/packages/core/src/hooks/http-guard.ts",
+	"cases": [
+		{
+			"name": "valid allow",
+			"secret": "whsec_shared_vector_secret_2026",
+			"timestamp": 1792261200,
+			"now": 1792261200,
+			"requestId": "6f1c2b9e-0d4f-4a7e-9a11-2c3d4e5f6a7b",
+			"requestBody": "{\"version\":\"2026-10\",\"requestId\":\"6f1c2b9e-0d4f-4a7e-9a11-2c3d4e5f6a7b\",\"issuedAt\":\"2026-10-17T19:00:00.000Z\",\"input\":{\"agentId\":\"agent_1\",\"action\":\"read\",\"resource\":\"mcp:github:issues\",\"arguments\":{\"q\":\"bugs <b>&</b> résumé ✓ 🚀\",\"n\":3},\"agent\":{\"id\":\"agent_1\",\"ownerId\":\"u1\",\"type\":\"autonomous\",\"name\":\"bot\"},\"delegation\":{\"path\":[\"agent_1\"],\"links\":[],\"inbound\":[]},\"source\":\"authorize\",\"dryRun\":false}}",
+			"requestSignature": "v1=297de7458c3140ab765e3e4edec65169dc1672fb433928ec7f31bdfc8ebee201",
+			"requestSignSecret": "whsec_shared_vector_secret_2026",
+			"requestSignedBody": "{\"version\":\"2026-10\",\"requestId\":\"6f1c2b9e-0d4f-4a7e-9a11-2c3d4e5f6a7b\",\"issuedAt\":\"2026-10-17T19:00:00.000Z\",\"input\":{\"agentId\":\"agent_1\",\"action\":\"read\",\"resource\":\"mcp:github:issues\",\"arguments\":{\"q\":\"bugs <b>&</b> résumé ✓ 🚀\",\"n\":3},\"agent\":{\"id\":\"agent_1\",\"ownerId\":\"u1\",\"type\":\"autonomous\",\"name\":\"bot\"},\"delegation\":{\"path\":[\"agent_1\"],\"links\":[],\"inbound\":[]},\"source\":\"authorize\",\"dryRun\":false}}",
+			"verifyRequestId": "6f1c2b9e-0d4f-4a7e-9a11-2c3d4e5f6a7b",
+			"responseBody": "{\"decision\":\"allow\"}",
+			"responseTimestamp": 1792261200,
+			"responseSignature": "v1=0dc02ecac6a392e65f6ee70639894012d76bd14ff8141301316b5650acbb6548",
+			"responseSignSecret": "whsec_shared_vector_secret_2026",
+			"responseSignedBody": "{\"decision\":\"allow\"}",
+			"responseSignedRequestId": "6f1c2b9e-0d4f-4a7e-9a11-2c3d4e5f6a7b",
+			"expectRequest": {
+				"ok": true
+			},
+			"expectResponse": {
+				"ok": true
+			}
+		},
+		{
+			"name": "valid deny with code",
+			"secret": "whsec_shared_vector_secret_2026",
+			"timestamp": 1792261200,
+			"now": 1792261200,
+			"requestId": "0b8e4f0c-7d1a-4c55-8e2b-9f0a1b2c3d4e",
+			"requestBody": "{\"version\":\"2026-10\",\"requestId\":\"0b8e4f0c-7d1a-4c55-8e2b-9f0a1b2c3d4e\",\"issuedAt\":\"2026-10-17T19:00:00.000Z\",\"input\":{\"agentId\":\"agent_1\",\"action\":\"read\",\"resource\":\"mcp:github:repo\",\"arguments\":{\"q\":\"bugs <b>&</b> résumé ✓ 🚀\",\"n\":3},\"agent\":{\"id\":\"agent_1\",\"ownerId\":\"u1\",\"type\":\"autonomous\",\"name\":\"bot\"},\"delegation\":{\"path\":[\"agent_1\"],\"links\":[],\"inbound\":[]},\"source\":\"authorize\",\"dryRun\":false}}",
+			"requestSignature": "v1=22a11a30d3aa51348707b8bcba845c7fa8f41ffb10464a9ef845827da4f8c461",
+			"requestSignSecret": "whsec_shared_vector_secret_2026",
+			"requestSignedBody": "{\"version\":\"2026-10\",\"requestId\":\"0b8e4f0c-7d1a-4c55-8e2b-9f0a1b2c3d4e\",\"issuedAt\":\"2026-10-17T19:00:00.000Z\",\"input\":{\"agentId\":\"agent_1\",\"action\":\"read\",\"resource\":\"mcp:github:repo\",\"arguments\":{\"q\":\"bugs <b>&</b> résumé ✓ 🚀\",\"n\":3},\"agent\":{\"id\":\"agent_1\",\"ownerId\":\"u1\",\"type\":\"autonomous\",\"name\":\"bot\"},\"delegation\":{\"path\":[\"agent_1\"],\"links\":[],\"inbound\":[]},\"source\":\"authorize\",\"dryRun\":false}}",
+			"verifyRequestId": "0b8e4f0c-7d1a-4c55-8e2b-9f0a1b2c3d4e",
+			"responseBody": "{\"decision\":\"deny\",\"reason\":\"blocked by rule 7\",\"code\":\"R7\"}",
+			"responseTimestamp": 1792261200,
+			"responseSignature": "v1=28a5de6e25740b0f0690971b85f1a46a1bdc11dfdc2f31f6f04025f649bf4eb2",
+			"responseSignSecret": "whsec_shared_vector_secret_2026",
+			"responseSignedBody": "{\"decision\":\"deny\",\"reason\":\"blocked by rule 7\",\"code\":\"R7\"}",
+			"responseSignedRequestId": "0b8e4f0c-7d1a-4c55-8e2b-9f0a1b2c3d4e",
+			"expectRequest": {
+				"ok": true
+			},
+			"expectResponse": {
+				"ok": true
+			}
+		},
+		{
+			"name": "valid escalate",
+			"secret": "whsec_shared_vector_secret_2026",
+			"timestamp": 1792261200,
+			"now": 1792261200,
+			"requestId": "a2d4f6b8-1c3e-4a5b-8c7d-0e1f2a3b4c5d",
+			"requestBody": "{\"version\":\"2026-10\",\"requestId\":\"a2d4f6b8-1c3e-4a5b-8c7d-0e1f2a3b4c5d\",\"issuedAt\":\"2026-10-17T19:00:00.000Z\",\"input\":{\"agentId\":\"agent_1\",\"action\":\"read\",\"resource\":\"payments:transfer\",\"arguments\":{\"q\":\"bugs <b>&</b> résumé ✓ 🚀\",\"n\":3},\"agent\":{\"id\":\"agent_1\",\"ownerId\":\"u1\",\"type\":\"autonomous\",\"name\":\"bot\"},\"delegation\":{\"path\":[\"agent_1\"],\"links\":[],\"inbound\":[]},\"source\":\"authorize\",\"dryRun\":false}}",
+			"requestSignature": "v1=e11da3379084e8153b0158175cbf7a82f40c2837b962888976fca60980f15f3a",
+			"requestSignSecret": "whsec_shared_vector_secret_2026",
+			"requestSignedBody": "{\"version\":\"2026-10\",\"requestId\":\"a2d4f6b8-1c3e-4a5b-8c7d-0e1f2a3b4c5d\",\"issuedAt\":\"2026-10-17T19:00:00.000Z\",\"input\":{\"agentId\":\"agent_1\",\"action\":\"read\",\"resource\":\"payments:transfer\",\"arguments\":{\"q\":\"bugs <b>&</b> résumé ✓ 🚀\",\"n\":3},\"agent\":{\"id\":\"agent_1\",\"ownerId\":\"u1\",\"type\":\"autonomous\",\"name\":\"bot\"},\"delegation\":{\"path\":[\"agent_1\"],\"links\":[],\"inbound\":[]},\"source\":\"authorize\",\"dryRun\":false}}",
+			"verifyRequestId": "a2d4f6b8-1c3e-4a5b-8c7d-0e1f2a3b4c5d",
+			"responseBody": "{\"decision\":\"escalate\",\"reason\":\"needs a human\",\"guard\":\"hol-guard\",\"ruleId\":\"esc-1\",\"metadata\":{\"score\":0.93,\"tier\":\"high\",\"pii\":true}}",
+			"responseTimestamp": 1792261200,
+			"responseSignature": "v1=f906f764b21914c634fa1777ead7ef41fef879b1cbed9183a0fc2d4210c4f2e7",
+			"responseSignSecret": "whsec_shared_vector_secret_2026",
+			"responseSignedBody": "{\"decision\":\"escalate\",\"reason\":\"needs a human\",\"guard\":\"hol-guard\",\"ruleId\":\"esc-1\",\"metadata\":{\"score\":0.93,\"tier\":\"high\",\"pii\":true}}",
+			"responseSignedRequestId": "a2d4f6b8-1c3e-4a5b-8c7d-0e1f2a3b4c5d",
+			"expectRequest": {
+				"ok": true
+			},
+			"expectResponse": {
+				"ok": true
+			}
+		},
+		{
+			"name": "tampered body",
+			"secret": "whsec_shared_vector_secret_2026",
+			"timestamp": 1792261200,
+			"now": 1792261200,
+			"requestId": "11111111-2222-4333-8444-555555555555",
+			"requestBody": "{\"version\":\"2026-10\",\"requestId\":\"11111111-2222-4333-8444-555555555555\",\"issuedAt\":\"2026-10-17T19:00:00.000Z\",\"input\":{\"agentId\":\"agent_1\",\"action\":\"read\",\"resource\":\"mcp:github:issues:tampered\",\"arguments\":{\"q\":\"bugs <b>&</b> résumé ✓ 🚀\",\"n\":3},\"agent\":{\"id\":\"agent_1\",\"ownerId\":\"u1\",\"type\":\"autonomous\",\"name\":\"bot\"},\"delegation\":{\"path\":[\"agent_1\"],\"links\":[],\"inbound\":[]},\"source\":\"authorize\",\"dryRun\":false}}",
+			"requestSignature": "v1=cae6b5f9f6b190daecbad42e6736a480805f2de9c7022c0e95e3e0d806f8d4e6",
+			"requestSignSecret": "whsec_shared_vector_secret_2026",
+			"requestSignedBody": "{\"version\":\"2026-10\",\"requestId\":\"11111111-2222-4333-8444-555555555555\",\"issuedAt\":\"2026-10-17T19:00:00.000Z\",\"input\":{\"agentId\":\"agent_1\",\"action\":\"read\",\"resource\":\"mcp:github:issues\",\"arguments\":{\"q\":\"bugs <b>&</b> résumé ✓ 🚀\",\"n\":3},\"agent\":{\"id\":\"agent_1\",\"ownerId\":\"u1\",\"type\":\"autonomous\",\"name\":\"bot\"},\"delegation\":{\"path\":[\"agent_1\"],\"links\":[],\"inbound\":[]},\"source\":\"authorize\",\"dryRun\":false}}",
+			"verifyRequestId": "11111111-2222-4333-8444-555555555555",
+			"responseBody": "{\"decision\":\"allow\"}",
+			"responseTimestamp": 1792261200,
+			"responseSignature": "v1=59fff6656e318f49c52577e1ad2889083fc2e28013be21b905a1b8a47a615c51",
+			"responseSignSecret": "whsec_shared_vector_secret_2026",
+			"responseSignedBody": "{\"decision\":\"deny\",\"reason\":\"blocked by rule 7\",\"code\":\"R7\"}",
+			"responseSignedRequestId": "11111111-2222-4333-8444-555555555555",
+			"expectRequest": {
+				"ok": false,
+				"reason": "bad signature"
+			},
+			"expectResponse": {
+				"ok": false,
+				"reason": "bad response signature"
+			}
+		},
+		{
+			"name": "wrong secret",
+			"secret": "whsec_shared_vector_secret_2026",
+			"timestamp": 1792261200,
+			"now": 1792261200,
+			"requestId": "22222222-3333-4444-8555-666666666666",
+			"requestBody": "{\"version\":\"2026-10\",\"requestId\":\"22222222-3333-4444-8555-666666666666\",\"issuedAt\":\"2026-10-17T19:00:00.000Z\",\"input\":{\"agentId\":\"agent_1\",\"action\":\"read\",\"resource\":\"mcp:github:issues\",\"arguments\":{\"q\":\"bugs <b>&</b> résumé ✓ 🚀\",\"n\":3},\"agent\":{\"id\":\"agent_1\",\"ownerId\":\"u1\",\"type\":\"autonomous\",\"name\":\"bot\"},\"delegation\":{\"path\":[\"agent_1\"],\"links\":[],\"inbound\":[]},\"source\":\"authorize\",\"dryRun\":false}}",
+			"requestSignature": "v1=6f07120925fc652fb2ab953ee08dcef28988ad9b4f1a333f8496507f36a15778",
+			"requestSignSecret": "whsec_some_other_secret",
+			"requestSignedBody": "{\"version\":\"2026-10\",\"requestId\":\"22222222-3333-4444-8555-666666666666\",\"issuedAt\":\"2026-10-17T19:00:00.000Z\",\"input\":{\"agentId\":\"agent_1\",\"action\":\"read\",\"resource\":\"mcp:github:issues\",\"arguments\":{\"q\":\"bugs <b>&</b> résumé ✓ 🚀\",\"n\":3},\"agent\":{\"id\":\"agent_1\",\"ownerId\":\"u1\",\"type\":\"autonomous\",\"name\":\"bot\"},\"delegation\":{\"path\":[\"agent_1\"],\"links\":[],\"inbound\":[]},\"source\":\"authorize\",\"dryRun\":false}}",
+			"verifyRequestId": "22222222-3333-4444-8555-666666666666",
+			"responseBody": "{\"decision\":\"allow\"}",
+			"responseTimestamp": 1792261200,
+			"responseSignature": "v1=bb3db8d767317ff59c1d99b54969a8c50da557af231367c8e443e88223a531c1",
+			"responseSignSecret": "whsec_some_other_secret",
+			"responseSignedBody": "{\"decision\":\"allow\"}",
+			"responseSignedRequestId": "22222222-3333-4444-8555-666666666666",
+			"expectRequest": {
+				"ok": false,
+				"reason": "bad signature"
+			},
+			"expectResponse": {
+				"ok": false,
+				"reason": "bad response signature"
+			}
+		},
+		{
+			"name": "stale timestamp",
+			"secret": "whsec_shared_vector_secret_2026",
+			"timestamp": 1792261200,
+			"now": 1792261501,
+			"requestId": "33333333-4444-4555-8666-777777777777",
+			"requestBody": "{\"version\":\"2026-10\",\"requestId\":\"33333333-4444-4555-8666-777777777777\",\"issuedAt\":\"2026-10-17T19:00:00.000Z\",\"input\":{\"agentId\":\"agent_1\",\"action\":\"read\",\"resource\":\"mcp:github:issues\",\"arguments\":{\"q\":\"bugs <b>&</b> résumé ✓ 🚀\",\"n\":3},\"agent\":{\"id\":\"agent_1\",\"ownerId\":\"u1\",\"type\":\"autonomous\",\"name\":\"bot\"},\"delegation\":{\"path\":[\"agent_1\"],\"links\":[],\"inbound\":[]},\"source\":\"authorize\",\"dryRun\":false}}",
+			"requestSignature": "v1=22b833986cedb9ff6349baf039f3b116efa9a2687ca7c85e66cfdc63328f10a5",
+			"requestSignSecret": "whsec_shared_vector_secret_2026",
+			"requestSignedBody": "{\"version\":\"2026-10\",\"requestId\":\"33333333-4444-4555-8666-777777777777\",\"issuedAt\":\"2026-10-17T19:00:00.000Z\",\"input\":{\"agentId\":\"agent_1\",\"action\":\"read\",\"resource\":\"mcp:github:issues\",\"arguments\":{\"q\":\"bugs <b>&</b> résumé ✓ 🚀\",\"n\":3},\"agent\":{\"id\":\"agent_1\",\"ownerId\":\"u1\",\"type\":\"autonomous\",\"name\":\"bot\"},\"delegation\":{\"path\":[\"agent_1\"],\"links\":[],\"inbound\":[]},\"source\":\"authorize\",\"dryRun\":false}}",
+			"verifyRequestId": "33333333-4444-4555-8666-777777777777",
+			"responseBody": "{\"decision\":\"allow\"}",
+			"responseTimestamp": 1792261200,
+			"responseSignature": "v1=e4726753f066dc0c198c262d13e3df5ec9d24fb448d7f8e164af27560d574b7d",
+			"responseSignSecret": "whsec_shared_vector_secret_2026",
+			"responseSignedBody": "{\"decision\":\"allow\"}",
+			"responseSignedRequestId": "33333333-4444-4555-8666-777777777777",
+			"expectRequest": {
+				"ok": false,
+				"reason": "stale timestamp"
+			},
+			"expectResponse": {
+				"ok": false,
+				"reason": "stale response"
+			}
+		},
+		{
+			"name": "edge of window",
+			"secret": "whsec_shared_vector_secret_2026",
+			"timestamp": 1792261200,
+			"now": 1792260900,
+			"requestId": "44444444-5555-4666-8777-888888888888",
+			"requestBody": "{\"version\":\"2026-10\",\"requestId\":\"44444444-5555-4666-8777-888888888888\",\"issuedAt\":\"2026-10-17T19:00:00.000Z\",\"input\":{\"agentId\":\"agent_1\",\"action\":\"read\",\"resource\":\"mcp:github:issues\",\"arguments\":{\"q\":\"bugs <b>&</b> résumé ✓ 🚀\",\"n\":3},\"agent\":{\"id\":\"agent_1\",\"ownerId\":\"u1\",\"type\":\"autonomous\",\"name\":\"bot\"},\"delegation\":{\"path\":[\"agent_1\"],\"links\":[],\"inbound\":[]},\"source\":\"authorize\",\"dryRun\":false}}",
+			"requestSignature": "v1=5ead57c47ed033a91edf25bb1040e557e5a4d8d2519ce3f780c4325880cfb302",
+			"requestSignSecret": "whsec_shared_vector_secret_2026",
+			"requestSignedBody": "{\"version\":\"2026-10\",\"requestId\":\"44444444-5555-4666-8777-888888888888\",\"issuedAt\":\"2026-10-17T19:00:00.000Z\",\"input\":{\"agentId\":\"agent_1\",\"action\":\"read\",\"resource\":\"mcp:github:issues\",\"arguments\":{\"q\":\"bugs <b>&</b> résumé ✓ 🚀\",\"n\":3},\"agent\":{\"id\":\"agent_1\",\"ownerId\":\"u1\",\"type\":\"autonomous\",\"name\":\"bot\"},\"delegation\":{\"path\":[\"agent_1\"],\"links\":[],\"inbound\":[]},\"source\":\"authorize\",\"dryRun\":false}}",
+			"verifyRequestId": "44444444-5555-4666-8777-888888888888",
+			"responseBody": "{\"decision\":\"allow\"}",
+			"responseTimestamp": 1792261200,
+			"responseSignature": "v1=8240085e406c6529c23af23ea74e957b4e1faf0bfcc1e27de07b3ec04648f608",
+			"responseSignSecret": "whsec_shared_vector_secret_2026",
+			"responseSignedBody": "{\"decision\":\"allow\"}",
+			"responseSignedRequestId": "44444444-5555-4666-8777-888888888888",
+			"expectRequest": {
+				"ok": true
+			},
+			"expectResponse": {
+				"ok": true
+			}
+		},
+		{
+			"name": "wrong requestId",
+			"secret": "whsec_shared_vector_secret_2026",
+			"timestamp": 1792261200,
+			"now": 1792261200,
+			"requestId": "55555555-6666-4777-8888-999999999999",
+			"requestBody": "{\"version\":\"2026-10\",\"requestId\":\"55555555-6666-4777-8888-999999999999\",\"issuedAt\":\"2026-10-17T19:00:00.000Z\",\"input\":{\"agentId\":\"agent_1\",\"action\":\"read\",\"resource\":\"mcp:github:issues\",\"arguments\":{\"q\":\"bugs <b>&</b> résumé ✓ 🚀\",\"n\":3},\"agent\":{\"id\":\"agent_1\",\"ownerId\":\"u1\",\"type\":\"autonomous\",\"name\":\"bot\"},\"delegation\":{\"path\":[\"agent_1\"],\"links\":[],\"inbound\":[]},\"source\":\"authorize\",\"dryRun\":false}}",
+			"requestSignature": "v1=994d871dc2e5c9943c74fca2892b167828c706ed2021b408777a21eba9291fcc",
+			"requestSignSecret": "whsec_shared_vector_secret_2026",
+			"requestSignedBody": "{\"version\":\"2026-10\",\"requestId\":\"55555555-6666-4777-8888-999999999999\",\"issuedAt\":\"2026-10-17T19:00:00.000Z\",\"input\":{\"agentId\":\"agent_1\",\"action\":\"read\",\"resource\":\"mcp:github:issues\",\"arguments\":{\"q\":\"bugs <b>&</b> résumé ✓ 🚀\",\"n\":3},\"agent\":{\"id\":\"agent_1\",\"ownerId\":\"u1\",\"type\":\"autonomous\",\"name\":\"bot\"},\"delegation\":{\"path\":[\"agent_1\"],\"links\":[],\"inbound\":[]},\"source\":\"authorize\",\"dryRun\":false}}",
+			"verifyRequestId": "55555555-6666-4777-8888-999999999999",
+			"responseBody": "{\"decision\":\"allow\"}",
+			"responseTimestamp": 1792261200,
+			"responseSignature": "v1=b3ad1b60538ebf9d63aa1c1a87f223f5ab8668be8305b24557123bcf8ad34780",
+			"responseSignSecret": "whsec_shared_vector_secret_2026",
+			"responseSignedBody": "{\"decision\":\"allow\"}",
+			"responseSignedRequestId": "66666666-7777-4888-8999-aaaaaaaaaaaa",
+			"expectRequest": {
+				"ok": true
+			},
+			"expectResponse": {
+				"ok": false,
+				"reason": "bad response signature"
+			}
+		}
+	]
+}

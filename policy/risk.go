@@ -96,6 +96,7 @@ func (e Evaluator) applyRisk(req Request, d Decision) Decision {
 	}
 	d.Allowed = false
 	d.Effect = Escalate
+	d.Code = CodeRiskEscalation
 	d.Reason = "risk tier " + t.Name + " requires " + string(t.Require)
 	d.Escalation = &Escalation{Tier: t.Name, Requirement: t.Require, Reason: d.Reason}
 	return d

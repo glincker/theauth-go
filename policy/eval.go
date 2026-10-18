@@ -35,7 +35,10 @@ type Decision struct {
 	PolicyID    string `json:"policyId,omitempty"`
 	StatementID string `json:"statementId,omitempty"`
 	Reason      string `json:"reason"`
-	Boundary    bool   `json:"boundary,omitempty"`
+	// Code is the machine-readable outcome. It is set on every decision the
+	// evaluator produces; see DecisionCode.
+	Code     DecisionCode `json:"code"`
+	Boundary bool         `json:"boundary,omitempty"`
 	// Escalation is set when Effect is Escalate.
 	Escalation *Escalation `json:"escalation,omitempty"`
 	// Taint is the taint verdict, set when provenance was supplied or a rule
@@ -77,6 +80,7 @@ func (e Evaluator) evaluate(req Request, policies ...*Policy) Decision {
 					d.StatementID = statementIndexID(i)
 				}
 				d.Reason = "explicit deny"
+				d.Code = CodeNoPermission
 				return d
 			}
 			if s.Effect == Escalate {
@@ -85,6 +89,7 @@ func (e Evaluator) evaluate(req Request, policies ...*Policy) Decision {
 						d.StatementID = statementIndexID(i)
 					}
 					d.Reason = "escalation required by statement"
+					d.Code = CodeApprovalRequired
 					d.Escalation = &Escalation{Tier: s.Tier, Requirement: s.Require, Reason: d.Reason}
 					if d.Escalation.Requirement == "" {
 						d.Escalation.Requirement = RequireApproval
@@ -99,6 +104,7 @@ func (e Evaluator) evaluate(req Request, policies ...*Policy) Decision {
 				}
 				d.Allowed = true
 				d.Reason = "allowed by statement"
+				d.Code = CodeAllowed
 				allow = &d
 			}
 		}
@@ -109,7 +115,36 @@ func (e Evaluator) evaluate(req Request, policies ...*Policy) Decision {
 	if allow != nil {
 		return e.applyRisk(req, *allow)
 	}
-	return Decision{Reason: "no matching allow statement (default deny)"}
+	return Decision{Reason: "no matching allow statement (default deny)", Code: e.defaultDenyCode(req, policies)}
+}
+
+// defaultDenyCode refines a default deny: when an allow statement covered the
+// action and resource but a source IP or time window condition failed, the
+// code says so instead of the generic no_permission. The first such
+// statement in policy order wins.
+func (e Evaluator) defaultDenyCode(req Request, policies []*Policy) DecisionCode {
+	for _, p := range policies {
+		if p == nil {
+			continue
+		}
+		for _, s := range p.Statements {
+			if s.Effect != Allow || !s.matchesTarget(req) {
+				continue
+			}
+			for _, c := range s.Conditions {
+				if c.holds(req) {
+					continue
+				}
+				switch c.Op {
+				case OpIPCIDR, OpNotIPCIDR:
+					return CodeIPNotAllowed
+				case OpTimeWindow, OpDailyWindow:
+					return CodeTimeRestricted
+				}
+			}
+		}
+	}
+	return CodeNoPermission
 }
 
 // statementIndexID is the StatementID given to an unnamed statement: its
@@ -147,12 +182,7 @@ func (e Evaluator) prepare(req Request) Request {
 }
 
 func (s Statement) matches(req Request) bool {
-	if !slices.ContainsFunc(s.Actions, func(p string) bool { return Match(p, req.Action) }) {
-		return false
-	}
-	// A deny whose variables cannot be resolved still applies (fail closed).
-	failOpen := s.Effect == Deny
-	if !s.matchesResource(req, failOpen) {
+	if !s.matchesTarget(req) {
 		return false
 	}
 	for _, c := range s.Conditions {
@@ -161,6 +191,16 @@ func (s Statement) matches(req Request) bool {
 		}
 	}
 	return true
+}
+
+// matchesTarget reports whether the statement covers the request's action and
+// resource, ignoring conditions.
+func (s Statement) matchesTarget(req Request) bool {
+	if !slices.ContainsFunc(s.Actions, func(p string) bool { return Match(p, req.Action) }) {
+		return false
+	}
+	// A deny whose variables cannot be resolved still applies (fail closed).
+	return s.matchesResource(req, s.Effect == Deny)
 }
 
 func (s Statement) matchesResource(req Request, unresolvedMatches bool) bool {

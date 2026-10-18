@@ -8,6 +8,7 @@ go install github.com/glincker/theauth-go/v2/cmd/theauth-go@latest
 |---|---|
 | `theauth-go secret` | Print random key material. Flags: `--bytes` (16 to 128, default 32), `--format base64url\|hex\|env`, `--name` for the env format |
 | `theauth-go openapi` | Print an OpenAPI 3.1 document for the default route set. Flags: `--base-url`, `--title`, `--version`, `--out` |
+| `theauth-go policy test <suite.json>` | Run a policy test suite and print failures with their explanation. Exit 1 on failure. See [policy-explain.md](policy-explain.md) |
 
 Related binaries: `theauth-doctor` fetches the security report of a running server, and `theauth-migrate` imports users from Auth0 and Cognito.
 

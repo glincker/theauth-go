@@ -95,19 +95,19 @@ func (g *Guard) Decide(ctx context.Context, p *theauth.Principal, req Request) (
 	if g.o.Subjects != nil {
 		extra, err := g.o.Subjects(ctx, p)
 		if err != nil {
-			return Decision{}, fmt.Errorf("policy: resolve subjects: %w", err)
+			return Decision{Code: CodePolicyIndeterminate}, fmt.Errorf("policy: resolve subjects: %w", err)
 		}
 		subs = append(subs, extra...)
 	}
 	attached, err := g.o.Store.PoliciesFor(ctx, subs)
 	if err != nil {
-		return Decision{}, fmt.Errorf("policy: load policies: %w", err)
+		return Decision{Code: CodePolicyIndeterminate}, fmt.Errorf("policy: load policies: %w", err)
 	}
 	var identity, boundary []*Policy
 	for _, a := range attached {
 		doc, err := Parse(a.Record.Document)
 		if err != nil {
-			return Decision{}, fmt.Errorf("policy: stored policy %q: %w", a.Record.ID, err)
+			return Decision{Code: CodePolicyIndeterminate}, fmt.Errorf("policy: stored policy %q: %w", a.Record.ID, err)
 		}
 		doc.ID = a.Record.ID
 		if a.Subject.Kind == SubjectToken {
@@ -141,7 +141,7 @@ func (g *Guard) RequirePolicy(action string, resourceFn func(*http.Request) Reso
 			d, err := g.Decide(r.Context(), p, req)
 			if err != nil {
 				slog.Error("theauth policy: evaluation failed", "err", err.Error())
-				writeJSON(w, http.StatusInternalServerError, map[string]any{"code": "policy.error", "detail": "Authorization failed"})
+				writeJSON(w, http.StatusInternalServerError, map[string]any{"code": "policy.error", "detail": "Authorization failed", "decision_code": CodePolicyIndeterminate})
 				return
 			}
 			g.audit(r.Context(), p, req, d)
@@ -152,14 +152,14 @@ func (g *Guard) RequirePolicy(action string, resourceFn func(*http.Request) Reso
 				}
 				writeJSON(w, status, map[string]any{
 					"code": code, "status": status,
-					"detail": d.Reason, "decision": d, "escalation": d.Escalation,
+					"detail": d.Reason, "decision": d, "escalation": d.Escalation, "decision_code": d.Code,
 				})
 				return
 			}
 			if !d.Allowed {
 				writeJSON(w, http.StatusForbidden, map[string]any{
 					"code": ErrorCodeDenied, "status": http.StatusForbidden,
-					"detail": d.Reason, "decision": d,
+					"detail": d.Reason, "decision": d, "decision_code": d.Code,
 				})
 				return
 			}
@@ -211,7 +211,7 @@ func (g *Guard) audit(ctx context.Context, p *theauth.Principal, req Request, d 
 	md := map[string]any{
 		"allowed": d.Allowed, "action": req.Action, "resource": req.Resource,
 		"reason": d.Reason, "boundary": d.Boundary, "effect": string(d.Effect),
-		"principal_kind": string(p.Kind),
+		"principal_kind": string(p.Kind), "decision_code": string(d.Code),
 	}
 	if d.PolicyID != "" {
 		md["policy_id"] = d.PolicyID
