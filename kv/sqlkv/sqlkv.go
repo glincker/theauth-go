@@ -14,6 +14,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"time"
+	"unicode/utf8"
 )
 
 // Dialect selects the SQL flavor.
@@ -36,6 +37,18 @@ type Option func(*Store)
 // identifier because it is interpolated into SQL.
 func WithTable(name string) Option { return func(s *Store) { s.table = name } }
 
+// DefaultPrefix is prepended to every key unless WithPrefix or WithoutPrefix
+// says otherwise. Prune only removes rows under this store's prefix.
+const DefaultPrefix = "theauth:"
+
+// WithPrefix sets the prefix prepended to every stored key. WithPrefix("")
+// turns prefixing off and keeps the exact key names the library chose, which
+// is how a deployment keeps the rows it wrote before the default prefix existed.
+func WithPrefix(prefix string) Option { return func(s *Store) { s.prefix = prefix } }
+
+// WithoutPrefix disables the prefix. It is shorthand for WithPrefix("").
+func WithoutPrefix() Option { return WithPrefix("") }
+
 // WithClock injects the time source (tests).
 func WithClock(now func() time.Time) Option {
 	return func(s *Store) {
@@ -50,13 +63,15 @@ type Store struct {
 	db      *sql.DB
 	dialect Dialect
 	table   string
+	prefix  string
 	now     func() time.Time
 	writes  atomic.Uint64
 }
 
-// New returns a Store. It does not touch the database; call EnsureSchema.
+// New returns a Store whose keys carry DefaultPrefix. It does not touch the
+// database; call EnsureSchema.
 func New(db *sql.DB, dialect Dialect, opts ...Option) (*Store, error) {
-	s := &Store{db: db, dialect: dialect, table: DefaultTable, now: time.Now}
+	s := &Store{db: db, dialect: dialect, table: DefaultTable, prefix: DefaultPrefix, now: time.Now}
 	for _, o := range opts {
 		o(s)
 	}
@@ -129,6 +144,24 @@ func (s *Store) expiry(ttl time.Duration) int64 {
 	return s.now().Add(ttl).UnixMilli()
 }
 
+// key returns the stored name for a library key.
+func (s *Store) key(k string) string { return s.prefix + k }
+
+// scope returns an extra WHERE predicate that limits a statement to rows under
+// this store's prefix, with its arguments. Without a prefix it returns no
+// predicate. Prefix matching uses substr or LEFT instead of LIKE so that "_"
+// and "%" in a prefix are literal, and MySQL compares bytes in binary so the
+// match is case-sensitive like the other dialects.
+func (s *Store) scope() (string, []any) {
+	if s.prefix == "" {
+		return "", nil
+	}
+	if s.dialect == MySQL {
+		return " AND LEFT(BINARY k, ?) = ?", []any{len(s.prefix), s.prefix}
+	}
+	return " AND substr(k, 1, ?) = ?", []any{utf8.RuneCountInString(s.prefix), s.prefix}
+}
+
 // q rewrites ? placeholders to $n for Postgres.
 func (s *Store) q(query string) string {
 	if s.dialect != Postgres {
@@ -154,10 +187,14 @@ func (s *Store) maybePrune(ctx context.Context) {
 	_, _ = s.Prune(ctx)
 }
 
-// Prune deletes expired rows and returns how many it removed. Writes call it
-// opportunistically; call it from a timer if the table sees little traffic.
+// Prune deletes expired rows under this store's prefix and returns how many it
+// removed. Rows under other prefixes, including other apps sharing the table,
+// are never touched. Writes call it opportunistically; call it from a timer if
+// the table sees little traffic.
 func (s *Store) Prune(ctx context.Context) (int64, error) {
-	res, err := s.db.ExecContext(ctx, s.q("DELETE FROM "+s.table+" WHERE expires_at <= ?"), s.now().UnixMilli())
+	scope, scopeArgs := s.scope()
+	args := append([]any{s.now().UnixMilli()}, scopeArgs...)
+	res, err := s.db.ExecContext(ctx, s.q("DELETE FROM "+s.table+" WHERE expires_at <= ?"+scope), args...)
 	if err != nil {
 		return 0, err
 	}
@@ -168,7 +205,7 @@ func (s *Store) Prune(ctx context.Context) (int64, error) {
 func (s *Store) Get(ctx context.Context, key string) ([]byte, bool, error) {
 	var v []byte
 	err := s.db.QueryRowContext(ctx,
-		s.q("SELECT v FROM "+s.table+" WHERE k = ? AND expires_at > ?"), key, s.now().UnixMilli()).Scan(&v)
+		s.q("SELECT v FROM "+s.table+" WHERE k = ? AND expires_at > ?"), s.key(key), s.now().UnixMilli()).Scan(&v)
 	if err == sql.ErrNoRows {
 		return nil, false, nil
 	}
@@ -191,7 +228,7 @@ func (s *Store) Set(ctx context.Context, key string, value []byte, ttl time.Dura
 		query = "INSERT INTO " + s.table + " (k, v, n, expires_at) VALUES (?, ?, 0, ?) " +
 			"ON CONFLICT (k) DO UPDATE SET v = excluded.v, n = 0, expires_at = excluded.expires_at"
 	}
-	_, err := s.db.ExecContext(ctx, s.q(query), key, value, s.expiry(ttl))
+	_, err := s.db.ExecContext(ctx, s.q(query), s.key(key), value, s.expiry(ttl))
 	if err == nil {
 		s.maybePrune(ctx)
 	}
@@ -205,7 +242,7 @@ func (s *Store) SetNX(ctx context.Context, key string, value []byte, ttl time.Du
 	}
 	// Clear an expired holder first so it does not block the insert.
 	if _, err := s.db.ExecContext(ctx, s.q("DELETE FROM "+s.table+" WHERE k = ? AND expires_at <= ?"),
-		key, s.now().UnixMilli()); err != nil {
+		s.key(key), s.now().UnixMilli()); err != nil {
 		return false, err
 	}
 	verb, tail := "INSERT", " ON CONFLICT (k) DO NOTHING"
@@ -213,7 +250,7 @@ func (s *Store) SetNX(ctx context.Context, key string, value []byte, ttl time.Du
 		verb, tail = "INSERT IGNORE", ""
 	}
 	res, err := s.db.ExecContext(ctx,
-		s.q(verb+" INTO "+s.table+" (k, v, n, expires_at) VALUES (?, ?, 0, ?)"+tail), key, value, s.expiry(ttl))
+		s.q(verb+" INTO "+s.table+" (k, v, n, expires_at) VALUES (?, ?, 0, ?)"+tail), s.key(key), value, s.expiry(ttl))
 	if err != nil {
 		return false, err
 	}
@@ -227,7 +264,7 @@ func (s *Store) SetNX(ctx context.Context, key string, value []byte, ttl time.Du
 
 // Delete implements kv.Cache.
 func (s *Store) Delete(ctx context.Context, key string) error {
-	_, err := s.db.ExecContext(ctx, s.q("DELETE FROM "+s.table+" WHERE k = ?"), key)
+	_, err := s.db.ExecContext(ctx, s.q("DELETE FROM "+s.table+" WHERE k = ?"), s.key(key))
 	return err
 }
 
@@ -235,16 +272,17 @@ func (s *Store) Delete(ctx context.Context, key string) error {
 func (s *Store) Incr(ctx context.Context, key string, ttl time.Duration) (int64, error) {
 	now := s.now().UnixMilli()
 	exp := s.expiry(ttl)
+	stored := s.key(key)
 	defer s.maybePrune(ctx)
 	if s.dialect == MySQL {
-		return s.incrMySQL(ctx, key, now, exp)
+		return s.incrMySQL(ctx, stored, now, exp)
 	}
 	var n int64
 	err := s.db.QueryRowContext(ctx, s.q(`INSERT INTO `+s.table+` AS t (k, v, n, expires_at) VALUES (?, ?, 1, ?)
 ON CONFLICT (k) DO UPDATE SET
   n = CASE WHEN t.expires_at <= ? THEN 1 ELSE t.n + 1 END,
   expires_at = CASE WHEN t.expires_at <= ? THEN ? ELSE t.expires_at END
-RETURNING n`), key, []byte{}, exp, now, now, exp).Scan(&n)
+RETURNING n`), stored, []byte{}, exp, now, now, exp).Scan(&n)
 	return n, err
 }
 

@@ -39,6 +39,77 @@ func (c *Clock) Advance(d time.Duration) {
 // Factory returns a fresh, empty Cache that reads time from clock.
 type Factory func(t *testing.T, clock *Clock) kv.Cache
 
+// PairFactory returns two Caches that share one backend but use different
+// namespaces, for example two Redis stores with different key prefixes or two
+// sqlkv stores with different prefixes on one table. Each call starts from an
+// empty backend.
+type PairFactory func(t *testing.T, clock *Clock) (a, b kv.Cache)
+
+// RunNamespaces checks that two Caches sharing a backend never see, change or
+// count each other's keys.
+func RunNamespaces(t *testing.T, newPair PairFactory) {
+	t.Helper()
+	ctx := context.Background()
+	fresh := func(t *testing.T) (kv.Cache, kv.Cache, *Clock) {
+		t.Helper()
+		clk := NewClock()
+		a, b := newPair(t, clk)
+		return a, b, clk
+	}
+
+	t.Run("values are invisible across namespaces", func(t *testing.T) {
+		a, b, _ := fresh(t)
+		if err := a.Set(ctx, "k", []byte("A"), time.Minute); err != nil {
+			t.Fatal(err)
+		}
+		if _, ok, _ := b.Get(ctx, "k"); ok {
+			t.Fatal("namespace b sees namespace a's key")
+		}
+		if err := b.Set(ctx, "k", []byte("B"), time.Minute); err != nil {
+			t.Fatal(err)
+		}
+		if v, ok, _ := a.Get(ctx, "k"); !ok || string(v) != "A" {
+			t.Fatalf("a overwritten by b: %q %v", v, ok)
+		}
+		if v, ok, _ := b.Get(ctx, "k"); !ok || string(v) != "B" {
+			t.Fatalf("b lost its value: %q %v", v, ok)
+		}
+	})
+
+	t.Run("delete only touches its own namespace", func(t *testing.T) {
+		a, b, _ := fresh(t)
+		_ = a.Set(ctx, "k", []byte("A"), time.Minute)
+		_ = b.Set(ctx, "k", []byte("B"), time.Minute)
+		if err := a.Delete(ctx, "k"); err != nil {
+			t.Fatal(err)
+		}
+		if _, ok, _ := a.Get(ctx, "k"); ok {
+			t.Fatal("delete did not remove a's key")
+		}
+		if v, ok, _ := b.Get(ctx, "k"); !ok || string(v) != "B" {
+			t.Fatalf("delete in a removed b's key: %q %v", v, ok)
+		}
+	})
+
+	t.Run("setnx and incr counters are independent", func(t *testing.T) {
+		a, b, _ := fresh(t)
+		if got, err := a.SetNX(ctx, "k", []byte("1"), time.Minute); err != nil || !got {
+			t.Fatalf("a setnx: %v %v", got, err)
+		}
+		if got, err := b.SetNX(ctx, "k", []byte("1"), time.Minute); err != nil || !got {
+			t.Fatalf("b setnx blocked by a: %v %v", got, err)
+		}
+		for want := int64(1); want <= 2; want++ {
+			if got, err := a.Incr(ctx, "c", time.Minute); err != nil || got != want {
+				t.Fatalf("a incr got %d err %v want %d", got, err, want)
+			}
+		}
+		if got, err := b.Incr(ctx, "c", time.Minute); err != nil || got != 1 {
+			t.Fatalf("b counter shares a's count: got %d err %v", got, err)
+		}
+	})
+}
+
 // Run executes the contract.
 func Run(t *testing.T, newCache Factory) {
 	t.Helper()

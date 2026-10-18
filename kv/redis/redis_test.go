@@ -88,7 +88,7 @@ func (f *fake) Eval(_ context.Context, script string, keys []string, args ...any
 func TestStore(t *testing.T) {
 	ctx := context.Background()
 	f := newFake()
-	s := New(f, "t:")
+	s := New(f, WithPrefix("t:"))
 
 	if _, ok, err := s.Get(ctx, "a"); ok || err != nil {
 		t.Fatalf("missing key: ok=%v err=%v", ok, err)
@@ -139,6 +139,108 @@ func TestContract(t *testing.T) {
 	kvtest.Run(t, func(_ *testing.T, clk *kvtest.Clock) kv.Cache {
 		f := newFake()
 		f.clk = clk.Now
-		return New(f, "t:")
+		return New(f, WithPrefix("t:"))
+	})
+}
+
+func TestContractDefaultPrefix(t *testing.T) {
+	kvtest.Run(t, func(_ *testing.T, clk *kvtest.Clock) kv.Cache {
+		f := newFake()
+		f.clk = clk.Now
+		return New(f)
+	})
+}
+
+func TestContractWithoutPrefix(t *testing.T) {
+	kvtest.Run(t, func(_ *testing.T, clk *kvtest.Clock) kv.Cache {
+		f := newFake()
+		f.clk = clk.Now
+		return New(f, WithoutPrefix())
+	})
+}
+
+func TestDefaultPrefixApplied(t *testing.T) {
+	ctx := context.Background()
+	cases := []struct {
+		name    string
+		opts    []Option
+		wantKey string
+	}{
+		{"no option uses the default", nil, "theauth:k"},
+		{"custom prefix", []Option{WithPrefix("app1:")}, "app1:k"},
+		{"WithoutPrefix disables the prefix", []Option{WithoutPrefix()}, "k"},
+		{"explicit empty prefix disables the prefix", []Option{WithPrefix("")}, "k"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			f := newFake()
+			s := New(f, tc.opts...)
+			if err := s.Set(ctx, "k", []byte("v"), time.Minute); err != nil {
+				t.Fatal(err)
+			}
+			if len(f.data) != 1 {
+				t.Fatalf("stored keys %v, want exactly one", f.data)
+			}
+			if _, ok := f.data[tc.wantKey]; !ok {
+				t.Fatalf("stored keys %v, want %q", f.data, tc.wantKey)
+			}
+		})
+	}
+}
+
+func TestEveryOperationIsPrefixed(t *testing.T) {
+	ctx := context.Background()
+	f := newFake()
+	s := New(f, WithPrefix("p:"))
+	if _, err := s.SetNX(ctx, "n", []byte("1"), time.Minute); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Incr(ctx, "c", time.Minute); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Set(ctx, "a", []byte("v"), time.Minute); err != nil {
+		t.Fatal(err)
+	}
+	for _, k := range []string{"p:n", "p:c", "p:a"} {
+		if _, ok := f.data[k]; !ok {
+			t.Fatalf("key %q not written with prefix, have %v", k, f.data)
+		}
+	}
+	if err := s.Delete(ctx, "a"); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := f.data["p:a"]; ok {
+		t.Fatal("Delete did not remove the prefixed key")
+	}
+	if len(f.data) != 2 {
+		t.Fatalf("unexpected keys %v", f.data)
+	}
+}
+
+func TestOptOutReadsLegacyKeys(t *testing.T) {
+	ctx := context.Background()
+	f := newFake()
+	f.data["session"] = "legacy"
+	if v, ok, _ := New(f, WithoutPrefix()).Get(ctx, "session"); !ok || string(v) != "legacy" {
+		t.Fatalf("opt-out store cannot read pre-prefix key: %q %v", v, ok)
+	}
+	if _, ok, _ := New(f).Get(ctx, "session"); ok {
+		t.Fatal("default prefix must not read unprefixed keys")
+	}
+}
+
+func TestNoCrossPrefixLeakage(t *testing.T) {
+	kvtest.RunNamespaces(t, func(_ *testing.T, clk *kvtest.Clock) (kv.Cache, kv.Cache) {
+		f := newFake()
+		f.clk = clk.Now
+		return New(f, WithPrefix("app1:")), New(f, WithPrefix("app2:"))
+	})
+}
+
+func TestDefaultAndOptOutDoNotCollide(t *testing.T) {
+	kvtest.RunNamespaces(t, func(_ *testing.T, clk *kvtest.Clock) (kv.Cache, kv.Cache) {
+		f := newFake()
+		f.clk = clk.Now
+		return New(f), New(f, WithoutPrefix())
 	})
 }

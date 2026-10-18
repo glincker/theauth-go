@@ -28,10 +28,25 @@ import (
 //	    return v, err
 //	}
 //
-//	stores := kv.FromCache(kvredis.New(goRedis{rdb}, "theauth:"))
+//	stores := kv.FromCache(kvredis.New(goRedis{rdb}))
 type Client interface {
 	Eval(ctx context.Context, script string, keys []string, args ...any) (any, error)
 }
+
+// DefaultPrefix is prepended to every key unless WithPrefix or WithoutPrefix
+// says otherwise, so several apps or features can share one Redis.
+const DefaultPrefix = "theauth:"
+
+// Option tunes New.
+type Option func(*Store)
+
+// WithPrefix sets the prefix prepended to every key. WithPrefix("") turns
+// prefixing off and keeps the exact key names the library chose, which is how
+// a deployment keeps the keys it wrote before the default prefix existed.
+func WithPrefix(prefix string) Option { return func(s *Store) { s.prefix = prefix } }
+
+// WithoutPrefix disables the prefix. It is shorthand for WithPrefix("").
+func WithoutPrefix() Option { return WithPrefix("") }
 
 // Lua scripts. Exported only so test doubles can recognize them.
 const (
@@ -42,15 +57,23 @@ const (
 	ScriptIncr  = `local n = redis.call('INCR', KEYS[1]) if n == 1 and tonumber(ARGV[1]) > 0 then redis.call('PEXPIRE', KEYS[1], ARGV[1]) end return n`
 )
 
-// Store implements kv.Cache over Redis.
+// Store implements kv.Cache over Redis. Every command addresses exactly one
+// prefixed key: the adapter issues no KEYS, SCAN or FLUSH, so it can never
+// touch a key outside its prefix.
 type Store struct {
 	c      Client
 	prefix string
 }
 
-// New returns a Store. prefix is prepended to every key so several apps can
-// share one Redis (for example "theauth:").
-func New(c Client, prefix string) *Store { return &Store{c: c, prefix: prefix} }
+// New returns a Store whose keys carry DefaultPrefix. Use WithPrefix to pick
+// another namespace or WithoutPrefix to keep unprefixed key names.
+func New(c Client, opts ...Option) *Store {
+	s := &Store{c: c, prefix: DefaultPrefix}
+	for _, o := range opts {
+		o(s)
+	}
+	return s
+}
 
 func ms(ttl time.Duration) string {
 	if ttl <= 0 {
