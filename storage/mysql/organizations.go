@@ -20,8 +20,8 @@ VALUES (?, ?, ?, ?, ?)`,
 		ulidToBytes(o.ID),
 		o.Name,
 		strings.ToLower(o.Slug),
-		timeUTC(o.CreatedAt),
-		timeUTC(o.UpdatedAt),
+		timeUTCOrNow(o.CreatedAt),
+		timeUTCOrNow(o.UpdatedAt),
 	)
 	if err != nil {
 		if isMySQL1062(err) {

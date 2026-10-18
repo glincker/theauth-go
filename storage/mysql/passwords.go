@@ -7,6 +7,8 @@ import (
 	"strings"
 	"time"
 
+	mysqldrv "github.com/go-sql-driver/mysql"
+
 	"github.com/glincker/theauth-go/v2"
 	"github.com/glincker/theauth-go/v2/storage"
 )
@@ -44,9 +46,9 @@ func (s *Store) ConsumeMagicLink(ctx context.Context, tokenHash []byte) (*theaut
 	)
 	err = tx.QueryRowContext(ctx,
 		`SELECT id, email, token_hash, expires_at, used_at, created_at
-		 FROM magic_links WHERE token_hash = ? AND used_at IS NULL
+		 FROM magic_links WHERE token_hash = ? AND used_at IS NULL AND expires_at > ?
 		 FOR UPDATE`,
-		tokenHash,
+		tokenHash, timeUTC(time.Now()),
 	).Scan(&idB, &email, &hash, &expiresAt, &usedAt, &created)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, storage.ErrNotFound
@@ -84,6 +86,11 @@ INSERT INTO user_passwords (user_id, password_hash) VALUES (?, ?)
 ON DUPLICATE KEY UPDATE password_hash = VALUES(password_hash)`,
 		ulidToBytes(userID), passwordHash,
 	)
+	var me *mysqldrv.MySQLError
+	if errors.As(err, &me) && me.Number == 1452 {
+		// Foreign key failure: the user does not exist.
+		return storage.ErrNotFound
+	}
 	return err
 }
 
@@ -179,9 +186,9 @@ func (s *Store) ConsumePasswordResetToken(ctx context.Context, tokenHash []byte)
 	)
 	err = tx.QueryRowContext(ctx,
 		`SELECT id, user_id, token_hash, expires_at, used_at, created_at
-		 FROM password_reset_tokens WHERE token_hash = ? AND used_at IS NULL
+		 FROM password_reset_tokens WHERE token_hash = ? AND used_at IS NULL AND expires_at > ?
 		 FOR UPDATE`,
-		tokenHash,
+		tokenHash, timeUTC(time.Now()),
 	).Scan(&idB, &userIDB, &hash, &expiresAt, &usedAt, &created)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, storage.ErrNotFound

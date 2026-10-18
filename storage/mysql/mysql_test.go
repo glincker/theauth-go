@@ -172,6 +172,7 @@ func dropTables(t *testing.T, ctx context.Context, db *sql.DB) {
 		"session_links",
 		"audit_events",
 		"theauth_audit_secrets",
+		"theauth_audit_period_secrets",
 		"theauth_audit_chain_heads",
 		"delegation_grants",
 		"agent_credentials",
