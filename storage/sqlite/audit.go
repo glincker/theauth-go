@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/glincker/theauth-go/v2"
+	"github.com/glincker/theauth-go/v2/audit"
 	"github.com/oklog/ulid/v2"
 )
 
@@ -20,16 +21,23 @@ const (
 )
 
 // InsertAuditEvents appends a batch in one transaction. Rows are linked into a
-// per-organization hash chain (see VerifyAuditChain). If the database has not
-// run migration 0017 the rows are written without chain or accountability
-// columns, so hosts upgrading in two steps keep working.
+// per-organization hash chain (see VerifyAuditChain) and stamped with
+// recorded_at_us and event (migration 0036). A database that has run 0017 but
+// not 0036 gets chained rows without those two columns; one that has not run
+// 0017 gets rows without chain or accountability columns, so hosts upgrading in
+// steps keep working.
 func (s *Store) InsertAuditEvents(ctx context.Context, events []theauth.AuditEvent) error {
 	if len(events) == 0 {
 		return nil
 	}
 	err := s.inTx(ctx, "insert audit events", func(tx DBTX) error {
-		return s.insertChained(ctx, tx, events)
+		return s.insertChained(ctx, tx, events, true)
 	})
+	if isNoSuchColumn(err) {
+		err = s.inTx(ctx, "insert audit events", func(tx DBTX) error {
+			return s.insertChained(ctx, tx, events, false)
+		})
+	}
 	if isNoSuchColumn(err) {
 		return s.inTx(ctx, "insert audit events", func(tx DBTX) error {
 			return s.insertLegacy(ctx, tx, events)
@@ -52,17 +60,28 @@ func marshalOr(v any, empty string) (string, error) {
 type chainHead struct {
 	seq  int64
 	hash string
+	// recordedAtUs is the stamp of the chain's last row (0 before 0036 or for an empty chain).
+	recordedAtUs int64
 }
 
-func (s *Store) insertChained(ctx context.Context, tx DBTX, events []theauth.AuditEvent) error {
+// insertChained writes the batch under one transaction. Within a transaction the head read and the
+// inserts are one critical section for the chain: the unique (chain_key, chain_seq) index makes a
+// racing writer fail instead of forking the chain. withOrder also writes recorded_at_us and event;
+// the stamp is assigned above the chain's last stamp (audit.NextRecordedAtUs), a caller supplied
+// RecordedAtUs is ignored, and neither column is hashed.
+func (s *Store) insertChained(ctx context.Context, tx DBTX, events []theauth.AuditEvent, withOrder bool) error {
+	cols, marks := "", ""
+	if withOrder {
+		cols, marks = ", recorded_at_us, event", ", ?, ?"
+	}
 	stmt, err := tx.PrepareContext(ctx, s.q(`
 INSERT INTO theauth_audit_events
 	(id, organization_id, actor_user_id, actor_session_id, action, target_type, target_id,
 	 metadata, ip, user_agent, created_at,
 	 subject_id, actor_id, policy_version, approver_id, delegation_chain, input_provenance,
 	 actor_user_pseudonym, subject_pseudonym, actor_pseudonym, approver_pseudonym,
-	 chain_key, chain_seq, prev_hash, hash)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`))
+	 chain_key, chain_seq, prev_hash, hash`+cols+`)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?`+marks+`)`))
 	if err != nil {
 		return err
 	}
@@ -91,7 +110,7 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 
 		}
 		head, ok := heads[keyStr]
 		if !ok {
-			head, err = s.readChainHead(ctx, tx, keyStr)
+			head, err = s.readChainHead(ctx, tx, keyStr, withOrder)
 			if err != nil {
 				return err
 			}
@@ -114,23 +133,37 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 
 		if err != nil {
 			return fmt.Errorf("hash audit event: %w", err)
 		}
-		if _, err := stmt.ExecContext(ctx, p.ID, idPtrStr(e.OrganizationID), idPtrStr(e.ActorUserID),
+		args := []any{p.ID, idPtrStr(e.OrganizationID), idPtrStr(e.ActorUserID),
 			idPtrStr(e.ActorSessionID), e.Action, e.TargetType, e.TargetID, meta, e.IP, e.UserAgent,
 			p.CreatedAt, e.SubjectID, e.ActorID, e.PolicyVersion, e.ApproverID, chain, prov,
 			p.ActorUserPseudo, p.SubjectPseudo, p.ActorPseudo, p.ApproverPseudo,
-			keyStr, p.Seq, p.Prev, hash); err != nil {
+			keyStr, p.Seq, p.Prev, hash}
+		stamp := head.recordedAtUs
+		if withOrder {
+			stamp = audit.NextRecordedAtUs(head.recordedAtUs)
+			var event any
+			if e.Event != "" {
+				event = e.Event
+			}
+			args = append(args, stamp, event)
+		}
+		if _, err := stmt.ExecContext(ctx, args...); err != nil {
 			return err
 		}
-		heads[keyStr] = chainHead{seq: p.Seq, hash: hash}
+		heads[keyStr] = chainHead{seq: p.Seq, hash: hash, recordedAtUs: stamp}
 	}
 	return nil
 }
 
-func (s *Store) readChainHead(ctx context.Context, tx DBTX, key string) (chainHead, error) {
+func (s *Store) readChainHead(ctx context.Context, tx DBTX, key string, withOrder bool) (chainHead, error) {
+	stamp := "0"
+	if withOrder {
+		stamp = "COALESCE(recorded_at_us, 0)"
+	}
 	var h chainHead
 	err := tx.QueryRowContext(ctx, s.q(`
-SELECT chain_seq, hash FROM theauth_audit_events
-WHERE chain_key = ? AND chain_seq IS NOT NULL ORDER BY chain_seq DESC LIMIT 1`), key).Scan(&h.seq, &h.hash)
+SELECT chain_seq, hash, `+stamp+` FROM theauth_audit_events
+WHERE chain_key = ? AND chain_seq IS NOT NULL ORDER BY chain_seq DESC LIMIT 1`), key).Scan(&h.seq, &h.hash, &h.recordedAtUs)
 	if errors.Is(err, sql.ErrNoRows) {
 		return chainHead{}, nil
 	}
@@ -161,22 +194,51 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`))
 	return nil
 }
 
-// QueryAuditEvents returns events newest first with keyset pagination over (created_at, id).
+// AuditOrderSupported declares write order support (storagetest.AuditOrderCapable).
+func (s *Store) AuditOrderSupported() bool { return true }
+
+// QueryAuditEvents returns events ordered by (recorded_at_us, id) in q.Order (default desc) and pages
+// with a "c1." keyset cursor. A cursor from before write order existed keeps the old
+// (created_at DESC, id DESC) keyset, for descending reads only. Before migration 0036 the stamp falls
+// back to created_at and the event is NULL; before 0017 the accountability columns are constants.
 func (s *Store) QueryAuditEvents(ctx context.Context, q theauth.AuditQuery) ([]theauth.AuditEvent, string, error) {
-	out, next, err := s.queryAuditEvents(ctx, q, false)
-	if isNoSuchColumn(err) {
-		return s.queryAuditEvents(ctx, q, true)
+	order, ok := audit.NormalizeOrder(q.Order)
+	if !ok {
+		return nil, "", theauth.ErrBadAuditOrder
 	}
-	return out, next, err
+	for _, level := range []auditSchema{auditSchemaOrdered, auditSchemaChained} {
+		out, next, err := s.queryAuditEvents(ctx, q, order, level)
+		if !isNoSuchColumn(err) {
+			return out, next, err
+		}
+	}
+	return s.queryAuditEvents(ctx, q, order, auditSchemaLegacy)
 }
 
-func (s *Store) queryAuditEvents(ctx context.Context, q theauth.AuditQuery, legacy bool) ([]theauth.AuditEvent, string, error) {
+// auditSchema is how far the audit table has been migrated.
+type auditSchema int
+
+const (
+	auditSchemaLegacy  auditSchema = iota // 0005 only
+	auditSchemaChained                    // 0017
+	auditSchemaOrdered                    // 0036
+)
+
+func (s *Store) queryAuditEvents(ctx context.Context, q theauth.AuditQuery, order string, level auditSchema) ([]theauth.AuditEvent, string, error) {
+	legacyCursor := audit.IsLegacyCursor(q.After)
+	if legacyCursor && order != theauth.AuditOrderDesc {
+		return nil, "", fmt.Errorf("%w: legacy cursor needs desc order", theauth.ErrBadCursor)
+	}
 	limit := q.Limit
 	if limit <= 0 {
 		limit = auditDefaultLimit
 	}
 	if limit > auditMaxLimit {
 		limit = auditMaxLimit
+	}
+	stampCol, eventCol := "recorded_at_us", "event"
+	if level < auditSchemaOrdered {
+		stampCol, eventCol = "created_at", "NULL"
 	}
 
 	var (
@@ -192,6 +254,9 @@ func (s *Store) queryAuditEvents(ctx context.Context, q theauth.AuditQuery, lega
 	if q.Action != "" {
 		wheres, args = append(wheres, "action = ?"), append(args, q.Action)
 	}
+	if q.Event != "" {
+		wheres, args = append(wheres, eventCol+" = ?"), append(args, q.Event)
+	}
 	if q.TargetType != "" {
 		wheres, args = append(wheres, "target_type = ?"), append(args, q.TargetType)
 	}
@@ -204,28 +269,43 @@ func (s *Store) queryAuditEvents(ctx context.Context, q theauth.AuditQuery, lega
 	if q.Until != nil {
 		wheres, args = append(wheres, "created_at <= ?"), append(args, toMicro(*q.Until))
 	}
-	if q.After != "" {
+	dir, cmp := "DESC", "<"
+	if order == theauth.AuditOrderAsc {
+		dir, cmp = "ASC", ">"
+	}
+	orderBy := " ORDER BY " + stampCol + " " + dir + ", id " + dir
+	switch {
+	case legacyCursor:
 		micros, id, err := decodeAuditCursor(q.After)
 		if err != nil {
 			return nil, "", fmt.Errorf("pagination.bad_cursor: %w: %w", theauth.ErrBadCursor, err)
 		}
 		wheres = append(wheres, "(created_at < ? OR (created_at = ? AND id < ?))")
 		args = append(args, micros, micros, id)
+		orderBy = " ORDER BY created_at DESC, id DESC"
+	case q.After != "":
+		c, err := audit.DecodeCursor(q.After, order)
+		if err != nil {
+			return nil, "", err
+		}
+		wheres = append(wheres, "("+stampCol+" "+cmp+" ? OR ("+stampCol+" = ? AND id "+cmp+" ?))")
+		args = append(args, c.RecordedAtUs, c.RecordedAtUs, c.ID.String())
 	}
 
 	// Before migration 0017 the accountability columns do not exist; select
 	// constants in their place so scanAudit stays one code path.
 	extra := `subject_id, actor_id, policy_version, approver_id, delegation_chain, input_provenance,
 	COALESCE(chain_seq, 0), prev_hash, hash`
-	if legacy {
+	if level == auditSchemaLegacy {
 		extra = `'', '', '', '', '[]', '{}', 0, '', ''`
 	}
+	stampSel := "COALESCE(" + stampCol + ", created_at)"
 	query := `SELECT id, organization_id, actor_user_id, actor_session_id, action, target_type, target_id,
-	metadata, ip, user_agent, created_at, ` + extra + ` FROM theauth_audit_events`
+	metadata, ip, user_agent, created_at, ` + extra + `, ` + stampSel + `, ` + eventCol + ` FROM theauth_audit_events`
 	if len(wheres) > 0 {
 		query += " WHERE " + strings.Join(wheres, " AND ")
 	}
-	query += " ORDER BY created_at DESC, id DESC LIMIT ?"
+	query += orderBy + " LIMIT ?"
 	args = append(args, limit)
 
 	rows, err := s.db.QueryContext(ctx, s.q(query), args...)
@@ -248,7 +328,11 @@ func (s *Store) queryAuditEvents(ctx context.Context, q theauth.AuditQuery, lega
 	var next string
 	if len(out) == limit {
 		last := out[len(out)-1]
-		next = encodeAuditCursor(toMicro(last.CreatedAt), last.ID.String())
+		if legacyCursor {
+			next = encodeAuditCursor(toMicro(last.CreatedAt), last.ID.String())
+		} else {
+			next = audit.EncodeCursor(audit.Cursor{RecordedAtUs: last.RecordedAtUs, ID: last.ID, Order: order})
+		}
 	}
 	return out, next, nil
 }
@@ -264,9 +348,11 @@ func scanAudit(r scanner) (theauth.AuditEvent, error) {
 		approver, chain, prov        string
 		seq                          int64
 		prev, hash                   string
+		recorded                     int64
+		event                        sql.NullString
 	)
 	if err := r.Scan(&id, &org, &actor, &sess, &action, &ttype, &tid, &meta, &ip, &ua, &created,
-		&subject, &actorID, &policy, &approver, &chain, &prov, &seq, &prev, &hash); err != nil {
+		&subject, &actorID, &policy, &approver, &chain, &prov, &seq, &prev, &hash, &recorded, &event); err != nil {
 		return theauth.AuditEvent{}, err
 	}
 	eid, err := parseID(id)
@@ -278,6 +364,7 @@ func scanAudit(r scanner) (theauth.AuditEvent, error) {
 		CreatedAt: fromMicro(created),
 		SubjectID: subject, ActorID: actorID, PolicyVersion: policy, ApproverID: approver,
 		ChainSeq: uint64(seq), PrevHash: prev, Hash: hash,
+		RecordedAtUs: recorded, Event: event.String,
 	}
 	if chain != "" && chain != "[]" {
 		if err := json.Unmarshal([]byte(chain), &e.DelegationChain); err != nil {

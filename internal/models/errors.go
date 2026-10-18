@@ -2,6 +2,7 @@ package models
 
 import (
 	"errors"
+	"fmt"
 	"time"
 )
 
@@ -28,6 +29,14 @@ var (
 	// ErrBadCursor is returned by storage adapters when a keyset pagination cursor fails to decode.
 	// Handlers match it with errors.Is.
 	ErrBadCursor = errors.New("theauth: invalid pagination cursor")
+
+	// ErrBadAuditOrder is returned when AuditQuery.Order is neither "", "asc" nor "desc".
+	ErrBadAuditOrder = errors.New("theauth: invalid audit order")
+
+	// ErrAuditOrderUnsupported is returned when an audit query asks for ascending order, an event
+	// filter or a write-order cursor and the storage backend does not declare write order support
+	// (AuditOrderSupported() bool). The query is refused instead of silently ignoring the filter.
+	ErrAuditOrderUnsupported = errors.New("theauth: audit storage backend does not support write order, event filters or c1 cursors")
 
 	// ErrLastOwner is returned when an org member removal would leave the
 	// organization with zero owners.
@@ -124,6 +133,13 @@ var (
 	// ErrAgentInactive is returned when an operation depends on an agent
 	// whose status is suspended or revoked.
 	ErrAgentInactive = errors.New("theauth: agent inactive")
+
+	// ErrAgentExpired is returned when an operation depends on an agent whose ExpiresAt has passed.
+	// It wraps ErrAgentInactive so existing inactive checks keep matching; the code is agent_expired.
+	ErrAgentExpired = fmt.Errorf("%w: agent_expired", ErrAgentInactive)
+
+	// ErrAgentExpiryInvalid is returned when a requested agent expiry is in the past or too far ahead.
+	ErrAgentExpiryInvalid = errors.New("theauth: agent expiry must be in the future and within the maximum agent lifetime")
 
 	// ErrDelegationNotFound is returned when no delegation_grants row
 	// matches the (user, agent, resource) tuple.

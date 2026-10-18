@@ -8,6 +8,9 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"net/mail"
+	"strings"
+	"sync"
 	"time"
 
 	"github.com/glincker/theauth-go/v2/internal/agent"
@@ -21,6 +24,7 @@ import (
 	"github.com/glincker/theauth-go/v2/internal/password"
 	internalsaml "github.com/glincker/theauth-go/v2/internal/saml"
 	"github.com/glincker/theauth-go/v2/internal/totp"
+	"github.com/glincker/theauth-go/v2/internal/ulid"
 	"github.com/go-webauthn/webauthn/protocol"
 )
 
@@ -447,9 +451,15 @@ func (a *TheAuth) VerifyAuditChain(ctx context.Context) (AuditChainResult, error
 }
 
 // QueryAudit returns up to q.Limit events and a cursor for the next page. It performs no
-// authorization; callers check.
+// authorization; callers check. q.Order is "desc" (default) or "asc" and q.Event filters by shared
+// event name; both, and "c1." cursors, need a backend that declares AuditOrderSupported() true,
+// otherwise it returns ErrAuditOrderUnsupported. An unknown order returns ErrBadAuditOrder and a
+// cursor that does not decode for the order returns ErrBadCursor.
 func (a *TheAuth) QueryAudit(ctx context.Context, q AuditQuery) ([]AuditEvent, string, error) {
 	if a.auditSvc == nil {
+		if err := audit.CheckQuery(a.storage, q); err != nil {
+			return nil, "", err
+		}
 		return a.storage.QueryAuditEvents(ctx, q)
 	}
 	return a.auditSvc.Query(ctx, q)
@@ -776,6 +786,13 @@ func (a *TheAuth) ResumeAgent(ctx context.Context, agentID ULID) error {
 	return a.agentSvc.ResumeAgent(ctx, agentID)
 }
 
+// SetAgentExpiry sets the agent's expiry, or clears it with nil. A non-nil value must be in the
+// future and no more than 10 years ahead (ErrAgentExpiryInvalid otherwise). Past the expiry the
+// agent is denied with ErrAgentExpired, which matches ErrAgentInactive.
+func (a *TheAuth) SetAgentExpiry(ctx context.Context, agentID ULID, expiresAt *time.Time) error {
+	return a.agentSvc.SetAgentExpiry(ctx, agentID, expiresAt)
+}
+
 // RevokeAgent is terminal: a revoked agent cannot be resumed.
 func (a *TheAuth) RevokeAgent(ctx context.Context, agentID ULID, reason string) error {
 	return a.agentSvc.RevokeAgent(ctx, agentID, reason)
@@ -931,7 +948,7 @@ func (a *TheAuth) OAuthStart(r *http.Request, provider, returnTo string) (OAuthS
 // same hooks as the built-in callback; the caller sets the session cookie from SessionToken and
 // clears the binding cookie.
 func (a *TheAuth) OAuthCallback(r *http.Request, provider, code, state, binding string) (OAuthCallbackResult, *User, error) {
-	return a.callbackOAuth(r.Context(), provider, code, state, binding, r.UserAgent(), httpx.ClientIP(r))
+	return a.callbackOAuth(r.Context(), provider, code, state, binding, r.UserAgent(), a.clientIPOf(r))
 }
 
 // CreateRegistrationToken mints an initial access token for POST /oauth/register. The plaintext is
@@ -1012,4 +1029,131 @@ func (a *TheAuth) OIDCLogout(ctx context.Context, userID, sessionID ULID) error 
 	}
 	a.as.NotifyLogout(ctx, userID, sessionID.String())
 	return nil
+}
+
+// CreateUserInput is the input to TheAuth.CreateUser.
+type CreateUserInput struct {
+	// Email is required. It is validated and stored in the canonical form of NormalizeEmail.
+	Email string
+	// Name is an optional display name, at most 256 bytes after trimming.
+	Name string
+	// ID optionally fixes the user ID, for example to match your own identity provider. The zero
+	// value means generate one.
+	ID ULID
+}
+
+// UserError is the typed error returned by CreateUser. Compare with errors.Is against
+// ErrUserInvalidInput, ErrUserEmailConflict or ErrUserIDConflict. Code uses the same names as the
+// TypeScript SDK.
+type UserError struct {
+	// Code is "USER_INVALID_INPUT", "USER_EMAIL_CONFLICT" or "USER_ID_CONFLICT".
+	Code string
+	// Message is a human readable detail. It never includes the stored user's data.
+	Message string
+}
+
+func (e *UserError) Error() string { return "theauth: " + e.Message }
+
+// Is reports whether target is a *UserError with the same Code, so the Err* sentinels match any
+// message.
+func (e *UserError) Is(target error) bool {
+	t, ok := target.(*UserError)
+	return ok && t.Code == e.Code
+}
+
+var (
+	// ErrUserInvalidInput means the email or another CreateUser field failed validation.
+	ErrUserInvalidInput = &UserError{Code: "USER_INVALID_INPUT", Message: "invalid user input"}
+	// ErrUserEmailConflict means the email is registered under a different user ID than requested.
+	ErrUserEmailConflict = &UserError{Code: "USER_EMAIL_CONFLICT", Message: "email is registered under a different user id"}
+	// ErrUserIDConflict means the requested user ID is already used by another email.
+	ErrUserIDConflict = &UserError{Code: "USER_ID_CONFLICT", Message: "user id is already in use by another email"}
+)
+
+// createUserMu serializes the check-then-insert of CreateUser inside one process. Across processes
+// the storage unique email constraint is the guard, and CreateUser re-reads on an insert error.
+var createUserMu sync.Mutex
+
+// CreateUser creates a user, or returns the existing one when the normalized email is already
+// registered and in.ID is zero or equal to the stored ID. An existing user is never modified. It
+// sends no email and creates no credential or session. A new user emits a "user.created" audit
+// event. Errors match ErrUserInvalidInput, ErrUserEmailConflict and ErrUserIDConflict via
+// errors.Is; the loser of a concurrent call with the same email gets the winner's user, not an
+// error.
+func (a *TheAuth) CreateUser(ctx context.Context, in CreateUserInput) (User, error) {
+	emailAddr, name, err := a.validateCreateUser(in)
+	if err != nil {
+		return User{}, err
+	}
+	createUserMu.Lock()
+	defer createUserMu.Unlock()
+
+	if u, err := a.matchUser(ctx, emailAddr, in.ID); u != nil || err != nil {
+		if err != nil {
+			return User{}, err
+		}
+		return *u, nil
+	}
+	id := in.ID
+	if id == (ULID{}) {
+		id = ulid.New()
+	}
+	now := time.Now()
+	created, err := a.storage.CreateUser(ctx, User{ID: id, Email: emailAddr, Name: name, CreatedAt: now, UpdatedAt: now})
+	if err != nil {
+		// Another process may have inserted the same email first: apply the same rules to its row.
+		if u, merr := a.matchUser(ctx, emailAddr, in.ID); merr != nil {
+			return User{}, merr
+		} else if u != nil {
+			return *u, nil
+		}
+		return User{}, err
+	}
+	a.EmitAudit(ctx, "user.created", TargetRef{Type: "user", ID: created.ID.String()}, map[string]any{
+		"email_ref": emailnorm.LogRef(emailAddr),
+	})
+	return created, nil
+}
+
+// validateCreateUser returns the normalized email and trimmed name, or an ErrUserInvalidInput match.
+func (a *TheAuth) validateCreateUser(in CreateUserInput) (emailAddr, name string, err error) {
+	raw := a.normalizeEmail(in.Email)
+	if raw == "" || len(raw) > 320 {
+		return "", "", &UserError{Code: ErrUserInvalidInput.Code, Message: "invalid user input: email must be 1 to 320 characters"}
+	}
+	addr, perr := mail.ParseAddress(raw)
+	if perr != nil || addr.Address != raw {
+		return "", "", &UserError{Code: ErrUserInvalidInput.Code, Message: "invalid user input: email is not a valid address"}
+	}
+	name = strings.TrimSpace(in.Name)
+	if len(name) > 256 {
+		return "", "", &UserError{Code: ErrUserInvalidInput.Code, Message: "invalid user input: name is longer than 256 bytes"}
+	}
+	return raw, name, nil
+}
+
+// matchUser applies the idempotency rules. It returns the user to reuse, nil when nothing matches,
+// or a conflict error.
+func (a *TheAuth) matchUser(ctx context.Context, emailAddr string, id ULID) (*User, error) {
+	byEmail, err := a.storage.UserByEmail(ctx, emailAddr)
+	switch {
+	case err == nil && byEmail != nil:
+		if id == (ULID{}) || byEmail.ID == id {
+			return byEmail, nil
+		}
+		return nil, &UserError{Code: ErrUserEmailConflict.Code, Message: "email is registered under a different user id than " + id.String()}
+	case err != nil && !errors.Is(err, ErrStorageNotFound):
+		return nil, err
+	}
+	if id == (ULID{}) {
+		return nil, nil
+	}
+	byID, err := a.storage.UserByID(ctx, id)
+	switch {
+	case err == nil && byID != nil:
+		return nil, &UserError{Code: ErrUserIDConflict.Code, Message: "user id " + id.String() + " is already in use by another email"}
+	case err != nil && !errors.Is(err, ErrStorageNotFound):
+		return nil, err
+	}
+	return nil, nil
 }

@@ -22,6 +22,15 @@ func nilToDefault(s, def string) string {
 	return s
 }
 
+// nonNilBytes returns an empty, non-nil slice for nil so pgx writes an empty bytea
+// instead of NULL into a NOT NULL bytea column.
+func nonNilBytes(b []byte) []byte {
+	if b == nil {
+		return []byte{}
+	}
+	return b
+}
+
 // nullableBytes returns nil for an empty slice so pgx writes NULL rather than an empty bytea.
 func nullableBytes(b []byte) any {
 	if len(b) == 0 {

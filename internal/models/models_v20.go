@@ -308,7 +308,13 @@ type CreateAgentInput struct {
 	// or token exchange. Must be a subset of the resource's supported scopes
 	// at mint time; the AS enforces this at every grant.
 	Scope []string
+	// ExpiresAt optionally bounds the agent's lifetime. It must be in the future and no more than
+	// MaxAgentLifetime ahead. Nil means the agent does not expire.
+	ExpiresAt *time.Time
 }
+
+// MaxAgentLifetime is the farthest an agent expiry may be set from now.
+const MaxAgentLifetime = 10 * 365 * 24 * time.Hour
 
 // Agent lifecycle status values persisted in agents.status.
 const (
@@ -341,6 +347,15 @@ type Agent struct {
 	Scope          []string   `json:"scope,omitempty"`
 	CreatedAt      time.Time  `json:"createdAt"`
 	LastActiveAt   *time.Time `json:"lastActiveAt,omitempty"`
+	// ExpiresAt is the optional moment after which the agent is treated as inactive. Nil means the
+	// agent never expires. An expired agent cannot authenticate, mint tokens, lend permissions in a
+	// delegation chain, or introspect as active.
+	ExpiresAt *time.Time `json:"expiresAt,omitempty"`
+}
+
+// AgentExpired reports whether the agent has an expiry that is at or before now.
+func (a Agent) AgentExpired(now time.Time) bool {
+	return a.ExpiresAt != nil && !now.Before(*a.ExpiresAt)
 }
 
 // AgentCredential is one stored secret material row for an agent. For kind

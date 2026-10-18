@@ -212,7 +212,7 @@ type accountStateReader interface {
 func (s *Service) subjectActiveLookup(ctx context.Context, sub string) bool {
 	if strings.HasPrefix(sub, models.AgentSubjectPrefix) {
 		ag, err := s.lookupAgent(ctx, sub)
-		return err == nil && ag != nil && ag.Status == models.AgentStatusActive
+		return err == nil && agentLive(ag, s.Cfg.Clock.Now())
 	}
 	if s.Users == nil || sub == "" {
 		return true
@@ -264,7 +264,9 @@ func (s *Service) chainStillActive(ctx context.Context, resp *IntrospectionRespo
 	if cacheKey != "" {
 		if v, ok := s.chainCache.Load(cacheKey); ok {
 			if entry, ok := v.(*chainCacheEntry); ok {
-				if s.Cfg.Clock.Now().Sub(entry.checkedAt) < chainCacheTTL {
+				// A cached active answer must not outlive the earliest agent expiry in the chain.
+				fresh := now.Sub(entry.checkedAt) < chainCacheTTL && (entry.expiresAt.IsZero() || now.Before(entry.expiresAt))
+				if fresh {
 					return entry.active
 				}
 				s.chainCache.Delete(cacheKey)
@@ -273,22 +275,25 @@ func (s *Service) chainStillActive(ctx context.Context, resp *IntrospectionRespo
 	}
 
 	active := true
+	var earliestExp time.Time
 	for cur := resp.Act; cur != nil; cur = cur.Act {
 		ag, err := s.lookupAgent(ctx, cur.Sub)
 		if err != nil || ag == nil {
 			active = false
 			break
 		}
-		if ag.Status != models.AgentStatusActive {
+		if !agentLive(ag, now) {
 			active = false
 			break
 		}
+		earliestExp = capExpiry(earliestExp, agentExpiryBound(ag))
 	}
 
 	if cacheKey != "" {
 		s.chainCache.Store(cacheKey, &chainCacheEntry{
 			active:    active,
-			checkedAt: s.Cfg.Clock.Now(),
+			checkedAt: now,
+			expiresAt: earliestExp,
 		})
 	}
 	return active

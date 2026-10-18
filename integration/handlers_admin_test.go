@@ -31,9 +31,16 @@ type adminFixture struct {
 
 func newAdminFixture(t *testing.T) adminFixture {
 	t.Helper()
+	return newAdminFixtureWithStorage(t, func(s *memory.Store) theauth.Storage { return s })
+}
+
+// newAdminFixtureWithStorage is newAdminFixture with the storage handed to theauth.New chosen by
+// wrap, so a test can hide optional capabilities of the memory store.
+func newAdminFixtureWithStorage(t *testing.T, wrap func(*memory.Store) theauth.Storage) adminFixture {
+	t.Helper()
 	store := memory.New()
 	a, err := theauth.New(theauth.Config{
-		Storage:       store,
+		Storage:       wrap(store),
 		BaseURL:       "http://localhost",
 		SessionTTL:    time.Hour,
 		MagicLinkTTL:  time.Minute,

@@ -3,6 +3,8 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -14,6 +16,17 @@ func (zeros) Read(p []byte) (int, error) {
 		p[i] = 0
 	}
 	return len(p), nil
+}
+
+func writeSuite(t *testing.T, expect string) string {
+	t.Helper()
+	doc := `{"policies":[{"version":"1","statements":[{"effect":"allow","actions":["read"],"resources":["docs/*"]}]}],` +
+		`"cases":[{"name":"c","request":{"action":"read","resource":"docs/x"},"expect":"` + expect + `"}]}`
+	path := filepath.Join(t.TempDir(), "suite.json")
+	if err := os.WriteFile(path, []byte(doc), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	return path
 }
 
 func TestRun(t *testing.T) {
@@ -54,6 +67,14 @@ func TestRun(t *testing.T) {
 				t.Fatalf("unexpected doc: %d paths", len(doc.Paths))
 			}
 		}},
+		{"policy no args", []string{"policy"}, 2, nil},
+		{"policy missing file", []string{"policy", "test", "/nonexistent/suite.json"}, 2, nil},
+		{"policy pass", []string{"policy", "test", writeSuite(t, "allowed")}, 0, func(t *testing.T, out string) {
+			if !strings.Contains(out, "1 cases, 0 failed") {
+				t.Fatalf("got %q", out)
+			}
+		}},
+		{"policy fail", []string{"policy", "test", writeSuite(t, "denied")}, 1, nil},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {

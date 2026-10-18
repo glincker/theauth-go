@@ -583,27 +583,11 @@ func (a *TheAuth) mountSessionManagement(r chi.Router, ipLimit func(http.Handler
 }
 
 func (a *TheAuth) setSessionCookie(w http.ResponseWriter, token string) {
-	http.SetCookie(w, &http.Cookie{
-		Name:     a.cookieName,
-		Value:    token,
-		Path:     "/",
-		HttpOnly: true,
-		Secure:   a.secureCookie,
-		SameSite: http.SameSiteLaxMode,
-		Expires:  time.Now().Add(a.sessionTTL),
-	})
+	a.cookiePolicy.Set(w, a.cookieName, token, "/", time.Now().Add(a.sessionTTL))
 }
 
 func (a *TheAuth) clearSessionCookie(w http.ResponseWriter) {
-	http.SetCookie(w, &http.Cookie{
-		Name:     a.cookieName,
-		Value:    "",
-		Path:     "/",
-		MaxAge:   -1,
-		HttpOnly: true,
-		Secure:   a.secureCookie,
-		SameSite: http.SameSiteLaxMode,
-	})
+	a.cookiePolicy.Clear(w, a.cookieName, "/")
 }
 
 func writeJSON(w http.ResponseWriter, status int, v any) {

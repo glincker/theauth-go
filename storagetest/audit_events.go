@@ -12,7 +12,7 @@ func testAuditEvents(t *testing.T, store AuditSuiteStorage) {
 	t.Helper()
 	ctx := context.Background()
 
-	actorID := newID()
+	actorID := ensureUser(t, store, "audit-single")
 
 	t.Run("InsertSingle", func(t *testing.T) {
 		ev := theauth.AuditEvent{

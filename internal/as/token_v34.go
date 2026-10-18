@@ -59,8 +59,8 @@ func (s *Service) ClientCredentialsToken(ctx context.Context, req TokenRequest) 
 	if err != nil {
 		return TokenResponse{}, models.ErrOAuthInvalidClient
 	}
-	if agent.Status != models.AgentStatusActive {
-		return TokenResponse{}, models.ErrAgentInactive
+	if aerr := agentLiveErr(agent, s.now()); aerr != nil {
+		return TokenResponse{}, aerr
 	}
 	// OptionalResource and PathAudience apply here as on the authorization code grant. audience is the
 	// canonical identifier.
@@ -90,12 +90,14 @@ func (s *Service) ClientCredentialsToken(ctx context.Context, req TokenRequest) 
 	}
 	requested = gated.Scopes
 	now := time.Now().UTC()
+	// The token never outlives the agent.
+	accessExp := capExpiry(now.Add(s.Cfg.AccessTokenTTL), agentExpiryBound(agent))
 	jti := ulid.New().String()
 	claims := jwt.Claims{
 		Iss:      s.Cfg.Issuer,
 		Sub:      models.AgentSubjectPrefix + agent.ID.String(),
 		Aud:      audience,
-		Exp:      now.Add(s.Cfg.AccessTokenTTL).Unix(),
+		Exp:      accessExp.Unix(),
 		Iat:      now.Unix(),
 		Jti:      jti,
 		ClientID: client.ClientID,
@@ -130,7 +132,7 @@ func (s *Service) ClientCredentialsToken(ctx context.Context, req TokenRequest) 
 	return TokenResponse{
 		AccessToken: access,
 		TokenType:   "Bearer",
-		ExpiresIn:   int(s.Cfg.AccessTokenTTL.Seconds()),
+		ExpiresIn:   int(accessExp.Sub(now).Seconds()),
 		Scope:       scopeJoin(requested),
 	}, nil
 }
@@ -162,8 +164,8 @@ func (s *Service) ExchangeToken(ctx context.Context, req TokenExchangeRequest) (
 	if err != nil {
 		return TokenResponse{}, models.ErrOAuthInvalidClient
 	}
-	if requestingAgent.Status != models.AgentStatusActive {
-		return TokenResponse{}, models.ErrAgentInactive
+	if aerr := agentLiveErr(requestingAgent, s.now()); aerr != nil {
+		return TokenResponse{}, aerr
 	}
 	// Steps 2 and 3: parse and verify the subject token, then extract its claims.
 	if req.SubjectToken == "" {
@@ -238,7 +240,7 @@ func (s *Service) ExchangeToken(ctx context.Context, req TokenExchangeRequest) (
 	}
 	// Step 6: resolve the root principal and walk the existing actor chain to confirm every link is
 	// still active.
-	root, existingChain, err := s.resolveSubjectPrincipal(ctx, subjectClaims)
+	root, existingChain, chainExp, err := s.resolveSubjectPrincipal(ctx, subjectClaims, s.now())
 	if err != nil {
 		return TokenResponse{}, err
 	}
@@ -279,6 +281,8 @@ func (s *Service) ExchangeToken(ctx context.Context, req TokenExchangeRequest) (
 		now.Add(s.AgentPolicy.DefaultDelegatedTokenTTL),
 		now.Add(time.Duration(grant.MaxDurationSeconds)*time.Second),
 		now.Add(s.Cfg.AccessTokenTTL),
+		agentExpiryBound(requestingAgent),
+		chainExp,
 	)
 	if policyExp.Before(now) || policyExp.Equal(now) {
 		return TokenResponse{}, models.ErrOAuthInvalidGrant
@@ -329,7 +333,7 @@ func (s *Service) ExchangeToken(ctx context.Context, req TokenExchangeRequest) (
 	return TokenResponse{
 		AccessToken:     access,
 		TokenType:       exchangedType,
-		ExpiresIn:       int(time.Until(policyExp).Seconds()),
+		ExpiresIn:       int(policyExp.Sub(now).Seconds()),
 		Scope:           scopeJoin(finalScope),
 		IssuedTokenType: models.TokenTypeAccessToken,
 	}, nil
@@ -337,35 +341,38 @@ func (s *Service) ExchangeToken(ctx context.Context, req TokenExchangeRequest) (
 
 // resolveSubjectPrincipal walks the subject token's claims and returns the root user and the
 // existing actor chain, innermost first. The root must be a user, since no user authority stands
-// behind an agent-rooted token. Every actor in the chain must be active.
-func (s *Service) resolveSubjectPrincipal(ctx context.Context, subjectClaims jwt.Claims) (models.ULID, *chain.Actor, error) {
+// behind an agent-rooted token. Every actor in the chain must be active and unexpired. The earliest
+// actor expiry is returned (zero when none) so the caller can cap the new token.
+func (s *Service) resolveSubjectPrincipal(ctx context.Context, subjectClaims jwt.Claims, now time.Time) (models.ULID, *chain.Actor, time.Time, error) {
 	if subjectClaims.Sub == "" {
-		return models.ULID{}, nil, models.ErrSubjectTokenInvalid
+		return models.ULID{}, nil, time.Time{}, models.ErrSubjectTokenInvalid
 	}
 	if strings.HasPrefix(subjectClaims.Sub, models.AgentSubjectPrefix) {
 		// An agent-rooted token cannot seed a delegation chain, because no user authority stands behind it.
-		return models.ULID{}, nil, models.ErrSubjectTokenInvalid
+		return models.ULID{}, nil, time.Time{}, models.ErrSubjectTokenInvalid
 	}
 	root, err := parseULID(subjectClaims.Sub)
 	if err != nil {
-		return models.ULID{}, nil, models.ErrSubjectTokenInvalid
+		return models.ULID{}, nil, time.Time{}, models.ErrSubjectTokenInvalid
 	}
 	existing := actorFromClaims(subjectClaims)
+	var chainExp time.Time
 	// Walk the existing chain and verify every actor is still active.
 	for cur := existing; cur != nil; cur = cur.Act {
 		ag, err := s.lookupAgent(ctx, cur.Sub)
 		if err != nil {
-			return models.ULID{}, nil, models.ErrSubjectTokenInvalid
+			return models.ULID{}, nil, time.Time{}, models.ErrSubjectTokenInvalid
 		}
 		if ag == nil {
 			// Only "agent:<id>" actors are emitted by this AS. Anything else means a forged or foreign token.
-			return models.ULID{}, nil, models.ErrSubjectTokenInvalid
+			return models.ULID{}, nil, time.Time{}, models.ErrSubjectTokenInvalid
 		}
-		if ag.Status != models.AgentStatusActive {
-			return models.ULID{}, nil, models.ErrAgentInactive
+		if aerr := agentLiveErr(ag, now); aerr != nil {
+			return models.ULID{}, nil, time.Time{}, aerr
 		}
+		chainExp = capExpiry(chainExp, agentExpiryBound(ag))
 	}
-	return root, existing, nil
+	return root, existing, chainExp, nil
 }
 
 // actorFromClaims reads the act claim from a JWT and returns the chain actor, or nil when absent or

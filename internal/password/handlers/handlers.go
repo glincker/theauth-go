@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/glincker/theauth-go/v2/internal/httpsec"
 	"github.com/glincker/theauth-go/v2/internal/httpx"
 	"github.com/glincker/theauth-go/v2/internal/models"
 	"github.com/glincker/theauth-go/v2/internal/password"
@@ -37,6 +38,8 @@ type CookieConfig struct {
 	Name       string
 	SecureFlag bool
 	TTL        time.Duration
+	// Policy carries Domain, SameSite and Partitioned. Secure is SecureFlag OR Policy.Secure.
+	Policy httpsec.CookiePolicy
 	// DeviceCookieName, when set, is read at signin so a remembered device
 	// can skip the TOTP prompt. Empty disables trusted devices.
 	DeviceCookieName string
@@ -46,8 +49,9 @@ type CookieConfig struct {
 // Service interface for business logic and on a CookieConfig for the
 // session cookie shape.
 type Handler struct {
-	svc    Service
-	cookie CookieConfig
+	svc      Service
+	cookie   CookieConfig
+	clientIP func(*http.Request) string
 }
 
 // New constructs a Handler. Both arguments are required; pass a Service
@@ -55,6 +59,22 @@ type Handler struct {
 // populated CookieConfig matching the operator session settings.
 func New(svc Service, cookie CookieConfig) *Handler {
 	return &Handler{svc: svc, cookie: cookie}
+}
+
+// SetClientIP installs the function that derives the client address for throttling, audit and
+// session records. The default is the connection address; the root installs a resolver that
+// honors Config.TrustedProxies. A nil fn is ignored.
+func (h *Handler) SetClientIP(fn func(*http.Request) string) {
+	if fn != nil {
+		h.clientIP = fn
+	}
+}
+
+func (h *Handler) ipOf(r *http.Request) string {
+	if h.clientIP != nil {
+		return h.clientIP(r)
+	}
+	return httpx.ClientIP(r)
 }
 
 // Mount registers the /email-password/* subroutes onto r. The caller
@@ -96,7 +116,7 @@ func (h *Handler) handleSignup(w http.ResponseWriter, r *http.Request) {
 	if hdr := r.Header.Get(SetupTokenHeader); hdr != "" {
 		setupToken = hdr
 	}
-	ctx := password.WithSignupMeta(r.Context(), password.SignupMeta{SetupToken: setupToken, IP: httpx.ClientIP(r)})
+	ctx := password.WithSignupMeta(r.Context(), password.SignupMeta{SetupToken: setupToken, IP: h.ipOf(r), UserAgent: r.UserAgent()})
 	_, sessToken, err := h.svc.Signup(ctx, email, pw)
 	if err != nil {
 		httpx.ErrToHTTP(w, err)
@@ -113,7 +133,7 @@ func (h *Handler) handleSignin(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	ip := httpx.ClientIP(r)
+	ip := h.ipOf(r)
 	ua := r.UserAgent()
 	ctx := r.Context()
 	if h.cookie.DeviceCookieName != "" {
@@ -181,13 +201,5 @@ func (h *Handler) handleReset(w http.ResponseWriter, r *http.Request) {
 // Mirrors the magic-link-verify cookie semantics so /auth/me works the
 // same regardless of which signin path was used.
 func (h *Handler) setSessionCookie(w http.ResponseWriter, token string) {
-	http.SetCookie(w, &http.Cookie{
-		Name:     h.cookie.Name,
-		Value:    token,
-		Path:     "/",
-		HttpOnly: true,
-		Secure:   h.cookie.SecureFlag,
-		SameSite: http.SameSiteLaxMode,
-		Expires:  time.Now().Add(h.cookie.TTL),
-	})
+	h.cookie.Policy.WithSecure(h.cookie.SecureFlag).Set(w, h.cookie.Name, token, "/", time.Now().Add(h.cookie.TTL))
 }

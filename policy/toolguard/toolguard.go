@@ -14,6 +14,7 @@ import (
 	theauth "github.com/glincker/theauth-go/v2"
 	"github.com/glincker/theauth-go/v2/internal/audit"
 	"github.com/glincker/theauth-go/v2/policy"
+	"github.com/glincker/theauth-go/v2/policy/hook"
 )
 
 // Errors returned by the guard. Use errors.Is and errors.As to branch.
@@ -38,7 +39,14 @@ type ApprovalRequiredError struct {
 	Requirement policy.Requirement
 	// ApprovalID is set when the guard opened an approval request.
 	ApprovalID string
+	// Code says why approval is needed: approval_required, risk_escalation,
+	// taint_violation, or approval_invalid when a presented approval id could
+	// not be spent.
+	Code policy.DecisionCode
 }
+
+// DecisionCode returns Code.
+func (e *ApprovalRequiredError) DecisionCode() policy.DecisionCode { return e.Code }
 
 // Error implements error.
 func (e *ApprovalRequiredError) Error() string {
@@ -53,7 +61,14 @@ type DeniedError struct {
 	Tool    string
 	AgentID string
 	Reason  string
+	// Code is the machine-readable reason: no_permission, ip_not_allowed,
+	// time_restricted and so on. Branch on it instead of parsing Reason.
+	Code policy.DecisionCode
 }
+
+// DecisionCode returns Code, so a DeniedError satisfies the interface CodeOf
+// looks for.
+func (e *DeniedError) DecisionCode() policy.DecisionCode { return e.Code }
 
 // Error implements error.
 func (e *DeniedError) Error() string {
@@ -72,7 +87,12 @@ type TaintViolationError struct {
 	Reason  string
 	// Verdict holds the violated checks and the labels they were computed from.
 	Verdict *policy.TaintVerdict
+	// Code is always taint_violation.
+	Code policy.DecisionCode
 }
+
+// DecisionCode returns Code.
+func (e *TaintViolationError) DecisionCode() policy.DecisionCode { return e.Code }
 
 // Error implements error.
 func (e *TaintViolationError) Error() string {
@@ -82,6 +102,42 @@ func (e *TaintViolationError) Error() string {
 // Is makes errors.Is match ErrTaintViolation and ErrDenied.
 func (e *TaintViolationError) Is(target error) bool {
 	return target == ErrTaintViolation || target == ErrDenied
+}
+
+// guardError is an ErrGuardFailed failure that also carries a decision code.
+// Its text and unwrap chain are those of the wrapped error.
+type guardError struct {
+	code policy.DecisionCode
+	err  error
+}
+
+func (e *guardError) Error() string                     { return e.err.Error() }
+func (e *guardError) Unwrap() error                     { return e.err }
+func (e *guardError) DecisionCode() policy.DecisionCode { return e.code }
+
+func guardFailed(code policy.DecisionCode, err error) error { return &guardError{code: code, err: err} }
+
+// CodeOf returns the decision code carried by an error from Guard.Authorize or
+// a guarded Tool, found with errors.As anywhere in the chain. It returns the
+// empty code for nil and for errors that carry none.
+func CodeOf(err error) policy.DecisionCode {
+	var c interface{ DecisionCode() policy.DecisionCode }
+	if errors.As(err, &c) {
+		return c.DecisionCode()
+	}
+	return ""
+}
+
+// limitCode classifies an error from Guard.Limit.
+func limitCode(err error) policy.DecisionCode {
+	var rl *theauth.AgentRateLimitedError
+	switch {
+	case errors.As(err, &rl):
+		return policy.CodeRateLimited
+	case errors.Is(err, theauth.ErrAgentNotFound):
+		return policy.CodeAgentNotFound
+	}
+	return policy.CodePolicyIndeterminate
 }
 
 // Call describes one tool invocation to authorize.
@@ -156,6 +212,18 @@ type Guard struct {
 	// input provenance. A call without labels emits nothing. The method value
 	// (*theauth.TheAuth).EmitAudit fits.
 	Audit func(ctx context.Context, action string, target theauth.TargetRef, metadata map[string]any)
+	// BeforeAuthorize, when set, runs a before authorize hook or external guard
+	// (package policy/hook) on every call the policy allowed or escalated. A
+	// deny, timeout or failure refuses the call with a *DeniedError coded
+	// hook_denied, hook_timeout or hook_error; an escalate sends an allowed call
+	// to the approval flow (approval_required). A hook allow never overrides a
+	// policy decision. A call the hook refused is always audited when Audit is
+	// set. Nil, the default, changes nothing.
+	BeforeAuthorize *hook.Runner
+	// HookSubject, when set, fills the agent and delegation fields of the hook
+	// input; an error fails the call closed with policy_indeterminate.
+	// (*theauth.TheAuth).AgentHookSubject fits. Nil sends the agent id alone.
+	HookSubject func(ctx context.Context, agentID string) (hook.AgentInfo, hook.Delegation, error)
 }
 
 type approvalKey struct{}
@@ -180,26 +248,34 @@ func (g *Guard) Authorize(ctx context.Context, c Call) error {
 
 // authorize returns the resolved provenance along with the outcome.
 func (g *Guard) authorize(ctx context.Context, c Call) (map[string][]string, error) {
-	prov, d, err := g.decide(ctx, c)
-	g.audit(ctx, c, prov, d, err)
+	prov, d, hk, err := g.decide(ctx, c)
+	g.audit(ctx, c, prov, d, hk, err)
 	return prov, err
 }
 
-func (g *Guard) decide(ctx context.Context, c Call) (map[string][]string, *policy.Decision, error) {
+func (g *Guard) decide(ctx context.Context, c Call) (map[string][]string, *policy.Decision, *hook.Outcome, error) {
+	prov, d, err := g.evaluate(ctx, c)
+	if d == nil || g.BeforeAuthorize == nil || (d.Effect != policy.Allow && d.Effect != policy.Escalate) {
+		return prov, d, nil, err
+	}
+	return g.applyHook(ctx, c, prov, *d, err)
+}
+
+func (g *Guard) evaluate(ctx context.Context, c Call) (map[string][]string, *policy.Decision, error) {
 	if g == nil || g.Policies == nil {
-		return nil, nil, fmt.Errorf("%w: no policy source configured", ErrGuardFailed)
+		return nil, nil, guardFailed(policy.CodePolicyIndeterminate, fmt.Errorf("%w: no policy source configured", ErrGuardFailed))
 	}
 	if c.AgentID == "" {
-		return nil, nil, fmt.Errorf("%w: no agent id for tool %q", ErrGuardFailed, c.Tool)
+		return nil, nil, guardFailed(policy.CodePolicyIndeterminate, fmt.Errorf("%w: no agent id for tool %q", ErrGuardFailed, c.Tool))
 	}
 	if g.Limit != nil {
 		if err := g.Limit(ctx, c.AgentID); err != nil {
-			return nil, nil, fmt.Errorf("%w: limit for agent %s: %w", ErrGuardFailed, c.AgentID, err)
+			return nil, nil, guardFailed(limitCode(err), fmt.Errorf("%w: limit for agent %s: %w", ErrGuardFailed, c.AgentID, err))
 		}
 	}
 	pols, err := g.Policies(ctx, c.AgentID)
 	if err != nil {
-		return nil, nil, fmt.Errorf("%w: load policies for agent %s: %w", ErrGuardFailed, c.AgentID, err)
+		return nil, nil, guardFailed(policy.CodePolicyIndeterminate, fmt.Errorf("%w: load policies for agent %s: %w", ErrGuardFailed, c.AgentID, err))
 	}
 	attrs := make(map[string]string, len(c.Attributes)+2)
 	for k, v := range c.Attributes {
@@ -229,20 +305,26 @@ func (g *Guard) decide(ctx context.Context, c Call) (map[string][]string, *polic
 	case policy.Allow:
 		return prov, &d, nil
 	case policy.Escalate:
+		if g.BeforeAuthorize != nil {
+			// The hook runs before an approval is spent; applyHook escalates.
+			return prov, &d, nil
+		}
 		return prov, &d, g.escalate(ctx, c, d)
 	}
 	if d.Taint != nil && d.Taint.Verdict == policy.TaintDeny {
-		return prov, &d, &TaintViolationError{Tool: c.Tool, AgentID: c.AgentID, Reason: d.Reason, Verdict: d.Taint}
+		return prov, &d, &TaintViolationError{Tool: c.Tool, AgentID: c.AgentID, Reason: d.Reason, Verdict: d.Taint, Code: d.Code}
 	}
-	return prov, &d, &DeniedError{Tool: c.Tool, AgentID: c.AgentID, Reason: d.Reason}
+	return prov, &d, &DeniedError{Tool: c.Tool, AgentID: c.AgentID, Reason: d.Reason, Code: d.Code}
 }
 
 // audit records one decision when the call carried provenance labels.
-func (g *Guard) audit(ctx context.Context, c Call, prov map[string][]string, d *policy.Decision, err error) {
-	if g.Audit == nil || d == nil || len(prov) == 0 {
+func (g *Guard) audit(ctx context.Context, c Call, prov map[string][]string, d *policy.Decision, hk *hook.Outcome, err error) {
+	hookBlocked := hk != nil && !hk.Allowed()
+	if g.Audit == nil || d == nil || (len(prov) == 0 && !hookBlocked) {
 		return
 	}
 	outcome := "allowed"
+	code := d.Code
 	var approval *ApprovalRequiredError
 	var taint *TaintViolationError
 	switch {
@@ -256,23 +338,32 @@ func (g *Guard) audit(ctx context.Context, c Call, prov map[string][]string, d *
 		outcome = "failed"
 	case d.Effect == policy.Escalate:
 		outcome = "approved"
+		code = policy.CodeApprovalConsumed
 	}
-	record := map[string]any{"labels": provenanceRecord(prov)}
-	if d.Taint != nil {
-		record["taint"] = map[string]any{
-			"verdict": d.Taint.Verdict,
-			"matches": matchesRecord(d.Taint.Matches),
-		}
+	if ec := CodeOf(err); ec != "" {
+		code = ec
 	}
 	md, _ := audit.MetadataFromContext(ctx)
 	md.ActorID = c.AgentID
-	md.InputProvenance = record
-	g.Audit(audit.WithAuditMetadata(ctx, md), "agent.authorize",
-		theauth.TargetRef{Type: "tool", ID: c.Tool},
-		map[string]any{
-			"agent_id": c.AgentID, "tool": c.Tool, "action": c.action(), "resource": c.resource(),
-			"effect": string(d.Effect), "outcome": outcome, "reason": d.Reason,
-		})
+	if len(prov) > 0 {
+		record := map[string]any{"labels": provenanceRecord(prov)}
+		if d.Taint != nil {
+			record["taint"] = map[string]any{
+				"verdict": d.Taint.Verdict,
+				"matches": matchesRecord(d.Taint.Matches),
+			}
+		}
+		md.InputProvenance = record
+	}
+	meta := map[string]any{
+		"agent_id": c.AgentID, "tool": c.Tool, "action": c.action(), "resource": c.resource(),
+		"effect": string(d.Effect), "outcome": outcome, "reason": d.Reason,
+		"decision_code": string(code),
+	}
+	if hk != nil {
+		meta["hook"] = hk.AuditRecord()
+	}
+	g.Audit(audit.WithAuditMetadata(ctx, md), "agent.authorize", theauth.TargetRef{Type: "tool", ID: c.Tool}, meta)
 }
 
 func provenanceRecord(prov map[string][]string) map[string]any {
@@ -306,7 +397,7 @@ func (g *Guard) escalate(ctx context.Context, c Call, d policy.Decision) error {
 	}
 	e := &ApprovalRequiredError{
 		Tool: c.Tool, AgentID: c.AgentID, Reason: d.Reason,
-		Tier: esc.Tier, Requirement: esc.Requirement,
+		Tier: esc.Tier, Requirement: esc.Requirement, Code: d.Code,
 	}
 	if g.Approvals == nil {
 		return e
@@ -316,15 +407,16 @@ func (g *Guard) escalate(ctx context.Context, c Call, d policy.Decision) error {
 	if id := approvalID(ctx); id != "" && esc.Requirement == policy.RequireApproval {
 		ok, err := g.Approvals.Consume(ctx, id, c)
 		if err != nil {
-			return fmt.Errorf("%w: spend approval %s: %w", ErrGuardFailed, id, err)
+			return guardFailed(policy.CodePolicyIndeterminate, fmt.Errorf("%w: spend approval %s: %w", ErrGuardFailed, id, err))
 		}
 		if ok {
 			return nil
 		}
+		e.Code = policy.CodeApprovalInvalid
 	}
 	id, err := g.Approvals.Open(ctx, c, esc)
 	if err != nil {
-		return fmt.Errorf("%w: open approval: %w", ErrGuardFailed, err)
+		return guardFailed(policy.CodePolicyIndeterminate, fmt.Errorf("%w: open approval: %w", ErrGuardFailed, err))
 	}
 	e.ApprovalID = id
 	return e

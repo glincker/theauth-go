@@ -20,8 +20,8 @@ import (
 
 func (s *Store) InsertAgent(ctx context.Context, a theauth.Agent) (theauth.Agent, error) {
 	const q = `
-INSERT INTO agents (id, owner_user_id, organization_id, name, description, status, client_id, scope_grant, created_at, last_active_at)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+INSERT INTO agents (id, owner_user_id, organization_id, name, description, status, client_id, scope_grant, created_at, last_active_at, expires_at)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
 RETURNING id, created_at`
 	created := a.CreatedAt
 	if created.IsZero() {
@@ -39,9 +39,10 @@ RETURNING id, created_at`
 		a.Description,
 		status,
 		a.ClientID,
-		a.Scope,
+		nonNilStrings(a.Scope),
 		timeToTs(created),
 		timePtrToTs(a.LastActiveAt),
+		timePtrToTs(a.ExpiresAt),
 	)
 	var id pgtype.UUID
 	var createdAt pgtype.Timestamptz
@@ -56,7 +57,7 @@ RETURNING id, created_at`
 
 func (s *Store) AgentByID(ctx context.Context, id theauth.ULID) (*theauth.Agent, error) {
 	const q = `
-SELECT id, owner_user_id, organization_id, name, description, status, client_id, scope_grant, created_at, last_active_at
+SELECT id, owner_user_id, organization_id, name, description, status, client_id, scope_grant, created_at, last_active_at, expires_at
 FROM agents WHERE id = $1`
 	a, err := scanAgent(s.pool.QueryRow(ctx, q, ulidToPgUUID(id)))
 	if err != nil {
@@ -70,7 +71,7 @@ FROM agents WHERE id = $1`
 
 func (s *Store) AgentByClientID(ctx context.Context, clientID string) (*theauth.Agent, error) {
 	const q = `
-SELECT id, owner_user_id, organization_id, name, description, status, client_id, scope_grant, created_at, last_active_at
+SELECT id, owner_user_id, organization_id, name, description, status, client_id, scope_grant, created_at, last_active_at, expires_at
 FROM agents WHERE client_id = $1`
 	a, err := scanAgent(s.pool.QueryRow(ctx, q, clientID))
 	if err != nil {
@@ -87,11 +88,11 @@ func (s *Store) AgentsByOwner(ctx context.Context, owner theauth.AgentOwner) ([]
 	var arg any
 	switch {
 	case owner.UserID != nil:
-		q = `SELECT id, owner_user_id, organization_id, name, description, status, client_id, scope_grant, created_at, last_active_at
+		q = `SELECT id, owner_user_id, organization_id, name, description, status, client_id, scope_grant, created_at, last_active_at, expires_at
 FROM agents WHERE owner_user_id = $1 ORDER BY created_at ASC`
 		arg = ulidToPgUUID(*owner.UserID)
 	case owner.OrganizationID != nil:
-		q = `SELECT id, owner_user_id, organization_id, name, description, status, client_id, scope_grant, created_at, last_active_at
+		q = `SELECT id, owner_user_id, organization_id, name, description, status, client_id, scope_grant, created_at, last_active_at, expires_at
 FROM agents WHERE organization_id = $1 ORDER BY created_at ASC`
 		arg = ulidToPgUUID(*owner.OrganizationID)
 	default:
@@ -116,6 +117,18 @@ FROM agents WHERE organization_id = $1 ORDER BY created_at ASC`
 func (s *Store) UpdateAgentStatus(ctx context.Context, id theauth.ULID, status string, _ time.Time) error {
 	const q = `UPDATE agents SET status = $2 WHERE id = $1`
 	tag, err := s.pool.Exec(ctx, q, ulidToPgUUID(id), status)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return storage.ErrNotFound
+	}
+	return nil
+}
+
+func (s *Store) UpdateAgentExpiry(ctx context.Context, id theauth.ULID, expiresAt *time.Time) error {
+	const q = `UPDATE agents SET expires_at = $2 WHERE id = $1`
+	tag, err := s.pool.Exec(ctx, q, ulidToPgUUID(id), timePtrToTs(expiresAt))
 	if err != nil {
 		return err
 	}
@@ -213,7 +226,7 @@ RETURNING id, created_at`
 		ulidToPgUUID(g.UserID),
 		ulidToPgUUID(g.AgentID),
 		ulidPtrToPgUUID(g.OrganizationID),
-		g.Scope,
+		nonNilStrings(g.Scope),
 		g.Resource,
 		g.MaxDurationSeconds,
 		timeToTs(created),
@@ -249,7 +262,8 @@ FROM delegation_grants WHERE id = $1`
 func (s *Store) DelegationGrantByUserAgentResource(ctx context.Context, userID, agentID theauth.ULID, resource string) (*theauth.DelegationGrant, error) {
 	const q = `
 SELECT id, user_id, agent_id, organization_id, scope_grant, resource, max_duration_seconds, created_at, expires_at, revoked_at, revocation_note
-FROM delegation_grants WHERE user_id = $1 AND agent_id = $2 AND resource = $3`
+FROM delegation_grants WHERE user_id = $1 AND agent_id = $2 AND resource = $3
+ORDER BY (revoked_at IS NULL) DESC, created_at DESC, id DESC LIMIT 1`
 	g, err := scanDelegationGrant(s.pool.QueryRow(ctx, q, ulidToPgUUID(userID), ulidToPgUUID(agentID), resource))
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -309,8 +323,9 @@ func scanAgent(row pgRowScanner) (theauth.Agent, error) {
 		name, desc, status, clientID string
 		scope                        []string
 		createdAt, lastActiveAt      pgtype.Timestamptz
+		expiresAt                    pgtype.Timestamptz
 	)
-	if err := row.Scan(&id, &ownerUser, &orgID, &name, &desc, &status, &clientID, &scope, &createdAt, &lastActiveAt); err != nil {
+	if err := row.Scan(&id, &ownerUser, &orgID, &name, &desc, &status, &clientID, &scope, &createdAt, &lastActiveAt, &expiresAt); err != nil {
 		return theauth.Agent{}, err
 	}
 	return theauth.Agent{
@@ -324,6 +339,7 @@ func scanAgent(row pgRowScanner) (theauth.Agent, error) {
 		Scope:          scope,
 		CreatedAt:      tsToTime(createdAt),
 		LastActiveAt:   tsToTimePtr(lastActiveAt),
+		ExpiresAt:      tsToTimePtr(expiresAt),
 	}, nil
 }
 
@@ -374,4 +390,13 @@ func scanDelegationGrant(row pgRowScanner) (theauth.DelegationGrant, error) {
 		RevokedAt:          tsToTimePtr(revokedAt),
 		RevocationNote:     note,
 	}, nil
+}
+
+// nonNilStrings returns an empty, non-nil slice for nil so pgx encodes an empty
+// array instead of NULL into NOT NULL text[] columns.
+func nonNilStrings(v []string) []string {
+	if v == nil {
+		return []string{}
+	}
+	return v
 }

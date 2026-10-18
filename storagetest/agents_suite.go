@@ -21,6 +21,7 @@ type AgentSuiteStorage interface {
 	AgentByClientID(ctx context.Context, clientID string) (*theauth.Agent, error)
 	AgentsByOwner(ctx context.Context, owner theauth.AgentOwner) ([]theauth.Agent, error)
 	UpdateAgentStatus(ctx context.Context, id theauth.ULID, status string, at time.Time) error
+	UpdateAgentExpiry(ctx context.Context, id theauth.ULID, expiresAt *time.Time) error
 	UpdateAgentLastActive(ctx context.Context, id theauth.ULID, at time.Time) error
 	InsertAgentCredential(ctx context.Context, c theauth.AgentCredential) error
 	AgentCredentialsByAgentID(ctx context.Context, agentID theauth.ULID) ([]theauth.AgentCredential, error)
@@ -71,6 +72,79 @@ func RunAgents(t *testing.T, store AgentSuiteStorage) {
 		byClient, err := store.AgentByClientID(ctx, a.ClientID)
 		if err != nil || byClient.ID != a.ID {
 			t.Fatalf("AgentByClientID = %+v, %v", byClient, err)
+		}
+	})
+
+	t.Run("ExpiresAtRoundTrip", func(t *testing.T) {
+		exp := time.Now().UTC().Add(48 * time.Hour).Truncate(time.Millisecond)
+		a := mk()
+		a.ExpiresAt = &exp
+		got, err := store.InsertAgent(ctx, a)
+		if err != nil {
+			t.Fatalf("InsertAgent: %v", err)
+		}
+		if got.ExpiresAt == nil || !got.ExpiresAt.Equal(exp) {
+			t.Fatalf("insert result ExpiresAt = %v, want %v", got.ExpiresAt, exp)
+		}
+		read, err := store.AgentByID(ctx, a.ID)
+		if err != nil || read.ExpiresAt == nil || !read.ExpiresAt.Equal(exp) {
+			t.Fatalf("AgentByID ExpiresAt = %v, %v, want %v", read, err, exp)
+		}
+		byClient, err := store.AgentByClientID(ctx, a.ClientID)
+		if err != nil || byClient.ExpiresAt == nil || !byClient.ExpiresAt.Equal(exp) {
+			t.Fatalf("AgentByClientID ExpiresAt mismatch: %+v, %v", byClient, err)
+		}
+		listed, err := store.AgentsByOwner(ctx, theauth.AgentOwner{UserID: &owner})
+		if err != nil {
+			t.Fatalf("AgentsByOwner: %v", err)
+		}
+		var seen bool
+		for _, l := range listed {
+			if l.ID == a.ID {
+				seen = true
+				if l.ExpiresAt == nil || !l.ExpiresAt.Equal(exp) {
+					t.Fatalf("AgentsByOwner ExpiresAt = %v, want %v", l.ExpiresAt, exp)
+				}
+			}
+		}
+		if !seen {
+			t.Fatal("agent missing from owner listing")
+		}
+	})
+
+	t.Run("ExpiresAtDefaultsToNil", func(t *testing.T) {
+		a := mk()
+		if _, err := store.InsertAgent(ctx, a); err != nil {
+			t.Fatal(err)
+		}
+		read, err := store.AgentByID(ctx, a.ID)
+		if err != nil || read.ExpiresAt != nil {
+			t.Fatalf("ExpiresAt = %v, %v, want nil", read, err)
+		}
+	})
+
+	t.Run("UpdateAgentExpiry", func(t *testing.T) {
+		a := mk()
+		if _, err := store.InsertAgent(ctx, a); err != nil {
+			t.Fatal(err)
+		}
+		exp := time.Now().UTC().Add(time.Hour).Truncate(time.Millisecond)
+		if err := store.UpdateAgentExpiry(ctx, a.ID, &exp); err != nil {
+			t.Fatalf("UpdateAgentExpiry set: %v", err)
+		}
+		read, err := store.AgentByID(ctx, a.ID)
+		if err != nil || read.ExpiresAt == nil || !read.ExpiresAt.Equal(exp) {
+			t.Fatalf("after set ExpiresAt = %v, %v, want %v", read, err, exp)
+		}
+		if err := store.UpdateAgentExpiry(ctx, a.ID, nil); err != nil {
+			t.Fatalf("UpdateAgentExpiry clear: %v", err)
+		}
+		read, err = store.AgentByID(ctx, a.ID)
+		if err != nil || read.ExpiresAt != nil {
+			t.Fatalf("after clear ExpiresAt = %v, %v, want nil", read, err)
+		}
+		if err := store.UpdateAgentExpiry(ctx, newID(), &exp); !errors.Is(err, storage.ErrNotFound) {
+			t.Fatalf("UpdateAgentExpiry unknown agent: want ErrNotFound, got %v", err)
 		}
 	})
 

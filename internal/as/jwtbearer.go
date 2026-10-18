@@ -261,22 +261,31 @@ func (s *Service) JWTBearerGrant(ctx context.Context, req TokenRequest, assertio
 	}
 	// An agent client's policy and rate limit apply to this mint too.
 	var gated models.AgentMintResult
-	if s.AgentGate != nil && req.ClientID != "" {
+	var agentExp time.Time
+	if req.ClientID != "" {
 		if ag, lerr := s.Storage.AgentByClientID(ctx, req.ClientID); lerr == nil && ag != nil {
-			g, gerr := s.gateMint(ctx, *ag, models.AgentMintJWTBearer, audience, grantScope, len(grantScope) > 0, append([]string{}, ag.Scope...))
-			if gerr != nil {
-				return TokenResponse{}, gerr
+			// An expired agent mints nothing, and its tokens never outlive it.
+			if aerr := agentLiveErr(ag, s.now()); aerr != nil {
+				return TokenResponse{}, aerr
 			}
-			gated = g
-			grantScope = g.Scopes
+			agentExp = agentExpiryBound(ag)
+			if s.AgentGate != nil {
+				g, gerr := s.gateMint(ctx, *ag, models.AgentMintJWTBearer, audience, grantScope, len(grantScope) > 0, append([]string{}, ag.Scope...))
+				if gerr != nil {
+					return TokenResponse{}, gerr
+				}
+				gated = g
+				grantScope = g.Scopes
+			}
 		}
 	}
+	bearerExp := capExpiry(now.Add(s.Cfg.AccessTokenTTL), agentExp)
 	jtiOut := ulid.New().String()
 	accessClaims := jwt.Claims{
 		Iss:      s.Cfg.Issuer,
 		Sub:      userID.String(),
 		Aud:      audience,
-		Exp:      now.Add(s.Cfg.AccessTokenTTL).Unix(),
+		Exp:      bearerExp.Unix(),
 		Iat:      now.Unix(),
 		Jti:      jtiOut,
 		ClientID: req.ClientID,
@@ -306,7 +315,7 @@ func (s *Service) JWTBearerGrant(ctx context.Context, req TokenRequest, assertio
 	return TokenResponse{
 		AccessToken: access,
 		TokenType:   "Bearer",
-		ExpiresIn:   int(s.Cfg.AccessTokenTTL.Seconds()),
+		ExpiresIn:   int(bearerExp.Sub(now).Seconds()),
 		Scope:       scopeJoin(grantScope),
 	}, nil
 }

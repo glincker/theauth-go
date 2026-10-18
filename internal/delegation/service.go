@@ -143,6 +143,9 @@ func (s *Service) GrantDelegation(ctx context.Context, in models.GrantDelegation
 	if ag.Status != models.AgentStatusActive {
 		return models.DelegationGrant{}, models.ErrAgentInactive
 	}
+	if ag.AgentExpired(time.Now()) {
+		return models.DelegationGrant{}, models.ErrAgentExpired
+	}
 	now := time.Now().UTC()
 	row := models.DelegationGrant{
 		ID:                 ulid.New(),

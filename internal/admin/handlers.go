@@ -671,6 +671,8 @@ func (h *Handler) queryAudit(w http.ResponseWriter, r *http.Request) {
 		Action:     r.URL.Query().Get("action"),
 		TargetType: r.URL.Query().Get("target_type"),
 		TargetID:   r.URL.Query().Get("target_id"),
+		Event:      r.URL.Query().Get("event"),
+		Order:      r.URL.Query().Get("order"),
 		After:      r.URL.Query().Get("cursor"),
 		Limit:      parseLimit(r),
 	}
@@ -702,11 +704,16 @@ func (h *Handler) queryAudit(w http.ResponseWriter, r *http.Request) {
 	}
 	events, next, err := h.audit.QueryAudit(r.Context(), q)
 	if err != nil {
-		if errors.Is(err, models.ErrBadCursor) {
+		switch {
+		case errors.Is(err, models.ErrBadCursor):
 			admin.Write(w, http.StatusBadRequest, admin.CodeBadCursor, err.Error(), "")
-			return
+		case errors.Is(err, models.ErrBadAuditOrder):
+			admin.Write(w, http.StatusBadRequest, admin.CodeValidationInvalid, "invalid order: use asc or desc", "")
+		case errors.Is(err, models.ErrAuditOrderUnsupported):
+			admin.Write(w, http.StatusBadRequest, admin.CodeValidationInvalid, "this storage backend does not support order=asc, the event filter or c1 cursors", "")
+		default:
+			admin.Write(w, http.StatusInternalServerError, admin.CodeInternal, err.Error(), "")
 		}
-		admin.Write(w, http.StatusInternalServerError, admin.CodeInternal, err.Error(), "")
 		return
 	}
 	h.audit.EmitAudit(r.Context(), "audit.queried", models.TargetRef{Type: "audit"}, map[string]any{
@@ -715,13 +722,17 @@ func (h *Handler) queryAudit(w http.ResponseWriter, r *http.Request) {
 			"action":      q.Action,
 			"target_type": q.TargetType,
 			"target_id":   q.TargetID,
+			"event":       q.Event,
+			"order":       q.Order,
 		},
 	})
 	type response struct {
 		Events []models.AuditEvent `json:"events"`
-		Next   string              `json:"next,omitempty"`
+		// Next is the original name of NextCursor and carries the same value.
+		Next       string `json:"next,omitempty"`
+		NextCursor string `json:"next_cursor,omitempty"`
 	}
-	httpx.WriteJSON(w, http.StatusOK, response{Events: events, Next: next})
+	httpx.WriteJSON(w, http.StatusOK, response{Events: events, Next: next, NextCursor: next})
 }
 
 // oauth accounts

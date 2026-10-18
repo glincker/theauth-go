@@ -14,6 +14,7 @@ import (
 
 	"github.com/glincker/theauth-go/v2"
 	"github.com/glincker/theauth-go/v2/admin"
+	"github.com/glincker/theauth-go/v2/audit"
 )
 
 // MaxArgumentBytes caps the JSON size of the redacted arguments in a response.
@@ -202,7 +203,7 @@ func (h *handler) decide(approve bool) adminHandler {
 		}
 		md := map[string]any{"action": a.Action, "resource": truncate(a.Resource)}
 		if err := h.cfg.Audit.InsertAuditEvents(ctx, []theauth.AuditEvent{{
-			ID: ulid.Make(), Action: action, TargetType: "tool_approval", TargetID: id,
+			ID: ulid.Make(), Action: action, Event: audit.EventForAction(action), TargetType: "tool_approval", TargetID: id,
 			SubjectID: a.AgentID, ActorID: adminID, ApproverID: adminID, Metadata: md, CreatedAt: now,
 		}}); err != nil {
 			admin.Write(w, http.StatusInternalServerError, "approvals.audit_failed", "decision recorded but audit write failed", r.URL.Path)

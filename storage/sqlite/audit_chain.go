@@ -205,5 +205,11 @@ func (s *Store) auditSecretIfPresent(ctx context.Context) ([]byte, error) {
 }
 
 func isNoSuchColumn(err error) bool {
-	return err != nil && (strings.Contains(err.Error(), "no such column") || strings.Contains(err.Error(), "no such table"))
+	if err == nil {
+		return false
+	}
+	msg := err.Error()
+	// INSERT reports "table t has no column named c"; SELECT reports "no such column: c".
+	return strings.Contains(msg, "no such column") || strings.Contains(msg, "no such table") ||
+		strings.Contains(msg, "has no column named")
 }

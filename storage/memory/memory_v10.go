@@ -3,7 +3,6 @@ package memory
 import (
 	"context"
 	"encoding/base64"
-	"errors"
 	"fmt"
 	"sort"
 	"strconv"
@@ -12,6 +11,7 @@ import (
 	"time"
 
 	"github.com/glincker/theauth-go/v2"
+	"github.com/glincker/theauth-go/v2/audit"
 	"github.com/glincker/theauth-go/v2/storage"
 	"github.com/oklog/ulid/v2"
 )
@@ -352,6 +352,9 @@ func (s *Store) InsertAuditEvents(_ context.Context, events []theauth.AuditEvent
 		if e.CreatedAt.IsZero() {
 			e.CreatedAt = time.Now()
 		}
+		// The store assigns the write-order stamp; a caller value is ignored. The process counter
+		// is enough here because memory keeps no chain heads.
+		e.RecordedAtUs = audit.NextRecordedAtUs(0)
 		if len(v.auditRing) < auditRingCap {
 			v.auditRing = append(v.auditRing, e)
 			v.auditHead = len(v.auditRing) % auditRingCap
@@ -364,62 +367,78 @@ func (s *Store) InsertAuditEvents(_ context.Context, events []theauth.AuditEvent
 	return nil
 }
 
+// AuditOrderSupported declares theauth write order support (storagetest.AuditOrderCapable).
+func (s *Store) AuditOrderSupported() bool { return true }
+
+// QueryAuditEvents reads the audit ring. Without a cursor, or with a "c1." cursor, rows are
+// ordered by (RecordedAtUs, ID) in q.Order (default desc) and paged with a "c1." cursor. A
+// cursor from before write order existed keeps the old created_at ordering for descending reads.
 func (s *Store) QueryAuditEvents(_ context.Context, q theauth.AuditQuery) ([]theauth.AuditEvent, string, error) {
+	order, ok := audit.NormalizeOrder(q.Order)
+	if !ok {
+		return nil, "", theauth.ErrBadAuditOrder
+	}
+	legacy := audit.IsLegacyCursor(q.After)
+	if legacy && order != theauth.AuditOrderDesc {
+		return nil, "", fmt.Errorf("%w: legacy cursor needs desc order", theauth.ErrBadCursor)
+	}
+	var (
+		afterTS  time.Time
+		afterID  theauth.ULID
+		afterCur audit.Cursor
+	)
+	switch {
+	case legacy:
+		ts, id, err := decodeCursor(q.After)
+		if err != nil {
+			return nil, "", err
+		}
+		afterTS, afterID = ts, id
+	case q.After != "":
+		c, err := audit.DecodeCursor(q.After, order)
+		if err != nil {
+			return nil, "", err
+		}
+		afterCur = c
+	}
+
 	v := s.auditState()
 	v.mu.Lock()
 	snap := make([]theauth.AuditEvent, len(v.auditRing))
 	copy(snap, v.auditRing)
 	v.mu.Unlock()
-	// Newest first.
-	sort.Slice(snap, func(i, j int) bool {
-		if !snap[i].CreatedAt.Equal(snap[j].CreatedAt) {
-			return snap[i].CreatedAt.After(snap[j].CreatedAt)
-		}
-		return snap[i].ID.Compare(snap[j].ID) > 0
-	})
-	cursor := q.After
-	var afterTS time.Time
-	var afterID theauth.ULID
-	if cursor != "" {
-		ts, id, err := decodeCursor(cursor)
-		if err != nil {
-			return nil, "", err
-		}
-		afterTS = ts
-		afterID = id
+	switch {
+	case legacy:
+		sort.Slice(snap, func(i, j int) bool {
+			if !snap[i].CreatedAt.Equal(snap[j].CreatedAt) {
+				return snap[i].CreatedAt.After(snap[j].CreatedAt)
+			}
+			return snap[i].ID.Compare(snap[j].ID) > 0
+		})
+	default:
+		sort.Slice(snap, func(i, j int) bool {
+			c := compareWriteOrder(snap[i], snap[j])
+			if order == theauth.AuditOrderAsc {
+				return c < 0
+			}
+			return c > 0
+		})
 	}
 	out := []theauth.AuditEvent{}
 	for _, e := range snap {
-		if q.OrganizationID != nil {
-			if e.OrganizationID == nil || *e.OrganizationID != *q.OrganizationID {
-				continue
-			}
-		}
-		if q.ActorUserID != nil {
-			if e.ActorUserID == nil || *e.ActorUserID != *q.ActorUserID {
-				continue
-			}
-		}
-		if q.Action != "" && e.Action != q.Action {
+		if !auditRowMatches(e, q) {
 			continue
 		}
-		if q.TargetType != "" && e.TargetType != q.TargetType {
-			continue
-		}
-		if q.TargetID != "" && e.TargetID != q.TargetID {
-			continue
-		}
-		if q.Since != nil && e.CreatedAt.Before(*q.Since) {
-			continue
-		}
-		if q.Until != nil && e.CreatedAt.After(*q.Until) {
-			continue
-		}
-		if cursor != "" {
+		if legacy {
 			if e.CreatedAt.After(afterTS) {
 				continue
 			}
 			if e.CreatedAt.Equal(afterTS) && e.ID.Compare(afterID) >= 0 {
+				continue
+			}
+		} else if q.After != "" {
+			c := compareWriteOrder(e, theauth.AuditEvent{RecordedAtUs: afterCur.RecordedAtUs, ID: afterCur.ID})
+			if (order == theauth.AuditOrderAsc && c <= 0) || (order == theauth.AuditOrderDesc && c >= 0) {
 				continue
 			}
 		}
@@ -431,9 +450,52 @@ func (s *Store) QueryAuditEvents(_ context.Context, q theauth.AuditQuery) ([]the
 	var next string
 	if q.Limit > 0 && len(out) == q.Limit {
 		last := out[len(out)-1]
-		next = encodeCursor(last.CreatedAt, last.ID)
+		if legacy {
+			next = encodeCursor(last.CreatedAt, last.ID)
+		} else {
+			next = audit.EncodeCursor(audit.Cursor{RecordedAtUs: last.RecordedAtUs, ID: last.ID, Order: order})
+		}
 	}
 	return out, next, nil
+}
+
+// compareWriteOrder orders rows by (RecordedAtUs, ID).
+func compareWriteOrder(a, b theauth.AuditEvent) int {
+	switch {
+	case a.RecordedAtUs < b.RecordedAtUs:
+		return -1
+	case a.RecordedAtUs > b.RecordedAtUs:
+		return 1
+	}
+	return a.ID.Compare(b.ID)
+}
+
+func auditRowMatches(e theauth.AuditEvent, q theauth.AuditQuery) bool {
+	if q.OrganizationID != nil && (e.OrganizationID == nil || *e.OrganizationID != *q.OrganizationID) {
+		return false
+	}
+	if q.ActorUserID != nil && (e.ActorUserID == nil || *e.ActorUserID != *q.ActorUserID) {
+		return false
+	}
+	if q.Action != "" && e.Action != q.Action {
+		return false
+	}
+	if q.Event != "" && e.Event != q.Event {
+		return false
+	}
+	if q.TargetType != "" && e.TargetType != q.TargetType {
+		return false
+	}
+	if q.TargetID != "" && e.TargetID != q.TargetID {
+		return false
+	}
+	if q.Since != nil && e.CreatedAt.Before(*q.Since) {
+		return false
+	}
+	if q.Until != nil && e.CreatedAt.After(*q.Until) {
+		return false
+	}
+	return true
 }
 
 func encodeCursor(ts time.Time, id theauth.ULID) string {
@@ -444,19 +506,19 @@ func encodeCursor(ts time.Time, id theauth.ULID) string {
 func decodeCursor(s string) (time.Time, theauth.ULID, error) {
 	raw, err := base64.RawURLEncoding.DecodeString(s)
 	if err != nil {
-		return time.Time{}, theauth.ULID{}, fmt.Errorf("cursor decode: %w", err)
+		return time.Time{}, theauth.ULID{}, fmt.Errorf("%w: decode: %v", theauth.ErrBadCursor, err)
 	}
 	parts := strings.SplitN(string(raw), ":", 2)
 	if len(parts) != 2 {
-		return time.Time{}, theauth.ULID{}, errors.New("cursor format")
+		return time.Time{}, theauth.ULID{}, fmt.Errorf("%w: format", theauth.ErrBadCursor)
 	}
 	micros, err := strconv.ParseInt(parts[0], 10, 64)
 	if err != nil {
-		return time.Time{}, theauth.ULID{}, fmt.Errorf("cursor micros: %w", err)
+		return time.Time{}, theauth.ULID{}, fmt.Errorf("%w: micros: %v", theauth.ErrBadCursor, err)
 	}
 	id, err := ulidParseFn(parts[1])
 	if err != nil {
-		return time.Time{}, theauth.ULID{}, fmt.Errorf("cursor ulid: %w", err)
+		return time.Time{}, theauth.ULID{}, fmt.Errorf("%w: ulid: %v", theauth.ErrBadCursor, err)
 	}
 	return time.UnixMicro(micros), id, nil
 }

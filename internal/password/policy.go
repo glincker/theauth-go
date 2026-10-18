@@ -41,6 +41,7 @@ const signupMetaKey ctxKey = 1
 type SignupMeta struct {
 	SetupToken string
 	IP         string
+	UserAgent  string
 }
 
 // WithSignupMeta attaches m to ctx for SignupGate implementations.

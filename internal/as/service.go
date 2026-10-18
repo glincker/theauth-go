@@ -129,6 +129,8 @@ type introspectCacheEntry struct {
 type chainCacheEntry struct {
 	active    bool
 	checkedAt time.Time
+	// expiresAt is the earliest agent expiry in the walked chain, zero when none.
+	expiresAt time.Time
 }
 
 // chainCacheTTL is the maximum age of a chain-cache entry. It is short so revocation lags the

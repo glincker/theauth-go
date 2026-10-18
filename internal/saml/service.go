@@ -74,6 +74,11 @@ type Config struct {
 	SPKey           *rsa.PrivateKey
 	AuthnRequestTTL time.Duration
 	ClockSkew       time.Duration
+
+	// Tracker records issued AuthnRequest ids and accepted assertion ids.
+	// Nil selects the in-process MemoryTracker; set a KVTracker over a shared
+	// kv.Cache when running more than one replica.
+	Tracker RequestTracker
 }
 
 // SAMLConnectionInput is the consumer-facing payload for create / update.
@@ -103,9 +108,8 @@ type Service struct {
 	auditEm  audit.Emitter
 	cfg      *Config
 
-	// authnInFlight is the in-memory tracker of outstanding AuthnRequest
-	// IDs, keyed by the request ID with the deadline as value.
-	authnInFlight sync.Map
+	// tracker holds outstanding AuthnRequest ids and seen assertion ids.
+	tracker RequestTracker
 
 	// stopGC signals the AuthnRequest GC goroutine to exit. nil before
 	// Start; closed by Stop.
@@ -123,11 +127,16 @@ func NewService(storage Storage, sessions SessionIssuer, em audit.Emitter, cfg *
 	if em == nil {
 		em = audit.NoopEmitter{}
 	}
+	var tr RequestTracker = NewMemoryTracker()
+	if cfg != nil && cfg.Tracker != nil {
+		tr = cfg.Tracker
+	}
 	return &Service{
 		storage:  storage,
 		sessions: sessions,
 		auditEm:  em,
 		cfg:      cfg,
+		tracker:  tr,
 	}
 }
 
@@ -176,13 +185,9 @@ func (s *Service) gcLoop(stop chan struct{}) {
 		case <-stop:
 			return
 		case now := <-tick.C:
-			s.authnInFlight.Range(func(k, v interface{}) bool {
-				deadline, ok := v.(time.Time)
-				if !ok || now.After(deadline) {
-					s.authnInFlight.Delete(k)
-				}
-				return true
-			})
+			if sw, ok := s.tracker.(interface{ Sweep(time.Time) }); ok {
+				sw.Sweep(now)
+			}
 		}
 	}
 }
@@ -267,7 +272,9 @@ func (s *Service) BeginLogin(ctx context.Context, connectionID models.ULID, rela
 	if err != nil {
 		return "", err
 	}
-	s.authnInFlight.Store(req.ID, time.Now().Add(s.cfg.AuthnRequestTTL))
+	if err := s.tracker.Issue(ctx, connectionID.String(), req.ID, relayState, s.requestTTL()); err != nil {
+		return "", fmt.Errorf("theauth: saml track authn request: %w", err)
+	}
 	redirectURL, err := req.Redirect(relayState, sp)
 	if err != nil {
 		return "", err
@@ -290,11 +297,6 @@ func (s *Service) FinishLogin(ctx context.Context, connectionID models.ULID, sam
 		return "", models.Session{}, false, err
 	}
 
-	// Collect outstanding request IDs for replay protection. The IdP-
-	// initiated path passes an empty slice so the library accepts the
-	// assertion as unsolicited (AllowIDPInitiated is on in our SP builder).
-	ids := s.outstandingAuthnRequestIDs()
-
 	rawBytes, err := base64.StdEncoding.DecodeString(samlResponseB64)
 	if err != nil {
 		return "", models.Session{}, false, fmt.Errorf("theauth: saml response base64 decode: %w", err)
@@ -312,19 +314,15 @@ func (s *Service) FinishLogin(ctx context.Context, connectionID models.ULID, sam
 	if err != nil {
 		return "", models.Session{}, false, fmt.Errorf("theauth: sp acs url invalid: %w", err)
 	}
-	assertion, err := sp.ParseXMLResponse(rawBytes, ids, *acsURL)
+	// crewjam/saml skips InResponseTo matching while AllowIDPInitiated is
+	// on, so the tracker below is what enforces it.
+	assertion, err := sp.ParseXMLResponse(rawBytes, nil, *acsURL)
 	if err != nil {
 		return "", models.Session{}, false, errors.Join(ErrSAMLInvalidAssertion, err)
 	}
 
-	// Once an InResponseTo lands, consume it so a replay against the same
-	// ID is rejected on the second hit.
-	if assertion.Subject != nil && assertion.Subject.SubjectConfirmations != nil {
-		for _, sc := range assertion.Subject.SubjectConfirmations {
-			if sc.SubjectConfirmationData != nil && sc.SubjectConfirmationData.InResponseTo != "" {
-				s.authnInFlight.Delete(sc.SubjectConfirmationData.InResponseTo)
-			}
-		}
+	if err := s.enforceReplay(ctx, connectionID.String(), assertion); err != nil {
+		return "", models.Session{}, false, err
 	}
 
 	mapped := mapAssertion(conn, assertion)
@@ -713,23 +711,66 @@ func (s *Service) ensureOrgMembership(ctx context.Context, orgID, userID models.
 	})
 }
 
-// outstandingAuthnRequestIDs returns the IDs of every AuthnRequest still
-// inside its TTL. Used to drive crewjam/saml's InResponseTo validation.
-func (s *Service) outstandingAuthnRequestIDs() []string {
-	now := time.Now()
-	var ids []string
-	s.authnInFlight.Range(func(k, v interface{}) bool {
-		deadline, ok := v.(time.Time)
-		if !ok || now.After(deadline) {
-			s.authnInFlight.Delete(k)
-			return true
+// requestTTL returns the AuthnRequest validity window (default 10 minutes).
+func (s *Service) requestTTL() time.Duration {
+	if s.cfg != nil && s.cfg.AuthnRequestTTL > 0 {
+		return s.cfg.AuthnRequestTTL
+	}
+	return 10 * time.Minute
+}
+
+// enforceReplay rejects an assertion whose InResponseTo was not issued for
+// this connection or was already used, and an assertion id seen before. An
+// assertion with no InResponseTo is an IdP-initiated login and is allowed,
+// but its id is still one-time. Tracker failures fail closed.
+func (s *Service) enforceReplay(ctx context.Context, connID string, a *saml.Assertion) error {
+	if a.Subject != nil {
+		seen := map[string]bool{}
+		for _, sc := range a.Subject.SubjectConfirmations {
+			if sc.SubjectConfirmationData == nil || sc.SubjectConfirmationData.InResponseTo == "" {
+				continue
+			}
+			id := sc.SubjectConfirmationData.InResponseTo
+			if seen[id] {
+				continue
+			}
+			seen[id] = true
+			ok, err := s.tracker.Consume(ctx, connID, id, "")
+			if err != nil {
+				return fmt.Errorf("theauth: saml request tracker: %w", err)
+			}
+			if !ok {
+				return errors.Join(ErrSAMLInvalidAssertion, errors.New("InResponseTo is unknown, expired or already used"))
+			}
 		}
-		if id, ok := k.(string); ok {
-			ids = append(ids, id)
+	}
+	if a.ID != "" {
+		ttl := s.requestTTL()
+		if a.Conditions != nil && !a.Conditions.NotOnOrAfter.IsZero() {
+			ttl = time.Until(a.Conditions.NotOnOrAfter) + s.clockSkew()
 		}
-		return true
-	})
-	return ids
+		if ttl < time.Minute {
+			ttl = time.Minute
+		}
+		if ttl > time.Hour {
+			ttl = time.Hour
+		}
+		dup, err := s.tracker.SeenAssertion(ctx, connID, a.ID, ttl)
+		if err != nil {
+			return fmt.Errorf("theauth: saml request tracker: %w", err)
+		}
+		if dup {
+			return errors.Join(ErrSAMLInvalidAssertion, errors.New("assertion id already used"))
+		}
+	}
+	return nil
+}
+
+func (s *Service) clockSkew() time.Duration {
+	if s.cfg != nil && s.cfg.ClockSkew > 0 {
+		return s.cfg.ClockSkew
+	}
+	return 30 * time.Second
 }
 
 // issueSessionForOrg mints a session with the supplied active org pre-set.

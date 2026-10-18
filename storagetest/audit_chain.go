@@ -30,6 +30,7 @@ func RunAuditChain(t *testing.T, store AuditChainSuiteStorage) {
 		t.Run("Supported", func(t *testing.T) { chainSupported(t, store) })
 		t.Run("AppendVerifiesAndRoundTrips", func(t *testing.T) { chainAppend(t, store) })
 		t.Run("ConcurrentWriters", func(t *testing.T) { chainConcurrent(t, store) })
+		t.Run("EventAndRecordedAtNotHashed", func(t *testing.T) { chainEventNotHashed(t, store) })
 		t.Run("SurvivesUserErasure", func(t *testing.T) { chainErasure(t, store) })
 	})
 }
@@ -170,6 +171,35 @@ func chainErasure(t *testing.T, store AuditChainSuiteStorage) {
 		}
 		if e.ActorID != "agent_1" || e.Hash == "" {
 			t.Fatalf("non-personal fields changed: %+v", e)
+		}
+	}
+}
+
+// chainEventNotHashed pins that Event and RecordedAtUs sit next to the chain and not in it: rows
+// written with and without them extend one chain that still verifies, and the rows written before
+// (everything the earlier cases wrote) keep verifying with the same count. The byte level proof
+// is the golden vector in internal/audit (TestChainHashIgnoresEventAndRecordedAtUs).
+func chainEventNotHashed(t *testing.T, store AuditChainSuiteStorage) {
+	ctx := context.Background()
+	before := mustVerify(t, store)
+	if err := store.InsertAuditEvents(ctx, []theauth.AuditEvent{
+		{ID: newID(), Action: "storagetest.chain.event", Event: "authorize", RecordedAtUs: 7, CreatedAt: time.Now()},
+		{ID: newID(), Action: "storagetest.chain.event", CreatedAt: time.Now()},
+		{ID: newID(), Action: "storagetest.chain.event", Event: "policy.evaluate", CreatedAt: time.Now()},
+	}); err != nil {
+		t.Fatalf("InsertAuditEvents: %v", err)
+	}
+	after := mustVerify(t, store)
+	if after.Checked != before.Checked+3 {
+		t.Fatalf("checked = %d, want %d", after.Checked, before.Checked+3)
+	}
+	got, _, err := store.QueryAuditEvents(ctx, theauth.AuditQuery{Action: "storagetest.chain.event"})
+	if err != nil || len(got) != 3 {
+		t.Fatalf("query: %d events, %v", len(got), err)
+	}
+	for _, e := range got {
+		if e.ChainSeq == 0 || e.Hash == "" {
+			t.Fatalf("row not chained: %+v", e)
 		}
 	}
 }

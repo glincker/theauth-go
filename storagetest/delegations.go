@@ -14,8 +14,8 @@ func testDelegations(t *testing.T, store theauth.OAuthServerStorage) {
 	t.Helper()
 	ctx := context.Background()
 
-	userID := newID()
-	agentID := newID()
+	userID := ensureUser(t, store, "deleg")
+	agentID := ensureAgent(t, store, userID)
 	const resource = "https://api.storagetest.example"
 
 	makeGrant := func(uid, aid theauth.ULID, res string) theauth.DelegationGrant {

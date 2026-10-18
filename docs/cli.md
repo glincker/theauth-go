@@ -8,6 +8,51 @@ go install github.com/glincker/theauth-go/v2/cmd/theauth-go@latest
 |---|---|
 | `theauth-go secret` | Print random key material. Flags: `--bytes` (16 to 128, default 32), `--format base64url\|hex\|env`, `--name` for the env format |
 | `theauth-go openapi` | Print an OpenAPI 3.1 document for the default route set. Flags: `--base-url`, `--title`, `--version`, `--out` |
+| `theauth-go db status` | List applied and pending migrations. Flags: `--driver postgres\|mysql`, `--dsn` (or `$THEAUTH_DATABASE_URL`), `--json`, `--exit-code` |
+| `theauth-go db migrate` | Apply pending migrations through the backend's own `Migrate`. Flags: `--driver`, `--dsn`, `--dry-run` (print the pending SQL), `--json` |
+| `theauth-go init` | Scaffold `main.go` and `.env.example`. Flags: `--dir`, `--storage memory\|postgres\|mysql`, `--print`, `--force`, `--with-postgres`, `--seed-email`, `--seed-name` |
+| `theauth-go policy test <suite.json>` | Run a policy test suite and print failures with their explanation. Exit 1 on failure. See [policy-explain.md](policy-explain.md) |
+
+## Database migrations
+
+```
+theauth-go db status  --driver postgres --dsn "postgres://user:pass@localhost:5432/theauth"
+theauth-go db status  --driver mysql --json --exit-code     # DSN from $THEAUTH_DATABASE_URL
+theauth-go db migrate --driver postgres --dry-run           # print the SQL, run nothing
+theauth-go db migrate --driver postgres
+```
+
+Status prints the id, name and applied time of each embedded migration from the `theauth_schema_migrations` ledger, then a count. `--json` output has stable keys: `driver`, `applied`, `pending` and a `migrations` array of `version`, `id`, `name`, `applied`, `applied_at` (null when pending). Status is read only: it does not create the ledger and takes no lock. `db migrate` calls the same `Migrate` your application would run (advisory lock), so replicas can run it safely.
+
+Passwords in a DSN are never printed: connection errors show the DSN with the password replaced by `xxxxx`.
+
+Exit codes: `0` success, `1` an error, or pending migrations with `status --exit-code`, `2` usage error.
+
+Limits:
+
+- **sqlite is library only.** `storage/sqlite` is a separate module that depends on the root module, so the CLI (in the root module) cannot import it. Call `sqlite.Migrate(ctx, db)` from your own code, or `sqlite.RenderMigrations` to inspect the SQL.
+- **`--to <id>` is rejected.** The backends apply every pending migration in order and expose no target. Use `--dry-run` to review first.
+- **No dirty or locked state.** The ledger records only applied versions, so there is no dirty flag to report. Postgres runs all pending migrations in one transaction. MySQL DDL is not transactional: if a migration fails midway, fix the schema by hand before rerunning.
+
+## Scaffolding a project
+
+```
+mkdir myapp && cd myapp && go mod init example.com/myapp
+theauth-go init --storage postgres --with-postgres
+go get github.com/glincker/theauth-go/v2@latest && go mod tidy
+```
+
+To record an operator address in `main.go`, pass the seed address:
+
+```
+theauth-go init --seed-email ada@example.com --seed-name "Ada Lovelace"
+```
+
+`init` writes `main.go` (theauth.New with the chosen storage and `Bootstrap` gating the first signup behind `THEAUTH_SETUP_TOKEN`), `.env.example` with a generated encryption key and setup token (mode 0600), and with `--with-postgres` a `docker-compose.yml` postgres service plus a matching password and URL. It makes no network calls and never runs `go get`: the command is printed. Existing files are skipped unless `--force`. `--print` writes `main.go` to stdout and touches nothing. A missing `go.mod` is reported with the `go mod init` command to run.
+
+`--seed-email` writes a commented-out `TheAuth.CreateUser` call into `main.go`, right after `theauth.New`, with a comment that explains why it is off. The address is normalized with the library's email normalization and must be a bare address (`Ada <ada@example.com>` is rejected). Invalid input exits 2 before any file is written. `--seed-name` requires `--seed-email`. The address is written only into `main.go`, never into `.env.example`.
+
+The call is disabled on purpose. The generated `main.go` signs in through `Bootstrap` and a password. A seeded user has no password, passkey or session, and any existing user closes the Bootstrap gate, so with the call enabled the setup token stops working and signup returns `SIGNUP_CLOSED`. Nobody could then set a password for that address. The setup token does not set a first credential on an existing user, by design. Uncomment the call only after you add another way to sign in (passkey, OAuth, or a password reset email flow), or if you only need the user record.
 
 Related binaries: `theauth-doctor` fetches the security report of a running server, and `theauth-migrate` imports users from Auth0 and Cognito.
 

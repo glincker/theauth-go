@@ -14,15 +14,18 @@ func testAgents(t *testing.T, store theauth.OAuthServerStorage) {
 	t.Helper()
 	ctx := context.Background()
 
-	ownerUID := newID()
+	ownerUID := ensureUser(t, store, "agent-owner")
 
-	makeAgent := func() theauth.Agent {
+	makeAgent := func(t *testing.T) theauth.Agent {
+		t.Helper()
+		clientID := "st-agent-client-" + newID().String()
+		ensureOAuthClient(t, store, clientID)
 		return theauth.Agent{
 			ID:          newID(),
 			OwnerUserID: &ownerUID,
 			Name:        "storagetest-agent-" + newID().String(),
 			Status:      theauth.AgentStatusActive,
-			ClientID:    "st-agent-client-" + newID().String(),
+			ClientID:    clientID,
 			CreatedAt:   time.Now(),
 		}
 	}
@@ -30,7 +33,7 @@ func testAgents(t *testing.T, store theauth.OAuthServerStorage) {
 	var agentID theauth.ULID
 
 	t.Run("Create", func(t *testing.T) {
-		a := makeAgent()
+		a := makeAgent(t)
 		got, err := store.InsertAgent(ctx, a)
 		if err != nil {
 			t.Fatalf("InsertAgent: %v", err)
@@ -53,7 +56,7 @@ func testAgents(t *testing.T, store theauth.OAuthServerStorage) {
 
 	t.Run("ListByOwner", func(t *testing.T) {
 		// Create a second agent for the same owner.
-		a2 := makeAgent()
+		a2 := makeAgent(t)
 		if _, err := store.InsertAgent(ctx, a2); err != nil {
 			t.Fatalf("InsertAgent a2: %v", err)
 		}
@@ -113,7 +116,7 @@ func testAgents(t *testing.T, store theauth.OAuthServerStorage) {
 	})
 
 	t.Run("UpdateLastActive", func(t *testing.T) {
-		a := makeAgent()
+		a := makeAgent(t)
 		inserted, err := store.InsertAgent(ctx, a)
 		if err != nil {
 			t.Fatalf("InsertAgent: %v", err)
@@ -132,7 +135,7 @@ func testAgents(t *testing.T, store theauth.OAuthServerStorage) {
 	})
 
 	t.Run("AgentCredentials", func(t *testing.T) {
-		a := makeAgent()
+		a := makeAgent(t)
 		inserted, err := store.InsertAgent(ctx, a)
 		if err != nil {
 			t.Fatalf("InsertAgent for cred test: %v", err)

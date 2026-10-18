@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/glincker/theauth-go/v2/internal/httpsec"
 	"github.com/glincker/theauth-go/v2/internal/httpx"
 	"github.com/glincker/theauth-go/v2/internal/models"
 	"github.com/glincker/theauth-go/v2/internal/webauthn"
@@ -48,6 +49,8 @@ type SessionCookieConfig struct {
 	Name       string
 	SecureFlag bool
 	TTL        time.Duration
+	// Policy carries Domain, SameSite and Partitioned. Secure is SecureFlag OR Policy.Secure.
+	Policy httpsec.CookiePolicy
 }
 
 // ChallengeCookieConfig captures the challenge cookie shape (just
@@ -57,6 +60,8 @@ type ChallengeCookieConfig struct {
 	Path       string
 	SecureFlag bool
 	TTL        time.Duration
+	// Policy carries Domain, SameSite and Partitioned. Secure is SecureFlag OR Policy.Secure.
+	Policy httpsec.CookiePolicy
 }
 
 // Handler owns the six WebAuthn HTTP endpoints.
@@ -65,6 +70,7 @@ type Handler struct {
 	sessionCookie SessionCookieConfig
 	challengeCfg  ChallengeCookieConfig
 	userFromCtx   func(r *http.Request) (*models.User, bool)
+	clientIP      func(*http.Request) string
 }
 
 // New constructs a Handler. The userFromCtx indirection lets the
@@ -82,6 +88,22 @@ func New(
 		challengeCfg:  challengeCfg,
 		userFromCtx:   userFromCtx,
 	}
+}
+
+// SetClientIP installs the function that derives the client address for throttling, audit and
+// session records. The default is the connection address; the root installs a resolver that
+// honors Config.TrustedProxies. A nil fn is ignored.
+func (h *Handler) SetClientIP(fn func(*http.Request) string) {
+	if fn != nil {
+		h.clientIP = fn
+	}
+}
+
+func (h *Handler) ipOf(r *http.Request) string {
+	if h.clientIP != nil {
+		return h.clientIP(r)
+	}
+	return httpx.ClientIP(r)
 }
 
 // Mount registers /webauthn/* under r. The caller supplies the
@@ -107,39 +129,17 @@ func (h *Handler) challengePath() string {
 }
 
 func (h *Handler) setChallengeCookie(w http.ResponseWriter, token string) {
-	http.SetCookie(w, &http.Cookie{
-		Name:     webauthnChallengeCookieName,
-		Value:    token,
-		Path:     h.challengePath(),
-		HttpOnly: true,
-		Secure:   h.challengeCfg.SecureFlag,
-		SameSite: http.SameSiteLaxMode,
-		Expires:  time.Now().Add(h.challengeCfg.TTL),
-	})
+	h.challengeCfg.Policy.WithSecure(h.challengeCfg.SecureFlag).
+		Set(w, webauthnChallengeCookieName, token, h.challengePath(), time.Now().Add(h.challengeCfg.TTL))
 }
 
 func (h *Handler) clearChallengeCookie(w http.ResponseWriter) {
-	http.SetCookie(w, &http.Cookie{
-		Name:     webauthnChallengeCookieName,
-		Value:    "",
-		Path:     h.challengePath(),
-		MaxAge:   -1,
-		HttpOnly: true,
-		Secure:   h.challengeCfg.SecureFlag,
-		SameSite: http.SameSiteLaxMode,
-	})
+	h.challengeCfg.Policy.WithSecure(h.challengeCfg.SecureFlag).Clear(w, webauthnChallengeCookieName, h.challengePath())
 }
 
 func (h *Handler) setSessionCookie(w http.ResponseWriter, token string) {
-	http.SetCookie(w, &http.Cookie{
-		Name:     h.sessionCookie.Name,
-		Value:    token,
-		Path:     "/",
-		HttpOnly: true,
-		Secure:   h.sessionCookie.SecureFlag,
-		SameSite: http.SameSiteLaxMode,
-		Expires:  time.Now().Add(h.sessionCookie.TTL),
-	})
+	h.sessionCookie.Policy.WithSecure(h.sessionCookie.SecureFlag).
+		Set(w, h.sessionCookie.Name, token, "/", time.Now().Add(h.sessionCookie.TTL))
 }
 
 func (h *Handler) handleRegisterBegin(w http.ResponseWriter, r *http.Request) {
@@ -193,7 +193,7 @@ func (h *Handler) handleLoginFinish(w http.ResponseWriter, r *http.Request) {
 	}
 	h.clearChallengeCookie(w)
 	r.Body = http.MaxBytesReader(w, r.Body, 1<<16)
-	sessTok, _, err := h.svc.FinishLogin(r.Context(), chal.Value, r.Body, r.UserAgent(), httpx.ClientIP(r))
+	sessTok, _, err := h.svc.FinishLogin(r.Context(), chal.Value, r.Body, r.UserAgent(), h.ipOf(r))
 	if err != nil {
 		httpx.ErrToHTTP(w, err)
 		return

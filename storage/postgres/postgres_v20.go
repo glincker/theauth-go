@@ -9,6 +9,7 @@ import (
 	"github.com/glincker/theauth-go/v2"
 	"github.com/glincker/theauth-go/v2/storage"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
@@ -421,8 +422,8 @@ VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`
 		k.KID,
 		k.Alg,
 		nilToDefault(k.Use, "sig"),
-		k.PublicJWK,
-		k.PrivateEnc,
+		nonNilBytes(k.PublicJWK),
+		nonNilBytes(k.PrivateEnc),
 		k.State,
 		timeToTs(created),
 		timePtrToTs(k.PromotedAt),
@@ -465,19 +466,25 @@ FROM jwks_keys ORDER BY created_at ASC`
 }
 
 func (s *Store) UpdateJWKSKeyState(ctx context.Context, kid, state string, at time.Time) error {
-	var q string
+	var (
+		tag pgconn.CommandTag
+		err error
+	)
 	switch state {
 	case theauth.JWKSStateCurrent:
-		q = `UPDATE jwks_keys SET state = $2, promoted_at = $3 WHERE kid = $1`
+		tag, err = s.pool.Exec(ctx, `UPDATE jwks_keys SET state = $2, promoted_at = $3 WHERE kid = $1`, kid, state, timeToTs(at))
 	case theauth.JWKSStateRetired:
-		q = `UPDATE jwks_keys SET state = $2, retired_at = $3 WHERE kid = $1`
+		tag, err = s.pool.Exec(ctx, `UPDATE jwks_keys SET state = $2, retired_at = $3 WHERE kid = $1`, kid, state, timeToTs(at))
 	default:
-		q = `UPDATE jwks_keys SET state = $2 WHERE kid = $1`
-		_, err := s.pool.Exec(ctx, q, kid, state)
+		tag, err = s.pool.Exec(ctx, `UPDATE jwks_keys SET state = $2 WHERE kid = $1`, kid, state)
+	}
+	if err != nil {
 		return err
 	}
-	_, err := s.pool.Exec(ctx, q, kid, state, timeToTs(at))
-	return err
+	if tag.RowsAffected() == 0 {
+		return storage.ErrNotFound
+	}
+	return nil
 }
 
 // AtomicRotateJWKS implements as.JWKSAtomicRotator in one serializable transaction, so
@@ -525,8 +532,8 @@ func (s *Store) AtomicRotateJWKS(ctx context.Context, retireKIDs []string, demot
 		freshKey.KID,
 		freshKey.Alg,
 		nilToDefault(freshKey.Use, "sig"),
-		freshKey.PublicJWK,
-		freshKey.PrivateEnc,
+		nonNilBytes(freshKey.PublicJWK),
+		nonNilBytes(freshKey.PrivateEnc),
 		freshKey.State,
 		timeToTs(created),
 		timePtrToTs(freshKey.PromotedAt),

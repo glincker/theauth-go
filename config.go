@@ -41,6 +41,12 @@ type AgentConfig struct {
 	// RateLimit bounds how often each agent (keyed by agent id) may mint tokens or call AuthorizeAgent.
 	// Over the limit the mint gets HTTP 429 with Retry-After. The zero value disables it.
 	RateLimit AgentRateLimit
+
+	// BeforeAuthorize, when set, runs an external guard or in process hook on every AuthorizeAgent
+	// call the policy engine and rate limit allowed. A deny refuses the call with decision code
+	// hook_denied, an escalate with approval_required, and a timeout (default 2s) or failure with
+	// hook_timeout or hook_error: it fails closed. Nil, the default, changes nothing. See docs/hooks.md.
+	BeforeAuthorize *AgentHookRunner
 }
 
 // RBACConfig configures organization-scoped roles and permissions. The zero
@@ -359,6 +365,10 @@ type AuthorizationServerConfig struct {
 	// /oauth/authorize only.
 	SessionAMR func(ctx context.Context, sess *Session) []string
 
+	// CORS opts the discovery and OAuth endpoints in to browser cross-origin access (allow list,
+	// exact origin match). The zero value sends no CORS headers. See docs/oauth-cors.md.
+	CORS CORSConfig
+
 	// PAR wires RFC 9126 pushed authorization requests. When non-nil and the storage implements PARStorage,
 	// POST /oauth/par is mounted and authorize accepts request_uri. Nil disables PAR.
 	PAR *PARConfig
@@ -594,6 +604,9 @@ func (m EmailMapper) Resolve(claims map[string]any) (ULID, error) {
 	return m.Lookup(email)
 }
 
+// CORSConfig is the root alias for as.CORSConfig. The zero value sends no CORS headers.
+type CORSConfig = internalas.CORSConfig
+
 // ClientCompatConfig is the root alias for as.ClientCompat. The zero value is fully strict.
 type ClientCompatConfig = internalas.ClientCompat
 
@@ -732,6 +745,7 @@ func validateASConfig(cfg *AuthorizationServerConfig, encryptionKey []byte) erro
 		ConsentHandler:                 cfg.ConsentHandler,
 		ConsentMaxGrantTTL:             cfg.ConsentMaxGrantTTL,
 		ConsentTicketTTL:               cfg.ConsentTicketTTL,
+		CORS:                           cfg.CORS,
 	}
 	if err := internalas.Validate(&internal, encryptionKey); err != nil {
 		return err
@@ -751,6 +765,7 @@ func validateASConfig(cfg *AuthorizationServerConfig, encryptionKey []byte) erro
 	cfg.SubjectActiveCacheTTL = internal.SubjectActiveCacheTTL
 	cfg.Clock = internal.Clock
 	cfg.LoginURL = internal.LoginURL
+	cfg.CORS = internal.CORS
 	cfg.RateLimits = internal.RateLimits
 	cfg.RegistrationTokenTTL = internal.RegistrationTokenTTL
 	// Mirror JWT bearer defaults back; without this an omitted AssertionMaxAge rejects every grant.
@@ -936,3 +951,26 @@ func (c *LoginThrottleConfig) limiter() *throttle.Limiter {
 // CodeSignupClosed unless OpenSignupAfterFirstUser is set. Magic-link signup cannot present a
 // token, so the first admin signs up with a password.
 type BootstrapConfig = bootstrap.Config
+
+// CookiesConfig tunes the attributes of every cookie the library writes. HttpOnly and Path are
+// not configurable, and Secure follows Config.SecureCookie and BaseURL. The zero value keeps the
+// historic behavior: host-only, SameSite=Lax, not Partitioned, no name prefix. New rejects an
+// invalid combination at startup.
+type CookiesConfig struct {
+	// Domain shares the cookies with every subdomain of the given host (for example "example.com").
+	// Empty keeps them host-only. A Domain cookie can be overwritten by any sibling subdomain, so
+	// prefer leaving it empty. It cannot be combined with Prefix "host".
+	Domain string
+	// SameSite is "lax" (default), "strict" or "none". "none" requires Secure. "strict" is applied
+	// to the session, device and WebAuthn cookies; the OAuth state cookie stays Lax because the
+	// provider callback is a cross-site navigation that Strict would not carry the cookie on.
+	SameSite string
+	// Partitioned adds the CHIPS Partitioned attribute (cookies keyed to the top-level site). It
+	// requires Secure and is meant for SameSite "none" in embedded third-party contexts.
+	Partitioned bool
+	// Prefix adds a browser-enforced name prefix to the session cookie: "secure" gives __Secure-,
+	// "host" gives __Host- (Secure, Path=/, no Domain). Empty adds none. A CookieName that already
+	// starts with the prefix is left alone, and the prefix rules are enforced either way. Both
+	// modes require Secure (Config.SecureCookie or an https BaseURL).
+	Prefix string
+}

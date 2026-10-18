@@ -165,15 +165,7 @@ func (a *TheAuth) handleMagicLinkVerify(w http.ResponseWriter, r *http.Request) 
 		errToHTTP(w, err)
 		return
 	}
-	http.SetCookie(w, &http.Cookie{
-		Name:     a.cookieName,
-		Value:    sessToken,
-		Path:     "/",
-		HttpOnly: true,
-		Secure:   a.secureCookie,
-		SameSite: http.SameSiteLaxMode,
-		Expires:  time.Now().Add(a.sessionTTL),
-	})
+	a.setSessionCookie(w, sessToken)
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write([]byte(`{"ok":true}`))
 }
@@ -200,15 +192,7 @@ func (a *TheAuth) handleSessionDelete(w http.ResponseWriter, r *http.Request) {
 	}
 	a.EmitAudit(r.Context(), "user.logout", TargetRef{Type: "session", ID: sess.ID.String()}, nil)
 	slog.Info("theauth: session revoked", "user_id", sess.UserID.String(), "session_id", sess.ID.String())
-	http.SetCookie(w, &http.Cookie{
-		Name:     a.cookieName,
-		Value:    "",
-		Path:     "/",
-		MaxAge:   -1,
-		HttpOnly: true,
-		Secure:   a.secureCookie,
-		SameSite: http.SameSiteLaxMode,
-	})
+	a.clearSessionCookie(w)
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -323,9 +307,11 @@ func (a *TheAuth) mountPasswordHandlers(r chi.Router, ipLimit, emailLimit func(h
 	h := passwordhandlers.New(passwordServiceAdapter{a: a}, passwordhandlers.CookieConfig{
 		Name:             a.cookieName,
 		SecureFlag:       a.secureCookie,
+		Policy:           a.cookiePolicy,
 		TTL:              a.sessionTTL,
 		DeviceCookieName: a.deviceCookie,
 	})
+	h.SetClientIP(a.clientIPOf)
 	h.Mount(r, ipLimit, emailLimit)
 }
 
@@ -400,6 +386,7 @@ func (a *TheAuth) mountTOTP(r chi.Router, ipLimit func(http.Handler) http.Handle
 		totphandlers.CookieConfig{
 			Name:             a.cookieName,
 			SecureFlag:       a.secureCookie,
+			Policy:           a.cookiePolicy,
 			TTL:              a.sessionTTL,
 			DeviceCookieName: a.deviceCookie,
 		},
@@ -407,6 +394,7 @@ func (a *TheAuth) mountTOTP(r chi.Router, ipLimit func(http.Handler) http.Handle
 			return UserFromContext(r.Context())
 		},
 	)
+	h.SetClientIP(a.clientIPOf)
 	h.Mount(r, ipLimit, a.RequireAuth(), a.RequirePendingOrFull())
 }
 
@@ -449,17 +437,20 @@ func (a *TheAuth) mountWebAuthn(r chi.Router, ipLimit func(http.Handler) http.Ha
 		webauthnhandlers.SessionCookieConfig{
 			Name:       a.cookieName,
 			SecureFlag: a.secureCookie,
+			Policy:     a.cookiePolicy,
 			TTL:        a.sessionTTL,
 		},
 		webauthnhandlers.ChallengeCookieConfig{
 			Path:       a.pathPrefix + "/webauthn",
 			SecureFlag: a.secureCookie,
+			Policy:     a.cookiePolicy,
 			TTL:        a.webauthnCfg.ChallengeTTL,
 		},
 		func(r *http.Request) (*models.User, bool) {
 			return UserFromContext(r.Context())
 		},
 	)
+	h.SetClientIP(a.clientIPOf)
 	h.Mount(r, ipLimit, a.RequireAuth())
 }
 
@@ -470,10 +461,12 @@ func (a *TheAuth) mountOAuth(r chi.Router, ipLimit func(http.Handler) http.Handl
 		oauthhandlers.SessionCookieConfig{
 			Name:       a.cookieName,
 			SecureFlag: a.secureCookie,
+			Policy:     a.cookiePolicy,
 			TTL:        a.sessionTTL,
 		},
 		a.postLoginRedirect,
 	)
+	h.SetClientIP(a.clientIPOf)
 	h.Mount(r, ipLimit)
 }
 
@@ -484,7 +477,7 @@ func (a *TheAuth) mountAS(r chi.Router) {
 		return
 	}
 	h := ashandlers.New(a.as, userFromRequest, a.dcrRegistrationTokenHashes)
-	h.SetClientIP(func(r *http.Request) string { return extractClientIPTrusting(r, a.trustedProxies) })
+	h.SetClientIP(a.clientIPOf)
 	h.SetAuthContext(a.asAuthContext)
 	h.SetSessionEnder(a.asEndSession)
 	var registerLimit func(http.Handler) http.Handler

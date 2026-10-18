@@ -19,6 +19,7 @@ type agentStorage interface {
 	AgentByClientID(ctx context.Context, clientID string) (*theauth.Agent, error)
 	AgentsByOwner(ctx context.Context, owner theauth.AgentOwner) ([]theauth.Agent, error)
 	UpdateAgentStatus(ctx context.Context, id theauth.ULID, status string, at time.Time) error
+	UpdateAgentExpiry(ctx context.Context, id theauth.ULID, expiresAt *time.Time) error
 	UpdateAgentLastActive(ctx context.Context, id theauth.ULID, at time.Time) error
 	InsertAgentCredential(ctx context.Context, c theauth.AgentCredential) error
 	AgentCredentialsByAgentID(ctx context.Context, agentID theauth.ULID) ([]theauth.AgentCredential, error)
@@ -28,7 +29,7 @@ type agentStorage interface {
 
 var _ agentStorage = (*Store)(nil)
 
-const agentCols = `id, owner_user_id, organization_id, name, description, status, client_id, scope_grant, created_at, last_active_at`
+const agentCols = `id, owner_user_id, organization_id, name, description, status, client_id, scope_grant, created_at, last_active_at, expires_at`
 
 const agentCredCols = `id, agent_id, kind, value_enc, created_at, expires_at, last_used_at, revoked_at`
 
@@ -37,9 +38,9 @@ func scanAgentRow(r scanner) (theauth.Agent, error) {
 		id, name, desc, status, clientID, scope string
 		owner, org                              sql.NullString
 		created                                 int64
-		lastActive                              sql.NullInt64
+		lastActive, expires                     sql.NullInt64
 	)
-	if err := r.Scan(&id, &owner, &org, &name, &desc, &status, &clientID, &scope, &created, &lastActive); err != nil {
+	if err := r.Scan(&id, &owner, &org, &name, &desc, &status, &clientID, &scope, &created, &lastActive, &expires); err != nil {
 		return theauth.Agent{}, err
 	}
 	aid, err := parseID(id)
@@ -61,7 +62,7 @@ func scanAgentRow(r scanner) (theauth.Agent, error) {
 	return theauth.Agent{
 		ID: aid, OwnerUserID: ownerID, OrganizationID: orgID, Name: name, Description: desc,
 		Status: status, ClientID: clientID, Scope: sc, CreatedAt: fromMicro(created),
-		LastActiveAt: fromNullMicro(lastActive),
+		LastActiveAt: fromNullMicro(lastActive), ExpiresAt: fromNullMicro(expires),
 	}, nil
 }
 
@@ -80,9 +81,9 @@ func (s *Store) InsertAgent(ctx context.Context, a theauth.Agent) (theauth.Agent
 		return theauth.Agent{}, err
 	}
 	_, err = s.db.ExecContext(ctx, s.q(`
-INSERT INTO theauth_agents (`+agentCols+`) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`),
+INSERT INTO theauth_agents (`+agentCols+`) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`),
 		idStr(a.ID), idPtrStr(a.OwnerUserID), idPtrStr(a.OrganizationID), a.Name, a.Description,
-		a.Status, a.ClientID, scope, toMicro(a.CreatedAt), toNullMicro(a.LastActiveAt))
+		a.Status, a.ClientID, scope, toMicro(a.CreatedAt), toNullMicro(a.LastActiveAt), toNullMicro(a.ExpiresAt))
 	if err != nil {
 		if strings.Contains(err.Error(), "UNIQUE constraint failed") {
 			return theauth.Agent{}, fmt.Errorf("theauth sqlite: insert agent: duplicate id or client_id: %w", theauth.ErrStorageNotFound)
@@ -154,6 +155,15 @@ func (s *Store) UpdateAgentStatus(ctx context.Context, id theauth.ULID, status s
 		return wrap("update agent status", err)
 	}
 	return requireRows("update agent status", res)
+}
+
+// UpdateAgentExpiry sets or clears (nil) the agent expiry.
+func (s *Store) UpdateAgentExpiry(ctx context.Context, id theauth.ULID, expiresAt *time.Time) error {
+	res, err := s.db.ExecContext(ctx, s.q(`UPDATE theauth_agents SET expires_at = ? WHERE id = ?`), toNullMicro(expiresAt), idStr(id))
+	if err != nil {
+		return wrap("update agent expiry", err)
+	}
+	return requireRows("update agent expiry", res)
 }
 
 // UpdateAgentLastActive records the last activity time.

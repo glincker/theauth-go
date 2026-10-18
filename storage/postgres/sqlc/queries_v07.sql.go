@@ -467,9 +467,9 @@ const listUsersByOrganization = `-- name: ListUsersByOrganization :many
 SELECT u.id, u.email, u.email_verified_at, u.name, u.avatar_url, u.created_at, u.updated_at, u.password_hash, u.external_id, u.given_name, u.family_name, u.display_name FROM users u
   JOIN organization_members m ON m.user_id = u.id
  WHERE m.organization_id = $1
-   AND ($2::text = '' OR u.email = $2)
+   AND ($2::text = '' OR u.email = $2::citext)
    AND ($3::text = '' OR u.external_id = $3)
-   AND ($4::text = '' OR u.email = $4)
+   AND ($4::text = '' OR u.email = $4::citext)
  ORDER BY u.created_at ASC
  OFFSET $5 LIMIT $6
 `
@@ -510,9 +510,9 @@ const countUsersByOrganization = `-- name: CountUsersByOrganization :one
 SELECT count(*) FROM users u
   JOIN organization_members m ON m.user_id = u.id
  WHERE m.organization_id = $1
-   AND ($2::text = '' OR u.email = $2)
+   AND ($2::text = '' OR u.email = $2::citext)
    AND ($3::text = '' OR u.external_id = $3)
-   AND ($4::text = '' OR u.email = $4)
+   AND ($4::text = '' OR u.email = $4::citext)
 `
 
 type CountUsersByOrganizationParams struct {

@@ -26,6 +26,13 @@ var (
 	// ErrBadCursor is returned by storage adapters when a keyset pagination cursor fails to decode.
 	ErrBadCursor = models.ErrBadCursor
 
+	// ErrBadAuditOrder is returned when AuditQuery.Order is neither "", "asc" nor "desc".
+	ErrBadAuditOrder = models.ErrBadAuditOrder
+
+	// ErrAuditOrderUnsupported is returned by QueryAudit when the query uses Order "asc", an Event
+	// filter or a "c1." cursor and the storage backend does not declare AuditOrderSupported() true.
+	ErrAuditOrderUnsupported = models.ErrAuditOrderUnsupported
+
 	// ErrReplayDetected is returned by storage when a WebAuthn sign count does not strictly increase.
 	// The library treats it as a clone attempt and refuses the login. Authenticators that never count
 	// stay at zero and are handled by the caller.
@@ -180,6 +187,13 @@ var (
 
 	// ErrAgentInactive is returned when an operation depends on an agent that is suspended or revoked.
 	ErrAgentInactive = models.ErrAgentInactive
+
+	// ErrAgentExpired is returned when the agent is past its ExpiresAt. It matches ErrAgentInactive
+	// under errors.Is; the wire code is agent_expired.
+	ErrAgentExpired = models.ErrAgentExpired
+
+	// ErrAgentExpiryInvalid is returned when a requested agent expiry is in the past or too far ahead.
+	ErrAgentExpiryInvalid = models.ErrAgentExpiryInvalid
 
 	// ErrDelegationNotFound is returned when no delegation grant matches the user, agent and resource.
 	// Token exchange surfaces it as access_denied.

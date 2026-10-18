@@ -99,7 +99,17 @@ type Input struct {
 	OAuthDomains    int
 	HasProviders    bool
 	HasSAML         bool
-	OAuthReturnTo   int
+	// SAMLTrackerMemory is true when SAML is enabled and the AuthnRequest
+	// tracker is the in-process default (no shared Stores.Cache).
+	SAMLTrackerMemory bool
+	OAuthReturnTo     int
+
+	// CORSPublicWildcard is true when "*" is allowed on Discovery or JWKS. CORSCredentials mirrors
+	// AllowCredentials. CORSTokenEnabled and CORSTokenOrigins describe the token endpoint opt in.
+	CORSPublicWildcard bool
+	CORSCredentials    bool
+	CORSTokenEnabled   bool
+	CORSTokenOrigins   int
 
 	TOTPEnabled     bool
 	WebAuthnEnabled bool
@@ -123,6 +133,14 @@ type Input struct {
 	WebAuthnRPID       string
 	WebAuthnOrigins    []string
 	WebAuthnConfigured bool
+
+	// CookieName is the session cookie name after any prefix. CookieDomain and CookieSameSite
+	// ("lax", "strict" or "none") mirror Config.Cookies.
+	CookieName        string
+	CookieDomain      string
+	CookieSameSite    string
+	CookiePartitioned bool
+	SecurityHeaders   bool
 }
 
 // Build runs every check over in and returns the sorted report.

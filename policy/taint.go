@@ -267,6 +267,7 @@ func (e Evaluator) applyTaint(req Request, d Decision) Decision {
 		return d
 	case TaintDeny:
 		d.Allowed, d.Effect, d.Escalation = false, Deny, nil
+		d.Code = CodeTaintViolation
 		d.Reason = "taint violation: " + describeTaint(v)
 		return d
 	}
@@ -274,6 +275,7 @@ func (e Evaluator) applyTaint(req Request, d Decision) Decision {
 		return d
 	}
 	d.Allowed, d.Effect = false, Escalate
+	d.Code = CodeTaintViolation
 	d.Reason = describeTaint(v)
 	d.Escalation = &Escalation{Tier: e.taintTier(v), Requirement: RequireApproval, Reason: d.Reason}
 	return d
