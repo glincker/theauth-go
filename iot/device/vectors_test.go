@@ -57,6 +57,31 @@ type vectorFile struct {
 			OK bool `json:"ok"`
 		} `json:"expect"`
 	} `json:"assertions"`
+	Revocation []struct {
+		Name          string `json:"name"`
+		Token         string `json:"token"`
+		Snapshot      string `json:"snapshot"`
+		DeviceID      string `json:"deviceId"`
+		MaxAgeSeconds int64  `json:"maxAgeSeconds"`
+		Now           int64  `json:"now"`
+		LastSeq       int64  `json:"lastSeq"`
+		Expect        struct {
+			OK     bool   `json:"ok"`
+			Reason string `json:"reason"`
+		} `json:"expect"`
+	} `json:"revocation"`
+	Snapshots []struct {
+		Name          string `json:"name"`
+		Token         string `json:"token"`
+		Owner         string `json:"owner"`
+		MaxAgeSeconds int64  `json:"maxAgeSeconds"`
+		Now           int64  `json:"now"`
+		Expect        struct {
+			OK  bool            `json:"ok"`
+			N   int             `json:"n"`
+			Has map[string]bool `json:"has"`
+		} `json:"expect"`
+	} `json:"snapshots"`
 	Thumbprints []struct {
 		JWK        json.RawMessage `json:"jwk"`
 		Thumbprint string          `json:"thumbprint"`
@@ -171,5 +196,57 @@ func TestVectorsThumbprint(t *testing.T) {
 		if got := key.Thumbprint(); got != c.Thumbprint {
 			t.Errorf("%v thumbprint %s, want %s", key.Alg, got, c.Thumbprint)
 		}
+	}
+}
+
+func TestVectorsRevocationInBundle(t *testing.T) {
+	v, keys := loadVectors(t)
+	if len(v.Revocation) == 0 {
+		t.Fatal("no revocation vectors")
+	}
+	for _, c := range v.Revocation {
+		t.Run(c.Name, func(t *testing.T) {
+			_, err := VerifyBundle(c.Token, VerifyOptions{
+				Keys: keys, DeviceID: c.DeviceID, Now: time.Unix(c.Now, 0),
+				Revocations: &RevocationOptions{
+					Token: c.Snapshot, MaxAge: time.Duration(c.MaxAgeSeconds) * time.Second, LastSeq: c.LastSeq,
+				},
+			})
+			if c.Expect.OK {
+				if err != nil {
+					t.Fatalf("want ok, got %v", err)
+				}
+				return
+			}
+			ve, isVE := err.(*VerifyError)
+			if !isVE {
+				t.Fatalf("want %s, got %v", c.Expect.Reason, err)
+			}
+			if string(ve.Reason) != c.Expect.Reason {
+				t.Fatalf("reason %s (%s), want %s", ve.Reason, ve.Message, c.Expect.Reason)
+			}
+		})
+	}
+}
+
+func TestVectorsSnapshotMembership(t *testing.T) {
+	v, keys := loadVectors(t)
+	for _, c := range v.Snapshots {
+		t.Run(c.Name, func(t *testing.T) {
+			snap, err := VerifyRevocations(RevocationOptions{
+				Token: c.Token, Owner: c.Owner, MaxAge: time.Duration(c.MaxAgeSeconds) * time.Second,
+			}, keys, "", time.Unix(c.Now, 0))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if snap.Count != c.Expect.N {
+				t.Fatalf("count %d, want %d", snap.Count, c.Expect.N)
+			}
+			for id, want := range c.Expect.Has {
+				if got := snap.Contains(id); got != want {
+					t.Errorf("Contains(%q) = %v, want %v", id, got, want)
+				}
+			}
+		})
 	}
 }

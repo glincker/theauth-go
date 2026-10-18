@@ -62,6 +62,11 @@ const (
 	ReasonInvalid     Reason = "invalid"
 	ReasonWrongDevice Reason = "wrong_device"
 	ReasonRollback    Reason = "rollback"
+	// ReasonRevoked: the device is on a verified revocation snapshot.
+	ReasonRevoked Reason = "revoked"
+	// ReasonStaleRevocations: a device that opted in to offline revocation checks has no
+	// snapshot, or it is expired or older than the allowed age. Fail closed.
+	ReasonStaleRevocations Reason = "stale_revocations"
 )
 
 // VerifyError is returned by VerifyBundle.
@@ -82,6 +87,11 @@ type VerifyOptions struct {
 	Issuer string
 	// LastSeq is the highest seq this device accepted before, 0 for none.
 	LastSeq int64
+	// Revocations opts in to offline revocation. Token is the snapshot delivered next to the
+	// bundle. VerifyBundle then refuses a bundle with ReasonRevoked when this device is on the
+	// list and with ReasonStaleRevocations when the snapshot is missing, expired or older than
+	// MaxAge. Leave nil to skip the check. Owner is taken from the bundle.
+	Revocations *RevocationOptions
 	// Now is the current time. A device without a real time source should pass the
 	// estimate from SyncedClock and refuse to verify before it has one.
 	Now time.Time
@@ -144,8 +154,24 @@ func VerifyBundle(token string, o VerifyOptions) (*Claims, error) {
 			c.Perms = append(c.Perms, p)
 		}
 	}
+	if o.Revocations != nil {
+		ro := *o.Revocations
+		ro.Owner = c.Owner
+		snap, err := VerifyRevocations(ro, o.Keys, issuer, o.Now)
+		if err != nil {
+			return nil, err
+		}
+		if snap.Contains(o.DeviceID) {
+			return nil, &VerifyError{ReasonRevoked, "device is on the revocation list"}
+		}
+	}
 	return c, nil
 }
+
+var (
+	errBundleAlg   = errors.New("device: bundles are signed with ES256 or EdDSA")
+	errKidRequired = errors.New("device: kid is required")
+)
 
 func numOr(v any) float64 {
 	if f, ok := v.(float64); ok {
@@ -271,10 +297,10 @@ func nonNil(s []string) []string {
 // EdDSA keys are valid, as on the server.
 func (s *Signer) SignBundle(kid string, c Claims) (string, error) {
 	if s.pub.Alg == AlgES384 {
-		return "", errors.New("device: bundles are signed with ES256 or EdDSA")
+		return "", errBundleAlg
 	}
 	if kid == "" {
-		return "", errors.New("device: kid is required")
+		return "", errKidRequired
 	}
 	return signJWS(s, map[string]any{"alg": string(s.pub.Alg), "typ": BundleTyp, "kid": kid}, c.Map())
 }

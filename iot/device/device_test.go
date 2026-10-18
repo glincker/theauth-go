@@ -328,3 +328,29 @@ func TestWriteInterop(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestSignRevocationsRoundTrip(t *testing.T) {
+	signer := newKeys(t)["ES256"]
+	pub := signer.Public()
+	pub.KID = "k1"
+	keys := NewKeySet(pub)
+	now := time.Unix(1_760_000_000, 0)
+	tok, err := signer.SignRevocations("k1", "theauth", "o1", []string{"b", "a", "a"}, now, time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	snap, err := VerifyRevocations(RevocationOptions{Token: tok, Owner: "o1", MaxAge: time.Minute}, keys, "", now.Add(10*time.Second))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if snap.Count != 2 || !snap.Contains("a") || !snap.Contains("b") || snap.Contains("c") {
+		t.Fatalf("unexpected snapshot %+v", snap)
+	}
+	_, err = VerifyRevocations(RevocationOptions{Token: tok, MaxAge: time.Minute}, keys, "", now.Add(2*time.Minute))
+	if ve, ok := err.(*VerifyError); !ok || ve.Reason != ReasonStaleRevocations {
+		t.Fatalf("want stale, got %v", err)
+	}
+	if _, err := VerifyRevocations(RevocationOptions{MaxAge: time.Minute}, keys, "", now); err == nil {
+		t.Fatal("empty token must fail closed")
+	}
+}

@@ -4,7 +4,8 @@
 // Formats follow the TS design (sdk/docs-local/design/iot-device-identity.md): D3 for the
 // assertion, D7 for the bundle, D8 for resource names. Evaluate matches the TS
 // evaluateDeviceBundle rule for rule, and testdata/vectors.json (generated from the TS
-// code) is replayed by the tests.
+// code) is replayed by the tests. Signed revocation snapshots (VerifyRevocations, and the
+// Revocations option of VerifyBundle) follow the TS verifyRevocationSnapshot.
 //
 // The package imports only the standard library, and none of encoding/json, reflect, fmt
 // or os directly: a small JSON reader is built in, so the verify path suits TinyGo. See
