@@ -99,6 +99,9 @@ type AuditEvent = models.AuditEvent
 
 type AuditQuery = models.AuditQuery
 
+// AuditProvenanceFilter is AuditQuery.Provenance.
+type AuditProvenanceFilter = models.ProvenanceFilter
+
 // Audit read orders for AuditQuery.Order.
 const (
 	AuditOrderAsc  = models.AuditOrderAsc

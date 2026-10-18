@@ -450,6 +450,26 @@ func (a *TheAuth) VerifyAuditChain(ctx context.Context) (AuditChainResult, error
 	return audit.VerifyChain(ctx, a.storage)
 }
 
+// AuditInputHash returns the hash the audit log records for input content, using
+// Config.Audit.InputHashKey when set. Use it to build an AuditQuery.Provenance filter for a
+// message or document you still hold:
+//
+//	q := theauth.AuditQuery{Provenance: &theauth.AuditProvenanceFilter{
+//		Kind: audit.InputRetrievedDocument, Hash: a.AuditInputHash(doc)}}
+func (a *TheAuth) AuditInputHash(content string) string { return a.auditHasher.Hash(content) }
+
+// ShredAuditPseudonyms deletes the audit pseudonym period secrets that fell out of the retention
+// window and returns the periods removed. Rotation does this by itself on the first write of each
+// new period; call it to do so on demand. It needs Config.Audit.PseudonymRotation, otherwise it
+// returns an error.
+func (a *TheAuth) ShredAuditPseudonyms(ctx context.Context) ([]int64, error) {
+	r, ok := a.storageRaw.(AuditPseudonymRotator)
+	if !ok {
+		return nil, errors.New("theauth: storage backend does not rotate audit pseudonyms")
+	}
+	return r.ShredAuditPseudonyms(ctx)
+}
+
 // QueryAudit returns up to q.Limit events and a cursor for the next page. It performs no
 // authorization; callers check. q.Order is "desc" (default) or "asc" and q.Event filters by shared
 // event name; both, and "c1." cursors, need a backend that declares AuditOrderSupported() true,

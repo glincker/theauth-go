@@ -9,7 +9,11 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-var _ theauth.ToolApprovalStorage = (*Store)(nil)
+var (
+	_ theauth.ToolApprovalStorage       = (*Store)(nil)
+	_ theauth.ToolApprovalAdminStorage  = (*Store)(nil)
+	_ theauth.ToolApprovalExpiryStorage = (*Store)(nil)
+)
 
 func nullableTime(t time.Time) pgtype.Timestamptz {
 	if t.IsZero() {
@@ -20,9 +24,9 @@ func nullableTime(t time.Time) pgtype.Timestamptz {
 
 func (s *Store) OpenToolApproval(ctx context.Context, a theauth.ToolApproval) error {
 	_, err := s.pool.Exec(ctx, `
-INSERT INTO theauth_tool_approvals (id, agent_id, action, resource, requirement, tier, reason, created_at, expires_at)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
-		a.ID, a.AgentID, a.Action, a.Resource, a.Requirement, a.Tier, a.Reason,
+INSERT INTO theauth_tool_approvals (id, agent_id, action, resource, requirement, tier, reason, opened_by, arguments_hash, created_at, expires_at)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+		a.ID, a.AgentID, a.Action, a.Resource, a.Requirement, a.Tier, a.Reason, a.OpenedBy, a.ArgumentsHash,
 		a.CreatedAt.UTC(), nullableTime(a.ExpiresAt))
 	if err != nil {
 		return fmt.Errorf("postgres: open tool approval: %w", err)
@@ -33,7 +37,8 @@ VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
 func (s *Store) ApproveToolApproval(ctx context.Context, id, approver string, now time.Time) (bool, error) {
 	tag, err := s.pool.Exec(ctx, `
 UPDATE theauth_tool_approvals SET approved_at = $1, approver = $2
-WHERE id = $3 AND approved_at IS NULL AND consumed_at IS NULL AND (expires_at IS NULL OR expires_at > $1)`,
+WHERE id = $3 AND approved_at IS NULL AND consumed_at IS NULL AND denied_at IS NULL AND expired_at IS NULL
+  AND (expires_at IS NULL OR expires_at > $1)`,
 		now.UTC(), approver, id)
 	if err != nil {
 		return false, fmt.Errorf("postgres: approve tool approval: %w", err)
@@ -47,7 +52,8 @@ func (s *Store) ConsumeToolApproval(ctx context.Context, id, agentID, action, re
 	tag, err := s.pool.Exec(ctx, `
 UPDATE theauth_tool_approvals SET consumed_at = $1
 WHERE id = $2 AND agent_id = $3 AND action = $4 AND resource = $5
-  AND approved_at IS NOT NULL AND consumed_at IS NULL AND (expires_at IS NULL OR expires_at > $1)`,
+  AND approved_at IS NOT NULL AND consumed_at IS NULL AND denied_at IS NULL AND expired_at IS NULL
+  AND (expires_at IS NULL OR expires_at > $1)`,
 		now.UTC(), id, agentID, action, resource)
 	if err != nil {
 		return false, fmt.Errorf("postgres: consume tool approval: %w", err)

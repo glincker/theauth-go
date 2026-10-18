@@ -144,7 +144,15 @@ The values match the TypeScript library's `DECISION_CODES` one for one, so a cli
 | `time_restricted` | An allow statement covered the action and resource but its time window condition failed. |
 | `argument_rejected` | Reserved. A call argument was refused. |
 | `approval_required` | A statement escalated the call and no valid approval was presented. |
-| `approval_invalid` | An approval id was presented but could not be spent (unknown, pending, used or issued for another call). |
+| `approval_invalid` | Generic fallback for an approval id that could not be spent. The built in approvals report one of the specific codes below instead, so only a custom `Approvals` that cannot say why returns it. |
+| `approval_not_found` | The presented approval id is unknown. |
+| `approval_pending` | The request is still waiting for a human. |
+| `approval_denied` | A human denied the request. |
+| `approval_expired` | The request passed its expiry before it was decided or spent. |
+| `approval_already_used` | The approval was already spent. Approvals are single use. |
+| `approval_mismatch` | The approval was issued for another agent, action or resource. |
+| `approval_arguments_mismatch` | The arguments presented at spend time differ from the ones the human approved. |
+| `approval_granted` | A human approved a request (the `approval.approved` event). Not a spend: the spend is `approval_consumed`. |
 | `agent_not_found` | The agent id is unknown (reported when the limit check fails with `ErrAgentNotFound`). |
 | `agent_revoked` | Reserved. The agent was revoked or suspended. |
 | `agent_expired` | Reserved. The agent passed its expiry. |

@@ -7,6 +7,7 @@ import (
 	"crypto/x509"
 	"encoding/pem"
 	"errors"
+	"fmt"
 	"log/slog"
 	"strconv"
 	"strings"
@@ -264,6 +265,19 @@ func parseSAMLConfig(cfg *SAMLConfig) (samlParsed, error) {
 func wireServices(a *TheAuth, cfg Config, providers map[string]Provider, sp samlParsed) error {
 	// Audit is wired first so constructors taking an audit.Emitter receive the live writer.
 	if cfg.Audit != nil {
+		hasher, err := internalaudit.NewInputHasher(cfg.Audit.InputHashKey)
+		if err != nil {
+			return fmt.Errorf("theauth: Config.Audit.InputHashKey: %w", err)
+		}
+		if r := cfg.Audit.PseudonymRotation; r != nil {
+			rot, ok := cfg.storageRaw.(AuditPseudonymRotator)
+			if !ok {
+				return errors.New("theauth: Config.Audit.PseudonymRotation needs a storage backend that implements AuditPseudonymRotator")
+			}
+			if err := rot.SetAuditPseudonymRotation(*r); err != nil {
+				return fmt.Errorf("theauth: Config.Audit.PseudonymRotation: %w", err)
+			}
+		}
 		internalSinks := make([]internalaudit.Sink, len(cfg.Audit.Sinks))
 		for i, s := range cfg.Audit.Sinks {
 			internalSinks[i] = auditSinkAdapter{s}
@@ -276,10 +290,12 @@ func wireServices(a *TheAuth, cfg Config, providers map[string]Provider, sp saml
 			DefaultRedactor: internalaudit.Redactor(DefaultRedactor),
 			DrainTimeout:    cfg.Audit.DrainTimeout,
 			Sinks:           internalSinks,
+			InputHasher:     hasher,
 
 			FailClosed:             cfg.Audit.FailClosed,
 			DecisionActionPrefixes: cfg.Audit.DecisionActionPrefixes,
 		})
+		a.auditHasher = hasher
 		a.auditSvc.SetHooks(a.hooks)
 	}
 

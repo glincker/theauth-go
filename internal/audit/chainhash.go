@@ -118,6 +118,12 @@ func ChainKey(e models.AuditEvent) string {
 // BuildChainEntry computes the stored strings and hash for the row at head+1 of a chain. It defines
 // the hash input for every backend.
 func BuildChainEntry(e models.AuditEvent, secret []byte, head ChainHead) (ChainEntry, error) {
+	return BuildChainEntryWith(e, Pseudonymizer{Stable: secret}, head)
+}
+
+// BuildChainEntryWith is BuildChainEntry with a Pseudonymizer, so a store with rotation on writes
+// period keyed pseudonyms. The hashed field set is the same, only the pseudonym strings differ.
+func BuildChainEntryWith(e models.AuditEvent, ps Pseudonymizer, head ChainHead) (ChainEntry, error) {
 	meta, err := MarshalOr(e.Metadata, "{}")
 	if err != nil {
 		return ChainEntry{}, fmt.Errorf("marshal audit metadata: %w", err)
@@ -139,12 +145,21 @@ func BuildChainEntry(e models.AuditEvent, secret []byte, head ChainHead) (ChainE
 		ChainKey: key, Seq: head.Seq + 1, Prev: head.Hash, ID: e.ID.String(), Org: key,
 		Action: e.Action, TargetType: e.TargetType, TargetID: e.TargetID, Metadata: meta,
 		IP: e.IP, UserAgent: e.UserAgent, CreatedAt: created.UTC().UnixMicro(),
-		SubjectPseudo: Pseudonym(secret, e.SubjectID), ActorPseudo: Pseudonym(secret, e.ActorID),
-		PolicyVersion: e.PolicyVersion, ApproverPseudo: Pseudonym(secret, e.ApproverID),
-		DelegationChain: chain, InputProvenance: prov,
+		PolicyVersion: e.PolicyVersion, DelegationChain: chain, InputProvenance: prov,
+	}
+	if p.SubjectPseudo, err = ps.Of(created, e.SubjectID); err != nil {
+		return ChainEntry{}, err
+	}
+	if p.ActorPseudo, err = ps.Of(created, e.ActorID); err != nil {
+		return ChainEntry{}, err
+	}
+	if p.ApproverPseudo, err = ps.Of(created, e.ApproverID); err != nil {
+		return ChainEntry{}, err
 	}
 	if e.ActorUserID != nil {
-		p.ActorUserPseudo = Pseudonym(secret, e.ActorUserID.String())
+		if p.ActorUserPseudo, err = ps.Of(created, e.ActorUserID.String()); err != nil {
+			return ChainEntry{}, err
+		}
 	}
 	if e.ActorSessionID != nil {
 		p.ActorSession = e.ActorSessionID.String()
@@ -174,7 +189,13 @@ type ChainRow struct {
 // VerifyChainRows walks rows ordered by (chain key, seq). unchained counts the pre-chain rows.
 // secret may be nil when no chained write happened.
 func VerifyChainRows(next func() (ChainRow, bool, error), secret []byte, unchained int) (models.AuditChainResult, error) {
-	return verifyChainRows(next, secret, unchained, false)
+	return verifyChainRows(next, StableKeys(secret), unchained, false)
+}
+
+// VerifyChainRowsKeys is VerifyChainRows for a store that may hold rotating pseudonyms. A rotated
+// pseudonym is checked under the secret of its period, and skipped when that period was shredded.
+func VerifyChainRowsKeys(next func() (ChainRow, bool, error), keys PseudonymKeys, unchained int) (models.AuditChainResult, error) {
+	return verifyChainRows(next, keys, unchained, false)
 }
 
 // VerifyChainRowsAnchored is VerifyChainRows for a store that may have dropped the oldest rows of a
@@ -182,10 +203,15 @@ func VerifyChainRows(next func() (ChainRow, bool, error), secret []byte, unchain
 // every later row must link to it. Dropped history is not reported as a break; use a signed head
 // checkpoint to detect loss at the tail.
 func VerifyChainRowsAnchored(next func() (ChainRow, bool, error), secret []byte, unchained int) (models.AuditChainResult, error) {
-	return verifyChainRows(next, secret, unchained, true)
+	return verifyChainRows(next, StableKeys(secret), unchained, true)
 }
 
-func verifyChainRows(next func() (ChainRow, bool, error), secret []byte, unchained int, anchored bool) (models.AuditChainResult, error) {
+// VerifyChainRowsAnchoredKeys is VerifyChainRowsAnchored with PseudonymKeys.
+func VerifyChainRowsAnchoredKeys(next func() (ChainRow, bool, error), keys PseudonymKeys, unchained int) (models.AuditChainResult, error) {
+	return verifyChainRows(next, keys, unchained, true)
+}
+
+func verifyChainRows(next func() (ChainRow, bool, error), keys PseudonymKeys, unchained int, anchored bool) (models.AuditChainResult, error) {
 	res := models.AuditChainResult{Supported: true, Unchained: unchained, OK: true}
 	var (
 		curKey   string
@@ -241,7 +267,7 @@ func verifyChainRows(next func() (ChainRow, bool, error), secret []byte, unchain
 			switch {
 			case c.raw == "" && c.pseudo != "":
 				erased = true
-			case c.raw != "" && secret != nil && Pseudonym(secret, c.raw) != c.pseudo:
+			case c.raw != "" && !keys.Check(c.raw, c.pseudo):
 				return brk("pseudonym_mismatch")
 			}
 		}

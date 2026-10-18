@@ -60,6 +60,8 @@ func TestMySQLCapabilityContracts(t *testing.T) {
 	}{
 		{"APITokens", func(t *testing.T, s *mysql.Store) { storagetest.RunAPITokens(t, s) }},
 		{"ToolApprovals", func(t *testing.T, s *mysql.Store) { storagetest.RunToolApprovals(t, s) }},
+		{"ToolApprovalAdmin", func(t *testing.T, s *mysql.Store) { storagetest.RunToolApprovalAdmin(t, s) }},
+		{"ApprovalFlow", func(t *testing.T, s *mysql.Store) { storagetest.RunApprovalFlow(t, s) }},
 		{"DeviceCodes", func(t *testing.T, s *mysql.Store) { storagetest.RunDeviceCodes(t, s) }},
 		{"DeviceAuthorizations", func(t *testing.T, s *mysql.Store) { storagetest.RunDeviceAuthorizations(t, s) }},
 		{"RegistrationTokens", func(t *testing.T, s *mysql.Store) { storagetest.RunRegistrationTokens(t, s) }},
@@ -69,6 +71,8 @@ func TestMySQLCapabilityContracts(t *testing.T) {
 		{"SessionAuthMethods", func(t *testing.T, s *mysql.Store) { storagetest.RunSessionAuthMethods(t, s) }},
 		{"AccountLifecycle", func(t *testing.T, s *mysql.Store) { storagetest.RunAccountLifecycle(t, s) }},
 		{"AuditChain", func(t *testing.T, s *mysql.Store) { storagetest.RunAuditChain(t, s) }},
+		{"AuditProvenance", func(t *testing.T, s *mysql.Store) { storagetest.RunAuditProvenance(t, s) }},
+		{"AuditRotation", func(t *testing.T, s *mysql.Store) { storagetest.RunAuditRotation(t, s) }},
 		{"AuditHeadCheckpoint", func(t *testing.T, _ *mysql.Store) {
 			s, db := capsStoreDB(t)
 			storagetest.RunAuditHeadCheckpoint(t, s, func(ctx context.Context) error {

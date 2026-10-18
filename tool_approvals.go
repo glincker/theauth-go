@@ -18,13 +18,22 @@ type ToolApproval struct {
 	Approver    string
 	// OpenedBy is the human or service that opened the request, used for the four-eyes check in
 	// the approvals package. Empty means unknown, so no self-approval check applies.
-	OpenedBy   string
-	DeniedBy   string
-	CreatedAt  time.Time
-	ExpiresAt  time.Time
-	ApprovedAt time.Time
-	ConsumedAt time.Time
-	DeniedAt   time.Time
+	OpenedBy string
+	DeniedBy string
+	// ArgumentsHash binds the request to the arguments the approver saw: a hex SHA-256 of the
+	// canonical JSON of action, resource and arguments (toolguard.HashApprovalAction). It is never
+	// edited after the request is opened. Empty means the request is not argument bound (a row
+	// opened before the column existed), which any presented arguments satisfy.
+	ArgumentsHash string
+	CreatedAt     time.Time
+	ExpiresAt     time.Time
+	ApprovedAt    time.Time
+	ConsumedAt    time.Time
+	DeniedAt      time.Time
+	// ExpiredAt is set once by ExpireToolApproval, the first time an overdue undecided request
+	// is noticed. Expiry is also derived from ExpiresAt, so a request past ExpiresAt is expired
+	// whether or not this is set.
+	ExpiredAt time.Time
 }
 
 // ToolApprovalStorage is the optional storage capability behind single-use approvals for agent tool
@@ -40,7 +49,7 @@ type ToolApprovalStorage interface {
 }
 
 // ToolApprovalAdminStorage is the optional capability behind the approvals inbox
-// (the approvals package). Only the memory store implements it today; SQL backends do not.
+// (the approvals package). Every built in store implements it.
 // A store that implements it must make ApproveToolApproval fail for a denied request, and
 // DenyToolApproval must be one atomic conditional write deciding the winner by rows affected.
 type ToolApprovalAdminStorage interface {
@@ -50,4 +59,15 @@ type ToolApprovalAdminStorage interface {
 	ListToolApprovals(ctx context.Context, limit int) ([]ToolApproval, error)
 	// DenyToolApproval denies id when it is still undecided, unspent and unexpired.
 	DenyToolApproval(ctx context.Context, id, denier string, now time.Time) (bool, error)
+}
+
+// ToolApprovalExpiryStorage is the optional capability that marks overdue requests expired, so
+// the expiry is recorded once (one audit row, one event). Every built in store implements it.
+type ToolApprovalExpiryStorage interface {
+	// ExpireToolApproval flips id to expired when it is undecided, unspent, not yet marked and past
+	// its ExpiresAt. Exactly one concurrent caller sees true.
+	ExpireToolApproval(ctx context.Context, id string, now time.Time) (bool, error)
+	// ListOverdueToolApprovals returns undecided, unmarked requests past ExpiresAt, oldest first,
+	// at most limit (0 means 100).
+	ListOverdueToolApprovals(ctx context.Context, now time.Time, limit int) ([]ToolApproval, error)
 }

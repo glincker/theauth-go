@@ -115,7 +115,7 @@ func statusOf(a theauth.ToolApproval, now time.Time) string {
 		return StatusSpent
 	case !a.ApprovedAt.IsZero():
 		return StatusApproved
-	case !a.ExpiresAt.IsZero() && !a.ExpiresAt.After(now):
+	case !a.ExpiredAt.IsZero() || (!a.ExpiresAt.IsZero() && !a.ExpiresAt.After(now)):
 		return StatusExpired
 	default:
 		return StatusPending

@@ -112,7 +112,7 @@ func (s *Store) VerifyAuditChain(ctx context.Context) (AuditChainResult, error) 
 	if err := row.Scan(&res.Unchained); err != nil {
 		return res, wrap("verify audit chain", err)
 	}
-	secret, err := s.auditSecretIfPresent(ctx)
+	keys, err := s.auditPseudonymKeys(ctx)
 	if err != nil {
 		return res, wrap("verify audit chain", err)
 	}
@@ -178,7 +178,7 @@ FROM theauth_audit_events WHERE chain_seq IS NOT NULL ORDER BY chain_key, chain_
 			switch {
 			case c.raw == "" && c.pseudo != "":
 				erased = true
-			case c.raw != "" && secret != nil && auditPseudonym(secret, c.raw) != c.pseudo:
+			case c.raw != "" && !keys.Check(c.raw, c.pseudo):
 				return brk("pseudonym_mismatch")
 			}
 		}

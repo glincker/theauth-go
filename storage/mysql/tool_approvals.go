@@ -9,7 +9,11 @@ import (
 	"github.com/glincker/theauth-go/v2"
 )
 
-var _ theauth.ToolApprovalStorage = (*Store)(nil)
+var (
+	_ theauth.ToolApprovalStorage       = (*Store)(nil)
+	_ theauth.ToolApprovalAdminStorage  = (*Store)(nil)
+	_ theauth.ToolApprovalExpiryStorage = (*Store)(nil)
+)
 
 func toolApprovalExpiry(t time.Time) sql.NullTime {
 	if t.IsZero() {
@@ -31,9 +35,9 @@ func oneRow(res sql.Result, err error, op string) (bool, error) {
 
 func (s *Store) OpenToolApproval(ctx context.Context, a theauth.ToolApproval) error {
 	_, err := s.db.ExecContext(ctx, `
-INSERT INTO theauth_tool_approvals (id, agent_id, action, resource, requirement, tier, reason, created_at, expires_at)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		a.ID, a.AgentID, a.Action, a.Resource, a.Requirement, a.Tier, a.Reason,
+INSERT INTO theauth_tool_approvals (id, agent_id, action, resource, requirement, tier, reason, opened_by, arguments_hash, created_at, expires_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		a.ID, a.AgentID, a.Action, a.Resource, a.Requirement, a.Tier, a.Reason, a.OpenedBy, a.ArgumentsHash,
 		a.CreatedAt.UTC(), toolApprovalExpiry(a.ExpiresAt))
 	if err != nil {
 		return fmt.Errorf("mysql: open tool approval: %w", err)
@@ -44,7 +48,8 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 func (s *Store) ApproveToolApproval(ctx context.Context, id, approver string, now time.Time) (bool, error) {
 	res, err := s.db.ExecContext(ctx, `
 UPDATE theauth_tool_approvals SET approved_at = ?, approver = ?
-WHERE id = ? AND approved_at IS NULL AND consumed_at IS NULL AND (expires_at IS NULL OR expires_at > ?)`,
+WHERE id = ? AND approved_at IS NULL AND consumed_at IS NULL AND denied_at IS NULL AND expired_at IS NULL
+  AND (expires_at IS NULL OR expires_at > ?)`,
 		now.UTC(), approver, id, now.UTC())
 	return oneRow(res, err, "approve tool approval")
 }
@@ -56,7 +61,8 @@ func (s *Store) ConsumeToolApproval(ctx context.Context, id, agentID, action, re
 	res, err := s.db.ExecContext(ctx, `
 UPDATE theauth_tool_approvals SET consumed_at = ?
 WHERE id = ? AND agent_id = ? AND action = ? AND resource = ?
-  AND approved_at IS NOT NULL AND consumed_at IS NULL AND (expires_at IS NULL OR expires_at > ?)`,
+  AND approved_at IS NOT NULL AND consumed_at IS NULL AND denied_at IS NULL AND expired_at IS NULL
+  AND (expires_at IS NULL OR expires_at > ?)`,
 		now.UTC(), id, agentID, action, resource, now.UTC())
 	return oneRow(res, err, "consume tool approval")
 }

@@ -33,6 +33,13 @@ var (
 	// filter or a "c1." cursor and the storage backend does not declare AuditOrderSupported() true.
 	ErrAuditOrderUnsupported = models.ErrAuditOrderUnsupported
 
+	// ErrAuditProvenanceUnsupported is returned by QueryAudit when the query has a Provenance filter
+	// and the storage backend does not declare AuditProvenanceSupported() true.
+	ErrAuditProvenanceUnsupported = models.ErrAuditProvenanceUnsupported
+
+	// ErrBadProvenanceFilter is returned for a provenance filter with an unknown kind or a bad hash.
+	ErrBadProvenanceFilter = models.ErrBadProvenanceFilter
+
 	// ErrReplayDetected is returned by storage when a WebAuthn sign count does not strictly increase.
 	// The library treats it as a clone attempt and refuses the login. Authenticators that never count
 	// stay at zero and are handled by the caller.

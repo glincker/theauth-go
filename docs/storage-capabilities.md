@@ -33,6 +33,8 @@ If you write your own backend, run the matching suite from `storagetest` against
 | RBAC | `RBACStorage` | Yes | Yes (0016) | Yes (0009) | Yes (0009) |
 | Audit log | `AuditStorage` | Yes | Yes (0005) | Yes (0010) | Yes (0010) |
 | Audit write order (`recorded_at_us`, `event`, `Order`, `c1.` cursors) | `storagetest.AuditOrderCapable` (`AuditOrderSupported() bool`) | Yes | Yes (0036) | Yes (0032) | Yes (0031) |
+| Audit provenance filter (`AuditQuery.Provenance`) | `storagetest.AuditProvenanceCapable` (`AuditProvenanceSupported() bool`) | Yes | Yes (0017) | Yes (0028) | Yes (0027) |
+| Rotating audit pseudonyms | `AuditPseudonymRotator` | Yes | Yes (0038) | Yes (0035) | Yes (0033) |
 | Audit hash chain | `VerifyAuditChain`, `ChainSupported` | Yes (ring buffer, see below) | Yes (0017) | Yes (0028) | Yes (0027) |
 | Shared signals store | `SignalsStore()` | Use `signals.NewMemoryStore` | Yes (0012) | Yes (0026) | No |
 | API tokens | `APITokenStorage` | Yes | Yes (0007) | Yes (0018) | Yes (0018) |
@@ -41,7 +43,8 @@ If you write your own backend, run the matching suite from `storagetest` against
 | Device identity (join tokens, enrolled devices) | `DeviceIdentityStorage` | Yes | Yes (0011) | Yes (0024) | Yes (0024) |
 | Token vault credentials (`tokenvault` package) | `TokenVaultStorage` | Yes | No | No | No |
 | Agent tool approvals (single use, used by `toolguard.NewStorageApprovals`) | `ToolApprovalStorage` | Yes | Yes (0019) | Yes (0029) | Yes (0028) |
-| Approvals inbox (get, list, deny; used by the `approvals` package) | `ToolApprovalAdminStorage` | Yes | No | No | No |
+| Approvals inbox and specific denial codes (get, list, deny; used by the `approvals` package and `StorageApprovals.Spend`) | `ToolApprovalAdminStorage` | Yes | Yes (0037) | Yes (0034) | Yes (0032) |
+| Approval expiry marking (one audit row and event per expiry) | `ToolApprovalExpiryStorage` | Yes | Yes (0037) | Yes (0034) | Yes (0032) |
 
 Audit write order is a flag, not an interface: a store declares it by returning true from `AuditOrderSupported()`. It means the store assigns `AuditEvent.RecordedAtUs` (microseconds, strictly increasing per chain key, a caller value is ignored), stores and filters `AuditEvent.Event` (nullable, empty on old rows), serves `AuditQuery.Order` (`asc` or `desc`, default `desc`) and pages with the opaque `c1.` keyset cursor on `(recorded_at_us, id)`. Neither new column is part of the audit chain hash, so chains written before keep verifying. Cursors from before this existed keep working for descending reads. `storagetest.RunAudit` runs the write order cases for stores that declare the flag and skips them with a message for the rest.
 
@@ -55,9 +58,9 @@ The memory store chains in process. Its audit log is a ring buffer of 10000 rows
 
 ### Head checkpoints (tail truncation)
 
-A verifier that walks rows cannot see rows cut off the end of a chain, since every remaining row still links to the one before. `checkpoint.CreateHeadCheckpoint(ctx, store, checkpoint.HeadOptions{Signer: signer})` signs the last position of every chain (`chainKey`, `seq`, `hash`) with an Ed25519 key, the same `Signer` and public key a Merkle `Checkpoint` uses. Store the result where the log writer cannot rewrite it. Later, `checkpoint.CheckHeadCheckpoint(ctx, store, head, publicKey)` verifies the signature and then reports `chain_truncated` (a chain is shorter than signed or gone) or `head_mismatch` (the row at the signed seq has another hash). Rows and chains added after signing are fine. `VerifyHeadCheckpoint` checks only the signature, offline. Run `VerifyAuditChain` as well, since the head check looks only at the signed positions. On the memory store, a signed seq that has since been evicted from the ring reports `head_mismatch`.
+A verifier that walks rows cannot see rows cut off the end of a chain, since every remaining row still links to the one before. `checkpoint.CreateHeadCheckpoint(ctx, store, checkpoint.HeadOptions{Signer: signer})` signs the last position of every chain (`chainKey`, `seq`, `hash`) with an Ed25519 key, the same `Signer` and public key a Merkle `Checkpoint` uses. Store the result where the log writer cannot rewrite it. Later, `checkpoint.CheckHeadCheckpoint(ctx, store, head, publicKey)` verifies the signature and then reports `chain_truncated` (a chain is shorter than signed or gone) or `head_mismatch` (the row at the signed seq has another hash). Rows and chains added after signing are fine. `VerifyHeadCheckpoint` checks only the signature, offline. Run `VerifyAuditChain` as well, since the head check looks only at the signed positions. When the chain has grown past the signed seq but the store no longer holds that row (the memory ring evicted it, or retention removed it), the check reports `head_not_retained`. That is not tampering and not proof of it, so check a newer head checkpoint instead.
 
-Wire format: JSON `{version: 1, alg: "Ed25519", keyId, timestamp (ms), heads: [{chainKey, seq, hash}], signature}`, heads sorted by `chainKey`. The signature is base64url without padding over the bytes `theauth.audit.head.v1\n` followed by the canonical JSON (sorted keys, no whitespace) of `{version, alg, keyId, timestamp, heads}`. The TypeScript SDK has no verifier for this object yet, so it still cannot see tail truncation of a Go chain. The format is fixed so one can be added without a change here.
+Wire format: JSON `{version: 1, alg: "Ed25519", keyId, timestamp (ms), heads: [{chainKey, seq, hash}], signature}`, heads sorted by `chainKey`. The signature is base64url without padding over the bytes `theauth.audit.head.v1\n` followed by the canonical JSON (sorted keys, no whitespace) of `{version, alg, keyId, timestamp, heads}`. The TypeScript SDK verifies this object with `verifyGoHeadCheckpoint` (and `theauth audit verify-go --head`), so a TypeScript service can detect tail truncation of a Go chain given the signing public key.
 
 The Postgres (0028) and MySQL (0027) chain migrations already exist, and a head checkpoint reads the chain through `QueryAuditEvents`, so no new migration is needed.
 

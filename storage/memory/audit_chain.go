@@ -2,9 +2,9 @@ package memory
 
 import (
 	"context"
-	"maps"
 	"slices"
 	"sort"
+	"time"
 
 	"github.com/glincker/theauth-go/v2"
 	"github.com/glincker/theauth-go/v2/internal/audit"
@@ -28,12 +28,16 @@ func (v *v10State) chainEvent(e *theauth.AuditEvent) (audit.ChainEntry, error) {
 		v.auditHeads = map[string]audit.ChainHead{}
 	}
 	// Own the maps and slices, so a caller changing them later cannot alter what was hashed.
-	e.Metadata = maps.Clone(e.Metadata)
-	e.InputProvenance = maps.Clone(e.InputProvenance)
+	e.Metadata = cloneJSONMap(e.Metadata)
+	e.InputProvenance = cloneJSONMap(e.InputProvenance)
 	e.DelegationChain = slices.Clone(e.DelegationChain)
 	key := audit.ChainKey(*e)
 	head := v.auditHeads[key]
-	ce, err := audit.BuildChainEntry(*e, v.auditSecret, head)
+	ps, err := v.auditRotation.Resolve(context.Background(), v.auditSecret, memPeriods{v}, []time.Time{e.CreatedAt})
+	if err != nil {
+		return audit.ChainEntry{}, err
+	}
+	ce, err := audit.BuildChainEntryWith(*e, ps, head)
 	if err != nil {
 		return audit.ChainEntry{}, err
 	}
@@ -55,7 +59,10 @@ func (s *Store) VerifyAuditChain(_ context.Context) (theauth.AuditChainResult, e
 	for _, i := range idx {
 		rows = append(rows, v.chainRowAt(i))
 	}
-	secret := slices.Clone(v.auditSecret)
+	keys := audit.PseudonymKeys{Stable: slices.Clone(v.auditSecret), Periods: map[int64][]byte{}}
+	for p, sec := range v.auditPeriods {
+		keys.Periods[p] = slices.Clone(sec)
+	}
 	v.mu.Unlock()
 	sort.SliceStable(rows, func(a, b int) bool {
 		pa, pb := rows[a].Payload, rows[b].Payload
@@ -65,13 +72,13 @@ func (s *Store) VerifyAuditChain(_ context.Context) (theauth.AuditChainResult, e
 		return pa.Seq < pb.Seq
 	})
 	n := 0
-	return audit.VerifyChainRowsAnchored(func() (audit.ChainRow, bool, error) {
+	return audit.VerifyChainRowsAnchoredKeys(func() (audit.ChainRow, bool, error) {
 		if n >= len(rows) {
 			return audit.ChainRow{}, false, nil
 		}
 		n++
 		return rows[n-1], true, nil
-	}, secret, 0)
+	}, keys, 0)
 }
 
 // chainRowAt rebuilds the hashed payload of ring slot i from the live event, keeping the stored

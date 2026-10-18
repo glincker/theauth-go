@@ -10,8 +10,9 @@ import (
 )
 
 var (
-	_ theauth.ToolApprovalStorage      = (*Store)(nil)
-	_ theauth.ToolApprovalAdminStorage = (*Store)(nil)
+	_ theauth.ToolApprovalStorage       = (*Store)(nil)
+	_ theauth.ToolApprovalAdminStorage  = (*Store)(nil)
+	_ theauth.ToolApprovalExpiryStorage = (*Store)(nil)
 )
 
 func (s *Store) OpenToolApproval(_ context.Context, a theauth.ToolApproval) error {
@@ -28,7 +29,7 @@ func (s *Store) OpenToolApproval(_ context.Context, a theauth.ToolApproval) erro
 }
 
 func toolApprovalLive(a theauth.ToolApproval, now time.Time) bool {
-	return a.ConsumedAt.IsZero() && a.DeniedAt.IsZero() && (a.ExpiresAt.IsZero() || a.ExpiresAt.After(now))
+	return a.ConsumedAt.IsZero() && a.DeniedAt.IsZero() && a.ExpiredAt.IsZero() && (a.ExpiresAt.IsZero() || a.ExpiresAt.After(now))
 }
 
 func (s *Store) ApproveToolApproval(_ context.Context, id, approver string, now time.Time) (bool, error) {
@@ -97,4 +98,45 @@ func (s *Store) DenyToolApproval(_ context.Context, id, denier string, now time.
 	a.DeniedAt, a.DeniedBy = now, denier
 	s.toolApprovals[id] = a
 	return true, nil
+}
+
+func toolApprovalOverdue(a theauth.ToolApproval, now time.Time) bool {
+	return a.ApprovedAt.IsZero() && a.DeniedAt.IsZero() && a.ConsumedAt.IsZero() && a.ExpiredAt.IsZero() &&
+		!a.ExpiresAt.IsZero() && !a.ExpiresAt.After(now)
+}
+
+func (s *Store) ExpireToolApproval(_ context.Context, id string, now time.Time) (bool, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	a, ok := s.toolApprovals[id]
+	if !ok || !toolApprovalOverdue(a, now) {
+		return false, nil
+	}
+	a.ExpiredAt = now
+	s.toolApprovals[id] = a
+	return true, nil
+}
+
+func (s *Store) ListOverdueToolApprovals(_ context.Context, now time.Time, limit int) ([]theauth.ToolApproval, error) {
+	if limit <= 0 {
+		limit = 100
+	}
+	s.mu.Lock()
+	out := make([]theauth.ToolApproval, 0)
+	for _, a := range s.toolApprovals {
+		if toolApprovalOverdue(a, now) {
+			out = append(out, a)
+		}
+	}
+	s.mu.Unlock()
+	sort.Slice(out, func(i, j int) bool {
+		if !out[i].ExpiresAt.Equal(out[j].ExpiresAt) {
+			return out[i].ExpiresAt.Before(out[j].ExpiresAt)
+		}
+		return out[i].ID < out[j].ID
+	})
+	if len(out) > limit {
+		out = out[:limit]
+	}
+	return out, nil
 }

@@ -18,13 +18,14 @@ Running it:
 
 Authorization server:
 
-- [oauth-consent.md](oauth-consent.md), [session-auth-methods.md](session-auth-methods.md), [access-token-policy.md](access-token-policy.md), [rich-authorization-requests.md](rich-authorization-requests.md), [oauth-endpoint-limits.md](oauth-endpoint-limits.md), [mcp-metadata-paths.md](mcp-metadata-paths.md), [client-compat.md](client-compat.md), [oidc-provider.md](oidc-provider.md), [id-jag.md](id-jag.md), [device-authorization.md](device-authorization.md), [registration-tokens.md](registration-tokens.md), [device-tokens.md](device-tokens.md), [token-vault.md](token-vault.md) and [admission.md](admission.md).
+- [oauth-consent.md](oauth-consent.md), [session-auth-methods.md](session-auth-methods.md), [access-token-policy.md](access-token-policy.md), [rich-authorization-requests.md](rich-authorization-requests.md), [oauth-endpoint-limits.md](oauth-endpoint-limits.md), [mcp-metadata-paths.md](mcp-metadata-paths.md), [client-compat.md](client-compat.md), [oidc-provider.md](oidc-provider.md), [id-jag.md](id-jag.md), [device-authorization.md](device-authorization.md), [registration-tokens.md](registration-tokens.md), [device-tokens.md](device-tokens.md), [mqtt-auth.md](mqtt-auth.md), [token-vault.md](token-vault.md) and [admission.md](admission.md).
 
 Agents and audit:
 
 - [ai-assistants.md](ai-assistants.md).
 - [agent-expiry.md](agent-expiry.md), [agent-policies.md](agent-policies.md) and [policy-shrink.md](policy-shrink.md).
 - [shared-signals.md](shared-signals.md).
+- [audit-query.md](audit-query.md) and [audit-provenance.md](audit-provenance.md) (input provenance, rotating pseudonyms).
 
 Other guides: [otp.md](otp.md), [enumeration-safe-passwordless.md](enumeration-safe-passwordless.md), [passkey-attestation.md](passkey-attestation.md), [hooks.md](hooks.md), [create-user.md](create-user.md), [provider-catalog.md](provider-catalog.md), [cli.md](cli.md) and [MIGRATING-FROM-KEYCLOAK.md](MIGRATING-FROM-KEYCLOAK.md).
 

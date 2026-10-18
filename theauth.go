@@ -378,6 +378,8 @@ type TheAuth struct {
 	webauthnSvc *internalwebauthn.Service
 	samlSvc     *internalsaml.Service
 	auditSvc    *internalaudit.Service
+	// auditHasher hashes input content for provenance filters (Config.Audit.InputHashKey).
+	auditHasher internalaudit.InputHasher
 	// identityLinkSvc is non-nil whenever an OAuth provider or password auth is configured.
 	identityLinkSvc *identitylink.Service
 

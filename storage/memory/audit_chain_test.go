@@ -20,6 +20,14 @@ func TestMemoryAuditChainContract(t *testing.T) {
 	storagetest.RunAuditChain(t, New())
 }
 
+func TestMemoryAuditProvenanceContract(t *testing.T) {
+	storagetest.RunAuditProvenance(t, New())
+}
+
+func TestMemoryAuditRotationContract(t *testing.T) {
+	storagetest.RunAuditRotation(t, New())
+}
+
 // dropGlobalTail removes the highest seq row of the global chain, as an attacker with write access
 // to the log would.
 func dropGlobalTail(s *Store) func(context.Context) error {

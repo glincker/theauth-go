@@ -34,9 +34,32 @@ const (
 	// CodeApprovalRequired means a statement escalated the call and no valid
 	// approval was presented.
 	CodeApprovalRequired DecisionCode = "approval_required"
-	// CodeApprovalInvalid means an approval id was presented but could not be
-	// spent (unknown, pending, already used or issued for another call).
+	// CodeApprovalInvalid is the generic fallback for an approval id that
+	// could not be spent. The built in toolguard approvals report one of the
+	// specific approval_* codes below instead; only a custom Approvals that
+	// cannot say why still reports this one.
 	CodeApprovalInvalid DecisionCode = "approval_invalid"
+	// CodeApprovalNotFound means the presented approval id is unknown.
+	CodeApprovalNotFound DecisionCode = "approval_not_found"
+	// CodeApprovalPending means the request is still waiting for a human.
+	CodeApprovalPending DecisionCode = "approval_pending"
+	// CodeApprovalDenied means a human denied the request.
+	CodeApprovalDenied DecisionCode = "approval_denied"
+	// CodeApprovalExpired means the request passed its expiry before it was
+	// decided or spent.
+	CodeApprovalExpired DecisionCode = "approval_expired"
+	// CodeApprovalAlreadyUsed means the approval was already spent.
+	CodeApprovalAlreadyUsed DecisionCode = "approval_already_used"
+	// CodeApprovalMismatch means the approval was issued for another agent,
+	// action or resource.
+	CodeApprovalMismatch DecisionCode = "approval_mismatch"
+	// CodeApprovalArgumentsMismatch means the arguments presented at spend
+	// time differ from the ones the human approved.
+	CodeApprovalArgumentsMismatch DecisionCode = "approval_arguments_mismatch"
+	// CodeApprovalGranted is the code of the decision event emitted when a
+	// human approves a request. It is not a spend: the spend reports
+	// approval_consumed.
+	CodeApprovalGranted DecisionCode = "approval_granted"
 	// CodeAgentNotFound means the agent id is unknown.
 	CodeAgentNotFound DecisionCode = "agent_not_found"
 	// CodeAgentRevoked means the agent was revoked or suspended. Reserved
@@ -69,7 +92,10 @@ func AllDecisionCodes() []DecisionCode {
 	return []DecisionCode{
 		CodeAllowed, CodeApprovalConsumed, CodeNoPermission, CodeRateLimited,
 		CodeIPNotAllowed, CodeTimeRestricted, CodeArgumentRejected,
-		CodeApprovalRequired, CodeApprovalInvalid, CodeAgentNotFound,
+		CodeApprovalRequired, CodeApprovalInvalid, CodeApprovalNotFound,
+		CodeApprovalPending, CodeApprovalDenied, CodeApprovalExpired,
+		CodeApprovalAlreadyUsed, CodeApprovalMismatch, CodeApprovalArgumentsMismatch,
+		CodeApprovalGranted, CodeAgentNotFound,
 		CodeAgentRevoked, CodeAgentExpired, CodeInvalidToken, CodeOwnerMismatch,
 		CodeHookDenied, CodeHookTimeout, CodeHookError, CodeTaintViolation,
 		CodeRiskEscalation, CodePolicyIndeterminate,

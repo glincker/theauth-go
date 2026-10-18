@@ -6,6 +6,7 @@ import (
 	"time"
 
 	internalas "github.com/glincker/theauth-go/v2/internal/as"
+	internalaudit "github.com/glincker/theauth-go/v2/internal/audit"
 	"github.com/glincker/theauth-go/v2/internal/bootstrap"
 	internaldpop "github.com/glincker/theauth-go/v2/internal/dpop"
 	internaloauth "github.com/glincker/theauth-go/v2/internal/oauth"
@@ -98,6 +99,33 @@ type AuditConfig struct {
 
 	// DecisionActionPrefixes overrides the audit action prefixes treated as decision-class for FailClosed.
 	DecisionActionPrefixes []string
+
+	// InputHashKey keys the hashes of input content declared with audit.WithInputs (HMAC-SHA256 under
+	// a subkey derived from this key). Without it the hash is plain SHA-256, which anyone can compute
+	// for a guessable input such as a one word message. At least 16 bytes. Keep it apart from other
+	// secrets, and keep it stable: changing it changes the hash of the same content, so older rows
+	// no longer match a filter built with the new key.
+	InputHashKey []byte
+
+	// PseudonymRotation turns on rotating pseudonyms for the personal ids in the audit chain. The
+	// storage backend must implement AuditPseudonymRotator (memory, sqlite, postgres and mysql do),
+	// otherwise New fails. Rows written before it was turned on keep their stable pseudonym and still
+	// verify.
+	PseudonymRotation *PseudonymRotation
+}
+
+// PseudonymRotation is the rotation policy for audit pseudonyms. PeriodDays is the length of one
+// period in days (at least 1). RetainPeriods is how many older periods keep their secret: 0 means
+// the default of 1, a negative value keeps only the current period.
+type PseudonymRotation = internalaudit.Rotation
+
+// AuditPseudonymRotator is implemented by storage backends that can rotate audit pseudonyms.
+type AuditPseudonymRotator interface {
+	// SetAuditPseudonymRotation turns rotation on with r.
+	SetAuditPseudonymRotation(r PseudonymRotation) error
+	// ShredAuditPseudonyms deletes the period secrets outside the retention window now and returns
+	// the periods shredded. After it nobody can link those periods to any other.
+	ShredAuditPseudonyms(ctx context.Context) ([]int64, error)
 }
 
 // AdminConfig mounts /admin/v1/* on the router passed to Mount when non-nil.
