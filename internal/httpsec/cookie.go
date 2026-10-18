@@ -61,7 +61,7 @@ func (p CookiePolicy) Validate(name, path string) error {
 		return errors.New("SameSite must be Lax, Strict or None")
 	}
 	if strings.ContainsAny(p.Domain, "/:; ,") {
-		return fmt.Errorf("Domain %q must be a bare host name", p.Domain)
+		return fmt.Errorf("cookie domain %q must be a bare host name", p.Domain)
 	}
 	if ss == http.SameSiteNoneMode && !p.Secure {
 		return fmt.Errorf("cookie %q: SameSite=None requires Secure", name)
