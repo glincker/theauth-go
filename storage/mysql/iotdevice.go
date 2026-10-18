@@ -19,7 +19,7 @@ const iotDeviceCols = `id, organization_id, name, spiffe_id, public_key_jwk, key
 scopes, status, created_at, last_seen_at, revoked_at`
 
 const joinTokenCols = `id, token_hash, token_prefix, organization_id, name, spiffe_id, scopes, created_by,
-created_at, expires_at, redeemed_at, device_id, revoked_at`
+created_at, expires_at, redeemed_at, device_id, revoked_at, max_uses, uses`
 
 func (s *Store) InsertDevice(ctx context.Context, d theauth.Device) error {
 	scopes, err := encodeList(d.Scopes)
@@ -122,10 +122,10 @@ func (s *Store) InsertDeviceJoinToken(ctx context.Context, t theauth.DeviceJoinT
 		created = time.Now()
 	}
 	_, err = s.db.ExecContext(ctx, `INSERT INTO device_join_tokens (`+joinTokenCols+`)
-VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 		ulidToBytes(t.ID), t.TokenHash, t.Prefix, ulidPtrToBytes(t.OrganizationID), t.Name, t.SPIFFEID, scopes,
 		ulidPtrToBytes(t.CreatedBy), timeUTC(created), timeUTC(t.ExpiresAt), timePtrToNull(t.RedeemedAt),
-		ulidPtrToBytes(t.DeviceID), timePtrToNull(t.RevokedAt))
+		ulidPtrToBytes(t.DeviceID), timePtrToNull(t.RevokedAt), t.EffectiveMaxUses(), t.Uses)
 	if err != nil {
 		return fmt.Errorf("mysql: insert device join token: %w", err)
 	}
@@ -138,9 +138,10 @@ func scanJoinToken(r rowScanner) (theauth.DeviceJoinToken, error) {
 		prefix, name, spiffe, scopes string
 		created, expires             time.Time
 		redeemed, revoked            sql.NullTime
+		maxUses, uses                int
 	)
 	if err := r.Scan(&idB, &hash, &prefix, &orgB, &name, &spiffe, &scopes, &byB, &created, &expires,
-		&redeemed, &devB, &revoked); err != nil {
+		&redeemed, &devB, &revoked, &maxUses, &uses); err != nil {
 		return theauth.DeviceJoinToken{}, err
 	}
 	sc, err := decodeList(scopes)
@@ -151,7 +152,7 @@ func scanJoinToken(r rowScanner) (theauth.DeviceJoinToken, error) {
 		ID: bytesToULID(idB), TokenHash: hash, Prefix: prefix, OrganizationID: bytesToULIDPtr(orgB), Name: name,
 		SPIFFEID: spiffe, Scopes: sc, CreatedBy: bytesToULIDPtr(byB), CreatedAt: created.UTC(),
 		ExpiresAt: expires.UTC(), RedeemedAt: nullTimeToPtr(redeemed), DeviceID: bytesToULIDPtr(devB),
-		RevokedAt: nullTimeToPtr(revoked),
+		RevokedAt: nullTimeToPtr(revoked), MaxUses: maxUses, Uses: uses,
 	}, nil
 }
 
@@ -177,17 +178,61 @@ func (s *Store) RevokeDeviceJoinToken(ctx context.Context, id theauth.ULID, at t
 	return rowsOne(res, err, "revoke device join token")
 }
 
+// RedeemDeviceJoinToken spends one use. MySQL evaluates SET assignments left to right and later
+// ones see the updated value, so redeemed_at and device_id come before the uses increment.
 func (s *Store) RedeemDeviceJoinToken(ctx context.Context, id, deviceID theauth.ULID, now time.Time) (bool, error) {
-	res, err := s.db.ExecContext(ctx, `UPDATE device_join_tokens SET redeemed_at = ?, device_id = ?
-WHERE id = ? AND redeemed_at IS NULL AND revoked_at IS NULL AND expires_at > ?`,
+	res, err := s.db.ExecContext(ctx, `UPDATE device_join_tokens SET
+redeemed_at = CASE WHEN uses + 1 >= max_uses THEN ? ELSE NULL END,
+device_id = CASE WHEN max_uses = 1 THEN ? ELSE NULL END,
+uses = uses + 1
+WHERE id = ? AND uses < max_uses AND redeemed_at IS NULL AND revoked_at IS NULL AND expires_at > ?`,
 		timeUTC(now), ulidToBytes(deviceID), ulidToBytes(id), timeUTC(now))
 	return rowsOne(res, err, "redeem device join token")
 }
 
 func (s *Store) RefundDeviceJoinToken(ctx context.Context, id theauth.ULID) error {
 	if _, err := s.db.ExecContext(ctx,
-		`UPDATE device_join_tokens SET redeemed_at = NULL, device_id = NULL WHERE id = ?`, ulidToBytes(id)); err != nil {
+		`UPDATE device_join_tokens SET redeemed_at = NULL, device_id = NULL, uses = GREATEST(uses - 1, 0) WHERE id = ?`,
+		ulidToBytes(id)); err != nil {
 		return fmt.Errorf("mysql: refund device join token: %w", err)
 	}
 	return nil
+}
+
+func (s *Store) SuspendDevice(ctx context.Context, id theauth.ULID) (bool, error) {
+	return s.setDeviceStatus(ctx, id, "active", "suspended")
+}
+
+func (s *Store) ResumeDevice(ctx context.Context, id theauth.ULID) (bool, error) {
+	return s.setDeviceStatus(ctx, id, "suspended", "active")
+}
+
+func (s *Store) setDeviceStatus(ctx context.Context, id theauth.ULID, from, to string) (bool, error) {
+	res, err := s.db.ExecContext(ctx,
+		`UPDATE iot_devices SET status = ? WHERE id = ? AND status = ? AND revoked_at IS NULL`,
+		to, ulidToBytes(id), from)
+	return rowsOne(res, err, "set device status")
+}
+
+func (s *Store) DeviceBySPIFFEID(ctx context.Context, spiffeID string) (*theauth.Device, error) {
+	if spiffeID == "" {
+		return nil, theauth.ErrStorageNotFound
+	}
+	d, err := scanIoTDevice(s.db.QueryRowContext(ctx, `SELECT `+iotDeviceCols+` FROM iot_devices WHERE spiffe_id = ?`, spiffeID))
+	if err != nil {
+		return nil, notFoundOr("device by spiffe id", err)
+	}
+	return &d, nil
+}
+
+func (s *Store) DeviceByKeyThumbprint(ctx context.Context, thumbprint string) (*theauth.Device, error) {
+	if thumbprint == "" {
+		return nil, theauth.ErrStorageNotFound
+	}
+	d, err := scanIoTDevice(s.db.QueryRowContext(ctx, `SELECT `+iotDeviceCols+
+		` FROM iot_devices WHERE key_thumbprint = ? ORDER BY created_at DESC, id DESC LIMIT 1`, thumbprint))
+	if err != nil {
+		return nil, notFoundOr("device by key thumbprint", err)
+	}
+	return &d, nil
 }

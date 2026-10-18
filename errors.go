@@ -271,6 +271,9 @@ var (
 
 	ErrDeviceConflict = models.ErrDeviceConflict
 
+	// ErrDeviceRevoked is returned when a revoked device is suspended or resumed.
+	ErrDeviceRevoked = models.ErrDeviceRevoked
+
 	// ErrDevicesDisabled is returned when device tokens are not configured.
 	ErrDevicesDisabled = models.ErrDevicesDisabled
 

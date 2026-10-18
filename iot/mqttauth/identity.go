@@ -3,6 +3,7 @@ package mqttauth
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"strings"
 	"sync/atomic"
 
@@ -79,8 +80,8 @@ func scopeFilter(levels []string) (string, bool) {
 // It is read only: enrollment, revocation and scopes stay with theAuth.
 //
 // Mapping: the device ID is the ULID string, OrgID the organization ULID, Subject the access token
-// subject (the SPIFFE ID when set, else "device:<id>"), and a device that is not active is reported
-// revoked. The ACL comes from the device's enrolled scopes through Rules (default ScopeRules), not
+// subject (the SPIFFE ID when set, else "device:<id>"), and a suspended device is reported suspended and any other
+// device that is not active revoked. The ACL comes from the device's enrolled scopes through Rules (default ScopeRules), not
 // from the scope claim of any one access token. The device holds an asymmetric key and no
 // certificate or opaque token, so the credential on the MQTT side is the access token the device
 // obtained with its assertion, sent as the password and verified through Config.JWT.
@@ -103,8 +104,11 @@ func (s *IdentityStore) toDevice(d theauth.Device) *Device {
 	if d.OrganizationID != nil {
 		out.OrgID = d.OrganizationID.String()
 	}
-	if d.Active() {
+	switch {
+	case d.Active():
 		out.Status = StatusActive
+	case d.Status == theauth.DeviceStatusSuspended && d.RevokedAt == nil:
+		out.Status = StatusSuspended
 	}
 	if s.Rules != nil {
 		out.Rules = s.Rules(d)
@@ -130,10 +134,8 @@ func (s *IdentityStore) DeviceByID(ctx context.Context, id string) (*Device, err
 	return s.toDevice(*d), nil
 }
 
-// DeviceBySubject implements DeviceStore. "device:<id>" is a direct lookup. Any other subject is
-// a SPIFFE ID, which the storage interface cannot index, so it scans ListDevices: fine for a few
-// thousand devices, and a reason to let devices without a SPIFFE ID authenticate by "device:<id>"
-// on larger fleets.
+// DeviceBySubject implements DeviceStore. "device:<id>" is a direct lookup by ID, any other
+// subject is a SPIFFE ID and goes through the indexed Storage.DeviceBySPIFFEID.
 func (s *IdentityStore) DeviceBySubject(ctx context.Context, subject string) (*Device, error) {
 	if subject == "" {
 		return nil, ErrDeviceNotFound
@@ -148,16 +150,28 @@ func (s *IdentityStore) DeviceBySubject(ctx context.Context, subject string) (*D
 		}
 		return d, nil
 	}
-	all, err := s.Storage.ListDevices(ctx, nil)
+	d, err := s.Storage.DeviceBySPIFFEID(ctx, subject)
 	if err != nil {
+		if errors.Is(err, theauth.ErrStorageNotFound) {
+			return nil, ErrDeviceNotFound
+		}
 		return nil, err
 	}
-	for _, d := range all {
-		if d.SPIFFEID != "" && d.SPIFFEID == subject {
-			return s.toDevice(d), nil
+	return s.toDevice(*d), nil
+}
+
+// DeviceByKeyThumbprint finds the device enrolled with the key whose RFC 7638 thumbprint is
+// given (the newest one when several share a key). It is an indexed lookup, for brokers that
+// authenticate a device by its key instead of an access token.
+func (s *IdentityStore) DeviceByKeyThumbprint(ctx context.Context, thumbprint string) (*Device, error) {
+	d, err := s.Storage.DeviceByKeyThumbprint(ctx, thumbprint)
+	if err != nil {
+		if errors.Is(err, theauth.ErrStorageNotFound) {
+			return nil, ErrDeviceNotFound
 		}
+		return nil, err
 	}
-	return nil, ErrDeviceNotFound
+	return s.toDevice(*d), nil
 }
 
 // DeviceByCertFingerprint implements DeviceStore. Registry devices have no certificate
@@ -166,18 +180,26 @@ func (s *IdentityStore) DeviceByCertFingerprint(context.Context, string) (*Devic
 	return nil, ErrDeviceNotFound
 }
 
-// Purger connects the device revoke path to the handler cache. Pass OnRevoke as
-// DeviceTokensConfig.OnRevoke and call Bind once the Handler exists (the Handler needs the
-// TheAuth value for TheAuthSink, which needs the config, hence the two steps):
+// Purger connects the device revoke and status paths to the handler cache. Pass OnRevoke and
+// OnStatusChange as DeviceTokensConfig.OnRevoke and OnStatusChange and call Bind once the Handler
+// exists (the Handler needs the TheAuth value for TheAuthSink, which needs the config, hence the
+// two steps):
 //
 //	var purge mqttauth.Purger
-//	cfg.AuthorizationServer.DeviceTokens = &theauth.DeviceTokensConfig{OnRevoke: purge.OnRevoke}
+//	cfg.AuthorizationServer.DeviceTokens = &theauth.DeviceTokensConfig{
+//		OnRevoke: purge.OnRevoke, OnStatusChange: purge.OnStatusChange,
+//	}
 //	// ... theauth.New, mqttauth.New ...
 //	purge.Bind(h)
 //
-// The purge is per process. With several replicas call Handler.Purge on each (see POST /purge) or
-// keep CacheTTL short. A revoke before Bind is not lost: Bind drops all cached state.
-type Purger struct{ h atomic.Pointer[Handler] }
+// The purge is per process unless a PurgeBroadcaster is set (SetBroadcaster, then Run in a
+// goroutine): then every revoke also reaches the other replicas. Without one, call Handler.Purge
+// on each replica (see POST /purge) or keep CacheTTL short. A revoke before Bind is not lost: Bind
+// drops all cached state.
+type Purger struct {
+	h  atomic.Pointer[Handler]
+	bc atomic.Pointer[PurgeBroadcaster]
+}
 
 // Bind sets the handler to purge and clears whatever it cached before.
 func (p *Purger) Bind(h *Handler) {
@@ -187,9 +209,50 @@ func (p *Purger) Bind(h *Handler) {
 	}
 }
 
-// OnRevoke has the signature of DeviceTokensConfig.OnRevoke.
-func (p *Purger) OnRevoke(_ context.Context, deviceID string) {
-	if h := p.h.Load(); h != nil {
+// SetBroadcaster makes OnRevoke and OnStatusChange publish to the other replicas as well. Pass
+// nil to stop. Run must be running on every replica, including this one, to receive.
+func (p *Purger) SetBroadcaster(b PurgeBroadcaster) {
+	if b == nil {
+		p.bc.Store(nil)
+		return
+	}
+	p.bc.Store(&b)
+}
+
+// Run receives purges from the broadcaster and applies them to the bound handler. It blocks until
+// ctx ends or the broadcaster fails, so start it in a goroutine. Without a broadcaster it
+// returns nil at once.
+func (p *Purger) Run(ctx context.Context) error {
+	bp := p.bc.Load()
+	if bp == nil {
+		return nil
+	}
+	return (*bp).Subscribe(ctx, p.purgeLocal)
+}
+
+func (p *Purger) purgeLocal(deviceID string) {
+	h := p.h.Load()
+	switch {
+	case h == nil:
+	case deviceID == "":
+		h.PurgeAll()
+	default:
 		h.Purge(deviceID)
 	}
 }
+
+func (p *Purger) purge(ctx context.Context, deviceID string) {
+	p.purgeLocal(deviceID)
+	if bp := p.bc.Load(); bp != nil {
+		if err := (*bp).Publish(ctx, deviceID); err != nil {
+			slog.Warn("mqttauth: purge broadcast failed, other replicas keep the cache until CacheTTL", "device", deviceID, "err", err.Error())
+		}
+	}
+}
+
+// OnRevoke has the signature of DeviceTokensConfig.OnRevoke.
+func (p *Purger) OnRevoke(ctx context.Context, deviceID string) { p.purge(ctx, deviceID) }
+
+// OnStatusChange has the signature of DeviceTokensConfig.OnStatusChange. A suspend or resume
+// changes what the broker may serve, so it purges like a revoke.
+func (p *Purger) OnStatusChange(ctx context.Context, deviceID, _ string) { p.purge(ctx, deviceID) }

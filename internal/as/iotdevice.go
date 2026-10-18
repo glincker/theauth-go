@@ -14,7 +14,6 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/glincker/theauth-go/v2/crypto"
 	"github.com/glincker/theauth-go/v2/internal/dpop"
 	"github.com/glincker/theauth-go/v2/internal/jwt"
 	"github.com/glincker/theauth-go/v2/internal/models"
@@ -58,6 +57,9 @@ type DeviceTokensConfig struct {
 	// serving the device, for example mqttauth.Purger. It must return quickly and its panics are
 	// recovered and logged.
 	OnRevoke func(ctx context.Context, deviceID string)
+	// OnStatusChange gets the device ID and new status ("suspended" or "active") after a suspend
+	// or resume. Same rules as OnRevoke. mqttauth.Purger.OnStatusChange fits.
+	OnStatusChange func(ctx context.Context, deviceID, status string)
 }
 
 func applyDeviceTokenDefaults(c *DeviceTokensConfig) {
@@ -153,7 +155,11 @@ func (a joinTokenAttestor) Attest(ctx context.Context, ev DeviceEvidence) (Devic
 	if ev.Token == "" {
 		return DeviceAttestation{}, models.ErrDeviceEnrollmentInvalid
 	}
-	t, err := a.store.DeviceJoinTokenByHash(ctx, crypto.HashToken(ev.Token))
+	hash, ok := enrollmentTokenHash(ev.Token)
+	if !ok {
+		return DeviceAttestation{}, models.ErrDeviceEnrollmentInvalid
+	}
+	t, err := a.store.DeviceJoinTokenByHash(ctx, hash)
 	if err != nil {
 		if errors.Is(err, models.ErrStorageNotFound) {
 			return DeviceAttestation{}, models.ErrDeviceEnrollmentInvalid
@@ -211,50 +217,6 @@ func (s *Service) attestor(store DeviceIdentityStorage, kind string) (Attestor, 
 		return joinTokenAttestor{store: store, now: s.now}, true
 	}
 	return nil, false
-}
-
-// CreateDeviceJoinTokenInput describes a join token to mint.
-type CreateDeviceJoinTokenInput struct {
-	OrganizationID *models.ULID
-	Name           string
-	SPIFFEID       string
-	Scopes         []string
-	TTL            time.Duration
-	CreatedBy      *models.ULID
-}
-
-// CreateDeviceJoinToken mints a single-use join token. The plaintext is returned once and is not
-// recoverable afterwards.
-func (s *Service) CreateDeviceJoinToken(ctx context.Context, in CreateDeviceJoinTokenInput) (models.DeviceJoinToken, string, error) {
-	store, ok := s.identityStore()
-	if !ok {
-		return models.DeviceJoinToken{}, "", models.ErrDevicesDisabled
-	}
-	if len(in.Scopes) == 0 || in.TTL < 0 {
-		return models.DeviceJoinToken{}, "", models.ErrOAuthInvalidRequest
-	}
-	if in.TTL == 0 {
-		in.TTL = s.Cfg.DeviceTokens.JoinTokenTTL
-	}
-	secret, err := crypto.NewToken()
-	if err != nil {
-		return models.DeviceJoinToken{}, "", err
-	}
-	raw := joinTokenPrefix + secret
-	now := s.now().UTC()
-	t := models.DeviceJoinToken{
-		ID: ulid.New(), TokenHash: crypto.HashToken(raw), Prefix: raw[:len(joinTokenPrefix)+4],
-		OrganizationID: in.OrganizationID, Name: in.Name, SPIFFEID: in.SPIFFEID,
-		Scopes: append([]string(nil), in.Scopes...), CreatedBy: in.CreatedBy,
-		CreatedAt: now, ExpiresAt: now.Add(in.TTL),
-	}
-	if err := store.InsertDeviceJoinToken(ctx, t); err != nil {
-		return models.DeviceJoinToken{}, "", err
-	}
-	s.Audit.EmitAudit(ctx, "device.join_token.created",
-		models.TargetRef{Type: "device_join_token", ID: t.ID.String()},
-		map[string]any{"name": t.Name, "spiffe_id": t.SPIFFEID, "expires_at": t.ExpiresAt.Format(time.RFC3339)})
-	return t, raw, nil
 }
 
 // DeviceEnrollRequest carries the enrollment fields. Challenge and Proof are empty on the challenge step.
@@ -491,6 +453,19 @@ func (s *Service) notifyDeviceRevoked(ctx context.Context, id models.ULID) {
 		}
 	}()
 	fn(ctx, id.String())
+}
+
+func (s *Service) notifyDeviceStatus(ctx context.Context, id models.ULID, status string) {
+	fn := s.Cfg.DeviceTokens.OnStatusChange
+	if fn == nil {
+		return
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			slog.Error("theauth: DeviceTokens.OnStatusChange panicked", "device", id.String(), "panic", fmt.Sprint(r))
+		}
+	}()
+	fn(ctx, id.String(), status)
 }
 
 // RevokeDeviceJoinToken revokes an unspent join token, scoped like RevokeDevice.

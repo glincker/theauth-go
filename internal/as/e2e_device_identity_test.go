@@ -35,6 +35,7 @@ const (
 
 type iotHarness struct {
 	a      *theauth.TheAuth
+	store  *memory.Store
 	srv    *httptest.Server
 	org    theauth.ULID
 	client theauth.RegisteredClient
@@ -49,8 +50,9 @@ func newIoTHarness(t *testing.T, cfg *theauth.DeviceTokensConfig) *iotHarness {
 	if _, err := rand.Read(enc); err != nil {
 		t.Fatal(err)
 	}
+	store := memory.New()
 	a, err := theauth.New(theauth.Config{
-		Storage:       memory.New(),
+		Storage:       store,
 		BaseURL:       devIssuer,
 		EncryptionKey: enc,
 		AuthorizationServer: &theauth.AuthorizationServerConfig{
@@ -72,7 +74,7 @@ func newIoTHarness(t *testing.T, cfg *theauth.DeviceTokensConfig) *iotHarness {
 	a.Mount(r)
 	srv := httptest.NewServer(r)
 	t.Cleanup(srv.Close)
-	return &iotHarness{a: a, srv: srv, org: ulid.New(), client: registerTestClient(t, srv)}
+	return &iotHarness{a: a, store: store, srv: srv, org: ulid.New(), client: registerTestClient(t, srv)}
 }
 
 // devKey is a device keypair that can sign JWS compact tokens.

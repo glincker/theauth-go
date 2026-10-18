@@ -242,12 +242,13 @@ type Device = models.Device
 // DeviceAttestationJoinToken is the attestation kind of a device enrolled with a join token.
 const DeviceAttestationJoinToken = models.DeviceAttestationJoinToken
 
-// DeviceJoinToken is a single-use device enrollment token.
+// DeviceJoinToken is a device enrollment token, single use unless MaxUses is above one.
 type DeviceJoinToken = models.DeviceJoinToken
 
 const (
-	DeviceStatusActive  = models.DeviceStatusActive
-	DeviceStatusRevoked = models.DeviceStatusRevoked
+	DeviceStatusActive    = models.DeviceStatusActive
+	DeviceStatusSuspended = models.DeviceStatusSuspended
+	DeviceStatusRevoked   = models.DeviceStatusRevoked
 )
 
 // RegistrationToken is an initial access token for POST /oauth/register.

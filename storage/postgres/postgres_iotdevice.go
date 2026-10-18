@@ -21,7 +21,7 @@ const iotDeviceCols = `id, organization_id, name, spiffe_id, public_key_jwk, key
 scopes, status, created_at, last_seen_at, revoked_at`
 
 const joinTokenCols = `id, token_hash, token_prefix, organization_id, name, spiffe_id, scopes, created_by,
-created_at, expires_at, redeemed_at, device_id, revoked_at`
+created_at, expires_at, redeemed_at, device_id, revoked_at, max_uses, uses`
 
 func (s *Store) InsertDevice(ctx context.Context, d theauth.Device) error {
 	scopes, err := encodeList(d.Scopes)
@@ -134,9 +134,9 @@ func (s *Store) InsertDeviceJoinToken(ctx context.Context, t theauth.DeviceJoinT
 		created = time.Now()
 	}
 	_, err = s.pool.Exec(ctx, `INSERT INTO device_join_tokens (`+joinTokenCols+`)
-VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
+VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)`,
 		ulidToPgUUID(t.ID), t.TokenHash, t.Prefix, uuidPtr(t.OrganizationID), t.Name, t.SPIFFEID, scopes,
-		uuidPtr(t.CreatedBy), created, t.ExpiresAt, timePtrToTs(t.RedeemedAt), uuidPtr(t.DeviceID), timePtrToTs(t.RevokedAt))
+		uuidPtr(t.CreatedBy), created, t.ExpiresAt, timePtrToTs(t.RedeemedAt), uuidPtr(t.DeviceID), timePtrToTs(t.RevokedAt), t.EffectiveMaxUses(), t.Uses)
 	if err != nil {
 		return fmt.Errorf("postgres: insert device join token: %w", err)
 	}
@@ -149,8 +149,9 @@ func scanJoinToken(r pgx.Row) (theauth.DeviceJoinToken, error) {
 		hash                           []byte
 		prefix, name, spiffe, scopes   string
 		created, expires, redeemed, rv pgtype.Timestamptz
+		maxUses, uses                  int
 	)
-	if err := r.Scan(&id, &hash, &prefix, &org, &name, &spiffe, &scopes, &by, &created, &expires, &redeemed, &dev, &rv); err != nil {
+	if err := r.Scan(&id, &hash, &prefix, &org, &name, &spiffe, &scopes, &by, &created, &expires, &redeemed, &dev, &rv, &maxUses, &uses); err != nil {
 		return theauth.DeviceJoinToken{}, err
 	}
 	sc, err := decodeList(scopes)
@@ -161,6 +162,7 @@ func scanJoinToken(r pgx.Row) (theauth.DeviceJoinToken, error) {
 		ID: pgUUIDToULID(id), TokenHash: hash, Prefix: prefix, OrganizationID: uuidToPtr(org), Name: name,
 		SPIFFEID: spiffe, Scopes: sc, CreatedBy: uuidToPtr(by), CreatedAt: tsToTime(created).UTC(),
 		ExpiresAt: tsToTime(expires).UTC(), RedeemedAt: utcPtr(redeemed), DeviceID: uuidToPtr(dev), RevokedAt: utcPtr(rv),
+		MaxUses: maxUses, Uses: uses,
 	}, nil
 }
 
@@ -190,8 +192,11 @@ func (s *Store) RevokeDeviceJoinToken(ctx context.Context, id theauth.ULID, at t
 }
 
 func (s *Store) RedeemDeviceJoinToken(ctx context.Context, id, deviceID theauth.ULID, now time.Time) (bool, error) {
-	tag, err := s.pool.Exec(ctx, `UPDATE device_join_tokens SET redeemed_at = $3, device_id = $2
-WHERE id = $1 AND redeemed_at IS NULL AND revoked_at IS NULL AND expires_at > $3`,
+	tag, err := s.pool.Exec(ctx, `UPDATE device_join_tokens SET
+redeemed_at = CASE WHEN uses + 1 >= max_uses THEN $3::timestamptz ELSE NULL END,
+device_id = CASE WHEN max_uses = 1 THEN $2::uuid ELSE NULL END,
+uses = uses + 1
+WHERE id = $1 AND uses < max_uses AND redeemed_at IS NULL AND revoked_at IS NULL AND expires_at > $3`,
 		ulidToPgUUID(id), ulidToPgUUID(deviceID), now)
 	if err != nil {
 		return false, fmt.Errorf("postgres: redeem device join token: %w", err)
@@ -201,8 +206,50 @@ WHERE id = $1 AND redeemed_at IS NULL AND revoked_at IS NULL AND expires_at > $3
 
 func (s *Store) RefundDeviceJoinToken(ctx context.Context, id theauth.ULID) error {
 	if _, err := s.pool.Exec(ctx,
-		`UPDATE device_join_tokens SET redeemed_at = NULL, device_id = NULL WHERE id = $1`, ulidToPgUUID(id)); err != nil {
+		`UPDATE device_join_tokens SET redeemed_at = NULL, device_id = NULL, uses = GREATEST(uses - 1, 0) WHERE id = $1`,
+		ulidToPgUUID(id)); err != nil {
 		return fmt.Errorf("postgres: refund device join token: %w", err)
 	}
 	return nil
+}
+
+func (s *Store) SuspendDevice(ctx context.Context, id theauth.ULID) (bool, error) {
+	return s.setDeviceStatus(ctx, id, "active", "suspended")
+}
+
+func (s *Store) ResumeDevice(ctx context.Context, id theauth.ULID) (bool, error) {
+	return s.setDeviceStatus(ctx, id, "suspended", "active")
+}
+
+func (s *Store) setDeviceStatus(ctx context.Context, id theauth.ULID, from, to string) (bool, error) {
+	tag, err := s.pool.Exec(ctx,
+		`UPDATE iot_devices SET status = $3 WHERE id = $1 AND status = $2 AND revoked_at IS NULL`,
+		ulidToPgUUID(id), from, to)
+	if err != nil {
+		return false, fmt.Errorf("postgres: set device status: %w", err)
+	}
+	return tag.RowsAffected() == 1, nil
+}
+
+func (s *Store) DeviceBySPIFFEID(ctx context.Context, spiffeID string) (*theauth.Device, error) {
+	if spiffeID == "" {
+		return nil, theauth.ErrStorageNotFound
+	}
+	d, err := scanIoTDevice(s.pool.QueryRow(ctx, `SELECT `+iotDeviceCols+` FROM iot_devices WHERE spiffe_id = $1`, spiffeID))
+	if err != nil {
+		return nil, notFoundOr("device by spiffe id", err)
+	}
+	return &d, nil
+}
+
+func (s *Store) DeviceByKeyThumbprint(ctx context.Context, thumbprint string) (*theauth.Device, error) {
+	if thumbprint == "" {
+		return nil, theauth.ErrStorageNotFound
+	}
+	d, err := scanIoTDevice(s.pool.QueryRow(ctx, `SELECT `+iotDeviceCols+
+		` FROM iot_devices WHERE key_thumbprint = $1 ORDER BY created_at DESC, id DESC LIMIT 1`, thumbprint))
+	if err != nil {
+		return nil, notFoundOr("device by key thumbprint", err)
+	}
+	return &d, nil
 }

@@ -35,7 +35,7 @@ A full program is in `examples/device-client` (its own module, not in `go.work`;
 Rule for rule the same as the TS side:
 
 1. The bundle is expired once `now > exp + 30 s`: `device_expired`.
-2. The first permission whose resource and action match decides. Resources are colon segments, a `*` segment matches the rest, `*` alone matches everything. Actions match by name or `*`.
+2. The first permission whose resource and action match decides. Resources are colon segments, a `*` segment matches the rest, `*` alone matches everything. When the server signs `"rm": "path"` into the bundle (its `resourceMatching: "path"` option), `Evaluate` uses the path aware matcher of package `policy/pathmatch` instead: inside one colon segment `/` separates path segments, `*` is one segment, `**` is one or more, never an empty, `.` or `..` segment, nothing is decoded, and a partial glob is literal. `Claims.ResourceMatching` carries the mode, and the Go and TypeScript matchers are checked against each other with generated vectors. Actions match by name or `*`.
 3. Constraints, in server order: `maxCallsPerHour`, `allowedArgPatterns`, `requireApproval`, `timeWindow`, `ipAllowlist`. Two fail closed rules apply offline. `requireApproval` always denies (`approval_required`), because no human is reachable. A rate limited permission denies (`rate_limited`) unless you pass your own count with `WithCallsInLastHour`.
 4. No audit rows exist offline. Queue your decisions and upload them when you are back online.
 

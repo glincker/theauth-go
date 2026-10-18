@@ -7,8 +7,10 @@ import (
 
 // Device statuses.
 const (
-	DeviceStatusActive  = "active"
-	DeviceStatusRevoked = "revoked"
+	DeviceStatusActive = "active"
+	// DeviceStatusSuspended is a reversible hold: the device gets no tokens until it is resumed.
+	DeviceStatusSuspended = "suspended"
+	DeviceStatusRevoked   = "revoked"
 )
 
 // DeviceAttestationJoinToken is the attestation kind of a device enrolled
@@ -58,9 +60,10 @@ func (d Device) Subject() string {
 // when the device has no SPIFFE ID.
 const DeviceSubjectPrefix = "device:"
 
-// DeviceJoinToken is a single-use enrollment secret minted by an admin. It
-// fixes the identity the enrolling device receives, so the device never
-// chooses its own name, SPIFFE ID or scopes. Stored only as a SHA-256 digest.
+// DeviceJoinToken is an enrollment secret minted by an admin. It fixes the
+// identity the enrolling device receives, so the device never chooses its own
+// name, SPIFFE ID or scopes. Stored only as a SHA-256 digest. A token is single
+// use unless MaxUses says otherwise (a bulk token for a factory line).
 type DeviceJoinToken struct {
 	ID             ULID
 	TokenHash      []byte
@@ -72,15 +75,29 @@ type DeviceJoinToken struct {
 	CreatedBy      *ULID
 	CreatedAt      time.Time
 	ExpiresAt      time.Time
-	// RedeemedAt and DeviceID are set when the token enrolled a device.
+	// MaxUses is how many devices the token may enroll. Zero means one (rows written before
+	// bulk tokens existed).
+	MaxUses int
+	// Uses is how many devices the token has enrolled so far.
+	Uses int
+	// RedeemedAt is set when the last use was spent. DeviceID is set only on a single use token,
+	// to the device it enrolled.
 	RedeemedAt *time.Time
 	DeviceID   *ULID
 	RevokedAt  *time.Time
 }
 
+// EffectiveMaxUses is MaxUses with the zero value read as one.
+func (t DeviceJoinToken) EffectiveMaxUses() int {
+	if t.MaxUses < 1 {
+		return 1
+	}
+	return t.MaxUses
+}
+
 // Active reports whether the token can still enroll a device at now.
 func (t DeviceJoinToken) Active(now time.Time) bool {
-	return t.RedeemedAt == nil && t.RevokedAt == nil && now.Before(t.ExpiresAt)
+	return t.RedeemedAt == nil && t.RevokedAt == nil && now.Before(t.ExpiresAt) && t.Uses < t.EffectiveMaxUses()
 }
 
 // Device identity sentinels.
@@ -90,6 +107,9 @@ var (
 	ErrDeviceEnrollmentInvalid = errors.New("theauth: invalid device or join token")
 	// ErrDeviceConflict is returned when a SPIFFE ID is already registered.
 	ErrDeviceConflict = errors.New("theauth: device SPIFFE ID already registered")
+	// ErrDeviceRevoked is returned when suspending or resuming a revoked device. Revocation is
+	// permanent.
+	ErrDeviceRevoked = errors.New("theauth: device is revoked")
 	// ErrDevicesDisabled is returned when device tokens are not configured or
 	// the storage cannot hold devices.
 	ErrDevicesDisabled = errors.New("theauth: device tokens not enabled")

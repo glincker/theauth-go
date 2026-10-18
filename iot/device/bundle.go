@@ -4,6 +4,8 @@ import (
 	"errors"
 	"math"
 	"time"
+
+	"github.com/glincker/theauth-go/v2/policy/pathmatch"
 )
 
 // BundleTyp is the `typ` header of an offline policy bundle (design D7).
@@ -27,8 +29,9 @@ type Constraints struct {
 	IPAllowlist        []string
 }
 
-// Permission grants Actions on resources matching Resource (colon segments, a `*`
-// segment matches the rest, a lone `*` matches everything).
+// Permission grants Actions on resources matching Resource. Matching follows
+// Claims.ResourceMatching: by default colon segments, a `*` segment matches the rest and a lone
+// `*` matches everything; in path mode see package pathmatch.
 type Permission struct {
 	Resource    string
 	Actions     []string
@@ -46,6 +49,10 @@ type Claims struct {
 	Owner  string
 	Groups []string
 	Perms  []Permission
+	// ResourceMatching is the signed "rm" claim: pathmatch.Path when the server matches resources
+	// with resourceMatching "path", else pathmatch.Colon. Evaluate follows it, so the device
+	// decides the way the server did when it issued the bundle.
+	ResourceMatching pathmatch.Mode
 }
 
 // Reason says why VerifyBundle refused a token. The values match the TS verifyDeviceBundle.
@@ -127,6 +134,8 @@ func VerifyBundle(token string, o VerifyOptions) (*Claims, error) {
 	c.IssuedAt = int64(numOr(obj["iat"]))
 	c.JTI, _ = obj["jti"].(string)
 	c.Owner, _ = obj["owner"].(string)
+	rm, _ := obj["rm"].(string)
+	c.ResourceMatching = pathmatch.Resolve(rm)
 	if gs, ok := obj["groups"].([]any); ok {
 		c.Groups = stringList(gs)
 	}
@@ -240,10 +249,14 @@ func (c *Claims) Map() map[string]any {
 		}
 		perms = append(perms, pm)
 	}
-	return map[string]any{
+	m := map[string]any{
 		"iss": c.Issuer, "sub": c.Subject, "aud": c.Audience, "iat": c.IssuedAt, "nbf": c.NotBefore,
 		"exp": c.Exp, "jti": c.JTI, "seq": c.Seq, "owner": c.Owner, "groups": nonNil(c.Groups), "perms": perms,
 	}
+	if c.ResourceMatching == pathmatch.Path {
+		m["rm"] = string(pathmatch.Path)
+	}
+	return m
 }
 
 func nonNil(s []string) []string {

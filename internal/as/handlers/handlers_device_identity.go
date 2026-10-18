@@ -4,6 +4,7 @@ package handlers
 // org-scoped admin routes.
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -117,6 +118,8 @@ func (a *AdminHandler) mountDevices(r chi.Router, perm func(http.Handler) http.H
 	r.With(perm).Delete("/devices/join-tokens/{tokenID}", a.revokeJoinToken)
 	r.With(perm).Get("/devices", a.listDevices)
 	r.With(perm).Post("/devices/{deviceID}/revoke", a.revokeDevice)
+	r.With(perm).Post("/devices/{deviceID}/suspend", a.suspendDevice)
+	r.With(perm).Post("/devices/{deviceID}/resume", a.resumeDevice)
 }
 
 func (a *AdminHandler) createJoinToken(w http.ResponseWriter, r *http.Request) {
@@ -130,6 +133,8 @@ func (a *AdminHandler) createJoinToken(w http.ResponseWriter, r *http.Request) {
 		SPIFFEID   string   `json:"spiffe_id"`
 		Scopes     []string `json:"scopes"`
 		TTLSeconds int      `json:"ttl_seconds"`
+		Kind       string   `json:"kind"`
+		MaxUses    int      `json:"max_uses"`
 	}
 	if err := httpx.DecodeJSON(r, &body); err != nil {
 		admin.Write(w, http.StatusBadRequest, admin.CodeValidationInvalid, err.Error(), "")
@@ -137,7 +142,7 @@ func (a *AdminHandler) createJoinToken(w http.ResponseWriter, r *http.Request) {
 	}
 	in := internalas.CreateDeviceJoinTokenInput{
 		OrganizationID: &orgID, Name: body.Name, SPIFFEID: body.SPIFFEID, Scopes: body.Scopes,
-		TTL: time.Duration(body.TTLSeconds) * time.Second,
+		TTL: time.Duration(body.TTLSeconds) * time.Second, Kind: body.Kind, MaxUses: body.MaxUses,
 	}
 	if u, _ := a.userFromCtx(r); u != nil {
 		id := u.ID
@@ -146,7 +151,7 @@ func (a *AdminHandler) createJoinToken(w http.ResponseWriter, r *http.Request) {
 	t, raw, err := a.svc.CreateDeviceJoinToken(r.Context(), in)
 	if err != nil {
 		if errors.Is(err, models.ErrOAuthInvalidRequest) {
-			admin.Write(w, http.StatusBadRequest, admin.CodeValidationInvalid, "scopes are required and ttl_seconds must not be negative", "")
+			admin.Write(w, http.StatusBadRequest, admin.CodeValidationInvalid, "scopes are required, kind must be empty, claim or bulk, bulk needs max_uses, and ttl_seconds must be valid", "")
 			return
 		}
 		admin.Write(w, http.StatusInternalServerError, admin.CodeInternal, "could not create join token", "")
@@ -155,7 +160,7 @@ func (a *AdminHandler) createJoinToken(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
 	writeJSON(w, http.StatusCreated, map[string]any{
 		"id": t.ID.String(), "token": raw, "prefix": t.Prefix, "name": t.Name, "spiffe_id": t.SPIFFEID,
-		"scopes": t.Scopes, "expires_at": t.ExpiresAt,
+		"scopes": t.Scopes, "expires_at": t.ExpiresAt, "kind": body.Kind, "max_uses": t.EffectiveMaxUses(),
 	})
 }
 
@@ -210,10 +215,41 @@ func (a *AdminHandler) revokeDevice(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-func (a *AdminHandler) writeDeviceAdminError(w http.ResponseWriter, err error, what string) {
-	if errors.Is(err, models.ErrStorageNotFound) {
-		admin.Write(w, http.StatusNotFound, admin.CodeNotFound, what+" not found", "")
+func (a *AdminHandler) suspendDevice(w http.ResponseWriter, r *http.Request) {
+	a.changeDevice(w, r, a.svc.SuspendDevice)
+}
+
+func (a *AdminHandler) resumeDevice(w http.ResponseWriter, r *http.Request) {
+	a.changeDevice(w, r, a.svc.ResumeDevice)
+}
+
+func (a *AdminHandler) changeDevice(w http.ResponseWriter, r *http.Request,
+	fn func(context.Context, models.ULID, *models.ULID, *models.ULID) error) {
+	orgID, ok := httpx.ParseULIDPath(r, "orgID")
+	id, ok2 := httpx.ParseULIDPath(r, "deviceID")
+	if !ok || !ok2 {
+		admin.Write(w, http.StatusBadRequest, admin.CodeValidationInvalid, "invalid id", "")
 		return
 	}
-	admin.Write(w, http.StatusInternalServerError, admin.CodeInternal, "could not revoke "+what, "")
+	var actor *models.ULID
+	if u, _ := a.userFromCtx(r); u != nil {
+		uid := u.ID
+		actor = &uid
+	}
+	if err := fn(r.Context(), id, &orgID, actor); err != nil {
+		a.writeDeviceAdminError(w, err, "device")
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (a *AdminHandler) writeDeviceAdminError(w http.ResponseWriter, err error, what string) {
+	switch {
+	case errors.Is(err, models.ErrStorageNotFound):
+		admin.Write(w, http.StatusNotFound, admin.CodeNotFound, what+" not found", "")
+	case errors.Is(err, models.ErrDeviceRevoked):
+		admin.Write(w, http.StatusConflict, admin.CodeValidationInvalid, what+" is revoked", "")
+	default:
+		admin.Write(w, http.StatusInternalServerError, admin.CodeInternal, "could not update "+what, "")
+	}
 }

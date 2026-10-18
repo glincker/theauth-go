@@ -40,7 +40,7 @@ If you write your own backend, run the matching suite from `storagetest` against
 | API tokens | `APITokenStorage` | Yes | Yes (0007) | Yes (0018) | Yes (0018) |
 | Agent id on API tokens | `APITokenAgentStorage` | Yes | Yes (0018) | Yes (0027) | Yes (0026) |
 | Device codes (API token device grant) | `DeviceCodeStorage`, `DeviceCodeLister` | Yes | Yes (0007) | Yes (0018) | Yes (0018) |
-| Device identity (join tokens, enrolled devices) | `DeviceIdentityStorage` | Yes | Yes (0011) | Yes (0024) | Yes (0024) |
+| Device identity (join tokens, enrolled devices) | `DeviceIdentityStorage` | Yes | Yes (0011, 0039) | Yes (0024, 0036) | Yes (0024, 0036) |
 | Token vault credentials (`tokenvault` package) | `TokenVaultStorage` | Yes | No | No | No |
 | Agent tool approvals (single use, used by `toolguard.NewStorageApprovals`) | `ToolApprovalStorage` | Yes | Yes (0019) | Yes (0029) | Yes (0028) |
 | Approvals inbox and specific denial codes (get, list, deny; used by the `approvals` package and `StorageApprovals.Spend`) | `ToolApprovalAdminStorage` | Yes | Yes (0037) | Yes (0034) | Yes (0032) |

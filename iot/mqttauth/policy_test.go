@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/glincker/theauth-go/v2/policy"
+	"github.com/glincker/theauth-go/v2/policy/pathmatch"
 )
 
 func TestPolicyAuthorizer(t *testing.T) {
@@ -72,5 +73,35 @@ func TestTopicResource(t *testing.T) {
 	}
 	if _, ok := TopicResource("a/b:c"); ok {
 		t.Error("a level with a colon must be refused")
+	}
+}
+
+// TestPolicyAuthorizerPathMode checks that the evaluator's ResourceMatching reaches the broker
+// authorizer: a middle "*" is one non empty level, a partial glob is literal text.
+func TestPolicyAuthorizerPathMode(t *testing.T) {
+	pol := &policy.Policy{Version: "1", ID: "iot", Statements: []policy.Statement{
+		{Effect: policy.Allow, Actions: []string{"publish"}, Resources: []string{"mqtt:fleet:*:cmd", "mqtt:lab:r*"}},
+	}}
+	pols := func(context.Context, *Device) ([]*policy.Policy, error) { return []*policy.Policy{pol}, nil }
+	glob := PolicyAuthorizer{Policies: pols}
+	path := PolicyAuthorizer{Evaluator: policy.Evaluator{ResourceMatching: pathmatch.Path}, Policies: pols}
+	d := &Device{ID: "dev1", OrgID: "o"}
+	cases := []struct {
+		topic      string
+		glob, path bool
+	}{
+		{"fleet/a/cmd", true, true},
+		{"fleet/a/b/cmd", true, false}, // the glob star spans levels
+		{"fleet//cmd", true, false},    // and an empty one
+		{"lab/robot", true, false},     // "r*" is literal in path mode
+		{"lab/r*", true, true},
+	}
+	for _, c := range cases {
+		if got := glob.Authorize(context.Background(), d, ActionPublish, c.topic).Allowed; got != c.glob {
+			t.Errorf("glob mode %q = %v, want %v", c.topic, got, c.glob)
+		}
+		if got := path.Authorize(context.Background(), d, ActionPublish, c.topic).Allowed; got != c.path {
+			t.Errorf("path mode %q = %v, want %v", c.topic, got, c.path)
+		}
 	}
 }

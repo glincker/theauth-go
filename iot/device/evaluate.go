@@ -6,6 +6,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/glincker/theauth-go/v2/policy/pathmatch"
 )
 
 // Decision codes. They are the same strings the TS DECISION_CODES use, so logs and
@@ -79,7 +81,7 @@ func Evaluate(c *Claims, action, resource string, opts ...Option) Decision {
 	}
 	var perm *Permission
 	for i := range c.Perms {
-		if matchResource(c.Perms[i].Resource, resource) && matchAction(c.Perms[i].Actions, action) {
+		if pathmatch.Match(c.ResourceMatching, c.Perms[i].Resource, resource) && matchAction(c.Perms[i].Actions, action) {
 			perm = &c.Perms[i]
 			break
 		}
@@ -117,25 +119,6 @@ func Evaluate(c *Claims, action, resource string, opts ...Option) Decision {
 		}
 	}
 	return Decision{true, CodeAllowed, ""}
-}
-
-// matchResource mirrors TS matchResource: colon segments, a `*` segment matches the
-// rest, and a lone `*` matches everything.
-func matchResource(pattern, resource string) bool {
-	if pattern == "*" {
-		return true
-	}
-	pp := strings.Split(pattern, ":")
-	rp := strings.Split(resource, ":")
-	for i, part := range pp {
-		if part == "*" {
-			return true
-		}
-		if i >= len(rp) || part != rp[i] {
-			return false
-		}
-	}
-	return len(pp) == len(rp)
 }
 
 func matchAction(allowed []string, action string) bool {

@@ -16,6 +16,16 @@ type DeviceIdentityStorage interface {
 	ListDevices(ctx context.Context, orgID *models.ULID) ([]models.Device, error)
 	RevokeDevice(ctx context.Context, id models.ULID, at time.Time) (bool, error)
 	TouchDevice(ctx context.Context, id models.ULID, at time.Time) error
+	// SuspendDevice moves an active device to suspended and reports whether it changed. A revoked
+	// or already suspended device is left alone (false). ResumeDevice is the reverse and never
+	// revives a revoked device. Both are conditional updates, so concurrent callers cannot both win.
+	SuspendDevice(ctx context.Context, id models.ULID) (bool, error)
+	ResumeDevice(ctx context.Context, id models.ULID) (bool, error)
+	// DeviceBySPIFFEID and DeviceByKeyThumbprint are indexed lookups, ErrStorageNotFound on a miss.
+	// The thumbprint is the RFC 7638 value in Device.KeyThumbprint. Two devices can share a key,
+	// so the newest one is returned.
+	DeviceBySPIFFEID(ctx context.Context, spiffeID string) (*models.Device, error)
+	DeviceByKeyThumbprint(ctx context.Context, thumbprint string) (*models.Device, error)
 
 	InsertDeviceJoinToken(ctx context.Context, t models.DeviceJoinToken) error
 	DeviceJoinTokenByHash(ctx context.Context, hash []byte) (*models.DeviceJoinToken, error)

@@ -508,6 +508,13 @@ type ASRateLimits = internalas.RateLimits
 // CreateDeviceJoinTokenInput describes a device join token to mint.
 type CreateDeviceJoinTokenInput = internalas.CreateDeviceJoinTokenInput
 
+// Kinds of device enrollment token for CreateDeviceJoinTokenInput.Kind.
+const (
+	DeviceJoinTokenSingle = internalas.JoinTokenKindSingle
+	DeviceJoinTokenClaim  = internalas.JoinTokenKindClaim
+	DeviceJoinTokenBulk   = internalas.JoinTokenKindBulk
+)
+
 // CreateRegistrationTokenInput describes an initial access token to mint.
 type CreateRegistrationTokenInput = internalas.CreateRegistrationTokenInput
 

@@ -998,8 +998,9 @@ func (a *TheAuth) RevokeRegistrationToken(ctx context.Context, id ULID) error {
 	return a.as.RevokeRegistrationToken(ctx, id, nil, nil)
 }
 
-// CreateDeviceJoinToken mints a single-use join token for one constrained device. The plaintext is
-// shown once; the token fixes the device's name, SPIFFE ID and scopes.
+// CreateDeviceJoinToken mints an enrollment token: a single use join token, a claim code or a bulk
+// token (see CreateDeviceJoinTokenInput.Kind). The plaintext is shown once; the token fixes the
+// device's name, SPIFFE ID and scopes.
 func (a *TheAuth) CreateDeviceJoinToken(ctx context.Context, in CreateDeviceJoinTokenInput) (DeviceJoinToken, string, error) {
 	if a.as == nil {
 		return DeviceJoinToken{}, "", ErrDevicesDisabled
@@ -1022,6 +1023,23 @@ func (a *TheAuth) RevokeDevice(ctx context.Context, id ULID) error {
 		return ErrDevicesDisabled
 	}
 	return a.as.RevokeDevice(ctx, id, nil, nil)
+}
+
+// SuspendDevice puts an active device on hold: it gets no tokens until ResumeDevice. A revoked
+// device returns ErrDeviceRevoked. Suspending twice succeeds.
+func (a *TheAuth) SuspendDevice(ctx context.Context, id ULID) error {
+	if a.as == nil {
+		return ErrDevicesDisabled
+	}
+	return a.as.SuspendDevice(ctx, id, nil, nil)
+}
+
+// ResumeDevice lifts a suspension. A revoked device stays revoked and returns ErrDeviceRevoked.
+func (a *TheAuth) ResumeDevice(ctx context.Context, id ULID) error {
+	if a.as == nil {
+		return ErrDevicesDisabled
+	}
+	return a.as.ResumeDevice(ctx, id, nil, nil)
 }
 
 // RevokeDeviceJoinToken revokes an unspent device join token.

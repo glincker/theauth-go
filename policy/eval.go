@@ -5,6 +5,8 @@ import (
 	"net/netip"
 	"slices"
 	"time"
+
+	"github.com/glincker/theauth-go/v2/policy/pathmatch"
 )
 
 // Request is one authorization question. Attributes feed {var} substitution
@@ -24,6 +26,9 @@ type Request struct {
 	// name. The key CallLabelsKey labels the whole call. It feeds
 	// Evaluator.Taint. Nil means no provenance was supplied.
 	Provenance map[string][]string
+
+	// matching is Evaluator.ResourceMatching, copied in by prepare so statement matching can see it.
+	matching pathmatch.Mode
 }
 
 // Decision is the audited outcome of an evaluation.
@@ -56,6 +61,13 @@ type Evaluator struct {
 	// Taint restricts which provenance labels may flow into which tools. It is
 	// applied after risk tiers. Empty means no taint rules.
 	Taint []TaintRule
+	// ResourceMatching selects how a statement or taint rule resource compares to the request
+	// resource. The zero value keeps the glob matcher (Match): "*" is any run of bytes. Set
+	// pathmatch.Path for the colon and path aware matcher shared with the TypeScript core
+	// (resourceMatching "path"): ":" separates segments, "/" separates path segments inside one,
+	// "*" is one segment and "**" one or more, never an empty, "." or ".." one. In that mode a
+	// partial glob such as "r*" is literal text. Action patterns keep using Match.
+	ResourceMatching pathmatch.Mode
 }
 
 // Evaluate applies explicit-deny-wins then default-deny across policies.
@@ -171,6 +183,7 @@ func (e Evaluator) EvaluateWithBoundary(req Request, identity, boundary []*Polic
 }
 
 func (e Evaluator) prepare(req Request) Request {
+	req.matching = e.ResourceMatching
 	if req.Now.IsZero() {
 		if e.Now != nil {
 			req.Now = e.Now()
@@ -212,11 +225,20 @@ func (s Statement) matchesResource(req Request, unresolvedMatches bool) bool {
 			}
 			continue
 		}
-		if Match(exp, req.Resource) {
+		if req.matchResource(exp) {
 			return true
 		}
 	}
 	return false
+}
+
+// matchResource compares an expanded resource pattern with the request resource in the mode the
+// evaluator was configured with.
+func (r Request) matchResource(pattern string) bool {
+	if r.matching == pathmatch.Path {
+		return pathmatch.MatchPath(pattern, r.Resource)
+	}
+	return Match(pattern, r.Resource)
 }
 
 func (c Condition) holds(req Request) bool {
