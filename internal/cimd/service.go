@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/glincker/theauth-go/v2/internal/audit"
+	"github.com/glincker/theauth-go/v2/internal/epoch"
 	"github.com/glincker/theauth-go/v2/internal/models"
 	"github.com/glincker/theauth-go/v2/kv"
 )
@@ -129,6 +130,10 @@ type Service struct {
 	emitter audit.Emitter
 
 	cache sync.Map // map[string]*cacheEntry, keyed by canonical URL
+
+	// fence drops a cache store whose fetch began before an Invalidate of the same URL, so an
+	// invalidated document is never put back (see internal/epoch).
+	fence epoch.Set
 
 	// inflight collapses concurrent fetches of the same URL into one
 	// outbound request (single-flight).
@@ -268,8 +273,16 @@ func (s *Service) Invalidate(rawURL string) {
 	if s == nil {
 		return
 	}
-	s.cache.Delete(cacheKey(rawURL))
-	s.sharedDelete(cacheKey(rawURL))
+	key := cacheKey(rawURL)
+	s.fence.Invalidate(key, func() {
+		s.cache.Delete(key)
+		// A caller arriving now must not join a fetch that started before the invalidation, which
+		// may carry the old document.
+		s.inflightMu.Lock()
+		delete(s.inflight, key)
+		s.inflightMu.Unlock()
+	})
+	s.sharedDelete(key)
 }
 
 // LooksLikeCIMD reports whether a client_id is an absolute https URL with a host, so the AS knows
@@ -351,8 +364,11 @@ func (s *Service) Resolve(ctx context.Context, rawURL string) (*models.OAuthClie
 			}
 		}
 	}
+	// Taken before any read below. An Invalidate that runs while the shared read or the fetch is in
+	// flight turns every store of this call into a no-op.
+	tok := s.fence.Token(key)
 	if doc, ok := s.sharedLoad(ctx, key, rawURL); ok {
-		s.cache.Store(key, &cacheEntry{doc: doc, fetchedAt: time.Now()})
+		s.fence.Commit(key, tok, func() { s.cache.Store(key, &cacheEntry{doc: doc, fetchedAt: time.Now()}) })
 		return synthesizeClient(doc), nil
 	}
 	doc, err := s.fetchOnce(ctx, key, rawURL)
@@ -361,6 +377,11 @@ func (s *Service) Resolve(ctx context.Context, rawURL string) (*models.OAuthClie
 		return nil, err
 	}
 	s.sharedStore(ctx, key, doc)
+	// The shared tier is external, so the store above cannot sit under the fence. If an Invalidate
+	// ran meanwhile, remove what was just written. Another replica may still read it in between.
+	if s.fence.Token(key) != tok {
+		s.sharedDelete(key)
+	}
 	s.emitter.EmitAudit(ctx, AuditFetched,
 		models.TargetRef{Type: "cimd", ID: rawURL},
 		map[string]any{
@@ -399,16 +420,22 @@ func (s *Service) fetchOnce(ctx context.Context, key, rawURL string) (Document, 
 	}
 	f := &flight{done: make(chan struct{})}
 	s.inflight[key] = f
+	tok := s.fence.Token(key)
 	s.inflightMu.Unlock()
 
 	f.doc, f.err = s.fetch(context.WithoutCancel(ctx), rawURL)
 	if f.err == nil {
-		s.cache.Store(key, &cacheEntry{doc: f.doc, fetchedAt: time.Now(), ttl: f.doc.cacheTTL})
+		s.fence.Commit(key, tok, func() {
+			s.cache.Store(key, &cacheEntry{doc: f.doc, fetchedAt: time.Now(), ttl: f.doc.cacheTTL})
+		})
 	} else if s.cfg.NegativeCacheTTL > 0 {
-		s.cache.Store(key, &cacheEntry{fetchedAt: time.Now(), err: f.err})
+		s.fence.Commit(key, tok, func() { s.cache.Store(key, &cacheEntry{fetchedAt: time.Now(), err: f.err}) })
 	}
 	s.inflightMu.Lock()
-	delete(s.inflight, key)
+	// Invalidate may have replaced this flight with a newer one, which must stay registered.
+	if s.inflight[key] == f {
+		delete(s.inflight, key)
+	}
 	s.inflightMu.Unlock()
 	close(f.done)
 	return f.doc, f.err
