@@ -187,6 +187,7 @@ func MakeCredential(ekPublic, akName, credential []byte, random *MakeCredentialR
 	}
 	plain := sizedBytes(credential)
 	encIdentity := make([]byte, len(plain))
+	//nolint:staticcheck // TPM 2.0 Part 1 section 24 specifies AES-CFB for MakeCredential, there is no choice of mode.
 	cipher.NewCFBEncrypter(block, make([]byte, aes.BlockSize)).XORKeyStream(encIdentity, plain)
 	integrity := hmacOf(hash, hmacKey, concat(encIdentity, akName))
 	return MadeCredential{CredentialBlob: sizedBytes(concat(sizedBytes(integrity), encIdentity)), EncryptedSecret: encrypted}, nil

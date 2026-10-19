@@ -181,17 +181,17 @@ var pcrFlagRE = regexp.MustCompile(`^(sha1|sha256|sha384|sha512):(\d{1,2})=([0-9
 
 func runVerifier(a attestArgs, roots []string, now func() time.Time, stderr io.Writer) (attest.Result, error) {
 	if a.evidence == "" {
-		return attest.Result{}, fmt.Errorf("Missing --evidence <file>")
+		return attest.Result{}, fmt.Errorf("missing --evidence <file>")
 	}
 	if a.nonce == "" {
-		return attest.Result{}, fmt.Errorf("Missing --nonce")
+		return attest.Result{}, fmt.Errorf("missing --nonce")
 	}
 	enc := attest.ChallengeEncoding(a.challenge)
 	if enc != attest.ChallengeUTF8 && enc != attest.ChallengeBase64URL && enc != attest.ChallengeHex {
 		return attest.Result{}, fmt.Errorf("--challenge must be utf8, base64url or hex")
 	}
 	if a.format == "android" && a.revocation != "google" && a.revocation != "off" {
-		return attest.Result{}, fmt.Errorf("Missing --revocation google|off")
+		return attest.Result{}, fmt.Errorf("missing --revocation google|off")
 	}
 	raw, err := os.ReadFile(a.evidence)
 	if err != nil {
@@ -201,7 +201,7 @@ func runVerifier(a attestArgs, roots []string, now func() time.Time, stderr io.W
 	switch a.format {
 	case "apple":
 		if len(a.appIDs) == 0 {
-			return attest.Result{}, fmt.Errorf("Missing --app-id <TeamID.BundleID>")
+			return attest.Result{}, fmt.Errorf("missing --app-id <TeamID.BundleID>")
 		}
 		bind := a.bind
 		if bind == "" {
@@ -228,14 +228,14 @@ func runVerifier(a attestArgs, roots []string, now func() time.Time, stderr io.W
 			pcrs[m[1]][idx] = m[3]
 		}
 		if len(roots) == 0 && !a.allowUnverified {
-			return attest.Result{}, fmt.Errorf("Pass --root <file> or --allow-unverified-ak")
+			return attest.Result{}, fmt.Errorf("pass --root <file> or --allow-unverified-ak")
 		}
 		verify, err = attest.NewTPM2QuoteVerifier(attest.TPM2Options{
 			Roots: roots, AllowUnverifiedAk: a.allowUnverified, ChallengeEncoding: enc, ExpectedPCRs: pcrs, Now: now,
 		})
 	case "tpm-certify":
 		if len(roots) == 0 && !a.allowUnverified {
-			return attest.Result{}, fmt.Errorf("Pass --root <file> or --allow-unverified-ek")
+			return attest.Result{}, fmt.Errorf("pass --root <file> or --allow-unverified-ek")
 		}
 		bind := attest.BindNone
 		if a.keyThumbprint != "" {
@@ -248,7 +248,7 @@ func runVerifier(a attestArgs, roots []string, now func() time.Time, stderr io.W
 		switch a.revocation {
 		case "google", "off":
 		default:
-			return attest.Result{}, fmt.Errorf("Missing --revocation google|off")
+			return attest.Result{}, fmt.Errorf("missing --revocation google|off")
 		}
 		level := attest.LevelTrustedEnvironment
 		switch a.minLevel {
@@ -312,7 +312,7 @@ func runAssertion(a attestArgs) (attest.Result, error) {
 
 func runReceipt(a attestArgs, roots []string, now func() time.Time) (attest.Result, error) {
 	if a.receiptFile == "" {
-		return attest.Result{}, fmt.Errorf("Missing --receipt <file>")
+		return attest.Result{}, fmt.Errorf("missing --receipt <file>")
 	}
 	raw, err := os.ReadFile(a.receiptFile)
 	if err != nil {

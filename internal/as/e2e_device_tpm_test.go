@@ -95,6 +95,7 @@ func softwareActivate(t *testing.T, ek *rsa.PrivateKey, akName, blob, encSecret 
 	}
 	block, _ := aes.NewCipher(kdfa(seed, "STORAGE", akName, 128))
 	plain := make([]byte, len(enc))
+	//nolint:staticcheck // TPM 2.0 credential protection is specified as AES-CFB, there is no choice of mode.
 	cipher.NewCFBDecrypter(block, make([]byte, 16)).XORKeyStream(plain, enc)
 	return plain[2:]
 }
