@@ -29,6 +29,9 @@ type Input struct {
 	// CredentialKeyThumbprint is the RFC 7638 SHA-256 thumbprint of the enrolled public key when
 	// CredentialKind is "jwk".
 	CredentialKeyThumbprint string
+	// ActivationKey is the server secret behind the TPM credential activation (see
+	// DeriveActivationSecret). Enrollment sets it for the TPM certify verifier, which refuses without it.
+	ActivationKey []byte
 }
 
 // Result is a verifier's decision. On refusal Reason is a short, stable sentence that is the same

@@ -27,6 +27,9 @@ type Constraints struct {
 	RequireApproval    bool
 	TimeWindow         *TimeWindow
 	IPAllowlist        []string
+	// Attestation, when set, needs the bundle's attested device facts to meet the rule. A bundle
+	// with no (or malformed) facts denies.
+	Attestation *AttestationConstraint
 }
 
 // Permission grants Actions on resources matching Resource. Matching follows
@@ -53,6 +56,9 @@ type Claims struct {
 	// with resourceMatching "path", else pathmatch.Colon. Evaluate follows it, so the device
 	// decides the way the server did when it issued the bundle.
 	ResourceMatching pathmatch.Mode
+	// Attestation is the signed "att" claim: the verified attestation facts of this device, or nil
+	// when it enrolled without hardware evidence. Permissions with an attestation constraint need it.
+	Attestation *AttestationFacts
 }
 
 // Reason says why VerifyBundle refused a token. The values match the TS verifyDeviceBundle.
@@ -146,6 +152,7 @@ func VerifyBundle(token string, o VerifyOptions) (*Claims, error) {
 	c.Owner, _ = obj["owner"].(string)
 	rm, _ := obj["rm"].(string)
 	c.ResourceMatching = pathmatch.Resolve(rm)
+	c.Attestation = parseFacts(obj["att"])
 	if gs, ok := obj["groups"].([]any); ok {
 		c.Groups = stringList(gs)
 	}
@@ -230,6 +237,10 @@ func parseConstraints(m map[string]any) *Constraints {
 	if l, ok := m["ipAllowlist"].([]any); ok {
 		c.IPAllowlist = stringList(l)
 	}
+	// JavaScript truthiness, like requireApproval: the server ignores a rule only when it is falsy.
+	if av, present := m["attestation"]; present && truthy(av) {
+		c.Attestation = parseAttestationConstraint(av)
+	}
 	return c
 }
 
@@ -271,6 +282,9 @@ func (c *Claims) Map() map[string]any {
 			if k.IPAllowlist != nil {
 				km["ipAllowlist"] = k.IPAllowlist
 			}
+			if k.Attestation != nil {
+				km["attestation"] = k.Attestation.toMap()
+			}
 			pm["constraints"] = km
 		}
 		perms = append(perms, pm)
@@ -281,6 +295,9 @@ func (c *Claims) Map() map[string]any {
 	}
 	if c.ResourceMatching == pathmatch.Path {
 		m["rm"] = string(pathmatch.Path)
+	}
+	if c.Attestation != nil {
+		m["att"] = c.Attestation.Map()
 	}
 	return m
 }

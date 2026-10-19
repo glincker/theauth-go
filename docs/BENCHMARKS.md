@@ -38,7 +38,7 @@ automatically.
 ## Running locally
 
 ```bash
-# Full gate run (2 s per benchmark, 10 runs each -- matches CI):
+# Full gate run (2 s per benchmark, 10 runs each, matches CI):
 ./scripts/bench-gate.sh
 
 # Quick smoke run (1 iteration only):
@@ -92,7 +92,7 @@ wall-clock-sensitive tests on shared CI runners), add a `# gate:skip` line
 in `benchgate/curated.txt`:
 
 ```
-# gate:skip BenchmarkFoo -- high variance on shared runners; tracked in issue #NNN
+# gate:skip BenchmarkFoo: high variance on shared runners; tracked in issue #NNN
 ```
 
 The gate script will exclude the benchmark from both the `-bench` regex and

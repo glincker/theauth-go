@@ -20,7 +20,10 @@ const (
 	CodeTimeRestricted   = "time_restricted"
 	CodeArgumentRejected = "argument_rejected"
 	CodeApprovalRequired = "approval_required"
-	CodeDeviceExpired    = "device_expired"
+	// CodeAttestationRequired means the permission needs a hardware attested device and the
+	// bundle's attestation facts are missing or too weak.
+	CodeAttestationRequired = "attestation_required"
+	CodeDeviceExpired       = "device_expired"
 )
 
 // Decision is the offline answer. Allowed is true only for CodeAllowed.
@@ -66,7 +69,7 @@ func WithLocation(l *time.Location) Option { return func(c *evalConfig) { c.loc 
 // evaluateDeviceBundle rule for rule: the first permission whose resource and action
 // match decides; requireApproval always denies (no human is reachable); a rate limited
 // permission needs a local call count. Constraints run in the server order: rate,
-// argument patterns, approval, time window, IP allowlist. Callers must have passed the
+// argument patterns, attestation, approval, time window, IP allowlist. Callers must have passed the
 // claims through VerifyBundle.
 func Evaluate(c *Claims, action, resource string, opts ...Option) Decision {
 	cfg := evalConfig{loc: time.UTC}
@@ -100,11 +103,16 @@ func Evaluate(c *Claims, action, resource string, opts ...Option) Decision {
 		return Decision{false, CodeRateLimited, "Rate limited permission needs a local call count offline"}
 	}
 	if k.MaxCallsPerHour != nil && float64(cfg.calls) >= *k.MaxCallsPerHour {
-		return Decision{false, CodeRateLimited, "Rate limit exceeded: " + strconv.Itoa(cfg.calls) + " calls per hour for resource \"" + resource + `"`}
+		return Decision{false, CodeRateLimited, "Rate limit exceeded: " + strconv.Itoa(cfg.calls) + "/" + strconv.FormatFloat(*k.MaxCallsPerHour, 'f', -1, 64) + " calls per hour for resource \"" + resource + `"`}
 	}
 	if k.AllowedArgPatterns != nil && cfg.args != nil {
 		if reason, ok := checkArgPatterns(k.AllowedArgPatterns, cfg.args); !ok {
 			return Decision{false, CodeArgumentRejected, reason}
+		}
+	}
+	if k.Attestation != nil {
+		if reason := k.Attestation.check(c.Attestation); reason != "" {
+			return Decision{false, CodeAttestationRequired, reason}
 		}
 	}
 	if k.TimeWindow != nil && !inTimeWindow(k.TimeWindow, cfg.now.In(cfg.loc)) {

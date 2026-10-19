@@ -16,7 +16,7 @@ import (
 var _ theauth.DeviceIdentityStorage = (*Store)(nil)
 
 const iotDeviceCols = `id, organization_id, name, spiffe_id, public_key_jwk, key_thumbprint, attestation,
-scopes, status, created_at, last_seen_at, revoked_at`
+attestation_claims, app_attest_counter, scopes, status, created_at, last_seen_at, revoked_at`
 
 const joinTokenCols = `id, token_hash, token_prefix, organization_id, name, spiffe_id, scopes, created_by,
 created_at, expires_at, redeemed_at, device_id, revoked_at, max_uses, uses`
@@ -30,10 +30,14 @@ func (s *Store) InsertDevice(ctx context.Context, d theauth.Device) error {
 	if created.IsZero() {
 		created = time.Now()
 	}
+	claims, err := encodeAttestationClaims(d.AttestationClaims)
+	if err != nil {
+		return fmt.Errorf("mysql: insert device: %w", err)
+	}
 	_, err = s.db.ExecContext(ctx, `INSERT INTO iot_devices (`+iotDeviceCols+`)
-VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
+VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 		ulidToBytes(d.ID), ulidPtrToBytes(d.OrganizationID), d.Name, nullStringVal(d.SPIFFEID), string(d.PublicKeyJWK),
-		d.KeyThumbprint, d.Attestation, scopes, d.Status, timeUTC(created), timePtrToNull(d.LastSeenAt),
+		d.KeyThumbprint, d.Attestation, nullStringVal(claims), uint64(d.AppAttestCounter), scopes, d.Status, timeUTC(created), timePtrToNull(d.LastSeenAt),
 		timePtrToNull(d.RevokedAt))
 	if err != nil {
 		if isMySQL1062(err) && strings.Contains(err.Error(), "uq_iot_devices_spiffe") {
@@ -48,18 +52,24 @@ func scanIoTDevice(r rowScanner) (theauth.Device, error) {
 	var (
 		idB, orgB                         []byte
 		name, jwk, thumb, att, scopes, st string
-		spiffe                            sql.NullString
+		spiffe, claims                    sql.NullString
 		created                           time.Time
+		counter                           uint64
 		lastSeen, revoked                 sql.NullTime
 	)
-	if err := r.Scan(&idB, &orgB, &name, &spiffe, &jwk, &thumb, &att, &scopes, &st, &created, &lastSeen, &revoked); err != nil {
+	if err := r.Scan(&idB, &orgB, &name, &spiffe, &jwk, &thumb, &att, &claims, &counter, &scopes, &st, &created, &lastSeen, &revoked); err != nil {
 		return theauth.Device{}, err
 	}
 	sc, err := decodeList(scopes)
 	if err != nil {
 		return theauth.Device{}, err
 	}
+	ac, err := decodeAttestationClaims(claims.String)
+	if err != nil {
+		return theauth.Device{}, err
+	}
 	return theauth.Device{
+		AttestationClaims: ac, AppAttestCounter: uint32(counter),
 		ID: bytesToULID(idB), OrganizationID: bytesToULIDPtr(orgB), Name: name, SPIFFEID: spiffe.String,
 		PublicKeyJWK: []byte(jwk), KeyThumbprint: thumb, Attestation: att, Scopes: sc, Status: st,
 		CreatedAt: created.UTC(), LastSeenAt: nullTimeToPtr(lastSeen), RevokedAt: nullTimeToPtr(revoked),
@@ -103,6 +113,14 @@ func (s *Store) RevokeDevice(ctx context.Context, id theauth.ULID, at time.Time)
 		`UPDATE iot_devices SET status = 'revoked', revoked_at = ? WHERE id = ? AND revoked_at IS NULL`,
 		timeUTC(at), ulidToBytes(id))
 	return rowsOne(res, err, "revoke device")
+}
+
+// AdvanceAppAttestCounter raises the App Attest counter in one conditional UPDATE.
+func (s *Store) AdvanceAppAttestCounter(ctx context.Context, id theauth.ULID, counter uint32) (bool, error) {
+	res, err := s.db.ExecContext(ctx,
+		`UPDATE iot_devices SET app_attest_counter = ? WHERE id = ? AND app_attest_counter < ?`,
+		uint64(counter), ulidToBytes(id), uint64(counter))
+	return rowsOne(res, err, "advance app attest counter")
 }
 
 func (s *Store) TouchDevice(ctx context.Context, id theauth.ULID, at time.Time) error {

@@ -18,7 +18,7 @@ import (
 var _ theauth.DeviceIdentityStorage = (*Store)(nil)
 
 const iotDeviceCols = `id, organization_id, name, spiffe_id, public_key_jwk, key_thumbprint, attestation,
-scopes, status, created_at, last_seen_at, revoked_at`
+attestation_claims, app_attest_counter, scopes, status, created_at, last_seen_at, revoked_at`
 
 const joinTokenCols = `id, token_hash, token_prefix, organization_id, name, spiffe_id, scopes, created_by,
 created_at, expires_at, redeemed_at, device_id, revoked_at, max_uses, uses`
@@ -36,10 +36,14 @@ func (s *Store) InsertDevice(ctx context.Context, d theauth.Device) error {
 	if created.IsZero() {
 		created = time.Now()
 	}
+	claims, err := encodeAttestationClaims(d.AttestationClaims)
+	if err != nil {
+		return fmt.Errorf("postgres: insert device: %w", err)
+	}
 	_, err = s.pool.Exec(ctx, `INSERT INTO iot_devices (`+iotDeviceCols+`)
-VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
+VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`,
 		ulidToPgUUID(d.ID), uuidPtr(d.OrganizationID), d.Name, spiffe, string(d.PublicKeyJWK), d.KeyThumbprint,
-		d.Attestation, scopes, d.Status, created, timePtrToTs(d.LastSeenAt), timePtrToTs(d.RevokedAt))
+		d.Attestation, claims, int64(d.AppAttestCounter), scopes, d.Status, created, timePtrToTs(d.LastSeenAt), timePtrToTs(d.RevokedAt))
 	if err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == pgUniqueViolation && pgErr.ConstraintName == "iot_devices_spiffe_uq" {
@@ -52,19 +56,25 @@ VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
 
 func scanIoTDevice(r pgx.Row) (theauth.Device, error) {
 	var (
-		id, org                           pgtype.UUID
-		name, jwk, thumb, att, scopes, st string
-		spiffe                            *string
-		created, lastSeen, revoked        pgtype.Timestamptz
+		id, org                                   pgtype.UUID
+		name, jwk, thumb, att, claims, scopes, st string
+		spiffe                                    *string
+		created, lastSeen, revoked                pgtype.Timestamptz
+		counter                                   int64
 	)
-	if err := r.Scan(&id, &org, &name, &spiffe, &jwk, &thumb, &att, &scopes, &st, &created, &lastSeen, &revoked); err != nil {
+	if err := r.Scan(&id, &org, &name, &spiffe, &jwk, &thumb, &att, &claims, &counter, &scopes, &st, &created, &lastSeen, &revoked); err != nil {
 		return theauth.Device{}, err
 	}
 	sc, err := decodeList(scopes)
 	if err != nil {
 		return theauth.Device{}, err
 	}
+	ac, err := decodeAttestationClaims(claims)
+	if err != nil {
+		return theauth.Device{}, err
+	}
 	d := theauth.Device{
+		AttestationClaims: ac, AppAttestCounter: uint32(counter),
 		ID: pgUUIDToULID(id), OrganizationID: uuidToPtr(org), Name: name, PublicKeyJWK: []byte(jwk),
 		KeyThumbprint: thumb, Attestation: att, Scopes: sc, Status: st,
 		CreatedAt: tsToTime(created).UTC(), LastSeenAt: utcPtr(lastSeen), RevokedAt: utcPtr(revoked),
@@ -113,6 +123,17 @@ func (s *Store) RevokeDevice(ctx context.Context, id theauth.ULID, at time.Time)
 		ulidToPgUUID(id), at)
 	if err != nil {
 		return false, fmt.Errorf("postgres: revoke device: %w", err)
+	}
+	return tag.RowsAffected() == 1, nil
+}
+
+// AdvanceAppAttestCounter raises the App Attest counter in one conditional UPDATE.
+func (s *Store) AdvanceAppAttestCounter(ctx context.Context, id theauth.ULID, counter uint32) (bool, error) {
+	tag, err := s.pool.Exec(ctx,
+		`UPDATE iot_devices SET app_attest_counter = $2 WHERE id = $1 AND app_attest_counter < $2`,
+		ulidToPgUUID(id), int64(counter))
+	if err != nil {
+		return false, fmt.Errorf("postgres: advance app attest counter: %w", err)
 	}
 	return tag.RowsAffected() == 1, nil
 }

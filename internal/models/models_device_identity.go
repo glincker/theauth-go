@@ -34,6 +34,14 @@ type Device struct {
 	KeyThumbprint string
 	// Attestation records how the device proved its identity at enrollment.
 	Attestation string
+	// AttestationClaims are the facts a hardware attestation verifier proved at enrollment
+	// (Android Key Attestation, Apple App Attest, TPM 2.0 quote), such as securityLevel,
+	// verifiedBootState or appId. Nil when the device enrolled without hardware evidence.
+	// Policy reads them through iot/attest.FactsFromClaims. They are written once at enrollment.
+	AttestationClaims map[string]any
+	// AppAttestCounter is the highest Apple App Attest assertion counter accepted for the device key.
+	// It only grows, through DeviceAppAttestStorage.AdvanceAppAttestCounter (one conditional update).
+	AppAttestCounter uint32
 	// Scopes caps what the device's tokens may carry.
 	Scopes     []string
 	Status     string

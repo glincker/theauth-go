@@ -37,6 +37,8 @@ const (
 	tagBitString   = 3
 	tagOctetString = 4
 	tagOID         = 6
+	tagSequence    = 16
+	tagSet         = 17
 	tagUTCTime     = 23
 	tagGenTime     = 24
 )

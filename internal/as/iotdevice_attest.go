@@ -65,6 +65,7 @@ func (s *Service) checkHardwareAttestation(ctx context.Context, req DeviceEnroll
 	res, err := runVerifier(ctx, cfg.Verify, attest.Input{
 		Evidence: req.AttestationEvidence, Nonce: nonce, EnrollmentID: att.Subject,
 		CredentialKind: "jwk", CredentialKeyThumbprint: key.thumbprint,
+		ActivationKey: s.tpmActivationKey(),
 	})
 	if err != nil {
 		slog.Warn("theauth: device attestation verifier failed", "enrollment", att.Subject, "err", err.Error())

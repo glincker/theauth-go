@@ -51,7 +51,7 @@ func main() {
 
 Refusals are `400`. A missing item answers `invalid_request` with the description `attestation_required`. A refused item answers `invalid_grant` with `attestation_failed: <reason>`, where the reason is the verifier's sentence (for example `Attestation challenge does not match the enrollment nonce`). A verifier that returns an error or panics answers plain `attestation_failed`, and the detail goes to the log and the audit event `device.enroll.attestation_refused`. In Go, `errors.Is(err, theauth.ErrDeviceAttestationRequired)` and `errors.Is(err, theauth.ErrDeviceAttestationFailed)` match, and `errors.As` with `*theauth.DeviceAttestationError` gives the reason.
 
-On success the verified claims go into the `device.enrolled` audit event under `hardware_attestation`. The stored device keeps `Attestation: "join_token"` for now.
+On success the verified claims go into the `device.enrolled` audit event under `hardware_attestation` and are stored on the device as `Device.AttestationClaims` (a JSON column, migrations SQLite 0042, Postgres 0039, MySQL 0040). `Device.Attestation` still says how the device proved its identity (`join_token`). A device that enrolled without evidence has no claims.
 
 Any function with the type `attest.Verifier` works, so you can write your own and combine them (try Android, then Apple) in one hook.
 
@@ -101,7 +101,8 @@ With `BindClientData` (default) the app hashes `<nonce>:<RFC 7638 thumbprint of 
 
 - The credential certificate lives about three days. Verify at enrollment. There is no revocation list for App Attest.
 - `apple_validation_category_01` and `apple_bundle_version_01` from `authData` are returned as claims, and `AllowedValidationCategories` can require a category.
-- Not built: verifying Apple's fraud metric receipt, assertions from `generateAssertion` and their counters, and macOS specific checks.
+- The claims carry `attestedPublicKey` (the App Attest key as a base64 X9.62 point), which assertions are checked against. Assertions, receipts and the counter are below.
+- Not built: asking Apple's service for a fresh fraud metric, and macOS specific checks.
 
 ## TPM 2.0 quotes
 
@@ -118,7 +119,78 @@ The attestation key must be a restricted signing key that cannot leave its TPM (
 Evidence is JSON: `akPublic` (TPMT_PUBLIC or TPM2B_PUBLIC, base64), `quote` (TPMS_ATTEST, base64), `signature` (TPMT_SIGNATURE, base64), `pcrs` (hex by bank and index, covering every PCR the quote selected) and `akCertificates` (base64 DER, leaf first).
 
 - No bundled root: TPM vendors and clouds each run their own. Without `Roots` you must set `AllowUnverifiedAk`, and the claims say `akVerified: false`.
-- The credential activation handshake that proves an attestation key shares a TPM with an endorsement key is not done, and `TPM2_Certify` of the enrolled key is not checked. A genuine TPM vouches for the nonce, but the quote does not prove the enrolled credential lives in that TPM. The event log, RSA-PSS and ECDAA are not supported.
+- The quote verifier does not run the credential activation handshake that proves an attestation key shares a TPM with an endorsement key, and it does not check `TPM2_Certify` of the enrolled key. A genuine TPM vouches for the nonce, but the quote does not prove the enrolled credential lives in that TPM. `NewTPM2CertifyVerifier` (below) does both. The event log, RSA-PSS and ECDAA are not supported.
+
+## Apple App Attest assertions and receipts
+
+An assertion proves a later request came from the app instance whose key was attested. `attest.VerifyAppleAssertion` follows the assertion steps of Apple's validation guide: it hashes the client data, computes `SHA-256(authenticatorData || clientDataHash)`, verifies the ECDSA signature over that with the attested key, checks `rpIdHash` against SHA-256 of your App ID and requires the counter to be higher than the stored one. `ReasonAssertionCounter` is the refusal text of a counter that did not grow.
+
+For an enrolled device the service does it and keeps the counter:
+
+```go
+dev, err := auth.VerifyDeviceAppAssertion(ctx, deviceID, theauth.DeviceAppAssertionRequest{
+	Assertion:  assertionBase64,
+	ClientData: clientDataBytes, // put a server challenge in it and check the challenge yourself
+})
+var refused *theauth.DeviceAppAssertionError
+if errors.As(err, &refused) {
+	// refused.Code: device_not_found, device_blocked, not_app_attest, assertion_invalid, assertion_replayed
+}
+```
+
+The key and App ID come from the stored claims (`attestedPublicKey`, `appId`). The counter is `Device.AppAttestCounter` and moves with `DeviceAppAttestStorage.AdvanceAppAttestCounter`, one conditional `UPDATE ... WHERE app_attest_counter < $new`, so racing requests with one assertion produce exactly one winner (the memory, SQLite, Postgres and MySQL stores implement it, and `storagetest.RunDeviceIdentity` has a 12 way race). A store without it makes `VerifyDeviceAppAssertion` refuse with `storage_unsupported`, because a counter that is not atomic gives no replay protection. Unlike the TypeScript module, Go keeps no nonce store for assertions, so the counter is the only replay protection kept here: embed a challenge in the client data and check it in your handler. Refusals write the audit event `device.app_assertion.refused`.
+
+`attest.VerifyAppleReceipt` checks the fraud receipt Apple returns (a CMS object, with a small BER normalizer because Apple writes indefinite lengths): the signature, the chain (`Application Attestation Fraud Receipt Signing`, `Apple Application Integration CA 5 - G1`, `attest.AppleReceiptRoots` for Apple Root CA - G3), the App ID, optionally the attested key, and expiry. The result has the risk metric (keys seen in 30 days, only in a refreshed receipt), the times and the token for refreshing it. Refreshing is not done here.
+
+Tested on the same real recordings as the TypeScript code (`testdata/apple-app-assertion.json`: veehaitch/devicecheck-appattest and block/buzz, both Apache License 2.0), 36 assertion and 39 receipt vectors generated from the TypeScript verifiers and replayed here with the same verdict, reason, counter and receipt fields, plus a real enrollment through the HTTP routes followed by the real assertion.
+
+## TPM 2.0 credential activation and TPM2_Certify
+
+`attest.NewTPM2CertifyVerifier` proves the attestation key (AK) and the endorsement key (EK) share one TPM, and that the enrolled key lives in that TPM and cannot be exported. The server half is TPM2_MakeCredential (`attest.MakeCredential`): it wraps a secret so that only the TPM holding the EK, with an AK of that name loaded, recovers it with TPM2_ActivateCredential. The device then sends the recovered secret with a TPM2_Certify of its key (signed by the AK, qualifying data the enrollment nonce) in the attestation evidence.
+
+Flow with the HTTP routes:
+
+1. `POST /oauth/devices/challenge` as usual, then `POST /oauth/devices/tpm-activation` with `join_token`, `jwk`, `challenge`, `proof`, `ek_public` and `ak_public` (TPMT_PUBLIC or TPM2B_PUBLIC, base64url). The answer is `credential_blob` and `encrypted_secret`. It spends nothing.
+2. The device runs TPM2_ActivateCredential and TPM2_Certify.
+3. `POST /oauth/devices/enroll` with `attestation_evidence` set to JSON with `ekPublic`, `akPublic`, `keyPublic`, `certifyInfo`, `signature`, `activation: {id, secret}` and, with `EKRoots`, `ekCertificates`.
+
+The activation secret is derived, not stored: HMAC-SHA-256 of the enrollment nonce, the AK name and the EK name under a key derived from the authorization server's encryption key (`attest.DeriveActivationSecret`). The verifier gets that key in `attest.Input.ActivationKey` from enrollment and recomputes the secret, so no activation state exists, and a secret made for one enrollment, AK or EK is worthless for another. Compare with TypeScript, which stores a single use record for five minutes.
+
+```go
+v, err := attest.NewTPM2CertifyVerifier(attest.TPM2CertifyOptions{
+	EKRoots: []string{manufacturerRootPEM}, // says the TPM is real; AllowUnverifiedEK for development
+})
+```
+
+Without `EKRoots` nobody vouches that the EK belongs to a real TPM: the claims say `ekVerified: false` and the policy facts below read `software`.
+
+Checked against a real TPM: swtpm 0.7.3 (a software TPM from libtpms) with tpm2-tools 5.7 and tpm2-pytss 2.3.0 in Docker made the EK, AK and key public areas for RSA and ECC and a real TPM2_Certify (`testdata/tpm2-swtpm.json`). The credential blobs from the TypeScript implementation, built with pinned randomness, were accepted by TPM2_ActivateCredential on that TPM for both key types, which recovered the secret. The Go implementation reproduces those blobs byte for byte (RSA seed and ECC ephemeral key pinned), and the Go verifier accepts the real Certify output. `docs-local/tpm2/run.sh` repeats the whole thing and prints whether the TPM recovered each secret; it needs Docker. An end to end enrollment test drives the routes with a simulated TPM. Not covered: hardware TPMs, real EK certificates, TPM 1.2.
+
+## Policy on attestation claims
+
+`theauth.DeviceAttestationFacts(device)` and `attest.FactsFromClaims` turn the stored claims into the facts policy reads (`device.AttestationFacts`): `SecurityLevel` (`software`, `hardware`, `strongbox`), `BootState` (Android only) and `AppIDs`. The mapping is the one in the TypeScript docs and replayed from 38 shared vectors: Android takes the lower of the attestation and key level (TEE is `hardware`), Apple App Attest is `hardware` (Secure Enclave), a TPM quote or certify is `hardware` only when its key or EK chained to a trusted root, and claims of an unknown format give no facts.
+
+Put them in the signed offline bundle and the device decides permissions with an `attestation` constraint the way the TypeScript SDK does:
+
+```go
+facts, ok := theauth.DeviceAttestationFacts(dev)
+claims := device.Claims{ /* ... */ Perms: []device.Permission{{
+	Resource: "door:*", Actions: []string{"unlock"},
+	Constraints: &device.Constraints{Attestation: device.NewAttestationConstraint(device.LevelHardware, []string{device.BootVerified}, nil)},
+}}}
+if ok {
+	claims.Attestation = &facts
+}
+token, err := signer.SignBundle("kid", claims)
+// on the device
+decision := device.Evaluate(verified, "unlock", "door:front") // CodeAttestationRequired when the facts are weaker or missing
+```
+
+A bundle without facts denies every permission that has the constraint, as does a malformed rule or malformed facts. The check runs after rate limit and argument patterns and after the `requireApproval` short circuit, in the same order as the TypeScript bundle evaluation. 258 decision cases generated from `evaluateDeviceBundle` (every rule shape against every facts shape, ordering against the other constraints, malformed input) are replayed in `iot/device`. The Go authorization server itself mints scoped tokens, so there is no per action decision on the server side to extend: the offline bundle is where Go applies the constraint.
+
+## Command line
+
+`theauth-go device attest android|apple|tpm|tpm-certify|apple-assertion|apple-receipt` runs the same verifiers offline, with the same flags as `theauth device attest` plus `--activation-key` for `tpm-certify`. Exit code 0 when accepted, 1 when refused, 2 for a usage error. Accepted evidence also prints the policy facts. Run it with `--help` for the flags.
 
 ## Differences from the TypeScript verifiers
 
@@ -129,8 +201,8 @@ Same fixtures, same options, same refusal texts, same claims. These are delibera
 - `Revocation: "disabled"` is `RevocationDisabled: true`. `AllowedPackages` and `AllowedValidationCategories` apply when the slice is non nil, so an empty non nil slice refuses everything, like an empty array in TypeScript.
 - A malformed extension inside a chain certificate is a refusal with the parser's text. In TypeScript that case throws out of the verifier, which the enrollment hook also treats as a refusal.
 - The TPM verifier requires ECC point coordinates to be exactly the curve size and an RSA modulus that really has 2048 bits (TypeScript trusts the declared size). `ExpectedPCRs` with an unknown bank name fails at construction.
-- Enrollment hook: the nonce is the challenge `jti` (no separate nonce endpoint, no nonce store), the credential is always `jwk`, no hardware id is passed, and claims go to the audit log instead of the device record.
-- No `theauth device attest` command in the Go CLI yet.
+- Enrollment hook: the nonce is the challenge `jti` (no separate nonce endpoint, no nonce store), the credential is always `jwk`, and no hardware id is passed. Claims are stored on the device record and also written to the audit log.
+- The TPM activation secret is derived with an HMAC instead of stored, and App Attest assertions have no nonce store (see above).
 
 ## How this was tested
 

@@ -62,6 +62,10 @@ func TestDeviceAttestationVerifierGetsNonceAndKey(t *testing.T) {
 		got.CredentialKeyThumbprint != p256Thumbprint(key) || got.EnrollmentID == "" {
 		t.Fatalf("verifier input: %+v", got)
 	}
+	devs, err := h.a.ListDevices(context.Background(), &h.org)
+	if err != nil || len(devs) != 1 || devs[0].AttestationClaims["format"] != "test" {
+		t.Fatalf("claims were not stored on the device record: %+v %v", devs, err)
+	}
 }
 
 func TestDeviceAttestationRequiredAndRefusalsDoNotSpendTheToken(t *testing.T) {

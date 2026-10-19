@@ -1022,6 +1022,27 @@ func (a *TheAuth) IssueDeviceCertToken(ctx context.Context, req DeviceCertTokenR
 	return a.as.IssueDeviceCertToken(ctx, req)
 }
 
+// DeviceAppAssertionRequest is one Apple App Attest assertion from a device.
+type DeviceAppAssertionRequest = internalas.DeviceAppAssertionRequest
+
+// DeviceAppAssertionError is the refusal of an App Attest assertion (see its Code).
+type DeviceAppAssertionError = internalas.DeviceAppAssertionError
+
+// ErrDeviceAppAssertion matches every *DeviceAppAssertionError with errors.Is.
+var ErrDeviceAppAssertion = internalas.ErrDeviceAppAssertion
+
+// VerifyDeviceAppAssertion checks an Apple App Attest assertion from an enrolled device against the
+// key attested at enrollment (the attestedPublicKey claim) and advances the device's replay counter
+// with one conditional update, so the same assertion works once. It needs a store that implements
+// DeviceAppAttestStorage (the built in stores do). Put a server challenge into ClientData and check
+// it yourself, the counter is the only replay protection kept here.
+func (a *TheAuth) VerifyDeviceAppAssertion(ctx context.Context, deviceID ULID, req DeviceAppAssertionRequest) (Device, error) {
+	if a.as == nil {
+		return Device{}, ErrDevicesDisabled
+	}
+	return a.as.VerifyDeviceAppAssertion(ctx, deviceID, req)
+}
+
 // ListDevices lists registered devices, newest first.
 func (a *TheAuth) ListDevices(ctx context.Context, orgID *ULID) ([]Device, error) {
 	if a.as == nil {

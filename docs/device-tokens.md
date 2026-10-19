@@ -30,6 +30,8 @@ auth, err := theauth.New(theauth.Config{
 | `TokenPerMinute` | 60 | Assertion grants per device per minute, negative disables |
 | `Attestation` | none | `*DeviceAttestationConfig{Required, Verify}`: hardware attestation evidence at enrollment, see [device-attestation.md](device-attestation.md) |
 
+The assertion grant tolerates 30 seconds of clock drift on `iat`, `exp` and `nbf` when `Config.ClockSkew` is zero (the TypeScript device module accepts the same window), and `Config.ClockSkew` when you set a larger one. Before this, a device whose clock ran one second fast was refused with `invalid_grant`.
+
 The storage must implement `theauth.DeviceIdentityStorage`; `New` fails with `ErrStorageMissingCapability` otherwise. Memory, Postgres (migration 0024), MySQL and SQLite (migration 0011 of `storage/sqlite`) implement it.
 
 ## Rate limits
@@ -199,5 +201,7 @@ Hardware evidence is a separate, configurable check: `DeviceTokensConfig.Attesta
 ## Storage
 
 Migration 0024 (Postgres, MySQL) and 0011 (SQLite) add `iot_devices` and `device_join_tokens`. Migration 0036 (Postgres, MySQL) and 0039 (SQLite) add the `max_uses` and `uses` columns of join tokens (existing rows read as one use of one) and an index on `key_thumbprint`. The Postgres migrations have matching down files. Run `storagetest.RunDeviceIdentity` against a custom `DeviceIdentityStorage`; it covers suspend and resume, the lookups and the multi use race.
+
+Migration 0042 (SQLite), 0039 (Postgres) and 0040 (MySQL) add `attestation_claims` (the verified hardware claims as JSON, empty for a device enrolled without evidence) and `app_attest_counter` (the Apple App Attest assertion counter) to the device table. The counter is advanced through the optional `DeviceAppAttestStorage` capability, see [device-attestation.md](device-attestation.md).
 
 Besides CRUD, `DeviceIdentityStorage` has `SuspendDevice` and `ResumeDevice` (conditional status updates that report whether they changed a row, and never touch a revoked device) and the indexed lookups `DeviceBySPIFFEID` and `DeviceByKeyThumbprint` (`ErrStorageNotFound` on a miss, the newest device when several share a key). `RedeemDeviceJoinToken` spends one use and `RefundDeviceJoinToken` gives one back.

@@ -26,6 +26,9 @@ type enrollBody struct {
 	Name      string          `json:"name"`
 	// AttestationEvidence is hardware attestation evidence, a JSON document as a string.
 	AttestationEvidence string `json:"attestation_evidence"`
+	// EKPublic and AKPublic are the TPM keys of a credential activation (tpm-activation only).
+	EKPublic string `json:"ek_public"`
+	AKPublic string `json:"ak_public"`
 }
 
 func (b enrollBody) request() internalas.DeviceEnrollRequest {
@@ -38,6 +41,7 @@ func (b enrollBody) request() internalas.DeviceEnrollRequest {
 func (h *Handler) mountDeviceIdentity(r chi.Router) {
 	r.With(h.limited).Post("/oauth/devices/challenge", h.handleDeviceChallenge)
 	r.With(h.limited).Post("/oauth/devices/enroll", h.handleDeviceEnroll)
+	r.With(h.limited).Post("/oauth/devices/tpm-activation", h.handleDeviceTPMActivation)
 }
 
 func (h *Handler) writeEnrollError(w http.ResponseWriter, err error) {
@@ -77,6 +81,25 @@ func (h *Handler) handleDeviceChallenge(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	writeJSON(w, http.StatusOK, ch)
+}
+
+// handleDeviceTPMActivation is the server half of the TPM credential activation. The device sends its
+// join token, key, challenge, proof and its TPM keys, runs TPM2_ActivateCredential on the answer and puts
+// the recovered secret into attestation_evidence.
+func (h *Handler) handleDeviceTPMActivation(w http.ResponseWriter, r *http.Request) {
+	var body enrollBody
+	if err := httpx.DecodeJSON(r, &body); err != nil {
+		writeOAuthError(w, http.StatusBadRequest, oauthErrInvalidRequest, "malformed body")
+		return
+	}
+	act, err := h.svc.DeviceTPMActivation(r.Context(), internalas.DeviceTPMActivationRequest{
+		DeviceEnrollRequest: body.request(), EKPublic: body.EKPublic, AKPublic: body.AKPublic,
+	})
+	if err != nil {
+		h.writeEnrollError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, act)
 }
 
 func (h *Handler) handleDeviceEnroll(w http.ResponseWriter, r *http.Request) {

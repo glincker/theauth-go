@@ -12,6 +12,8 @@ import (
 
 const (
 	tpmAlgRSA    = 0x0001
+	tpmAlgAES    = 0x0006
+	tpmAlgCFB    = 0x0043
 	tpmAlgSHA1   = 0x0004
 	tpmAlgSHA256 = 0x000b
 	tpmAlgSHA384 = 0x000c
@@ -24,10 +26,12 @@ const (
 
 	tpmGenerated    = 0xff544347
 	tpmSTAttestQuot = 0x8018
+	tpmSTAttestCert = 0x8017
 
 	// TPMA_OBJECT bits (Part 2, 8.3.2).
 	attrFixedTPM    = 0x2
 	attrFixedParent = 0x10
+	attrSensitive   = 0x20
 	attrRestricted  = 0x10000
 	attrDecrypt     = 0x20000
 	attrSign        = 0x40000
@@ -130,7 +134,11 @@ var tpmCurves = map[uint16]string{3: "P-256", 4: "P-384", 5: "P-521"}
 
 // parseTPMPublic accepts TPMT_PUBLIC, or TPM2B_PUBLIC (what tpm2_readpublic and TSS write), told
 // apart by the leading size.
-func parseTPMPublic(input []byte) (*tpmPublic, error) {
+func parseTPMPublic(input []byte) (*tpmPublic, error) { return parseTPMPublicOpts(input, false) }
+
+// parseTPMPublicOpts is parseTPMPublic with allowSymmetric, which accepts the AES CFB symmetric
+// definition of a storage or endorsement key. Signing keys must have none.
+func parseTPMPublicOpts(input []byte, allowSymmetric bool) (*tpmPublic, error) {
 	data := input
 	if len(data) > 2 && int(data[0])<<8+int(data[1]) == len(data)-2 {
 		data = data[2:]
@@ -155,8 +163,22 @@ func parseTPMPublic(input []byte) (*tpmPublic, error) {
 		if err != nil {
 			return err
 		}
-		if v != tpmAlgNull {
+		if v == tpmAlgNull {
+			return nil
+		}
+		// TPMT_SYM_DEF_OBJECT: algorithm, keyBits, mode. Only AES in CFB, what an EK template uses.
+		if !allowSymmetric || v != tpmAlgAES {
 			return reasonErr("A signing key must have a null symmetric")
+		}
+		if _, err := r.u16(); err != nil {
+			return err
+		}
+		mode, err := r.u16()
+		if err != nil {
+			return err
+		}
+		if mode != tpmAlgCFB {
+			return reasonErr("Unsupported symmetric mode")
 		}
 		return nil
 	}
@@ -368,3 +390,67 @@ func parseTPMQuote(data []byte) (*tpmQuote, error) {
 }
 
 func bigOf(b []byte) *big.Int { return new(big.Int).SetBytes(b) }
+
+type tpmCertify struct {
+	extraData       []byte
+	resetCount      uint32
+	restartCount    uint32
+	safe            bool
+	firmwareVersion uint64
+	name            []byte
+	qualifiedName   []byte
+}
+
+// parseTPMCertify reads a TPMS_ATTEST of type TPM_ST_ATTEST_CERTIFY (TPM2_Certify): the TPM vouches
+// that an object with this name is loaded in it.
+func parseTPMCertify(data []byte) (*tpmCertify, error) {
+	r := &tpmReader{data: data}
+	magic, err := r.u32()
+	if err != nil {
+		return nil, err
+	}
+	if magic != tpmGenerated {
+		return nil, reasonErr("Certify does not start with TPM_GENERATED_VALUE")
+	}
+	typ, err := r.u16()
+	if err != nil {
+		return nil, err
+	}
+	if typ != tpmSTAttestCert {
+		return nil, reasonErr("Attestation is not a certify")
+	}
+	c := &tpmCertify{}
+	if _, err = r.sized(); err != nil { // qualifiedSigner
+		return nil, err
+	}
+	if c.extraData, err = r.sized(); err != nil {
+		return nil, err
+	}
+	if _, err = r.u64(); err != nil { // clock
+		return nil, err
+	}
+	if c.resetCount, err = r.u32(); err != nil {
+		return nil, err
+	}
+	if c.restartCount, err = r.u32(); err != nil {
+		return nil, err
+	}
+	safe, err := r.u8()
+	if err != nil {
+		return nil, err
+	}
+	c.safe = safe != 0
+	if c.firmwareVersion, err = r.u64(); err != nil {
+		return nil, err
+	}
+	if c.name, err = r.sized(); err != nil {
+		return nil, err
+	}
+	if c.qualifiedName, err = r.sized(); err != nil {
+		return nil, err
+	}
+	if err := r.done(); err != nil {
+		return nil, err
+	}
+	return c, nil
+}

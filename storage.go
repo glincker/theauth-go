@@ -186,6 +186,13 @@ type DeviceIdentityStorage interface {
 	RefundDeviceJoinToken(ctx context.Context, id ULID) error
 }
 
+// DeviceAppAttestStorage is the optional counter store for Apple App Attest assertions. The built in
+// stores implement it. AdvanceAppAttestCounter raises the device counter to counter only while it is
+// lower, in one statement, and reports whether it did.
+type DeviceAppAttestStorage interface {
+	AdvanceAppAttestCounter(ctx context.Context, id ULID, counter uint32) (bool, error)
+}
+
 // UserStorage covers user records and email verification.
 type UserStorage interface {
 	CreateUser(ctx context.Context, u User) (User, error)

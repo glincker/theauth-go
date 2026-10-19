@@ -14,7 +14,7 @@ import (
 var _ theauth.DeviceIdentityStorage = (*Store)(nil)
 
 const iotDeviceCols = `id, organization_id, name, spiffe_id, public_key_jwk, key_thumbprint, attestation,
-scopes, status, created_at, last_seen_at, revoked_at`
+attestation_claims, app_attest_counter, scopes, status, created_at, last_seen_at, revoked_at`
 
 const joinTokenCols = `id, token_hash, token_prefix, organization_id, name, spiffe_id, scopes, created_by,
 created_at, expires_at, redeemed_at, device_id, revoked_at, max_uses, uses`
@@ -29,10 +29,14 @@ func (s *Store) InsertDevice(ctx context.Context, d theauth.Device) error {
 	if d.SPIFFEID != "" {
 		spiffe = sql.NullString{String: d.SPIFFEID, Valid: true}
 	}
+	claims, err := encodeAttestationClaims(d.AttestationClaims)
+	if err != nil {
+		return wrap("insert device", err)
+	}
 	_, err = s.db.ExecContext(ctx, s.q(`INSERT INTO theauth_iot_devices (`+iotDeviceCols+`)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`),
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`),
 		idStr(d.ID), idPtrStr(d.OrganizationID), d.Name, spiffe, string(d.PublicKeyJWK), d.KeyThumbprint,
-		d.Attestation, scopes, d.Status, toMicro(orNow(d.CreatedAt)), toNullMicro(d.LastSeenAt), toNullMicro(d.RevokedAt))
+		d.Attestation, claims, int64(d.AppAttestCounter), scopes, d.Status, toMicro(orNow(d.CreatedAt)), toNullMicro(d.LastSeenAt), toNullMicro(d.RevokedAt))
 	if err != nil {
 		if strings.Contains(err.Error(), "UNIQUE constraint failed") && strings.Contains(err.Error(), "spiffe_id") {
 			return theauth.ErrDeviceConflict
@@ -44,12 +48,12 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`),
 
 func scanIoTDevice(r scanner) (theauth.Device, error) {
 	var (
-		id, name, jwk, thumb, att, scopes, status string
-		org, spiffe                               sql.NullString
-		created                                   int64
-		lastSeen, revoked                         sql.NullInt64
+		id, name, jwk, thumb, att, claims, scopes, status string
+		org, spiffe                                       sql.NullString
+		created, counter                                  int64
+		lastSeen, revoked                                 sql.NullInt64
 	)
-	if err := r.Scan(&id, &org, &name, &spiffe, &jwk, &thumb, &att, &scopes, &status, &created, &lastSeen, &revoked); err != nil {
+	if err := r.Scan(&id, &org, &name, &spiffe, &jwk, &thumb, &att, &claims, &counter, &scopes, &status, &created, &lastSeen, &revoked); err != nil {
 		return theauth.Device{}, err
 	}
 	did, err := parseID(id)
@@ -64,9 +68,13 @@ func scanIoTDevice(r scanner) (theauth.Device, error) {
 	if err != nil {
 		return theauth.Device{}, err
 	}
+	ac, err := decodeAttestationClaims(claims)
+	if err != nil {
+		return theauth.Device{}, err
+	}
 	return theauth.Device{
 		ID: did, OrganizationID: orgID, Name: name, SPIFFEID: spiffe.String, PublicKeyJWK: []byte(jwk),
-		KeyThumbprint: thumb, Attestation: att, Scopes: sc, Status: status,
+		KeyThumbprint: thumb, Attestation: att, AttestationClaims: ac, AppAttestCounter: uint32(counter), Scopes: sc, Status: status,
 		CreatedAt: fromMicro(created), LastSeenAt: fromNullMicro(lastSeen), RevokedAt: fromNullMicro(revoked),
 	}, nil
 }
@@ -110,6 +118,13 @@ func (s *Store) RevokeDevice(ctx context.Context, id theauth.ULID, at time.Time)
 	return s.execApplied(ctx, "revoke device",
 		`UPDATE theauth_iot_devices SET status = 'revoked', revoked_at = ? WHERE id = ? AND revoked_at IS NULL`,
 		toMicro(at), idStr(id))
+}
+
+// AdvanceAppAttestCounter raises the App Attest counter in one conditional UPDATE.
+func (s *Store) AdvanceAppAttestCounter(ctx context.Context, id theauth.ULID, counter uint32) (bool, error) {
+	return s.execApplied(ctx, "advance app attest counter",
+		`UPDATE theauth_iot_devices SET app_attest_counter = ? WHERE id = ? AND app_attest_counter < ?`,
+		int64(counter), idStr(id), int64(counter))
 }
 
 // TouchDevice stamps last_seen_at.

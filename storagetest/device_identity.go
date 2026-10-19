@@ -42,6 +42,93 @@ func testDeviceIdentity(t *testing.T, store theauth.DeviceIdentityStorage) {
 	suffix := newID().String()
 	orgA, orgB := newID(), newID()
 
+	t.Run("attestation claims round trip", func(t *testing.T) {
+		d := newIoTDevice("claims-"+suffix, now, &orgA)
+		d.AttestationClaims = map[string]any{
+			"format": "android-key-attestation", "securityLevel": "strongbox", "deviceLocked": true,
+			"packages": []any{"com.example.app"},
+		}
+		if err := store.InsertDevice(ctx, d); err != nil {
+			t.Fatal(err)
+		}
+		got, err := store.DeviceByID(ctx, d.ID)
+		if err != nil || got.AttestationClaims["securityLevel"] != "strongbox" || got.AttestationClaims["deviceLocked"] != true ||
+			len(got.AttestationClaims["packages"].([]any)) != 1 {
+			t.Fatalf("claims: %+v %v", got.AttestationClaims, err)
+		}
+		plain := newIoTDevice("noclaims-"+suffix, now, &orgA)
+		if err := store.InsertDevice(ctx, plain); err != nil {
+			t.Fatal(err)
+		}
+		got, err = store.DeviceByID(ctx, plain.ID)
+		if err != nil || len(got.AttestationClaims) != 0 {
+			t.Fatalf("no claims: %+v %v", got.AttestationClaims, err)
+		}
+		list, err := store.ListDevices(ctx, &orgA)
+		if err != nil {
+			t.Fatal(err)
+		}
+		seen := false
+		for _, l := range list {
+			if l.ID == d.ID && l.AttestationClaims["securityLevel"] == "strongbox" {
+				seen = true
+			}
+		}
+		if !seen {
+			t.Fatal("list lost the claims")
+		}
+	})
+
+	t.Run("app attest counter only grows and one racer wins", func(t *testing.T) {
+		counters, ok := store.(theauth.DeviceAppAttestStorage)
+		if !ok {
+			t.Skip("store has no DeviceAppAttestStorage")
+		}
+		d := newIoTDevice("counter-"+suffix, now, &orgA)
+		if err := store.InsertDevice(ctx, d); err != nil {
+			t.Fatal(err)
+		}
+		advance := func(n uint32) bool {
+			ok, err := counters.AdvanceAppAttestCounter(ctx, d.ID, n)
+			if err != nil {
+				t.Fatal(err)
+			}
+			return ok
+		}
+		if !advance(1) || advance(1) || advance(0) || !advance(9) || advance(4) {
+			t.Fatal("counter did not behave monotonically")
+		}
+		got, err := store.DeviceByID(ctx, d.ID)
+		if err != nil || got.AppAttestCounter != 9 {
+			t.Fatalf("stored counter: %+v %v", got, err)
+		}
+		if ok, err := counters.AdvanceAppAttestCounter(ctx, newID(), 5); err != nil || ok {
+			t.Fatalf("unknown device advanced: %v %v", ok, err)
+		}
+		if !advance(4294967295) || advance(4294967295) {
+			t.Fatal("max counter")
+		}
+		race := newIoTDevice("counter-race-"+suffix, now, &orgA)
+		if err := store.InsertDevice(ctx, race); err != nil {
+			t.Fatal(err)
+		}
+		var wins atomic.Int32
+		var wg sync.WaitGroup
+		for i := 0; i < 12; i++ {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				if ok, err := counters.AdvanceAppAttestCounter(ctx, race.ID, 7); err == nil && ok {
+					wins.Add(1)
+				}
+			}()
+		}
+		wg.Wait()
+		if wins.Load() != 1 {
+			t.Fatalf("%d racers advanced the counter", wins.Load())
+		}
+	})
+
 	t.Run("insert, look up and round trip", func(t *testing.T) {
 		d := newIoTDevice("a-"+suffix, now, &orgA)
 		if err := store.InsertDevice(ctx, d); err != nil {

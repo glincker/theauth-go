@@ -389,7 +389,7 @@ func (s *Service) EnrollDevice(ctx context.Context, req DeviceEnrollRequest) (mo
 	d := models.Device{
 		ID: id, OrganizationID: att.OrganizationID, Name: name, SPIFFEID: att.SPIFFEID,
 		PublicKeyJWK: key.jwk, KeyThumbprint: key.thumbprint, Attestation: att.Kind,
-		Scopes: att.Scopes, Status: models.DeviceStatusActive, CreatedAt: now,
+		AttestationClaims: hw, Scopes: att.Scopes, Status: models.DeviceStatusActive, CreatedAt: now,
 	}
 	if err := store.InsertDevice(ctx, d); err != nil {
 		if rerr := a.Release(ctx, att); rerr != nil {

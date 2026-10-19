@@ -59,7 +59,7 @@ func (s *Service) deviceAssertionGrant(ctx context.Context, store DeviceIdentity
 		return TokenResponse{}, models.ErrOAuthInvalidGrant
 	}
 	exp, iat := time.Unix(claims.Exp, 0), time.Unix(claims.Iat, 0)
-	skew := s.Cfg.ClockSkew
+	skew := s.deviceClockSkew()
 	if exp.Add(skew).Before(now) || iat.Add(-skew).After(now) || exp.Sub(iat) > cfg.AssertionMaxLifetime {
 		return TokenResponse{}, models.ErrOAuthInvalidGrant
 	}
@@ -151,6 +151,18 @@ func (s *Service) deviceResourceScope(req TokenRequest, dev *models.Device) (str
 		return "", nil, models.ErrOAuthInvalidScope
 	}
 	return audience, scope, nil
+}
+
+// DefaultDeviceClockSkew is the tolerance on a device assertion when Config.ClockSkew is zero. The TypeScript
+// device module accepts the same 30 seconds, and a constrained device rarely keeps better time than that
+// between syncs: with no tolerance a clock one second fast is refused with invalid_grant.
+const DefaultDeviceClockSkew = 30 * time.Second
+
+func (s *Service) deviceClockSkew() time.Duration {
+	if s.Cfg.ClockSkew > 0 {
+		return s.Cfg.ClockSkew
+	}
+	return DefaultDeviceClockSkew
 }
 
 func (s *Service) jtiReplayTTL() time.Duration {

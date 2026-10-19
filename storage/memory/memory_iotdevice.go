@@ -3,6 +3,7 @@ package memory
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"sort"
 	"sync"
 	"time"
@@ -29,6 +30,15 @@ func (d *iotDeviceState) init() {
 func cloneIoTDevice(d theauth.Device) theauth.Device {
 	d.PublicKeyJWK = append([]byte(nil), d.PublicKeyJWK...)
 	d.Scopes = append([]string(nil), d.Scopes...)
+	if d.AttestationClaims != nil {
+		// A JSON round trip is a deep copy, and matches what the SQL stores return.
+		if b, err := json.Marshal(d.AttestationClaims); err == nil {
+			var m map[string]any
+			if json.Unmarshal(b, &m) == nil {
+				d.AttestationClaims = m
+			}
+		}
+	}
 	return d
 }
 
@@ -86,6 +96,21 @@ func (s *Store) ListDevices(_ context.Context, orgID *theauth.ULID) ([]theauth.D
 		return bytes.Compare(out[i].ID[:], out[j].ID[:]) > 0
 	})
 	return out, nil
+}
+
+// AdvanceAppAttestCounter raises the App Attest counter while it is lower.
+func (s *Store) AdvanceAppAttestCounter(_ context.Context, id theauth.ULID, counter uint32) (bool, error) {
+	st := &s.iotdev
+	st.mu.Lock()
+	defer st.mu.Unlock()
+	st.init()
+	d, ok := st.devices[id]
+	if !ok || d.AppAttestCounter >= counter {
+		return false, nil
+	}
+	d.AppAttestCounter = counter
+	st.devices[id] = d
+	return true, nil
 }
 
 func (s *Store) RevokeDevice(_ context.Context, id theauth.ULID, at time.Time) (bool, error) {

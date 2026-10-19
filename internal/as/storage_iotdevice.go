@@ -36,3 +36,12 @@ type DeviceIdentityStorage interface {
 	RedeemDeviceJoinToken(ctx context.Context, id, deviceID models.ULID, now time.Time) (bool, error)
 	RefundDeviceJoinToken(ctx context.Context, id models.ULID) error
 }
+
+// DeviceAppAttestStorage is the optional counter store for Apple App Attest assertions. Without it
+// VerifyDeviceAppAssertion refuses, because a counter that cannot be stored atomically gives no
+// replay protection.
+type DeviceAppAttestStorage interface {
+	// AdvanceAppAttestCounter raises the device counter to counter only while it is lower, in one
+	// statement, and reports whether it did. Exactly one of two callers racing with the same counter wins.
+	AdvanceAppAttestCounter(ctx context.Context, id models.ULID, counter uint32) (bool, error)
+}

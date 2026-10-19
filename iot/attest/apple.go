@@ -417,11 +417,13 @@ func NewAppleAppAttestVerifier(opts AppleAppAttestOptions) (Verifier, error) {
 			env = "production"
 		}
 		claims := map[string]any{
-			"format":                "apple-app-attest",
-			"bound":                 bind,
-			"environment":           env,
-			"appId":                 appID,
-			"keyId":                 base64.StdEncoding.EncodeToString(keyID),
+			"format":      "apple-app-attest",
+			"bound":       bind,
+			"environment": env,
+			"appId":       appID,
+			"keyId":       base64.StdEncoding.EncodeToString(keyID),
+			// The attested key as an X9.62 point, so assertions can be verified later (VerifyAppleAssertion).
+			"attestedPublicKey":     base64.StdEncoding.EncodeToString(point),
 			"attestationRootSerial": result.anchor.serialHex,
 		}
 		if attestedKey != "" {
