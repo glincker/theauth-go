@@ -178,6 +178,8 @@ The policy glob `*` matches the MQTT wildcards as text, so an allow on `mqtt:fle
 
 Device records and decisions are cached for `CacheTTL` (default 5 seconds, negative disables), at most `CacheMaxEntries` entries. This is the revocation latency when nothing else happens: a device revoked in the store can keep an already cached allow for up to one TTL. To make revocation immediate, call `Handler.Purge(deviceID)` from the code that revokes, or `POST /purge` with `PurgeSecret` from another service or replica. Purge is per process, so with several replicas use a purge broadcaster (next section), call it on each, or keep the TTL short.
 
+A purge also beats a load that was already in flight. Each cache shard keeps a purge epoch, a request takes it before it reads the store, and a cache write made with an older epoch is dropped. So a device read just before a revoke cannot be cached again after `Handler.Purge` (or a broadcast purge) has returned, and the next decision reads the store. The request that was already running can still be answered from the data it read.
+
 Measured on EMQX 5.8.6 and Mosquitto 2.0.15 with the plugin below, on one laptop with the handler on the host and the broker in Docker. A device publishes every 50 ms, the device is revoked in the store about 0.7 seconds after the first publish, and the time to the first denied publish is the number reported. These are single runs on one machine, not a benchmark.
 
 | Setup | EMQX, first denied publish after revoke | Mosquitto, first denied publish after revoke |

@@ -142,6 +142,7 @@ func (h *Handler) serveAuthn(w http.ResponseWriter, r *http.Request) {
 		emqxDeny(w)
 		return
 	}
+	snap := h.cache.snapshot()
 	p, reason := h.authenticate(r.Context(), r, req)
 	ev := AuditEvent{Kind: "authn", ClientID: req.ClientID, RemoteAddr: req.PeerHost, Reason: reason, Code: authnCode(reason)}
 	if p == nil {
@@ -151,7 +152,7 @@ func (h *Handler) serveAuthn(w http.ResponseWriter, r *http.Request) {
 	}
 	ev.Allowed, ev.Method, ev.DeviceID, ev.OrgID, ev.Reason, ev.Code = true, p.method, p.dev.ID, p.dev.OrgID, "ok", CodeAllowed
 	h.record(r.Context(), ev)
-	h.cache.putDevice(p.dev)
+	h.cache.putDevice(p.dev, h.cache.tokenFrom(snap, p.dev.ID))
 	resp := map[string]any{
 		"result":       "allow",
 		"is_superuser": false,

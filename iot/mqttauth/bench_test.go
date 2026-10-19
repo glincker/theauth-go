@@ -134,7 +134,7 @@ func BenchmarkPolicyPublishDeny(b *testing.B) {
 // BenchmarkCacheDecisionHit is the warm cache lookup on one goroutine.
 func BenchmarkCacheDecisionHit(b *testing.B) {
 	c := newCache(time.Minute, 10000, time.Now)
-	c.putDecision("dev1", "publish\x00devices/dev1/telemetry/temp", Decision{Allowed: true})
+	c.putDecision("dev1", "publish\x00devices/dev1/telemetry/temp", Decision{Allowed: true}, c.token("dev1"))
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -153,8 +153,8 @@ func BenchmarkCacheParallel(b *testing.B) {
 	for i := range keys {
 		id := "dev" + strconv.Itoa(i)
 		keys[i] = id
-		c.putDevice(&Device{ID: id, Status: StatusActive})
-		c.putDecision(id, "publish\x00t/"+id, Decision{Allowed: true})
+		c.putDevice(&Device{ID: id, Status: StatusActive}, c.token(id))
+		c.putDecision(id, "publish\x00t/"+id, Decision{Allowed: true}, c.token(id))
 	}
 	b.ReportAllocs()
 	b.ResetTimer()

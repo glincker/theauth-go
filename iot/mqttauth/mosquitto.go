@@ -46,6 +46,7 @@ func (h *Handler) mosquittoUser(w http.ResponseWriter, r *http.Request) {
 		mosquittoDeny(w)
 		return
 	}
+	snap := h.cache.snapshot()
 	p, reason := h.authenticate(r.Context(), r, brokerRequest{
 		Username: req.Username, Password: req.Password, ClientID: req.ClientID,
 	})
@@ -57,7 +58,7 @@ func (h *Handler) mosquittoUser(w http.ResponseWriter, r *http.Request) {
 	}
 	ev.Allowed, ev.Method, ev.DeviceID, ev.OrgID, ev.Reason, ev.Code = true, p.method, p.dev.ID, p.dev.OrgID, "ok", CodeAllowed
 	h.record(r.Context(), ev)
-	h.cache.putDevice(p.dev)
+	h.cache.putDevice(p.dev, h.cache.tokenFrom(snap, p.dev.ID))
 	mosquittoAllow(w)
 }
 

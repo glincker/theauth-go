@@ -24,7 +24,9 @@ func (h *Handler) authorize(ctx context.Context, req brokerRequest, action Actio
 	if !bound && !h.cfg.AllowAnyClientID && !clientIDBound(req.ClientID, id) {
 		return Decision{Reason: "client id not bound to device"}, nil, false
 	}
-	d, err := h.loadDevice(ctx, id)
+	// The token comes before any cache or store read: a purge after this point stops the puts below.
+	tok := h.cache.token(id)
+	d, err := h.loadDevice(ctx, id, tok)
 	if err != nil {
 		if errors.Is(err, ErrDeviceNotFound) {
 			return Decision{Reason: "unknown device", Code: CodeDeviceNotFound}, nil, false
@@ -42,11 +44,11 @@ func (h *Handler) authorize(ctx context.Context, req brokerRequest, action Actio
 		return dec, d, true
 	}
 	dec := h.cfg.Authorizer.Authorize(ctx, d, action, topic)
-	h.cache.putDecision(d.ID, key, dec)
+	h.cache.putDecision(d.ID, key, dec, tok)
 	return dec, d, false
 }
 
-func (h *Handler) loadDevice(ctx context.Context, id string) (*Device, error) {
+func (h *Handler) loadDevice(ctx context.Context, id string, tok uint64) (*Device, error) {
 	if d, ok := h.cache.device(id); ok {
 		h.metrics.inc("theauth_mqtt_cache_hits_total", "device")
 		return d, nil
@@ -55,7 +57,7 @@ func (h *Handler) loadDevice(ctx context.Context, id string) (*Device, error) {
 	if err != nil {
 		return nil, err
 	}
-	h.cache.putDevice(d)
+	h.cache.putDevice(d, tok)
 	return d, nil
 }
 
