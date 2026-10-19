@@ -173,7 +173,7 @@ func (s *Store) fetch(ctx context.Context, td string, e *entry) error {
 	if err != nil {
 		return errors.New("bundle endpoint could not be reached")
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("bundle endpoint answered %d", resp.StatusCode)
 	}
