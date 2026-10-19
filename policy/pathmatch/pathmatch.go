@@ -45,23 +45,42 @@ func Match(mode Mode, pattern, resource string) bool {
 	return MatchColon(pattern, resource)
 }
 
+// cut splits off the first segment at sep. more reports whether sep followed it, that is whether
+// rest holds further segments (possibly one empty segment). Walking a resource this way avoids
+// the slice strings.Split would allocate on every match.
+func cut(s string, sep byte) (seg, rest string, more bool) {
+	if i := strings.IndexByte(s, sep); i >= 0 {
+		return s[:i], s[i+1:], true
+	}
+	return s, "", false
+}
+
 // MatchColon is the default matcher: colon segments, a "*" segment matches the rest, a lone "*"
 // matches everything.
 func MatchColon(pattern, resource string) bool {
 	if pattern == "*" {
 		return true
 	}
-	pp := strings.Split(pattern, ":")
-	rp := strings.Split(resource, ":")
-	for i, part := range pp {
+	rp, rrest, rmore := cut(resource, ':')
+	haveR := true
+	for {
+		part, prest, pmore := cut(pattern, ':')
 		if part == "*" {
 			return true
 		}
-		if i >= len(rp) || part != rp[i] {
+		if !haveR || part != rp {
 			return false
 		}
+		if !pmore {
+			return !rmore
+		}
+		pattern = prest
+		if rmore {
+			rp, rrest, rmore = cut(rrest, ':')
+		} else {
+			haveR = false
+		}
 	}
-	return len(pp) == len(rp)
 }
 
 // MatchPath is the path aware matcher.
@@ -69,46 +88,74 @@ func MatchPath(pattern, resource string) bool {
 	if pattern == "*" {
 		return true
 	}
-	pp := strings.Split(pattern, ":")
-	rp := strings.Split(resource, ":")
-	for i, part := range pp {
+	actual, rrest, rmore := cut(resource, ':')
+	haveR := true
+	for {
+		part, prest, pmore := cut(pattern, ':')
 		wild := part == "*" || part == "**"
-		if wild && i == len(pp)-1 {
+		if wild && !pmore {
 			return true
 		}
-		if i >= len(rp) {
+		if !haveR {
 			return false
 		}
-		actual := rp[i]
-		if wild {
+		switch {
+		case wild:
 			// Before the last segment a whole segment wildcard is one non-empty segment.
 			if actual == "" || actual == "**" {
 				return false
 			}
-			continue
-		}
-		if part == actual {
-			continue
-		}
-		if !strings.Contains(part, "/") || !strings.Contains(actual, "/") {
+		case part == actual:
+		case !strings.Contains(part, "/") || !strings.Contains(actual, "/"):
+			return false
+		case !matchParts(part, actual):
 			return false
 		}
-		if !matchParts(strings.Split(part, "/"), strings.Split(actual, "/")) {
-			return false
+		if !pmore {
+			return !rmore
+		}
+		pattern = prest
+		if rmore {
+			actual, rrest, rmore = cut(rrest, ':')
+		} else {
+			haveR = false
 		}
 	}
-	return len(pp) == len(rp)
 }
 
 // plain reports whether a wildcard may stand for the path segment.
 func plain(seg string) bool { return seg != "" && seg != "." && seg != ".." }
 
+// maxStackParts is how many "/" parts of one colon segment matchParts handles without a heap
+// allocation. A longer segment still works, it just allocates.
+const maxStackParts = 32
+
+// splitParts splits s at "/" into buf, growing it only past maxStackParts.
+func splitParts(buf []string, s string) []string {
+	for {
+		seg, rest, more := cut(s, '/')
+		buf = append(buf, seg)
+		if !more {
+			return buf
+		}
+		s = rest
+	}
+}
+
 // matchParts matches the "/" separated parts of one colon segment. below[j] is "pattern[i+1:]
 // matches resource[j:]" and row[j] the same for pattern[i:].
-func matchParts(pattern, resource []string) bool {
+func matchParts(patternSeg, resourceSeg string) bool {
+	var pbuf, rbuf [maxStackParts]string
+	pattern := splitParts(pbuf[:0], patternSeg)
+	resource := splitParts(rbuf[:0], resourceSeg)
 	m, n := len(pattern), len(resource)
-	below := make([]bool, n+1)
-	row := make([]bool, n+1)
+	var abuf, bbuf [maxStackParts + 1]bool
+	var below, row []bool
+	if n+1 > len(abuf) {
+		below, row = make([]bool, n+1), make([]bool, n+1)
+	} else {
+		below, row = abuf[:n+1], bbuf[:n+1]
+	}
 	below[n] = true
 	for i := m - 1; i >= 0; i-- {
 		p := pattern[i]

@@ -8,31 +8,36 @@ import (
 	"sync/atomic"
 )
 
-// counters are Prometheus style monotonic counters keyed by name and one label value.
+// counters are Prometheus style monotonic counters keyed by name and one label value. The key set
+// is tiny and fixed after warm up, so the hot path is a shared lock read plus an atomic add.
 type counters struct {
-	mu sync.Mutex
+	mu sync.RWMutex
 	m  map[[2]string]*atomic.Int64
 }
 
 func (c *counters) inc(name, label string) {
 	k := [2]string{name, label}
-	c.mu.Lock()
-	if c.m == nil {
-		c.m = map[[2]string]*atomic.Int64{}
-	}
+	c.mu.RLock()
 	v := c.m[k]
+	c.mu.RUnlock()
 	if v == nil {
-		v = new(atomic.Int64)
-		c.m[k] = v
+		c.mu.Lock()
+		if c.m == nil {
+			c.m = map[[2]string]*atomic.Int64{}
+		}
+		if v = c.m[k]; v == nil {
+			v = new(atomic.Int64)
+			c.m[k] = v
+		}
+		c.mu.Unlock()
 	}
-	c.mu.Unlock()
 	v.Add(1)
 }
 
 // Snapshot returns the counters as "name{result=\"label\"}" keys.
 func (c *counters) snapshot() map[string]int64 {
-	c.mu.Lock()
-	defer c.mu.Unlock()
+	c.mu.RLock()
+	defer c.mu.RUnlock()
 	out := make(map[string]int64, len(c.m))
 	for k, v := range c.m {
 		out[fmt.Sprintf("%s{result=%q}", k[0], k[1])] = v.Load()

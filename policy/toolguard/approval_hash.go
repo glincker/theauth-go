@@ -37,6 +37,15 @@ func reservedArgKey(k string) bool {
 // already lost its low digits before it is hashed, so such a value cannot match across languages
 // unless the TypeScript caller passes a bigint.
 func HashApprovalAction(action, resource string, args any) (string, error) {
+	if h, ok := fastHashApproval(action, resource, args); ok {
+		return h, nil
+	}
+	return hashApprovalSlow(action, resource, args)
+}
+
+// hashApprovalSlow is the reference implementation: it round trips the arguments through
+// encoding/json, which handles every value type. The fast path must give the same digest.
+func hashApprovalSlow(action, resource string, args any) (string, error) {
 	norm, err := normalizeArgs(args)
 	if err != nil {
 		return "", err

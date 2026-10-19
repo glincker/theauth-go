@@ -52,17 +52,25 @@ func ValidateFilter(filter string) error {
 	if strings.ContainsRune(filter, 0) {
 		return invalid("topic filter contains NUL")
 	}
-	levels := strings.Split(filter, "/")
-	for i, l := range levels {
-		switch {
+	// One byte pass: a level is "#" (last level only), "+", or free of both wildcard characters.
+	start, wild := 0, false
+	for i := 0; i <= len(filter); i++ {
+		if i < len(filter) && filter[i] != '/' {
+			if c := filter[i]; c == '+' || c == '#' {
+				wild = true
+			}
+			continue
+		}
+		switch l := filter[start:i]; {
 		case l == "#":
-			if i != len(levels)-1 {
+			if i < len(filter) {
 				return invalid("# must be the last level")
 			}
 		case l == "+":
-		case strings.ContainsAny(l, "+#"):
+		case wild:
 			return invalid("wildcard must occupy a whole level")
 		}
+		start, wild = i+1, false
 	}
 	return nil
 }
@@ -106,53 +114,82 @@ func isWild(level string) bool { return level == "+" || level == "#" }
 // dollarLiteral reports whether a level is a literal beginning with "$".
 func dollarLiteral(level string) bool { return strings.HasPrefix(level, "$") && !isWild(level) }
 
+// cutLevel splits off the first topic level. more reports whether a "/" followed it, that is
+// whether rest holds further levels (possibly one empty level). It lets the matchers walk a topic
+// without allocating the slice strings.Split would.
+func cutLevel(s string) (level, rest string, more bool) {
+	if i := strings.IndexByte(s, '/'); i >= 0 {
+		return s[:i], s[i+1:], true
+	}
+	return s, "", false
+}
+
 // MatchTopic reports whether a topic name matches a topic filter. Both must be valid. A filter
 // whose first level is a wildcard never matches a topic name beginning with "$" (MQTT 5.0 section
 // 4.7.2). "sport/#" also matches "sport" (section 4.7.1.2).
 func MatchTopic(filter, name string) bool {
-	f := strings.Split(filter, "/")
-	t := strings.Split(name, "/")
-	if strings.HasPrefix(name, "$") && isWild(f[0]) {
+	fl, frest, fmore := cutLevel(filter)
+	if strings.HasPrefix(name, "$") && isWild(fl) {
 		return false
 	}
-	for i, fl := range f {
+	tl, trest, tmore := cutLevel(name)
+	haveT := true
+	for {
 		if fl == "#" {
 			return true
 		}
-		if i >= len(t) {
+		if !haveT {
 			return false
 		}
-		if fl != "+" && fl != t[i] {
+		if fl != "+" && fl != tl {
 			return false
+		}
+		if !fmore {
+			return !tmore
+		}
+		fl, frest, fmore = cutLevel(frest)
+		if tmore {
+			tl, trest, tmore = cutLevel(trest)
+		} else {
+			haveT = false
 		}
 	}
-	return len(f) == len(t)
 }
 
 // FilterCovers reports whether every topic name matching req also matches grant, that is whether
 // a grant on the filter "grant" allows subscribing with the filter "req". Both must be valid and
 // without a shared subscription prefix.
 func FilterCovers(grant, req string) bool {
-	g := strings.Split(grant, "/")
-	r := strings.Split(req, "/")
+	r0, _, _ := cutLevel(req)
+	gl, grest, gmore := cutLevel(grant)
+	rl, rrest, rmore := cutLevel(req)
+	haveG, haveR := true, true
 	for i := 0; ; i++ {
-		if i < len(g) && g[i] == "#" {
-			return i != 0 || !dollarLiteral(r[0])
+		if haveG && gl == "#" {
+			return i != 0 || !dollarLiteral(r0)
 		}
-		if i >= len(r) {
-			return i >= len(g)
+		if !haveR {
+			return !haveG
 		}
-		if i >= len(g) || r[i] == "#" {
+		if !haveG || rl == "#" {
 			return false
 		}
-		if g[i] == "+" {
-			if i == 0 && dollarLiteral(r[0]) {
+		if gl == "+" {
+			if i == 0 && dollarLiteral(r0) {
 				return false
 			}
-			continue
-		}
-		if r[i] != g[i] {
+		} else if rl != gl {
 			return false
+		}
+		if gmore {
+			gl, grest, gmore = cutLevel(grest)
+		} else {
+			haveG = false
+		}
+		if rmore {
+			rl, rrest, rmore = cutLevel(rrest)
+		} else {
+			haveR = false
 		}
 	}
 }
@@ -161,27 +198,38 @@ func FilterCovers(grant, req string) bool {
 // rules to wildcard subscriptions conservatively: a deny rule on "secret/#" must block the
 // subscription "#".
 func FiltersOverlap(a, b string) bool {
-	x := strings.Split(a, "/")
-	y := strings.Split(b, "/")
+	x0, _, _ := cutLevel(a)
+	y0, _, _ := cutLevel(b)
+	xl, xrest, xmore := cutLevel(a)
+	yl, yrest, ymore := cutLevel(b)
+	haveX, haveY := true, true
 	for i := 0; ; i++ {
-		xh := i < len(x) && x[i] == "#"
-		yh := i < len(y) && y[i] == "#"
+		xh := haveX && xl == "#"
+		yh := haveY && yl == "#"
 		if xh || yh {
-			if i == 0 {
-				if xh && dollarLiteral(y[0]) || yh && dollarLiteral(x[0]) {
-					return false
-				}
+			if i == 0 && (xh && dollarLiteral(y0) || yh && dollarLiteral(x0)) {
+				return false
 			}
 			return true
 		}
-		if i >= len(x) || i >= len(y) {
-			return i >= len(x) && i >= len(y)
+		if !haveX || !haveY {
+			return !haveX && !haveY
 		}
-		if x[i] != "+" && y[i] != "+" && x[i] != y[i] {
+		if xl != "+" && yl != "+" && xl != yl {
 			return false
 		}
-		if i == 0 && (x[0] == "+" && dollarLiteral(y[0]) || y[0] == "+" && dollarLiteral(x[0])) {
+		if i == 0 && (xl == "+" && dollarLiteral(y0) || yl == "+" && dollarLiteral(x0)) {
 			return false
+		}
+		if xmore {
+			xl, xrest, xmore = cutLevel(xrest)
+		} else {
+			haveX = false
+		}
+		if ymore {
+			yl, yrest, ymore = cutLevel(yrest)
+		} else {
+			haveY = false
 		}
 	}
 }

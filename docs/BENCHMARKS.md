@@ -11,7 +11,8 @@ checks that they still execute; it does not compare timings. See
 [CI workflow](#ci-workflow) for the current limits.
 
 This page lists no ns/op figures. Run the suite on your own hardware if you
-need numbers.
+need numbers. Before and after figures for the policy, approval hash and MQTT
+broker paths, with their noise, are in [performance.md](performance.md).
 
 ## Curated benchmark list
 

@@ -6,7 +6,6 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -208,16 +207,22 @@ type DeviceWriter interface {
 	SetStatus(ctx context.Context, id, status string) (bool, error)
 }
 
-// MemoryStore is an in memory DeviceWriter for tests and single process setups.
+// MemoryStore is an in memory DeviceWriter for tests and single process setups. Devices are held
+// by ID, with one index for subjects and one for certificate fingerprints, so every lookup and
+// every uniqueness check is a map access however many devices it holds.
 type MemoryStore struct {
-	mu      sync.RWMutex
-	devices map[string]Device
+	mu        sync.RWMutex
+	devices   map[string]*Device
+	bySubject map[string]string // subject to device ID
+	byCert    map[string]string // certificate fingerprint to device ID
 }
 
 var _ DeviceWriter = (*MemoryStore)(nil)
 
 // NewMemoryStore returns an empty MemoryStore.
-func NewMemoryStore() *MemoryStore { return &MemoryStore{devices: map[string]Device{}} }
+func NewMemoryStore() *MemoryStore {
+	return &MemoryStore{devices: map[string]*Device{}, bySubject: map[string]string{}, byCert: map[string]string{}}
+}
 
 // PutDevice validates and stores d, replacing a device with the same ID. A certificate
 // fingerprint or subject already owned by another device is a conflict.
@@ -227,22 +232,30 @@ func (m *MemoryStore) PutDevice(_ context.Context, d Device) error {
 	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	for id, o := range m.devices {
-		if id == d.ID {
-			continue
-		}
-		if d.Subject != "" && o.Subject == d.Subject {
+	if d.Subject != "" {
+		if owner, ok := m.bySubject[d.Subject]; ok && owner != d.ID {
 			return fmt.Errorf("mqttauth: subject %q already registered", d.Subject)
 		}
-		for _, fp := range d.CertFingerprints {
-			for _, ofp := range o.CertFingerprints {
-				if fp == ofp {
-					return fmt.Errorf("mqttauth: certificate fingerprint already registered")
-				}
-			}
+	}
+	for _, fp := range d.CertFingerprints {
+		if owner, ok := m.byCert[fp]; ok && owner != d.ID {
+			return fmt.Errorf("mqttauth: certificate fingerprint already registered")
 		}
 	}
-	m.devices[d.ID] = clone(d)
+	if old, ok := m.devices[d.ID]; ok {
+		delete(m.bySubject, old.Subject)
+		for _, fp := range old.CertFingerprints {
+			delete(m.byCert, fp)
+		}
+	}
+	c := clone(d)
+	m.devices[d.ID] = &c
+	if c.Subject != "" {
+		m.bySubject[c.Subject] = c.ID
+	}
+	for _, fp := range c.CertFingerprints {
+		m.byCert[fp] = c.ID
+	}
 	return nil
 }
 
@@ -258,13 +271,14 @@ func (m *MemoryStore) SetStatus(_ context.Context, id, status string) (bool, err
 		return false, nil
 	}
 	d.Status = status
-	m.devices[id] = d
 	return true, nil
 }
 
 // DeviceByID implements DeviceStore.
 func (m *MemoryStore) DeviceByID(_ context.Context, id string) (*Device, error) {
-	return m.find(func(d Device) bool { return d.ID == id })
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.copyOf(id)
 }
 
 // DeviceBySubject implements DeviceStore.
@@ -272,36 +286,26 @@ func (m *MemoryStore) DeviceBySubject(_ context.Context, subject string) (*Devic
 	if subject == "" {
 		return nil, ErrDeviceNotFound
 	}
-	return m.find(func(d Device) bool { return d.Subject == subject })
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.copyOf(m.bySubject[subject])
 }
 
 // DeviceByCertFingerprint implements DeviceStore.
 func (m *MemoryStore) DeviceByCertFingerprint(_ context.Context, fp string) (*Device, error) {
-	return m.find(func(d Device) bool {
-		for _, f := range d.CertFingerprints {
-			if f == fp {
-				return true
-			}
-		}
-		return false
-	})
-}
-
-func (m *MemoryStore) find(pred func(Device) bool) (*Device, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	ids := make([]string, 0, len(m.devices))
-	for id := range m.devices {
-		ids = append(ids, id)
+	return m.copyOf(m.byCert[fp])
+}
+
+// copyOf returns a private copy of the device with the given ID. The caller holds the read lock.
+func (m *MemoryStore) copyOf(id string) (*Device, error) {
+	d, ok := m.devices[id]
+	if !ok {
+		return nil, ErrDeviceNotFound
 	}
-	sort.Strings(ids)
-	for _, id := range ids {
-		if d := m.devices[id]; pred(d) {
-			c := clone(d)
-			return &c, nil
-		}
-	}
-	return nil, ErrDeviceNotFound
+	c := clone(*d)
+	return &c, nil
 }
 
 func clone(d Device) Device {

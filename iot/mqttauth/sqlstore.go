@@ -4,10 +4,10 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -54,9 +54,16 @@ func (s *SQLStore) EnsureSchema(ctx context.Context) error {
 	return nil
 }
 
+// pgQueries memoizes the $n form of each query text. The queries are string constants, so the map
+// stays tiny and the placeholder rewrite runs once per statement instead of once per call.
+var pgQueries sync.Map
+
 func (s *SQLStore) q(query string) string {
 	if !s.Postgres {
 		return query
+	}
+	if v, ok := pgQueries.Load(query); ok {
+		return v.(string)
 	}
 	var b strings.Builder
 	n := 0
@@ -68,6 +75,7 @@ func (s *SQLStore) q(query string) string {
 		}
 		b.WriteRune(r)
 	}
+	pgQueries.Store(query, b.String())
 	return b.String()
 }
 
@@ -125,62 +133,72 @@ func (s *SQLStore) SetStatus(ctx context.Context, id, status string) (bool, erro
 	return n > 0, err
 }
 
-const sqlDeviceCols = `id, org_id, name, subject, status, expires_at, rules, token_hashes`
+// sqlDeviceJoin selects the device row together with its certificate fingerprints in one round
+// trip: one row per fingerprint, or one row with a NULL fingerprint when the device has none.
+const sqlDeviceJoin = `SELECT d.id, d.org_id, d.name, d.subject, d.status, d.expires_at, d.rules, d.token_hashes, c.fingerprint
+FROM theauth_mqtt_devices d LEFT JOIN theauth_mqtt_device_certs c ON c.device_id = d.id`
 
 // DeviceByID implements DeviceStore.
 func (s *SQLStore) DeviceByID(ctx context.Context, id string) (*Device, error) {
-	return s.one(ctx, `SELECT `+sqlDeviceCols+` FROM theauth_mqtt_devices WHERE id = ?`, id)
+	return s.one(ctx, sqlDeviceJoin+` WHERE d.id = ? ORDER BY c.fingerprint`, id)
 }
 
-// DeviceBySubject implements DeviceStore.
+// DeviceBySubject implements DeviceStore. The subject <> ” term is redundant with the argument
+// check above it, but it lets the planner use the partial unique index (theauth_mqtt_devices_subject
+// only covers non empty subjects), which it cannot prove from a bound parameter alone.
 func (s *SQLStore) DeviceBySubject(ctx context.Context, subject string) (*Device, error) {
 	if subject == "" {
 		return nil, ErrDeviceNotFound
 	}
-	return s.one(ctx, `SELECT `+sqlDeviceCols+` FROM theauth_mqtt_devices WHERE subject = ?`, subject)
+	return s.one(ctx, sqlDeviceJoin+` WHERE d.subject = ? AND d.subject <> '' ORDER BY c.fingerprint`, subject)
 }
 
 // DeviceByCertFingerprint implements DeviceStore.
 func (s *SQLStore) DeviceByCertFingerprint(ctx context.Context, fp string) (*Device, error) {
-	return s.one(ctx, `SELECT `+sqlDeviceCols+` FROM theauth_mqtt_devices
-WHERE id = (SELECT device_id FROM theauth_mqtt_device_certs WHERE fingerprint = ?)`, fp)
+	return s.one(ctx, sqlDeviceJoin+`
+WHERE d.id = (SELECT device_id FROM theauth_mqtt_device_certs WHERE fingerprint = ?) ORDER BY c.fingerprint`, fp)
 }
 
 func (s *SQLStore) one(ctx context.Context, query string, arg string) (*Device, error) {
-	var (
-		d             Device
-		exp           int64
-		rules, hashes string
-	)
-	err := s.DB.QueryRowContext(ctx, s.q(query), arg).Scan(&d.ID, &d.OrgID, &d.Name, &d.Subject, &d.Status, &exp, &rules, &hashes)
-	if errors.Is(err, sql.ErrNoRows) {
-		return nil, ErrDeviceNotFound
-	}
-	if err != nil {
-		return nil, err
-	}
-	if exp != 0 {
-		d.ExpiresAt = time.Unix(exp, 0).UTC()
-	}
-	if err := json.Unmarshal([]byte(rules), &d.Rules); err != nil {
-		return nil, fmt.Errorf("mqttauth: decode rules: %w", err)
-	}
-	if err := json.Unmarshal([]byte(hashes), &d.TokenHashes); err != nil {
-		return nil, fmt.Errorf("mqttauth: decode token hashes: %w", err)
-	}
-	rows, err := s.DB.QueryContext(ctx, s.q(`SELECT fingerprint FROM theauth_mqtt_device_certs WHERE device_id = ? ORDER BY fingerprint`), d.ID)
+	rows, err := s.DB.QueryContext(ctx, s.q(query), arg)
 	if err != nil {
 		return nil, err
 	}
 	defer func() { _ = rows.Close() }()
+	var d *Device
 	for rows.Next() {
-		var fp string
-		if err := rows.Scan(&fp); err != nil {
+		var (
+			row           Device
+			exp           int64
+			rules, hashes string
+			fp            sql.NullString
+		)
+		if err := rows.Scan(&row.ID, &row.OrgID, &row.Name, &row.Subject, &row.Status, &exp, &rules, &hashes, &fp); err != nil {
 			return nil, err
 		}
-		d.CertFingerprints = append(d.CertFingerprints, fp)
+		if d == nil {
+			if exp != 0 {
+				row.ExpiresAt = time.Unix(exp, 0).UTC()
+			}
+			if err := json.Unmarshal([]byte(rules), &row.Rules); err != nil {
+				return nil, fmt.Errorf("mqttauth: decode rules: %w", err)
+			}
+			if err := json.Unmarshal([]byte(hashes), &row.TokenHashes); err != nil {
+				return nil, fmt.Errorf("mqttauth: decode token hashes: %w", err)
+			}
+			d = &row
+		}
+		if fp.Valid {
+			d.CertFingerprints = append(d.CertFingerprints, fp.String)
+		}
 	}
-	return &d, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if d == nil {
+		return nil, ErrDeviceNotFound
+	}
+	return d, nil
 }
 
 func nonNilRules(r []Rule) []Rule {

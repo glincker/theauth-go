@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"slices"
 	"sort"
+	"time"
 
 	theauth "github.com/glincker/theauth-go/v2"
 	"github.com/glincker/theauth-go/v2/internal/agent"
@@ -85,6 +86,7 @@ type Config struct {
 // theauth.AgentPolicyEngine.
 type Engine struct {
 	base     []*policy.Policy
+	baseJSON [][]byte // json.Marshal of each base policy, hashed on every Decide
 	resolver ResolverV2
 	mode     Mode
 	eval     policy.Evaluator
@@ -113,6 +115,11 @@ func New(cfg Config) (*Engine, error) {
 			return nil, fmt.Errorf("agentpolicy: policy %d: %w", i, err)
 		}
 		e.base = append(e.base, &p)
+		b, err := json.Marshal(&p)
+		if err != nil {
+			b = nil // digest skips a document that cannot be encoded, as before
+		}
+		e.baseJSON = append(e.baseJSON, b)
 	}
 	if cfg.Mode == AllowList && len(e.base) > 0 && e.resolver == nil && !hasAllow(e.base) {
 		return nil, ErrNoAllowStatement
@@ -146,10 +153,15 @@ func (e *Engine) Decide(ctx context.Context, ag theauth.Agent, queries []agent.P
 	}
 	dec.Applies = true
 	dec.Verdicts = make([]agent.PolicyVerdict, len(queries))
-	dec.IDs, dec.Hash = digest(pols)
+	dec.IDs, dec.Hash = e.digest(pols)
 	attrs := map[string]string{"agent_id": ag.ID.String(), "client_id": ag.ClientID}
+	// One clock read for the whole call: every query is judged at the same instant.
+	now := time.Now()
+	if e.eval.Now != nil {
+		now = e.eval.Now()
+	}
 	for i, q := range queries {
-		d := e.eval.Evaluate(policy.Request{Action: q.Action, Resource: q.Resource, Attributes: attrs}, pols...)
+		d := e.eval.Evaluate(policy.Request{Action: q.Action, Resource: q.Resource, Attributes: attrs, Now: now}, pols...)
 		dec.Verdicts[i] = verdict(d)
 	}
 	return dec, nil
@@ -204,13 +216,19 @@ func (e *Engine) resolve(ctx context.Context, ag theauth.Agent) ([]*policy.Polic
 }
 
 // digest returns the sorted policy ids and a SHA-256 over the canonical JSON of
-// every document, in order.
-func digest(pols []*policy.Policy) ([]string, string) {
+// every document, in order. The first len(e.base) documents are the static base policies, whose
+// JSON was encoded once in New.
+func (e *Engine) digest(pols []*policy.Policy) ([]string, string) {
 	h := sha256.New()
 	var ids []string
-	for _, p := range pols {
-		b, err := json.Marshal(p)
-		if err == nil {
+	for i, p := range pols {
+		var b []byte
+		if i < len(e.baseJSON) && p == e.base[i] {
+			b = e.baseJSON[i]
+		} else if enc, err := json.Marshal(p); err == nil {
+			b = enc
+		}
+		if b != nil {
 			h.Write(b)
 			h.Write([]byte{0})
 		}

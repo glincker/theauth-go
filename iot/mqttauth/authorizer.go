@@ -46,15 +46,17 @@ type RuleAuthorizer struct{}
 
 // Authorize implements Authorizer.
 func (RuleAuthorizer) Authorize(_ context.Context, d *Device, action Action, topic string) Decision {
-	repl := strings.NewReplacer("{device_id}", d.ID, "{org_id}", d.OrgID)
 	allowed := false
 	for _, r := range d.Rules {
 		if r.Action != ActionAll && r.Action != action {
 			continue
 		}
-		f := repl.Replace(r.Filter)
-		if strings.Contains(r.Filter, "{org_id}") && d.OrgID == "" {
-			continue
+		f := r.Filter
+		if strings.IndexByte(f, '{') >= 0 {
+			if strings.Contains(f, "{org_id}") && d.OrgID == "" {
+				continue
+			}
+			f = substitutePlaceholders(f, d.ID, d.OrgID)
 		}
 		if ValidateFilter(f) != nil {
 			continue
@@ -76,25 +78,63 @@ func (RuleAuthorizer) Authorize(_ context.Context, d *Device, action Action, top
 	return Decision{Reason: "no matching allow rule", Code: CodeNoPermission}
 }
 
+// substitutePlaceholders replaces {device_id} and {org_id} in one left to right pass, like
+// strings.NewReplacer does: a substituted value is never scanned again, so a value that itself
+// contains a placeholder stays literal.
+func substitutePlaceholders(filter, deviceID, orgID string) string {
+	var b strings.Builder
+	b.Grow(len(filter) + len(deviceID) + len(orgID))
+	for i := 0; i < len(filter); {
+		switch {
+		case filter[i] != '{':
+			j := strings.IndexByte(filter[i:], '{')
+			if j < 0 {
+				j = len(filter) - i
+			}
+			b.WriteString(filter[i : i+j])
+			i += j
+		case strings.HasPrefix(filter[i:], "{device_id}"):
+			b.WriteString(deviceID)
+			i += len("{device_id}")
+		case strings.HasPrefix(filter[i:], "{org_id}"):
+			b.WriteString(orgID)
+			i += len("{org_id}")
+		default:
+			b.WriteByte('{')
+			i++
+		}
+	}
+	return b.String()
+}
+
 // TopicResource converts a topic name or filter into the policy resource of decision D8:
 // "sensors/temp/42" becomes "mqtt:sensors:temp:42" and a trailing "#" becomes "*". The single
 // level wildcard "+" also becomes "*" (a policy star spans the rest of the resource, so this can
 // only ever widen the request, and an allow must then cover everything below that level). A level
 // that contains ":" cannot be told apart from a level boundary, so it is refused and ok is false.
 func TopicResource(topic string) (string, bool) {
-	levels := strings.Split(topic, "/")
-	out := make([]string, len(levels))
-	for i, l := range levels {
+	var b strings.Builder
+	b.Grow(len(ResourcePrefix) + len(topic))
+	b.WriteString(ResourcePrefix)
+	rest := topic
+	for first := true; ; first = false {
+		l, next, more := cutLevel(rest)
+		if !first {
+			b.WriteByte(':')
+		}
 		switch {
-		case strings.Contains(l, ":"):
+		case strings.IndexByte(l, ':') >= 0:
 			return "", false
 		case l == "+" || l == "#":
-			out[i] = "*"
+			b.WriteByte('*')
 		default:
-			out[i] = l
+			b.WriteString(l)
 		}
+		if !more {
+			return b.String(), true
+		}
+		rest = next
 	}
-	return ResourcePrefix + strings.Join(out, ":"), true
 }
 
 // PolicyAuthorizer evaluates the theAuth policy engine. The request resource is TopicResource of
