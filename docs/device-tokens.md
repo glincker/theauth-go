@@ -28,6 +28,7 @@ auth, err := theauth.New(theauth.Config{
 | `AssertionMaxLifetime` | 5m | Cap on `exp - iat` of an assertion |
 | `EnrollPerMinute` | 10 | Challenge plus enroll requests per join token per minute, negative disables |
 | `TokenPerMinute` | 60 | Assertion grants per device per minute, negative disables |
+| `Attestation` | none | `*DeviceAttestationConfig{Required, Verify}`: hardware attestation evidence at enrollment, see [device-attestation.md](device-attestation.md) |
 
 The storage must implement `theauth.DeviceIdentityStorage`; `New` fails with `ErrStorageMissingCapability` otherwise. Memory, Postgres (migration 0024), MySQL and SQLite (migration 0011 of `storage/sqlite`) implement it.
 
@@ -88,10 +89,10 @@ The device proves it holds the private key for the public JWK it submits. Two ca
 ```
 POST /oauth/devices/challenge
 {"join_token": "dj_...", "jwk": {"kty":"EC","crv":"P-256","x":"...","y":"..."}}
--> 200 {"challenge": "<server signed JWT>", "expires_in": 120}
+-> 200 {"challenge": "<server signed JWT>", "expires_in": 120, "nonce": "<jti of the challenge>"}
 
 POST /oauth/devices/enroll
-{"join_token": "dj_...", "jwk": {...}, "challenge": "<from above>", "proof": "<JWS>"}
+{"join_token": "dj_...", "jwk": {...}, "challenge": "<from above>", "proof": "<JWS>", "attestation_evidence": "<optional, see device-attestation.md>"}
 -> 201 {"device_id": "...", "subject": "spiffe://...", "name": "...", "scope": [...]}
 ```
 
@@ -187,11 +188,13 @@ POST   /devices/{id}/resume         -> 204   (409 when the device is revoked)
 
 Programmatic equivalents: `CreateDeviceJoinToken`, `RevokeDeviceJoinToken`, `ListDevices`, `RevokeDevice`, `SuspendDevice`, `ResumeDevice`.
 
-Audit events: `device.join_token.created`, `device.enrolled`, `device.token_minted`, `device.revoked`, `device.suspended`, `device.resumed`.
+Audit events: `device.join_token.created`, `device.enrolled`, `device.enroll.attestation_refused`, `device.token_minted`, `device.revoked`, `device.suspended`, `device.resumed`.
 
 ## Extending attestation
 
-Enrollment goes through an internal `Attestor` interface (`Attest`, `Consume`, `Release`). The built-in `join_token` attestor is the only one wired today; X.509 proof of possession and TPM attestors can implement the same interface later.
+Enrollment goes through an internal `Attestor` interface (`Attest`, `Consume`, `Release`). The built-in `join_token` attestor is the only one wired today.
+
+Hardware evidence is a separate, configurable check: `DeviceTokensConfig.Attestation` runs a verifier from `iot/attest` (Android Key Attestation, Apple App Attest, TPM 2.0 quotes) after the proof of possession and before the join token is spent. See [device-attestation.md](device-attestation.md).
 
 ## Storage
 

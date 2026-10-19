@@ -19,7 +19,7 @@ Running it:
 
 Authorization server:
 
-- [oauth-consent.md](oauth-consent.md), [session-auth-methods.md](session-auth-methods.md), [access-token-policy.md](access-token-policy.md), [rich-authorization-requests.md](rich-authorization-requests.md), [oauth-endpoint-limits.md](oauth-endpoint-limits.md), [mcp-metadata-paths.md](mcp-metadata-paths.md), [client-compat.md](client-compat.md), [oidc-provider.md](oidc-provider.md), [id-jag.md](id-jag.md), [device-authorization.md](device-authorization.md), [registration-tokens.md](registration-tokens.md), [device-tokens.md](device-tokens.md), [mqtt-auth.md](mqtt-auth.md), [iot-device-client.md](iot-device-client.md), [token-vault.md](token-vault.md) and [admission.md](admission.md).
+- [oauth-consent.md](oauth-consent.md), [session-auth-methods.md](session-auth-methods.md), [access-token-policy.md](access-token-policy.md), [rich-authorization-requests.md](rich-authorization-requests.md), [oauth-endpoint-limits.md](oauth-endpoint-limits.md), [mcp-metadata-paths.md](mcp-metadata-paths.md), [client-compat.md](client-compat.md), [oidc-provider.md](oidc-provider.md), [id-jag.md](id-jag.md), [device-authorization.md](device-authorization.md), [registration-tokens.md](registration-tokens.md), [device-tokens.md](device-tokens.md), [device-attestation.md](device-attestation.md), [mqtt-auth.md](mqtt-auth.md), [iot-device-client.md](iot-device-client.md), [token-vault.md](token-vault.md) and [admission.md](admission.md).
 
 Agents and audit:
 

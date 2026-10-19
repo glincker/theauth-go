@@ -347,7 +347,7 @@ Persistence is split into small capability interfaces, and `New` fails at startu
 | OAuth device grant (RFC 8628) and registration tokens | Yes | Yes | Yes | Yes |
 | Durable JWT-bearer `jti` replay | Yes | Yes | No | No |
 
-Postgres and MySQL implement the newer token, device, session and throttle capabilities and pass the new `storagetest` suites against live PostgreSQL 16 and MySQL 8. The full shared contract passes on Postgres when you opt in with `THEAUTH_PG_CONTRACT=1` and a DSN in `THEAUTH_TEST_PG_DSN` (verified on PostgreSQL 14), but that gate is not enabled in CI yet. MySQL passes the full shared contract on MySQL 8.4.11 (checked 2026-10-18) and CI runs it on `mysql:8.4`; other MySQL versions and MariaDB are untested. You can write your own backend and verify it with the public [`storagetest`](./storagetest) suite.
+Postgres and MySQL implement the newer token, device, session and throttle capabilities and pass the new `storagetest` suites against live PostgreSQL 14 and MySQL 8. The full shared contract passes on Postgres when you opt in with `THEAUTH_PG_CONTRACT=1` and a DSN in `THEAUTH_TEST_PG_DSN` (verified on PostgreSQL 14), but that gate is not enabled in CI yet. MySQL passes the full shared contract on MySQL 8.4.11 (checked 2026-10-18) and CI runs it on `mysql:8.4`; other MySQL versions and MariaDB are untested. You can write your own backend and verify it with the public [`storagetest`](./storagetest) suite.
 
 ## Stability
 

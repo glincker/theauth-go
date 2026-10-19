@@ -269,6 +269,14 @@ var (
 
 	ErrDeviceEnrollmentInvalid = models.ErrDeviceEnrollmentInvalid
 
+	// ErrDeviceAttestationRequired is returned by enrollment when attestation evidence is required
+	// (DeviceAttestationConfig.Required) and missing.
+	ErrDeviceAttestationRequired = models.ErrDeviceAttestationRequired
+
+	// ErrDeviceAttestationFailed is returned by enrollment when the attestation verifier refused
+	// the evidence. Use errors.As with *DeviceAttestationError for the reason.
+	ErrDeviceAttestationFailed = models.ErrDeviceAttestationFailed
+
 	ErrDeviceConflict = models.ErrDeviceConflict
 
 	// ErrDeviceRevoked is returned when a revoked device is suspended or resumed.

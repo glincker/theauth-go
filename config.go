@@ -499,6 +499,13 @@ type DeviceAuthorizationConfig = internalas.DeviceConfig
 // DeviceTokensConfig is the root alias for the device identity settings.
 type DeviceTokensConfig = internalas.DeviceTokensConfig
 
+// DeviceAttestationConfig is the root alias for the enrollment attestation hook.
+type DeviceAttestationConfig = internalas.DeviceAttestationConfig
+
+// DeviceAttestationError is the enrollment refusal for evidence the verifier rejected. It
+// matches ErrDeviceAttestationFailed with errors.Is.
+type DeviceAttestationError = internalas.DeviceAttestationError
+
 // DevicePage is the view model handed to DeviceAuthorizationConfig.Page.
 type DevicePage = internalas.DevicePage
 

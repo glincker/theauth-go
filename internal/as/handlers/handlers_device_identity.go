@@ -24,11 +24,14 @@ type enrollBody struct {
 	Challenge string          `json:"challenge"`
 	Proof     string          `json:"proof"`
 	Name      string          `json:"name"`
+	// AttestationEvidence is hardware attestation evidence, a JSON document as a string.
+	AttestationEvidence string `json:"attestation_evidence"`
 }
 
 func (b enrollBody) request() internalas.DeviceEnrollRequest {
 	return internalas.DeviceEnrollRequest{
 		Kind: b.Kind, JoinToken: b.JoinToken, JWK: b.JWK, Challenge: b.Challenge, Proof: b.Proof, Name: b.Name,
+		AttestationEvidence: b.AttestationEvidence,
 	}
 }
 
@@ -46,6 +49,15 @@ func (h *Handler) writeEnrollError(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, models.ErrDeviceEnrollmentInvalid):
 		writeOAuthError(w, http.StatusBadRequest, oauthErrInvalidGrant, "invalid join token, key or proof")
+	case errors.Is(err, models.ErrDeviceAttestationRequired):
+		writeOAuthError(w, http.StatusBadRequest, oauthErrInvalidRequest, "attestation_required")
+	case errors.Is(err, models.ErrDeviceAttestationFailed):
+		var af *internalas.DeviceAttestationError
+		desc := "attestation_failed"
+		if errors.As(err, &af) && af.Reason != "" {
+			desc += ": " + af.Reason
+		}
+		writeOAuthError(w, http.StatusBadRequest, oauthErrInvalidGrant, desc)
 	case errors.Is(err, models.ErrDeviceConflict):
 		writeOAuthError(w, http.StatusConflict, oauthErrInvalidRequest, "device identity already registered")
 	default:

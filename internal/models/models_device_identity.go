@@ -105,6 +105,13 @@ var (
 	// ErrDeviceEnrollmentInvalid covers unknown, revoked and mismatched devices and
 	// join tokens so callers cannot tell which.
 	ErrDeviceEnrollmentInvalid = errors.New("theauth: invalid device or join token")
+	// ErrDeviceAttestationRequired is returned when DeviceTokensConfig.Attestation.Required is set
+	// and the device sent no evidence. The TypeScript code for it is attestation_required.
+	ErrDeviceAttestationRequired = errors.New("theauth: device attestation evidence is required")
+	// ErrDeviceAttestationFailed is returned when the attestation verifier refused the evidence or
+	// failed. It is wrapped in a *DeviceAttestationError that carries the refusal reason. The
+	// TypeScript code for it is attestation_failed.
+	ErrDeviceAttestationFailed = errors.New("theauth: device attestation failed")
 	// ErrDeviceConflict is returned when a SPIFFE ID is already registered.
 	ErrDeviceConflict = errors.New("theauth: device SPIFFE ID already registered")
 	// ErrDeviceRevoked is returned when suspending or resuming a revoked device. Revocation is
