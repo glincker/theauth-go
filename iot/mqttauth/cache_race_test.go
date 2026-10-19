@@ -127,7 +127,9 @@ func TestStaleLoadAfterPurgeAllIsNotCached(t *testing.T) {
 		f.post("/authz", authzReq(), nil)
 	}()
 	<-ps.reached
-	f.store.SetStatus(context.Background(), "dev2", StatusRevoked)
+	if _, err := f.store.SetStatus(context.Background(), "dev2", StatusRevoked); err != nil {
+		t.Fatalf("revoke: %v", err)
+	}
 	f.h.PurgeAll()
 	close(ps.release)
 	<-done
@@ -226,7 +228,10 @@ func TestPurgeStress(t *testing.T) {
 			}(i)
 		}
 		time.Sleep(200 * time.Microsecond)
-		store.SetStatus(ctx, id, StatusRevoked)
+		if _, err := store.SetStatus(ctx, id, StatusRevoked); err != nil {
+			t.Errorf("revoke: %v", err)
+			return
+		}
 		f.h.Purge(id)
 		_, out := f.post("/authz", req, nil)
 		close(stop)
