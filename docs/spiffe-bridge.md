@@ -43,8 +43,33 @@ JWT-SVID: algorithm in RS, ES or PS 256/384/512, headers only `alg`, `kid` and `
 
 Bundles: static `Bundle` JSON, PEM `Roots`, or an `Endpoint` refreshed lazily when `spiffe_refresh_hint` has passed (no goroutine). The URL must be https, redirects are refused, the body is capped, polling is never faster than `MinRefresh`, a `spiffe_sequence` that goes backwards is refused, and a bundle older than `MaxStale` stops being trusted. An `https_spiffe` endpoint needs your own `http.Client` doing mutual TLS.
 
+## Certificate bound access tokens
+
+An agent or robot that proved itself with an X.509-SVID can trade it for an access token bound to that certificate (RFC 8705 section 3). The token carries `cnf` with `x5t#S256`, the SHA-256 thumbprint of the leaf certificate. `mcpresource` accepts it only on a TLS connection that presents that same certificate, so a copied token is useless without the private key.
+
+```go
+// Config.AuthorizationServer needs DeviceTokens, and the device must have the SPIFFE ID of the SVID.
+res, serr := br.AuthenticateX509(ctx, r.TLS.PeerCertificates)
+if serr != nil {
+	http.Error(w, "unauthorized", http.StatusUnauthorized)
+	return
+}
+tok, err := br.IssueToken(ctx, auth, res, "https://iot.example.com/api", []string{"telemetry:write"})
+// tok.AccessToken is a Bearer token with cnf x5t#S256. tok.ExpiresIn never runs past the SVID.
+```
+
+`auth` is your `*theauth.TheAuth`. `IssueToken` calls `TheAuth.IssueDeviceCertToken`, which goes through the same token machinery as the device assertion grant: the device must be active, `resource` and `scope` are checked against the device's enrolled scopes and the resource's scopes, the per device token rate limit applies, `Config.OnTokenIssued` runs, and a `device.token_minted` audit row is written with `mtls_bound` true. The token lifetime is `DeviceTokensConfig.AccessTokenTTL` or the time left on the SVID, whichever is shorter. No refresh token is issued, because the SVID is the long lived credential and is renewed by SPIRE.
+
+Rules that matter:
+
+- Only an X.509-SVID result works. A JWT-SVID has no key the holder proves possession of, so `IssueToken` returns `ErrNoKeyBinding` for it.
+- There is no HTTP route for this. The exchange trusts the caller to have verified the TLS handshake, so it is a Go call you make from your own mutual TLS endpoint, never a form field.
+- The token is a plain `Bearer` token as far as the client is concerned (RFC 8705 does not change the token type). A resource server that does not enforce `cnf` would treat it as bearer, so use `mcpresource`, or check `cnf` yourself.
+- The thumbprint is the one `mcpresource.CertThumbprint` computes. Behind a TLS terminating proxy, give the validator `mcpresource.WithClientCertThumbprint` and have the proxy set the header itself.
+
+`iot/spiffe/token_test.go` runs the whole path with a real TLS server: an SVID is exchanged, the token works with the matching certificate, and it is refused for another valid SVID of the same workload (a different key) and for a connection with no certificate.
+
 ## Limits
 
 - No name constraints. The standard library parses Ed25519 and PSS certificate signatures, which the TypeScript side refuses, so no shared vector covers them.
-- Go does not mint an access token with `cnf` `x5t#S256` yet. `Result.CNF` carries the member, and `mcpresource` already enforces it on the resource side. Wiring it into the authorization server token endpoint is a follow up.
 - The vectors are generated, not hand written: `node docs-local/vectors/gen-spiffe-vectors.mjs` (needs openssl and a built TypeScript core).

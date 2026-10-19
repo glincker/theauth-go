@@ -230,6 +230,59 @@ What the plugin sends, as observed: `/user` gets `username`, `password` and `cli
 
 Results, identical on both brokers for the same devices and rules: the connect cases listed under EMQX above, publish allowed only on `devices/<id>/telemetry/#`, the same SUBACK results for plain, `+`, `#`, `$share/` and `$SYS` filters, and the same result for `$share/g1/alerts/+` (granted) and `$share/g1/#` (refused). A denied publish is dropped without disconnecting the client. Mosquitto does not read `expire_at`: the device that EMQX disconnected after 10.4 seconds was still connected after 25 seconds on Mosquitto, so end sessions of expiring devices another way. When the handler is down the plugin refuses the connect.
 
+## Revocation snapshot over MQTT
+
+A device that holds a signed bundle can check a signed revocation snapshot offline (`device.VerifyRevocations`, see `docs/iot-device-client.md`). Package `iot/mqttauth/revocationmqtt` moves that snapshot over the broker you already run: the server publishes it as a retained message, and a device that connects later gets the newest one the moment it subscribes, with no HTTP call. It is a small MQTT 3.1.1 client on the standard library (no new dependency), and works with Mosquitto, EMQX and HiveMQ.
+
+The broker is a courier, not a trust anchor. `Receiver` runs `device.VerifyRevocations` on every message (signature, issuer, expiry, `MaxAge`, owner, sequence), so a broker or a stray publisher can delay a snapshot but cannot forge one, and an older snapshot than the last accepted one is refused as a rollback.
+
+```go
+topic, _ := revocationmqtt.TopicFor("owner-1") // theauth/revocations/owner-1
+
+// Server side. token is the signed snapshot (compact JWS) from your issuer.
+pub := &revocationmqtt.Publisher{
+	Connect: revocationmqtt.ConnectOptions{Addr: "broker.internal:8883", TLS: tlsCfg, Username: "revocations", Password: pw},
+	Topic:   topic,
+}
+err := pub.Publish(ctx, token) // retained, QoS 1, returns after the PUBACK
+// Or keep it fresh: publish now and every 2 minutes, report failures, stop with ctx.
+go pub.Run(ctx, func(ctx context.Context) (string, error) { return issueSnapshot(ctx, "owner-1") }, 2*time.Minute, logErr)
+
+// Device or gateway side. Keys is the key set VerifyBundle uses.
+rcv := &revocationmqtt.Receiver{
+	Connect: revocationmqtt.ConnectOptions{Addr: "broker.internal:8883", TLS: tlsCfg, ClientID: deviceID, Username: deviceID, Password: token},
+	Topic:   topic, Keys: keys, Owner: "owner-1", MaxAge: 10 * time.Minute, LastSeq: storedSeq,
+}
+snap, err := rcv.Receive(ctx) // first snapshot that verifies, normally the retained one
+if err == nil && snap.Contains(deviceID) { /* revoked or suspended */ }
+// Or stay subscribed: fn runs for each newer verified snapshot, with reconnects and backoff.
+go rcv.Watch(ctx, func(s *device.RevocationSnapshot) { apply(s) })
+```
+
+Details that matter:
+
+- `Publish` refuses an empty token, because an empty retained message deletes the stored one on the broker (MQTT 3.1.1 section 3.3.1.3). It also refuses a topic with a wildcard.
+- A snapshot expires, so run `Publisher.Run` (or your own timer) with an interval well under the snapshot lifetime and the `MaxAge` your devices use. If the publisher dies, devices fail closed once `MaxAge` passes.
+- Persist `Receiver.LastSeq` (it rises as snapshots are accepted) and pass it back after a reboot.
+- Use TLS (`ConnectOptions.TLS`). The snapshot is signed, but the broker password is not.
+- Give the publisher account `write` on `theauth/revocations/#` and devices `read` only. The snapshot lists digests of device ids, not the ids, but there is still no reason to let devices see another owner's list: scope the read ACL per owner if owners are separate.
+- ACL refusals are quiet on Mosquitto. MQTT 3.1.1 has no negative PUBACK, so a denied publish looks like success to the sender, and Mosquitto 2.1.2 grants a subscription the ACL does not allow and then delivers nothing. A receiver without read access therefore ends with the context error, not a "refused" message. EMQX and some brokers return the SUBACK failure code 0x80, which the receiver reports as a refused subscription. Test your ACL with a negative case, as `TestMosquitto` does.
+
+Tests. `go test ./iot/mqttauth/revocationmqtt` runs against an in-process fake broker (retained messages, CONNACK and SUBACK refusals, redelivery, QoS 0 and 1) and replays the TypeScript signed snapshot from the shared vectors. `TestMosquitto` runs against a real broker and is skipped unless `THEAUTH_MOSQUITTO_ADDR` is set. It was run on 2026-10-18 against `eclipse-mosquitto:2` (Mosquitto 2.1.2) with a password file and an ACL: retained delivery to a late subscriber, a device account that cannot overwrite the retained message, a publisher account that gets nothing when it subscribes, a wrong password, and a live update to a watcher. To repeat it:
+
+```sh
+mkdir mosq && cd mosq
+printf 'listener 1883\nallow_anonymous false\npassword_file /mosquitto/config/passwd\nacl_file /mosquitto/config/acl\npersistence false\n' > mosquitto.conf
+printf 'user pub\ntopic write theauth/revocations/#\n\nuser dev\ntopic read theauth/revocations/#\n' > acl
+docker run -v "$PWD":/mosquitto/config eclipse-mosquitto:2 sh -c \
+  'mosquitto_passwd -b -c /mosquitto/config/passwd pub pubpw && mosquitto_passwd -b /mosquitto/config/passwd dev devpw && chmod 644 /mosquitto/config/passwd'
+docker run -d -p 18830:1883 -v "$PWD":/mosquitto/config:ro eclipse-mosquitto:2
+THEAUTH_MOSQUITTO_ADDR=127.0.0.1:18830 THEAUTH_MOSQUITTO_PUB_PASSWORD=pubpw THEAUTH_MOSQUITTO_DEV_PASSWORD=devpw \
+  go test -count=1 -v -run TestMosquitto ./iot/mqttauth/revocationmqtt/
+```
+
+Not covered: MQTT 5 (the client speaks 3.1.1), QoS 2, EMQX and HiveMQ (not run against), and a broker that restarts without persistence loses the retained message until the next `Publish` or `Run` tick.
+
 ## What it does not do
 
 MQTT 5 enhanced authentication (AUTH packets, SCRAM, challenge response) needs a broker extension and a stateful exchange, which a stateless HTTP check cannot carry. Use certificate or token credentials here. Per message authorization of retained messages, QoS limits and rate limits are not enforced.

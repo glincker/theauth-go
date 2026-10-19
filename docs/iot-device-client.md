@@ -81,11 +81,43 @@ We did not benchmark either on hardware, so we make no speed claim for a specifi
 
 ## TinyGo
 
-TinyGo was not installed where this package was built, so a TinyGo build is **not verified**. What was done to make it likely:
+Checked on 2026-10-18 with TinyGo 0.43.0 (Go 1.27.2, LLVM 22.1.4, the `tinygo/tinygo` Docker image on linux/arm64). Everything below was run, nothing is a guess, except where it says "not run".
 
-- The package imports no `encoding/json`, `reflect`, `fmt`, `os` or `sort` directly (a test enforces this). JSON is read by a small built in parser. The TinyGo porting guide says its `reflect` support is limited and that `encoding/json` is the usual casualty.
-- The standard crypto packages pull `reflect` and `fmt` in internally on regular Go. Whether TinyGo links `crypto/ecdsa`, `crypto/ed25519` and `regexp` for your target is a TinyGo question: check its [supported packages table](https://tinygo.org/lang-support/stdlib) for your version before you commit to hardware.
-- If `regexp` is too large for your part, do not use `allowedArgPatterns` on the server for that fleet. Evaluation of other constraints never touches it.
+**Tests.** `tinygo test ./iot/device` passes: the whole package suite, including the 100+ shared vectors, runs under TinyGo (on the host target, not on a microcontroller).
+
+**Smoke program.** `iot/device/internal/tinygocheck` signs a bundle with a fixed test seed, verifies it, evaluates an allowed and a denied request, then signs and verifies an assertion. It prints `OK` or exits non zero. It uses only `println`, not `log` or `fmt`.
+
+```sh
+docker run -v "$PWD":/src:ro -w /src -e GOWORK=off tinygo/tinygo:latest \
+  tinygo build -o /tmp/check.wasm -target=wasip1 ./iot/device/internal/tinygocheck
+```
+
+Results for that program, full build (ES256, ES384 and Ed25519) and with `-tags theauth_noecdsa` (Ed25519 only, see below). Sizes are `tinygo build -size=short`, in bytes:
+
+| Target | Chip | Full build | `theauth_noecdsa` |
+| --- | --- | --- | --- |
+| `pca10056` | nRF52840, 1 MB flash, 256 kB RAM | flash 544,596, RAM 211,508 | flash 274,100, RAM 121,448 |
+| `pico` | RP2040, 2 MB flash, 264 kB RAM | flash 656,060, RAM 213,360 | flash 306,476, RAM 123,288 |
+| `feather-m4` | SAMD51, 512 kB flash, 192 kB RAM | does not fit (flash over by 40,472, RAM over by 17,996) | flash 277,780, RAM 124,552 |
+| `cortex-m-qemu` | LM3S6965, 256 kB flash, 64 kB RAM | does not fit (flash over by 284,192, RAM over by 146,376) | does not fit (flash over by 10,448, RAM over by 56,296) |
+| `arduino-nano33`, `microbit` | SAMD21 (256 kB flash, 32 kB RAM), nRF51 (256 kB flash, 16 kB RAM) | does not fit | not built with the tag |
+| `esp32-coreboard-v2` | ESP32 | linker error, `.data` does not fit the DRAM region | not built with the tag |
+| `wasip1` | WebAssembly (WASI) | builds, 4.3 MB | builds, 1.7 MB |
+| `wasm` | WebAssembly (browser) | builds | not built with the tag |
+
+The `wasip1` programs were also executed, under Node 22's WASI (`node:wasi`), in both variants. Both print `OK` and exit 0, so the JSON reader, JWS verification, Ed25519, ES256 and the evaluator all work under TinyGo at runtime. Not run: any microcontroller binary (no board, and no QEMU image was installed), so flash and RAM above are link time figures. `esp32c3` is an inheritable only target and was not built. A real program also needs your networking and storage, which these numbers do not include.
+
+What takes the space. With the full build, `crypto/internal/fips140/nistec` (the P-256 and P-384 code) holds about 88 kB of RAM in tables, and `edwards25519` about 38 kB. Both come from the Go standard library's crypto, not from this package. `math/big` and `regexp` add roughly 25 kB and 30 kB of flash. If your server signs bundles, revocation snapshots and device keys with Ed25519, build with the tag:
+
+```sh
+tinygo build -tags theauth_noecdsa -target=pico ./cmd/yourdevice
+```
+
+`theauth_noecdsa` (files `keys_ecdsa.go` and `keys_noecdsa.go`) removes every ECDSA path, so `crypto/ecdsa`, `crypto/elliptic` and `math/big` are not linked. ES256 and ES384 keys, tokens and signers are then refused as unsupported. It cut RAM by about 90 kB and flash by about 270 kB on `pico` and `pca10056`. The package tests use ES256 vectors, so they only run in the default build. `go vet -tags theauth_noecdsa ./iot/device/...` checks that the variant compiles.
+
+What was already in place and held up: the package imports no `encoding/json`, `reflect`, `fmt`, `os` or `sort` directly (a test enforces this), and JSON is read by a small built in parser. TinyGo's `reflect` support is limited, so this mattered. `regexp` links and works. If `regexp` is too large for your part, do not use `allowedArgPatterns` for that fleet: the other constraints never touch it.
+
+Not changed: `crypto/rand` is still imported for the ECDSA nonce default. TinyGo links it on every target above. On a part without a hardware random source, use Ed25519 (deterministic), or pass your own `rng` to `NewSigner`.
 
 ## Interop with the TS reference
 
@@ -104,6 +136,6 @@ node docs-local/vectors/check-go-interop.mjs /tmp/interop.json
 
 ## Sources
 
-- TinyGo supported packages: https://tinygo.org/lang-support/stdlib and porting guide https://tinygo.org/docs/guides/compatibility/
+- TinyGo supported packages: https://tinygo.org/lang-support/stdlib, porting guide https://tinygo.org/docs/guides/compatibility/ and binary size guide https://tinygo.org/docs/guides/optimizing-binaries/
 - RFC 7523 (assertion layout), RFC 9449 (replay rules), RFC 7638 (JWK thumbprint), RFC 8032 and RFC 8037 (Ed25519 in JOSE), RFC 6979 (deterministic ECDSA), RFC 8725 (JWT best practice)
 - Nonce reuse and key leakage in ECDSA and EdDSA: https://www.elliptic.co/corpus/gen-3462/key-signature-cryptography/nonce-reuse-and-key-leakage-risks-in-ecdsa-and-eddsa-signatures.html

@@ -1008,6 +1008,20 @@ func (a *TheAuth) CreateDeviceJoinToken(ctx context.Context, in CreateDeviceJoin
 	return a.as.CreateDeviceJoinToken(ctx, in)
 }
 
+// DeviceCertTokenRequest asks for an RFC 8705 certificate bound token for a device.
+type DeviceCertTokenRequest = internalas.DeviceCertTokenRequest
+
+// IssueDeviceCertToken mints a short lived access token for a device that the caller already
+// authenticated with an X.509-SVID (iot/spiffe Bridge.IssueToken is the usual caller). The token
+// carries cnf x5t#S256, so mcpresource accepts it only on a connection that presents that
+// certificate. It needs Config.AuthorizationServer.DeviceTokens and issues no refresh token.
+func (a *TheAuth) IssueDeviceCertToken(ctx context.Context, req DeviceCertTokenRequest) (TokenResponse, error) {
+	if a.as == nil {
+		return TokenResponse{}, ErrDevicesDisabled
+	}
+	return a.as.IssueDeviceCertToken(ctx, req)
+}
+
 // ListDevices lists registered devices, newest first.
 func (a *TheAuth) ListDevices(ctx context.Context, orgID *ULID) ([]Device, error) {
 	if a.as == nil {
