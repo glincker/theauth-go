@@ -16,6 +16,7 @@ import (
 	"hash"
 	"math/big"
 	"net/url"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -78,6 +79,11 @@ type dpopVerifier struct {
 	jtiOrder     []string
 	mu           sync.Mutex
 	clockSkewMax time.Duration
+	// nonces, when set, makes every proof carry a server issued nonce
+	// (RFC 9449 section 9).
+	nonces *dpopNonces
+	// replay, when set, replaces the in-memory jti cache.
+	replay DPoPReplayCache
 }
 
 func newDPoPVerifier(algs []string, maxAge, skew time.Duration, jtiCap int) *dpopVerifier {
@@ -184,7 +190,15 @@ func (v *dpopVerifier) verifyAndBind(proofJWT string, params dpopVerifyParams) (
 	if claims.JTI == "" {
 		return "", fmt.Errorf("%w: missing jti", errDPoPMalformed)
 	}
-	if !v.rememberJTI(claims.JTI, iat.Add(v.proofMaxAge)) {
+	// The nonce check comes before the jti is recorded, so a client that
+	// retries with a fresh nonce is not mistaken for a replay.
+	if v.nonces != nil && (claims.Nonce == "" || !v.nonces.valid(claims.Nonce, now)) {
+		return "", errDPoPNonceRequired
+	}
+	// Keep the jti for as long as the proof could still pass the iat check:
+	// proofMaxAge plus the skew allowance. A shorter memory would let a proof
+	// near the edge of the window be replayed after its entry expired.
+	if !v.remember(claims.JTI, iat.Add(v.proofMaxAge+v.clockSkewMax), now) {
 		return "", errDPoPReplay
 	}
 	// ath REQUIRED on resource-server proofs (RFC 9449 section 4.2).
@@ -205,10 +219,36 @@ func (v *dpopVerifier) verifyAndBind(proofJWT string, params dpopVerifyParams) (
 	return thumb, nil
 }
 
-func (v *dpopVerifier) rememberJTI(jti string, expiresAt time.Time) bool {
+// algList is the space separated alg list for the algs challenge parameter,
+// in a stable order.
+func (v *dpopVerifier) algList() string {
+	out := make([]string, 0, len(v.allowedAlgs))
+	for _, a := range defaultDPoPAlgs {
+		if _, ok := v.allowedAlgs[a]; ok {
+			out = append(out, a)
+		}
+	}
+	var extra []string
+	for a := range v.allowedAlgs {
+		if !slices.Contains(out, a) {
+			extra = append(extra, a)
+		}
+	}
+	slices.Sort(extra)
+	out = append(out, extra...)
+	return strings.Join(out, " ")
+}
+
+func (v *dpopVerifier) remember(jti string, expiresAt, now time.Time) bool {
+	if v.replay != nil {
+		return v.replay.Remember(jti, expiresAt)
+	}
+	return v.rememberJTI(jti, expiresAt, now)
+}
+
+func (v *dpopVerifier) rememberJTI(jti string, expiresAt, now time.Time) bool {
 	v.mu.Lock()
 	defer v.mu.Unlock()
-	now := time.Now()
 	if exp, ok := v.jtiSeen[jti]; ok && now.Before(exp) {
 		return false
 	}
@@ -405,4 +445,5 @@ var (
 	errDPoPReplay         = errors.New("mcpresource: DPoP proof jti replay detected")
 	errDPoPJKTMismatch    = errors.New("mcpresource: DPoP key thumbprint does not match cnf.jkt")
 	errDPoPMissingHeader  = errors.New("mcpresource: DPoP-bound token requires DPoP header")
+	errDPoPNonceRequired  = errors.New("mcpresource: DPoP proof needs a current server nonce")
 )

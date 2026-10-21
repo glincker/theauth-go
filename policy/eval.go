@@ -1,10 +1,13 @@
 package policy
 
 import (
-	"fmt"
 	"net/netip"
 	"slices"
+	"strconv"
+	"strings"
 	"time"
+
+	"github.com/glincker/theauth-go/v2/policy/pathmatch"
 )
 
 // Request is one authorization question. Attributes feed {var} substitution
@@ -24,6 +27,9 @@ type Request struct {
 	// name. The key CallLabelsKey labels the whole call. It feeds
 	// Evaluator.Taint. Nil means no provenance was supplied.
 	Provenance map[string][]string
+
+	// matching is Evaluator.ResourceMatching, copied in by prepare so statement matching can see it.
+	matching pathmatch.Mode
 }
 
 // Decision is the audited outcome of an evaluation.
@@ -56,6 +62,13 @@ type Evaluator struct {
 	// Taint restricts which provenance labels may flow into which tools. It is
 	// applied after risk tiers. Empty means no taint rules.
 	Taint []TaintRule
+	// ResourceMatching selects how a statement or taint rule resource compares to the request
+	// resource. The zero value keeps the glob matcher (Match): "*" is any run of bytes. Set
+	// pathmatch.Path for the colon and path aware matcher shared with the TypeScript core
+	// (resourceMatching "path"): ":" separates segments, "/" separates path segments inside one,
+	// "*" is one segment and "**" one or more, never an empty, "." or ".." one. In that mode a
+	// partial glob such as "r*" is literal text. Action patterns keep using Match.
+	ResourceMatching pathmatch.Mode
 }
 
 // Evaluate applies explicit-deny-wins then default-deny across policies.
@@ -65,55 +78,63 @@ func (e Evaluator) Evaluate(req Request, policies ...*Policy) Decision {
 }
 
 func (e Evaluator) evaluate(req Request, policies ...*Policy) Decision {
-	var allow, escalate *Decision
+	// The first matching allow and the first matching escalate are kept by value, so a statement
+	// that matches but is not selected costs no allocation.
+	var allow, escalate Decision
+	var haveAllow, haveEscalate bool
 	for _, p := range policies {
 		if p == nil {
 			continue
 		}
-		for i, s := range p.Statements {
+		for i := range p.Statements {
+			s := &p.Statements[i]
 			if !s.matches(req) {
 				continue
 			}
-			d := Decision{Effect: s.Effect, PolicyID: p.ID, StatementID: s.ID}
-			if s.Effect == Deny {
+			switch s.Effect {
+			case Deny:
+				d := Decision{Effect: s.Effect, PolicyID: p.ID, StatementID: s.ID}
 				if d.StatementID == "" {
 					d.StatementID = statementIndexID(i)
 				}
 				d.Reason = "explicit deny"
 				d.Code = CodeNoPermission
 				return d
-			}
-			if s.Effect == Escalate {
-				if escalate == nil {
-					if d.StatementID == "" {
-						d.StatementID = statementIndexID(i)
-					}
-					d.Reason = "escalation required by statement"
-					d.Code = CodeApprovalRequired
-					d.Escalation = &Escalation{Tier: s.Tier, Requirement: s.Require, Reason: d.Reason}
-					if d.Escalation.Requirement == "" {
-						d.Escalation.Requirement = RequireApproval
-					}
-					escalate = &d
+			case Escalate:
+				if haveEscalate {
+					continue
 				}
-				continue
-			}
-			if allow == nil {
+				d := Decision{Effect: s.Effect, PolicyID: p.ID, StatementID: s.ID}
+				if d.StatementID == "" {
+					d.StatementID = statementIndexID(i)
+				}
+				d.Reason = "escalation required by statement"
+				d.Code = CodeApprovalRequired
+				d.Escalation = &Escalation{Tier: s.Tier, Requirement: s.Require, Reason: d.Reason}
+				if d.Escalation.Requirement == "" {
+					d.Escalation.Requirement = RequireApproval
+				}
+				escalate, haveEscalate = d, true
+			default:
+				if haveAllow {
+					continue
+				}
+				d := Decision{Effect: s.Effect, PolicyID: p.ID, StatementID: s.ID}
 				if d.StatementID == "" {
 					d.StatementID = statementIndexID(i)
 				}
 				d.Allowed = true
 				d.Reason = "allowed by statement"
 				d.Code = CodeAllowed
-				allow = &d
+				allow, haveAllow = d, true
 			}
 		}
 	}
-	if escalate != nil {
-		return *escalate
+	if haveEscalate {
+		return escalate
 	}
-	if allow != nil {
-		return e.applyRisk(req, *allow)
+	if haveAllow {
+		return e.applyRisk(req, allow)
 	}
 	return Decision{Reason: "no matching allow statement (default deny)", Code: e.defaultDenyCode(req, policies)}
 }
@@ -127,11 +148,13 @@ func (e Evaluator) defaultDenyCode(req Request, policies []*Policy) DecisionCode
 		if p == nil {
 			continue
 		}
-		for _, s := range p.Statements {
+		for i := range p.Statements {
+			s := &p.Statements[i]
 			if s.Effect != Allow || !s.matchesTarget(req) {
 				continue
 			}
-			for _, c := range s.Conditions {
+			for ci := range s.Conditions {
+				c := &s.Conditions[ci]
 				if c.holds(req) {
 					continue
 				}
@@ -151,7 +174,7 @@ func (e Evaluator) defaultDenyCode(req Request, policies []*Policy) DecisionCode
 // position within the policy document. Built only for the statement that is
 // actually returned, so non-selected matches do not allocate.
 func statementIndexID(i int) string {
-	return fmt.Sprintf("stmt-%d", i)
+	return "stmt-" + strconv.Itoa(i)
 }
 
 // EvaluateWithBoundary requires identity policies to allow and the boundary
@@ -171,6 +194,7 @@ func (e Evaluator) EvaluateWithBoundary(req Request, identity, boundary []*Polic
 }
 
 func (e Evaluator) prepare(req Request) Request {
+	req.matching = e.ResourceMatching
 	if req.Now.IsZero() {
 		if e.Now != nil {
 			req.Now = e.Now()
@@ -181,12 +205,12 @@ func (e Evaluator) prepare(req Request) Request {
 	return req
 }
 
-func (s Statement) matches(req Request) bool {
+func (s *Statement) matches(req Request) bool {
 	if !s.matchesTarget(req) {
 		return false
 	}
-	for _, c := range s.Conditions {
-		if !c.holds(req) {
+	for i := range s.Conditions {
+		if !s.Conditions[i].holds(req) {
 			return false
 		}
 	}
@@ -195,7 +219,7 @@ func (s Statement) matches(req Request) bool {
 
 // matchesTarget reports whether the statement covers the request's action and
 // resource, ignoring conditions.
-func (s Statement) matchesTarget(req Request) bool {
+func (s *Statement) matchesTarget(req Request) bool {
 	if !slices.ContainsFunc(s.Actions, func(p string) bool { return Match(p, req.Action) }) {
 		return false
 	}
@@ -203,7 +227,7 @@ func (s Statement) matchesTarget(req Request) bool {
 	return s.matchesResource(req, s.Effect == Deny)
 }
 
-func (s Statement) matchesResource(req Request, unresolvedMatches bool) bool {
+func (s *Statement) matchesResource(req Request, unresolvedMatches bool) bool {
 	for _, pat := range s.Resources {
 		exp, ok := expand(pat, req.Attributes, true)
 		if !ok {
@@ -212,14 +236,23 @@ func (s Statement) matchesResource(req Request, unresolvedMatches bool) bool {
 			}
 			continue
 		}
-		if Match(exp, req.Resource) {
+		if req.matchResource(exp) {
 			return true
 		}
 	}
 	return false
 }
 
-func (c Condition) holds(req Request) bool {
+// matchResource compares an expanded resource pattern with the request resource in the mode the
+// evaluator was configured with.
+func (r Request) matchResource(pattern string) bool {
+	if r.matching == pathmatch.Path {
+		return pathmatch.MatchPath(pattern, r.Resource)
+	}
+	return Match(pattern, r.Resource)
+}
+
+func (c *Condition) holds(req Request) bool {
 	switch c.Op {
 	case OpTimeWindow:
 		return inAbsoluteWindow(c.Values, req.Now)
@@ -230,13 +263,7 @@ func (c Condition) holds(req Request) bool {
 	if c.Key == "ip" {
 		val, present = req.IP, req.IP != ""
 	}
-	want := make([]string, 0, len(c.Values))
-	for _, v := range c.Values {
-		x, ok := expand(v, req.Attributes, false)
-		if ok {
-			want = append(want, x)
-		}
-	}
+	want := c.expandedValues(req)
 	switch c.Op {
 	case OpEquals:
 		return present && len(want) == 1 && val == want[0]
@@ -252,6 +279,29 @@ func (c Condition) holds(req Request) bool {
 		return !present || !inCIDR(c.Values, val)
 	}
 	return false
+}
+
+// expandedValues returns the condition values with {var} placeholders replaced from the request
+// attributes. A value that references a missing attribute is dropped. Values without a "{" are
+// returned as they are, so the common case allocates nothing.
+func (c *Condition) expandedValues(req Request) []string {
+	plain := true
+	for _, v := range c.Values {
+		if strings.IndexByte(v, '{') >= 0 {
+			plain = false
+			break
+		}
+	}
+	if plain {
+		return c.Values
+	}
+	want := make([]string, 0, len(c.Values))
+	for _, v := range c.Values {
+		if x, ok := expand(v, req.Attributes, false); ok {
+			want = append(want, x)
+		}
+	}
+	return want
 }
 
 func inCIDR(cidrs []string, ip string) bool {

@@ -15,6 +15,11 @@ import (
 	"github.com/glincker/theauth-go/v2/internal/ulid"
 )
 
+// minDeviceJTILen is the shortest jti accepted on a device assertion. The TypeScript device module
+// requires the same, so a fleet gets one rule on both servers (a short jti is cheap to guess and
+// collides in the replay cache).
+const minDeviceJTILen = 16
+
 // tryDeviceAssertion handles assertions whose iss names an enrolled device. handled is false
 // otherwise, and the caller falls through.
 func (s *Service) tryDeviceAssertion(ctx context.Context, req TokenRequest, assertion string) (resp TokenResponse, handled bool, err error) {
@@ -50,11 +55,11 @@ func (s *Service) deviceAssertionGrant(ctx context.Context, store DeviceIdentity
 	if !dev.Active() {
 		return TokenResponse{}, models.ErrOAuthInvalidGrant
 	}
-	if claims.Aud != s.tokenEndpointURL() || claims.Exp == 0 || claims.Iat == 0 || claims.Jti == "" {
+	if claims.Aud != s.tokenEndpointURL() || claims.Exp == 0 || claims.Iat == 0 || len(claims.Jti) < minDeviceJTILen {
 		return TokenResponse{}, models.ErrOAuthInvalidGrant
 	}
 	exp, iat := time.Unix(claims.Exp, 0), time.Unix(claims.Iat, 0)
-	skew := s.Cfg.ClockSkew
+	skew := s.deviceClockSkew()
 	if exp.Add(skew).Before(now) || iat.Add(-skew).After(now) || exp.Sub(iat) > cfg.AssertionMaxLifetime {
 		return TokenResponse{}, models.ErrOAuthInvalidGrant
 	}
@@ -146,6 +151,18 @@ func (s *Service) deviceResourceScope(req TokenRequest, dev *models.Device) (str
 		return "", nil, models.ErrOAuthInvalidScope
 	}
 	return audience, scope, nil
+}
+
+// DefaultDeviceClockSkew is the tolerance on a device assertion when Config.ClockSkew is zero. The TypeScript
+// device module accepts the same 30 seconds, and a constrained device rarely keeps better time than that
+// between syncs: with no tolerance a clock one second fast is refused with invalid_grant.
+const DefaultDeviceClockSkew = 30 * time.Second
+
+func (s *Service) deviceClockSkew() time.Duration {
+	if s.Cfg.ClockSkew > 0 {
+		return s.Cfg.ClockSkew
+	}
+	return DefaultDeviceClockSkew
 }
 
 func (s *Service) jtiReplayTTL() time.Duration {

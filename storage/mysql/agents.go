@@ -298,7 +298,7 @@ func (s *Store) InsertDelegationGrant(ctx context.Context, g theauth.DelegationG
 	// since resource is TEXT and cannot be part of a MySQL unique index.
 	var existingID []byte
 	err := s.db.QueryRowContext(ctx,
-		`SELECT id FROM delegation_grants WHERE user_id = ? AND agent_id = ? AND resource = ?`,
+		`SELECT id FROM delegation_grants WHERE user_id = ? AND agent_id = ? AND resource = ? AND revoked_at IS NULL`,
 		ulidToBytes(g.UserID), ulidToBytes(g.AgentID), g.Resource,
 	).Scan(&existingID)
 	if err == nil {

@@ -102,6 +102,7 @@ func Run(t *testing.T, store theauth.Storage) {
 	RunAudit(t, store)
 	RunRBAC(t, store)
 	RunEnterprise(t, store)
+	RunClaimRaces(t, store)
 
 	if sm, ok := store.(SessionManagementSuiteStorage); ok {
 		RunSessionManagement(t, sm)

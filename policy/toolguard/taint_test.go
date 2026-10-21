@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	theauth "github.com/glincker/theauth-go/v2"
+	"github.com/glincker/theauth-go/v2/internal/audit"
 	"github.com/glincker/theauth-go/v2/policy"
 )
 
@@ -236,5 +237,29 @@ func TestAuditRecordsProvenanceOnlyWhenLabeled(t *testing.T) {
 	_ = g.Authorize(ctx, Call{AgentID: "a1", Tool: "send_email", Provenance: map[string][]string{"recipient": {"untrusted_web"}}})
 	if len(got) != 1 || got[0].action != "agent.authorize" || got[0].meta["outcome"] != "approval_required" {
 		t.Fatalf("got %+v", got)
+	}
+}
+
+// Inputs declared on the call reach the audit context, so a decision row records their hashes. An
+// unlabeled call with inputs is recorded, one with neither is not.
+func TestAuditRecordsDeclaredInputs(t *testing.T) {
+	var ctxs []context.Context
+	g, _ := taintGuard(t, mailRule)
+	g.Audit = func(ctx context.Context, _ string, _ theauth.TargetRef, _ map[string]any) {
+		ctxs = append(ctxs, ctx)
+	}
+	bg := context.Background()
+	_ = g.Authorize(bg, Call{AgentID: "a1", Tool: "send_email"})
+	if len(ctxs) != 0 {
+		t.Fatal("a call with no labels and no inputs must emit nothing")
+	}
+	in := audit.InputSource{Kind: audit.InputUserMessage, ID: "m1", Content: "mail the report"}
+	_ = g.Authorize(bg, Call{AgentID: "a1", Tool: "send_email", Inputs: []audit.InputSource{in}})
+	if len(ctxs) != 1 {
+		t.Fatalf("emitted %d rows, want 1", len(ctxs))
+	}
+	got := audit.InputsFromContext(ctxs[0])
+	if len(got) != 1 || got[0].ID != "m1" {
+		t.Fatalf("context inputs = %+v", got)
 	}
 }

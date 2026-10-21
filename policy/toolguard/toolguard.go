@@ -40,8 +40,11 @@ type ApprovalRequiredError struct {
 	// ApprovalID is set when the guard opened an approval request.
 	ApprovalID string
 	// Code says why approval is needed: approval_required, risk_escalation,
-	// taint_violation, or approval_invalid when a presented approval id could
-	// not be spent.
+	// taint_violation, or the approval_* code that says why a presented approval
+	// id could not be spent (approval_not_found, approval_pending,
+	// approval_denied, approval_expired, approval_already_used,
+	// approval_mismatch, approval_arguments_mismatch; approval_invalid from a
+	// custom Approvals that cannot say why).
 	Code policy.DecisionCode
 }
 
@@ -144,6 +147,9 @@ func limitCode(err error) policy.DecisionCode {
 type Call struct {
 	AgentID string
 	Tool    string
+	// OpenedBy is the human or service that asked for the action. It is stored on an approval
+	// request and never counts as an approver of a quorum request. Empty means unknown.
+	OpenedBy string
 	// Action defaults to "execute". Resource defaults to "tool:<Tool>".
 	Action   string
 	Resource string
@@ -157,9 +163,16 @@ type Call struct {
 	// (CallLabelsKey) labels the whole call. Nil means unlabeled, and the call
 	// is evaluated as before.
 	Provenance map[string][]string
-	// Args are the call arguments (a struct or a map with string keys). When
-	// the Guard has a Tracker, labels of tracked strings inside Args are merged
-	// into Provenance. Tool sets it from the typed arguments when empty.
+	// Inputs declare where the inputs of the call came from (user message, retrieved document and so
+	// on). The decision row records only their hashes, see audit.WithInputs. They are read from
+	// trusted code, never from Args, so a tool argument cannot forge a source.
+	Inputs []audit.InputSource
+	// Args are the call arguments (a struct or a map with string keys). They
+	// bind an approval to what the human saw: the request stores a hash of
+	// action, resource and Args, and a spend with different arguments fails with
+	// approval_arguments_mismatch. Nil hashes like an empty object. When the
+	// Guard has a Tracker, labels of tracked strings inside Args are merged into
+	// Provenance. Tool sets it from the typed arguments when empty.
 	Args any
 }
 
@@ -177,13 +190,15 @@ func (c Call) resource() string {
 	return c.Resource
 }
 
-// Approvals stores approval requests and spends them once.
+// Approvals stores approval requests and spends them once. An implementation that can say why a
+// spend failed also implements Spender, which gives the caller a specific approval_* code.
 type Approvals interface {
 	// Open records a pending request for the call and returns its id.
 	Open(ctx context.Context, c Call, e policy.Escalation) (string, error)
 	// Consume spends id if it is approved and was opened for the same agent,
-	// action and resource. It reports false for an unknown, pending, already
-	// spent or mismatched id. A given id returns true at most once.
+	// action, resource and arguments. It reports false for an unknown, pending,
+	// denied, expired, already spent or mismatched id. A given id returns true
+	// at most once.
 	Consume(ctx context.Context, id string, c Call) (bool, error)
 }
 
@@ -320,9 +335,10 @@ func (g *Guard) evaluate(ctx context.Context, c Call) (map[string][]string, *pol
 // audit records one decision when the call carried provenance labels.
 func (g *Guard) audit(ctx context.Context, c Call, prov map[string][]string, d *policy.Decision, hk *hook.Outcome, err error) {
 	hookBlocked := hk != nil && !hk.Allowed()
-	if g.Audit == nil || d == nil || (len(prov) == 0 && !hookBlocked) {
+	if g.Audit == nil || d == nil || (len(prov) == 0 && len(c.Inputs) == 0 && !hookBlocked) {
 		return
 	}
+	ctx = audit.WithInputs(ctx, c.Inputs...)
 	outcome := "allowed"
 	code := d.Code
 	var approval *ApprovalRequiredError
@@ -405,14 +421,23 @@ func (g *Guard) escalate(ctx context.Context, c Call, d policy.Decision) error {
 	// An approval spends only against a human approval requirement. A step up
 	// needs a fresh authentication, which an approval id cannot stand in for.
 	if id := approvalID(ctx); id != "" && esc.Requirement == policy.RequireApproval {
-		ok, err := g.Approvals.Consume(ctx, id, c)
+		code, err := spendApproval(ctx, g.Approvals, id, c)
 		if err != nil {
 			return guardFailed(policy.CodePolicyIndeterminate, fmt.Errorf("%w: spend approval %s: %w", ErrGuardFailed, id, err))
 		}
-		if ok {
+		if code == policy.CodeApprovalConsumed {
 			return nil
 		}
-		e.Code = policy.CodeApprovalInvalid
+		e.Code = code
+		switch code {
+		case policy.CodeApprovalPending:
+			// Still waiting for a human: point at the same request, do not open another.
+			e.ApprovalID = id
+			return e
+		case policy.CodeApprovalDenied:
+			// A human said no. A fresh request would just ask again.
+			return e
+		}
 	}
 	id, err := g.Approvals.Open(ctx, c, esc)
 	if err != nil {
@@ -429,7 +454,9 @@ func Tool[A, R any](g *Guard, build func(ctx context.Context, args A) Call, fn f
 	return func(ctx context.Context, args A) (R, error) {
 		var zero R
 		c := build(ctx, args)
-		if c.Args == nil && g != nil && g.Tracker != nil {
+		// Args feeds provenance tracking and binds an approval to the arguments the
+		// human saw, so it is always set from the typed arguments when empty.
+		if c.Args == nil {
 			c.Args = args
 		}
 		prov, err := g.authorize(ctx, c)
@@ -442,4 +469,20 @@ func Tool[A, R any](g *Guard, build func(ctx context.Context, args A) Call, fn f
 		}
 		return res, err
 	}
+}
+
+// spendApproval spends id through a Spender when the Approvals is one, and otherwise through
+// Consume with the generic approval_invalid code on failure.
+func spendApproval(ctx context.Context, ap Approvals, id string, c Call) (policy.DecisionCode, error) {
+	if s, ok := ap.(Spender); ok {
+		return s.Spend(ctx, id, c)
+	}
+	ok, err := ap.Consume(ctx, id, c)
+	if err != nil {
+		return "", err
+	}
+	if ok {
+		return policy.CodeApprovalConsumed, nil
+	}
+	return policy.CodeApprovalInvalid, nil
 }

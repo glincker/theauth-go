@@ -119,6 +119,23 @@ guard := &toolguard.Guard{
 }
 ```
 
+## Resource matching
+
+By default a statement resource is compared with the `policy` package glob. Set `Config.ResourceMatching` to `pathmatch.Path` to use the path aware matcher shared with the TypeScript core option `resourceMatching: "path"` (package `policy/pathmatch`): inside one colon segment `/` separates path segments, `*` is exactly one segment, `**` is one or more, wildcards never match an empty, `.` or `..` segment, and a partial glob such as `r*` is literal. It overrides `Evaluator.ResourceMatching`. Keep the mode equal on every enforcement point (policy engine, device bundles, delegation checks) so they cannot disagree.
+
+```go
+eng, err := agentpolicy.New(agentpolicy.Config{
+    Policies:         docs,
+    ResourceMatching: pathmatch.Path,
+})
+```
+
+The default is unchanged.
+
+### Delegation subset check
+
+`pathmatch.PermissionSubset(mode, parent, child)` is the Go twin of the TypeScript `isPermissionSubset`: every child permission needs a parent permission whose resource covers it and whose actions include the child's (or `*`). `ResourceSubset` applies the runtime matcher to the child as a pattern, so a child wildcard fits only under an equal or broader wildcard, and a parent that is a shorter exact prefix (`a:b` over `a:b:c`) does not cover the child. The TypeScript code once said yes there (`parentParts.length <= childParts.length`); the Go function never did, and `LegacyContains` keeps the old test only for deciding which rules constrain a child. Shared vectors generated from the TypeScript code (`policy/pathmatch/testdata/subset_vectors.json`, regenerate with `docs-local/vectors/gen-subset-vectors.mjs`) are replayed by the tests.
+
 ## Decision codes
 
 Every `policy.Decision` carries a machine-readable `Code` (type `policy.DecisionCode`), set on every path the evaluator takes. Branch on it instead of parsing `Reason`. The same code appears in the JSON of a decision (`code`), on `toolguard` errors (`DeniedError.Code`, `ApprovalRequiredError.Code`, `TaintViolationError.Code`), in the audit metadata of policy decisions (`decision_code`) and in the 403 and 500 bodies of `RequirePolicy` (`decision_code`, next to the existing `code`). All of these are additive: `Reason` strings and existing keys are unchanged.
@@ -144,11 +161,26 @@ The values match the TypeScript library's `DECISION_CODES` one for one, so a cli
 | `time_restricted` | An allow statement covered the action and resource but its time window condition failed. |
 | `argument_rejected` | Reserved. A call argument was refused. |
 | `approval_required` | A statement escalated the call and no valid approval was presented. |
-| `approval_invalid` | An approval id was presented but could not be spent (unknown, pending, used or issued for another call). |
+| `approval_invalid` | Generic fallback for an approval id that could not be spent. The built in approvals report one of the specific codes below instead, so only a custom `Approvals` that cannot say why returns it. |
+| `approval_not_found` | The presented approval id is unknown. |
+| `approval_pending` | The request is still waiting for a human. |
+| `approval_denied` | A human denied the request. |
+| `approval_expired` | The request passed its expiry before it was decided or spent. |
+| `approval_already_used` | The approval was already spent. Approvals are single use. |
+| `approval_mismatch` | The approval was issued for another agent, action or resource. |
+| `approval_arguments_mismatch` | The arguments presented at spend time differ from the ones the human approved. |
+| `approval_step_up_insufficient` | Reserved. The approval was granted under a weaker step-up rule than the policy demands now. |
+| `approval_granted` | A human approved a request (the `approval.approved` event). Not a spend: the spend is `approval_consumed`. |
 | `agent_not_found` | The agent id is unknown (reported when the limit check fails with `ErrAgentNotFound`). |
 | `agent_revoked` | Reserved. The agent was revoked or suspended. |
 | `agent_expired` | Reserved. The agent passed its expiry. |
 | `invalid_token` | Reserved. The presented token failed verification. |
+| `confirmation_required` | Reserved. The token is sender constrained (DPoP or mTLS, RFC 7800) and the request carried no proof of the key. |
+| `confirmation_failed` | Reserved. The proof of possession does not match the key or certificate the token is bound to. |
+| `device_not_found` | The device id is unknown (the MQTT broker backend in [mqtt-auth.md](mqtt-auth.md) reports it). |
+| `device_suspended` | The device is suspended. Reversible. |
+| `device_revoked` | The device was revoked. |
+| `device_expired` | The device passed its expiry. |
 | `owner_mismatch` | Reserved. The caller does not own the agent. |
 | `hook_denied` | A before authorize hook refused the call (see [hooks.md](hooks.md)). |
 | `hook_timeout` | A before authorize hook did not answer within its timeout. The call is refused. |

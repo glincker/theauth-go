@@ -450,6 +450,26 @@ func (a *TheAuth) VerifyAuditChain(ctx context.Context) (AuditChainResult, error
 	return audit.VerifyChain(ctx, a.storage)
 }
 
+// AuditInputHash returns the hash the audit log records for input content, using
+// Config.Audit.InputHashKey when set. Use it to build an AuditQuery.Provenance filter for a
+// message or document you still hold:
+//
+//	q := theauth.AuditQuery{Provenance: &theauth.AuditProvenanceFilter{
+//		Kind: audit.InputRetrievedDocument, Hash: a.AuditInputHash(doc)}}
+func (a *TheAuth) AuditInputHash(content string) string { return a.auditHasher.Hash(content) }
+
+// ShredAuditPseudonyms deletes the audit pseudonym period secrets that fell out of the retention
+// window and returns the periods removed. Rotation does this by itself on the first write of each
+// new period; call it to do so on demand. It needs Config.Audit.PseudonymRotation, otherwise it
+// returns an error.
+func (a *TheAuth) ShredAuditPseudonyms(ctx context.Context) ([]int64, error) {
+	r, ok := a.storageRaw.(AuditPseudonymRotator)
+	if !ok {
+		return nil, errors.New("theauth: storage backend does not rotate audit pseudonyms")
+	}
+	return r.ShredAuditPseudonyms(ctx)
+}
+
 // QueryAudit returns up to q.Limit events and a cursor for the next page. It performs no
 // authorization; callers check. q.Order is "desc" (default) or "asc" and q.Event filters by shared
 // event name; both, and "c1." cursors, need a backend that declares AuditOrderSupported() true,
@@ -978,13 +998,49 @@ func (a *TheAuth) RevokeRegistrationToken(ctx context.Context, id ULID) error {
 	return a.as.RevokeRegistrationToken(ctx, id, nil, nil)
 }
 
-// CreateDeviceJoinToken mints a single-use join token for one constrained device. The plaintext is
-// shown once; the token fixes the device's name, SPIFFE ID and scopes.
+// CreateDeviceJoinToken mints an enrollment token: a single use join token, a claim code or a bulk
+// token (see CreateDeviceJoinTokenInput.Kind). The plaintext is shown once; the token fixes the
+// device's name, SPIFFE ID and scopes.
 func (a *TheAuth) CreateDeviceJoinToken(ctx context.Context, in CreateDeviceJoinTokenInput) (DeviceJoinToken, string, error) {
 	if a.as == nil {
 		return DeviceJoinToken{}, "", ErrDevicesDisabled
 	}
 	return a.as.CreateDeviceJoinToken(ctx, in)
+}
+
+// DeviceCertTokenRequest asks for an RFC 8705 certificate bound token for a device.
+type DeviceCertTokenRequest = internalas.DeviceCertTokenRequest
+
+// IssueDeviceCertToken mints a short lived access token for a device that the caller already
+// authenticated with an X.509-SVID (iot/spiffe Bridge.IssueToken is the usual caller). The token
+// carries cnf x5t#S256, so mcpresource accepts it only on a connection that presents that
+// certificate. It needs Config.AuthorizationServer.DeviceTokens and issues no refresh token.
+func (a *TheAuth) IssueDeviceCertToken(ctx context.Context, req DeviceCertTokenRequest) (TokenResponse, error) {
+	if a.as == nil {
+		return TokenResponse{}, ErrDevicesDisabled
+	}
+	return a.as.IssueDeviceCertToken(ctx, req)
+}
+
+// DeviceAppAssertionRequest is one Apple App Attest assertion from a device.
+type DeviceAppAssertionRequest = internalas.DeviceAppAssertionRequest
+
+// DeviceAppAssertionError is the refusal of an App Attest assertion (see its Code).
+type DeviceAppAssertionError = internalas.DeviceAppAssertionError
+
+// ErrDeviceAppAssertion matches every *DeviceAppAssertionError with errors.Is.
+var ErrDeviceAppAssertion = internalas.ErrDeviceAppAssertion
+
+// VerifyDeviceAppAssertion checks an Apple App Attest assertion from an enrolled device against the
+// key attested at enrollment (the attestedPublicKey claim) and advances the device's replay counter
+// with one conditional update, so the same assertion works once. It needs a store that implements
+// DeviceAppAttestStorage (the built in stores do). Put a server challenge into ClientData and check
+// it yourself, the counter is the only replay protection kept here.
+func (a *TheAuth) VerifyDeviceAppAssertion(ctx context.Context, deviceID ULID, req DeviceAppAssertionRequest) (Device, error) {
+	if a.as == nil {
+		return Device{}, ErrDevicesDisabled
+	}
+	return a.as.VerifyDeviceAppAssertion(ctx, deviceID, req)
 }
 
 // ListDevices lists registered devices, newest first.
@@ -1002,6 +1058,23 @@ func (a *TheAuth) RevokeDevice(ctx context.Context, id ULID) error {
 		return ErrDevicesDisabled
 	}
 	return a.as.RevokeDevice(ctx, id, nil, nil)
+}
+
+// SuspendDevice puts an active device on hold: it gets no tokens until ResumeDevice. A revoked
+// device returns ErrDeviceRevoked. Suspending twice succeeds.
+func (a *TheAuth) SuspendDevice(ctx context.Context, id ULID) error {
+	if a.as == nil {
+		return ErrDevicesDisabled
+	}
+	return a.as.SuspendDevice(ctx, id, nil, nil)
+}
+
+// ResumeDevice lifts a suspension. A revoked device stays revoked and returns ErrDeviceRevoked.
+func (a *TheAuth) ResumeDevice(ctx context.Context, id ULID) error {
+	if a.as == nil {
+		return ErrDevicesDisabled
+	}
+	return a.as.ResumeDevice(ctx, id, nil, nil)
 }
 
 // RevokeDeviceJoinToken revokes an unspent device join token.

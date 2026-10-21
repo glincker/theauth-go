@@ -9,3 +9,7 @@ import (
 func TestToolApprovalContract(t *testing.T) { storagetest.RunToolApprovals(t, New()) }
 
 func TestToolApprovalAdminContract(t *testing.T) { storagetest.RunToolApprovalAdmin(t, New()) }
+
+func TestApprovalFlowContract(t *testing.T) { storagetest.RunApprovalFlow(t, New()) }
+
+func TestToolApprovalQuorumContract(t *testing.T) { storagetest.RunToolApprovalQuorum(t, New()) }

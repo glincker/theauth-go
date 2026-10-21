@@ -118,7 +118,7 @@ func TestApprovalCodes(t *testing.T) {
 	}
 	id := are.ApprovalID
 	err = g.Authorize(WithApprovalID(ctx, id), call)
-	if !errors.As(err, &are) || are.Code != policy.CodeApprovalInvalid {
+	if !errors.As(err, &are) || are.Code != policy.CodeApprovalPending || are.ApprovalID != id {
 		t.Fatalf("pending id: %v", err)
 	}
 	if err := m.Approve(id, "boss"); err != nil {

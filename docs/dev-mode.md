@@ -32,6 +32,6 @@ The walkthrough:
 ## Limits
 
 - All state is in memory and is lost on exit. A new signing key is generated on each start.
-- The memory store has no native audit hash chain. The command builds the chain itself, so it only shows the sequence is intact in this process.
+- The memory store keeps a native audit hash chain, but the command still builds its own chain over the events it reads, so it only shows the sequence is intact in this process.
 - Production: use the sqlite, postgres or mysql store. They chain every row and expose `(*TheAuth).VerifyAuditChain`.
 - Real wiring: see `examples/agent-tool-guard`, `examples/agent-policy` and [agent-policies.md](agent-policies.md).

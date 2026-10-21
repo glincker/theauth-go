@@ -155,6 +155,8 @@ func (s *Service) Issue(ctx context.Context, purpose, to string) error {
 		_ = s.cfg.Cache.Delete(ctx, "otp:cd:"+id)
 		return err
 	}
+	// A fresh code starts unspent. Verify sets this marker to claim a code exactly once.
+	_ = s.cfg.Cache.Delete(ctx, "otp:spent:"+id)
 	if err := s.cfg.Cache.Set(ctx, "otp:code:"+id, []byte(s.mac(id, code)), s.cfg.TTL); err != nil {
 		_ = s.cfg.Cache.Delete(ctx, "otp:cd:"+id)
 		return err
@@ -200,6 +202,16 @@ func (s *Service) Verify(ctx context.Context, purpose, to, code string) error {
 	got := s.mac(id, strings.TrimSpace(code))
 	match := subtle.ConstantTimeCompare([]byte(got), want) == 1
 	if !ok || !match {
+		return ErrInvalid
+	}
+	// Get then Delete is not atomic: parallel requests that all read the code before any delete
+	// would each succeed. SetNX is atomic by the kv.Cache contract, so of N callers presenting the
+	// same correct code exactly one claims it. Issue clears the marker when it mints the next code.
+	claimed, err := s.cfg.Cache.SetNX(ctx, "otp:spent:"+id, []byte{1}, s.cfg.TTL)
+	if err != nil {
+		return err
+	}
+	if !claimed {
 		return ErrInvalid
 	}
 	_ = s.cfg.Cache.Delete(ctx, "otp:code:"+id)

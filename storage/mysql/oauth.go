@@ -516,8 +516,8 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		k.KID,
 		k.Alg,
 		defaultStr(k.Use, "sig"),
-		k.PublicJWK,
-		k.PrivateEnc,
+		nonNilBytes(k.PublicJWK),
+		nonNilBytes(k.PrivateEnc),
 		k.State,
 		timeUTC(created),
 		timePtrToNull(k.PromotedAt),
@@ -574,7 +574,19 @@ func (s *Store) UpdateJWKSKeyState(ctx context.Context, kid, state string, at ti
 			`UPDATE jwks_keys SET state = ? WHERE kid = ?`,
 			state, kid)
 	}
-	return err
+	if err != nil {
+		return err
+	}
+	// RowsAffected counts changed rows, not matched rows (clientFoundRows is
+	// off by default), so a same-state update reports 0. Probe for the kid.
+	var one int
+	if err := s.db.QueryRowContext(ctx, `SELECT 1 FROM jwks_keys WHERE kid = ?`, kid).Scan(&one); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return storage.ErrNotFound
+		}
+		return err
+	}
+	return nil
 }
 
 func scanJWKSKey(row interface{ Scan(...interface{}) error }) (theauth.JWKSKey, error) {

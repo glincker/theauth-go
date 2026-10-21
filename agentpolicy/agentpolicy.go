@@ -12,11 +12,13 @@ import (
 	"fmt"
 	"slices"
 	"sort"
+	"time"
 
 	theauth "github.com/glincker/theauth-go/v2"
 	"github.com/glincker/theauth-go/v2/internal/agent"
 	"github.com/glincker/theauth-go/v2/internal/ratelimit"
 	"github.com/glincker/theauth-go/v2/policy"
+	"github.com/glincker/theauth-go/v2/policy/pathmatch"
 	"github.com/oklog/ulid/v2"
 )
 
@@ -72,12 +74,19 @@ type Config struct {
 	// Evaluator evaluates requests. The zero value is ready; set Now, Risk or
 	// Taint to customize.
 	Evaluator policy.Evaluator
+	// ResourceMatching selects how statement resources compare to the requested resource:
+	// pathmatch.Colon (the zero value, unchanged behavior) or pathmatch.Path, the opt in path
+	// aware matcher shared with the TypeScript core's resourceMatching "path". It overrides
+	// Evaluator.ResourceMatching when set. Keep it equal to the mode your other enforcement
+	// points use (device bundles, delegation subset checks) so they never disagree.
+	ResourceMatching pathmatch.Mode
 }
 
 // Engine evaluates agents against their attached policies. It implements
 // theauth.AgentPolicyEngine.
 type Engine struct {
 	base     []*policy.Policy
+	baseJSON [][]byte // json.Marshal of each base policy, hashed on every Decide
 	resolver ResolverV2
 	mode     Mode
 	eval     policy.Evaluator
@@ -87,6 +96,9 @@ type Engine struct {
 // with no allow statement, unless a resolver could add one.
 func New(cfg Config) (*Engine, error) {
 	e := &Engine{mode: cfg.Mode, eval: cfg.Evaluator}
+	if cfg.ResourceMatching != "" {
+		e.eval.ResourceMatching = pathmatch.Resolve(string(cfg.ResourceMatching))
+	}
 	switch {
 	case cfg.ResolverV2 != nil:
 		e.resolver = cfg.ResolverV2
@@ -103,6 +115,11 @@ func New(cfg Config) (*Engine, error) {
 			return nil, fmt.Errorf("agentpolicy: policy %d: %w", i, err)
 		}
 		e.base = append(e.base, &p)
+		b, err := json.Marshal(&p)
+		if err != nil {
+			b = nil // digest skips a document that cannot be encoded, as before
+		}
+		e.baseJSON = append(e.baseJSON, b)
 	}
 	if cfg.Mode == AllowList && len(e.base) > 0 && e.resolver == nil && !hasAllow(e.base) {
 		return nil, ErrNoAllowStatement
@@ -136,10 +153,15 @@ func (e *Engine) Decide(ctx context.Context, ag theauth.Agent, queries []agent.P
 	}
 	dec.Applies = true
 	dec.Verdicts = make([]agent.PolicyVerdict, len(queries))
-	dec.IDs, dec.Hash = digest(pols)
+	dec.IDs, dec.Hash = e.digest(pols)
 	attrs := map[string]string{"agent_id": ag.ID.String(), "client_id": ag.ClientID}
+	// One clock read for the whole call: every query is judged at the same instant.
+	now := time.Now()
+	if e.eval.Now != nil {
+		now = e.eval.Now()
+	}
 	for i, q := range queries {
-		d := e.eval.Evaluate(policy.Request{Action: q.Action, Resource: q.Resource, Attributes: attrs}, pols...)
+		d := e.eval.Evaluate(policy.Request{Action: q.Action, Resource: q.Resource, Attributes: attrs, Now: now}, pols...)
 		dec.Verdicts[i] = verdict(d)
 	}
 	return dec, nil
@@ -194,13 +216,19 @@ func (e *Engine) resolve(ctx context.Context, ag theauth.Agent) ([]*policy.Polic
 }
 
 // digest returns the sorted policy ids and a SHA-256 over the canonical JSON of
-// every document, in order.
-func digest(pols []*policy.Policy) ([]string, string) {
+// every document, in order. The first len(e.base) documents are the static base policies, whose
+// JSON was encoded once in New.
+func (e *Engine) digest(pols []*policy.Policy) ([]string, string) {
 	h := sha256.New()
 	var ids []string
-	for _, p := range pols {
-		b, err := json.Marshal(p)
-		if err == nil {
+	for i, p := range pols {
+		var b []byte
+		if i < len(e.baseJSON) && p == e.base[i] {
+			b = e.baseJSON[i]
+		} else if enc, err := json.Marshal(p); err == nil {
+			b = enc
+		}
+		if b != nil {
 			h.Write(b)
 			h.Write([]byte{0})
 		}

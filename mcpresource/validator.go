@@ -44,6 +44,14 @@ type Validator struct {
 	dpopAllowAlgs []string
 	dpopMaxAge    time.Duration
 	dpopJTIWindow int
+	// dpopNonce, when set, makes the verifier require a server nonce.
+	dpopNonce       bool
+	dpopNonceSecret []byte
+	dpopNonceTTL    time.Duration
+	dpopReplay      DPoPReplayCache
+
+	// clientCertThumbprint overrides reading r.TLS for RFC 8705 binding.
+	clientCertThumbprint func(*http.Request) string
 
 	// revocation, when set, is consulted after offline validation.
 	revocation         RevocationChecker
@@ -150,6 +158,30 @@ func WithDPoPVerification(allowedSignAlgs []string, proofMaxAge time.Duration, j
 	}
 }
 
+// WithDPoPNonce makes the resource server require a server issued nonce in
+// every DPoP proof (RFC 9449 section 9). A proof without a current nonce is
+// answered 401 with error="use_dpop_nonce" and a DPoP-Nonce header, and
+// successful responses carry the current nonce so clients can rotate. It has
+// no effect unless WithDPoPVerification is also set.
+//
+// Nonces are stateless (HMAC over a time window), so instances that share
+// secret accept each other's nonces. An empty secret generates a random one
+// per Validator, which is fine for a single instance. ttl is the window
+// length (default 5 minutes); a nonce lives between one and two windows.
+func WithDPoPNonce(secret []byte, ttl time.Duration) Option {
+	return func(v *Validator) {
+		v.dpopNonce = true
+		v.dpopNonceSecret = append([]byte(nil), secret...)
+		v.dpopNonceTTL = ttl
+	}
+}
+
+// WithDPoPReplayCache replaces the in-memory proof jti cache, so several
+// instances can share one replay window. See DPoPReplayCache.
+func WithDPoPReplayCache(c DPoPReplayCache) Option {
+	return func(v *Validator) { v.dpopReplay = c }
+}
+
 // New constructs a Validator. The resourceURI MUST match the aud claim of
 // every accepted token; it is also the URL the AS advertises in its
 // /.well-known/oauth-protected-resource document. The configuration is
@@ -172,6 +204,10 @@ func New(resourceURI string, opts ...Option) *Validator {
 	v.introspect = newIntrospectCache(v.introspectURI, v.introspectClient, v.introspectSecret, v.httpClient, v.cacheTTL)
 	if v.dpopEnabled {
 		v.dpop = newDPoPVerifier(v.dpopAllowAlgs, v.dpopMaxAge, v.clockSkew, v.dpopJTIWindow)
+		v.dpop.replay = v.dpopReplay
+		if v.dpopNonce {
+			v.dpop.nonces = newDPoPNonces(v.dpopNonceSecret, v.dpopNonceTTL)
+		}
 	}
 	return v
 }

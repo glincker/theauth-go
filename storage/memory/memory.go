@@ -3,6 +3,8 @@ package memory
 import (
 	"bytes"
 	"context"
+	"errors"
+	"strings"
 	"sync"
 	"time"
 
@@ -72,6 +74,13 @@ func New() *Store {
 func (s *Store) CreateUser(_ context.Context, u theauth.User) (theauth.User, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	// The SQL backends hold a unique index on the lower cased email. Enforce the same here so two
+	// concurrent sign ups cannot both create the account.
+	for id, existing := range s.users {
+		if id != u.ID && strings.EqualFold(existing.Email, u.Email) {
+			return theauth.User{}, errors.New("memory: email already registered")
+		}
+	}
 	s.users[u.ID] = u
 	return u, nil
 }

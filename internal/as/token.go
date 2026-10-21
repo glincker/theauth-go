@@ -395,6 +395,8 @@ func (s *Service) AuthenticateClient(ctx context.Context, clientID, clientSecret
 		}
 		s.observeCacheMiss("oauth_client")
 	}
+	// Taken before the lookup: a rotation that invalidates the entry meanwhile makes PutAt a no-op.
+	tok := s.clientAuthCache.Begin(clientID)
 	client, err := s.ResolveClient(ctx, clientID)
 	if err != nil {
 		return nil, models.ErrOAuthInvalidClient
@@ -418,7 +420,7 @@ func (s *Service) AuthenticateClient(ctx context.Context, clientID, clientSecret
 			// throttle them, and a rotated secret cannot be poisoned by an old entry.
 			return nil, models.ErrOAuthInvalidClient
 		}
-		s.clientAuthCache.Put(clientID, clientSecret, client)
+		s.clientAuthCache.PutAt(clientID, clientSecret, client, tok)
 		s.updateCacheSizeGauge()
 		return client, nil
 	case models.ClientAuthPrivateKeyJWT, models.ClientAuthClientSecretJWT:

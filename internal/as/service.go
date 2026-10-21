@@ -13,6 +13,7 @@ import (
 	"github.com/glincker/theauth-go/v2/internal/cimd"
 	"github.com/glincker/theauth-go/v2/internal/clientauthcache"
 	"github.com/glincker/theauth-go/v2/internal/dpop"
+	"github.com/glincker/theauth-go/v2/internal/epoch"
 	"github.com/glincker/theauth-go/v2/internal/models"
 	obs "github.com/glincker/theauth-go/v2/internal/observability"
 	"github.com/glincker/theauth-go/v2/kv"
@@ -68,6 +69,12 @@ type Service struct {
 
 	// subjectCache memoizes positive subjectActive answers for Cfg.SubjectActiveCacheTTL.
 	subjectCache sync.Map // map[string]time.Time
+
+	// subjectEpoch, chainEpoch and introspectEpoch stop a lookup that raced an invalidation from
+	// caching its stale answer (see internal/epoch). Reads of the caches never touch them.
+	subjectEpoch    epoch.Set
+	chainEpoch      epoch.Set
+	introspectEpoch epoch.Set
 
 	// clientAuthCache memoizes an Argon2id verify of client_secret_hash. Entries bind the verified
 	// client to the sha256 of the presented secret.
@@ -335,7 +342,14 @@ func (s *Service) InvalidateChainCache(agentID string) {
 	if s == nil || agentID == "" {
 		return
 	}
-	s.chainCache.Delete(agentID)
+	// The cache key is the outermost actor subject ("agent:<id>"), but an entry also depends on every
+	// inner actor of its chain. A suspend is rare, so drop the whole cache and fence stores in flight.
+	s.chainEpoch.InvalidateAll(func() {
+		s.chainCache.Range(func(k, _ any) bool {
+			s.chainCache.Delete(k)
+			return true
+		})
+	})
 	s.InvalidateSubject(models.AgentSubjectPrefix + agentID)
 }
 

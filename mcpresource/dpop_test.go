@@ -27,7 +27,7 @@ var jtiCounter int64
 
 // signDPoPProofES256 builds a valid proof JWT for the given key and
 // claim values. Returns the proof string and the JWK thumbprint.
-func signDPoPProofES256(t *testing.T, priv *ecdsa.PrivateKey, method, url, accessToken string, iat time.Time) (string, string) {
+func signDPoPProofES256(t testing.TB, priv *ecdsa.PrivateKey, method, url, accessToken string, iat time.Time) (string, string) {
 	t.Helper()
 	jwk := map[string]string{
 		"kty": "EC",

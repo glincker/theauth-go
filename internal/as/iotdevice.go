@@ -3,7 +3,9 @@ package as
 // iotdevice.go is constrained device identity. An admin mints a single-use join token; the device
 // proves possession of its key by signing a server challenge; the server registers the Device.
 // Enrolled devices then authenticate with an RFC 7523 assertion (iotdevice_grant.go). Attestation
-// is pluggable through Attestor.
+// is pluggable through Attestor. Hardware evidence (Android Key Attestation, Apple App Attest,
+// TPM 2.0 quotes from iot/attest) is checked by DeviceTokensConfig.Attestation, see
+// iotdevice_attest.go.
 
 import (
 	"context"
@@ -14,7 +16,6 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/glincker/theauth-go/v2/crypto"
 	"github.com/glincker/theauth-go/v2/internal/dpop"
 	"github.com/glincker/theauth-go/v2/internal/jwt"
 	"github.com/glincker/theauth-go/v2/internal/models"
@@ -52,6 +53,19 @@ type DeviceTokensConfig struct {
 	// TokenPerMinute caps assertion grants per device per minute, counted only after the signature
 	// verified. Negative disables (default 60).
 	TokenPerMinute int
+	// OnRevoke is called with the device ID after RevokeDevice succeeded, on every revoke path
+	// (the Go method and the HTTP route). It also runs when the device was already revoked, so a
+	// purge that failed earlier can be repeated. Use it to drop caches that would otherwise keep
+	// serving the device, for example mqttauth.Purger. It must return quickly and its panics are
+	// recovered and logged.
+	OnRevoke func(ctx context.Context, deviceID string)
+	// OnStatusChange gets the device ID and new status ("suspended" or "active") after a suspend
+	// or resume. Same rules as OnRevoke. mqttauth.Purger.OnStatusChange fits.
+	OnStatusChange func(ctx context.Context, deviceID, status string)
+	// Attestation checks hardware attestation evidence at enrollment (Android Key Attestation,
+	// Apple App Attest, TPM 2.0 quotes, see package iot/attest). Nil means no evidence is
+	// accepted: a device that sends attestation_evidence is refused rather than ignored.
+	Attestation *DeviceAttestationConfig
 }
 
 func applyDeviceTokenDefaults(c *DeviceTokensConfig) {
@@ -147,7 +161,11 @@ func (a joinTokenAttestor) Attest(ctx context.Context, ev DeviceEvidence) (Devic
 	if ev.Token == "" {
 		return DeviceAttestation{}, models.ErrDeviceEnrollmentInvalid
 	}
-	t, err := a.store.DeviceJoinTokenByHash(ctx, crypto.HashToken(ev.Token))
+	hash, ok := enrollmentTokenHash(ev.Token)
+	if !ok {
+		return DeviceAttestation{}, models.ErrDeviceEnrollmentInvalid
+	}
+	t, err := a.store.DeviceJoinTokenByHash(ctx, hash)
 	if err != nil {
 		if errors.Is(err, models.ErrStorageNotFound) {
 			return DeviceAttestation{}, models.ErrDeviceEnrollmentInvalid
@@ -207,50 +225,6 @@ func (s *Service) attestor(store DeviceIdentityStorage, kind string) (Attestor, 
 	return nil, false
 }
 
-// CreateDeviceJoinTokenInput describes a join token to mint.
-type CreateDeviceJoinTokenInput struct {
-	OrganizationID *models.ULID
-	Name           string
-	SPIFFEID       string
-	Scopes         []string
-	TTL            time.Duration
-	CreatedBy      *models.ULID
-}
-
-// CreateDeviceJoinToken mints a single-use join token. The plaintext is returned once and is not
-// recoverable afterwards.
-func (s *Service) CreateDeviceJoinToken(ctx context.Context, in CreateDeviceJoinTokenInput) (models.DeviceJoinToken, string, error) {
-	store, ok := s.identityStore()
-	if !ok {
-		return models.DeviceJoinToken{}, "", models.ErrDevicesDisabled
-	}
-	if len(in.Scopes) == 0 || in.TTL < 0 {
-		return models.DeviceJoinToken{}, "", models.ErrOAuthInvalidRequest
-	}
-	if in.TTL == 0 {
-		in.TTL = s.Cfg.DeviceTokens.JoinTokenTTL
-	}
-	secret, err := crypto.NewToken()
-	if err != nil {
-		return models.DeviceJoinToken{}, "", err
-	}
-	raw := joinTokenPrefix + secret
-	now := s.now().UTC()
-	t := models.DeviceJoinToken{
-		ID: ulid.New(), TokenHash: crypto.HashToken(raw), Prefix: raw[:len(joinTokenPrefix)+4],
-		OrganizationID: in.OrganizationID, Name: in.Name, SPIFFEID: in.SPIFFEID,
-		Scopes: append([]string(nil), in.Scopes...), CreatedBy: in.CreatedBy,
-		CreatedAt: now, ExpiresAt: now.Add(in.TTL),
-	}
-	if err := store.InsertDeviceJoinToken(ctx, t); err != nil {
-		return models.DeviceJoinToken{}, "", err
-	}
-	s.Audit.EmitAudit(ctx, "device.join_token.created",
-		models.TargetRef{Type: "device_join_token", ID: t.ID.String()},
-		map[string]any{"name": t.Name, "spiffe_id": t.SPIFFEID, "expires_at": t.ExpiresAt.Format(time.RFC3339)})
-	return t, raw, nil
-}
-
 // DeviceEnrollRequest carries the enrollment fields. Challenge and Proof are empty on the challenge step.
 type DeviceEnrollRequest struct {
 	Kind      string
@@ -259,12 +233,18 @@ type DeviceEnrollRequest struct {
 	Challenge string
 	Proof     string
 	Name      string
+	// AttestationEvidence is the raw hardware attestation evidence, checked by
+	// DeviceTokensConfig.Attestation.Verify with the challenge nonce. Empty means none.
+	AttestationEvidence string
 }
 
 // DeviceChallenge is the server nonce a device must sign.
 type DeviceChallenge struct {
 	Challenge string `json:"challenge"`
 	ExpiresIn int    `json:"expires_in"`
+	// Nonce is the jti of the challenge. It is the enrollment proof nonce and the freshness value
+	// a device binds into its hardware attestation evidence.
+	Nonce string `json:"nonce"`
 }
 
 type deviceKey struct {
@@ -342,16 +322,17 @@ func (s *Service) DeviceEnrollChallenge(ctx context.Context, req DeviceEnrollReq
 	}
 	now := s.now().UTC()
 	ttl := s.Cfg.DeviceTokens.ChallengeTTL
+	jti := ulid.New().String()
 	claims := jwt.Claims{
 		Iss: s.Cfg.Issuer, Sub: att.Subject, Aud: s.Cfg.Issuer,
-		Exp: now.Add(ttl).Unix(), Iat: now.Unix(), Jti: ulid.New().String(), Typ: challengeTyp,
+		Exp: now.Add(ttl).Unix(), Iat: now.Unix(), Jti: jti, Typ: challengeTyp,
 		Extra: map[string]any{"jkt": key.thumbprint, "kind": att.Kind},
 	}
 	tok, err := jwt.SignWith(claims, challengeTyp, jk.KID, alg, signer)
 	if err != nil {
 		return DeviceChallenge{}, fmt.Errorf("sign device challenge: %w", err)
 	}
-	return DeviceChallenge{Challenge: tok, ExpiresIn: int(ttl.Seconds())}, nil
+	return DeviceChallenge{Challenge: tok, ExpiresIn: int(ttl.Seconds()), Nonce: jti}, nil
 }
 
 func (s *Service) attestDevice(ctx context.Context, store DeviceIdentityStorage, req DeviceEnrollRequest, key deviceKey) (DeviceAttestation, error) {
@@ -392,6 +373,10 @@ func (s *Service) EnrollDevice(ctx context.Context, req DeviceEnrollRequest) (mo
 	if !s.verifyEnrollProof(req.Proof, key, ch.Jti, now) {
 		return models.Device{}, models.ErrDeviceEnrollmentInvalid
 	}
+	hw, err := s.checkHardwareAttestation(ctx, req, att, key, ch.Jti)
+	if err != nil {
+		return models.Device{}, err
+	}
 	a, _ := s.attestor(store, req.Kind)
 	id := ulid.New()
 	if err := a.Consume(ctx, att, id); err != nil {
@@ -404,7 +389,7 @@ func (s *Service) EnrollDevice(ctx context.Context, req DeviceEnrollRequest) (mo
 	d := models.Device{
 		ID: id, OrganizationID: att.OrganizationID, Name: name, SPIFFEID: att.SPIFFEID,
 		PublicKeyJWK: key.jwk, KeyThumbprint: key.thumbprint, Attestation: att.Kind,
-		Scopes: att.Scopes, Status: models.DeviceStatusActive, CreatedAt: now,
+		AttestationClaims: hw, Scopes: att.Scopes, Status: models.DeviceStatusActive, CreatedAt: now,
 	}
 	if err := store.InsertDevice(ctx, d); err != nil {
 		if rerr := a.Release(ctx, att); rerr != nil {
@@ -413,8 +398,11 @@ func (s *Service) EnrollDevice(ctx context.Context, req DeviceEnrollRequest) (mo
 		}
 		return models.Device{}, err
 	}
-	s.Audit.EmitAudit(ctx, "device.enrolled", models.TargetRef{Type: "device", ID: id.String()},
-		map[string]any{"name": d.Name, "spiffe_id": d.SPIFFEID, "attestation": d.Attestation, "jkt": d.KeyThumbprint})
+	meta := map[string]any{"name": d.Name, "spiffe_id": d.SPIFFEID, "attestation": d.Attestation, "jkt": d.KeyThumbprint}
+	if hw != nil {
+		meta["hardware_attestation"] = hw
+	}
+	s.Audit.EmitAudit(ctx, "device.enrolled", models.TargetRef{Type: "device", ID: id.String()}, meta)
 	return d, nil
 }
 
@@ -470,7 +458,34 @@ func (s *Service) RevokeDevice(ctx context.Context, id models.ULID, orgID *model
 		}
 		s.Audit.EmitAudit(ctx, "device.revoked", models.TargetRef{Type: "device", ID: id.String()}, meta)
 	}
+	s.notifyDeviceRevoked(ctx, id)
 	return nil
+}
+
+func (s *Service) notifyDeviceRevoked(ctx context.Context, id models.ULID) {
+	fn := s.Cfg.DeviceTokens.OnRevoke
+	if fn == nil {
+		return
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			slog.Error("theauth: DeviceTokens.OnRevoke panicked", "device", id.String(), "panic", fmt.Sprint(r))
+		}
+	}()
+	fn(ctx, id.String())
+}
+
+func (s *Service) notifyDeviceStatus(ctx context.Context, id models.ULID, status string) {
+	fn := s.Cfg.DeviceTokens.OnStatusChange
+	if fn == nil {
+		return
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			slog.Error("theauth: DeviceTokens.OnStatusChange panicked", "device", id.String(), "panic", fmt.Sprint(r))
+		}
+	}()
+	fn(ctx, id.String(), status)
 }
 
 // RevokeDeviceJoinToken revokes an unspent join token, scoped like RevokeDevice.

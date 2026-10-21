@@ -139,19 +139,14 @@ func (v *Validator) authenticateOpaque(r *http.Request, token, scheme string, no
 		return nil, err
 	}
 	principal.authorizationDetails = details
-	jkt := ""
-	if res.Cnf != nil {
-		jkt = res.Cnf.JKT
-	}
-	if jkt == "" && strings.EqualFold(res.TokenType, "dpop") {
+	if res.Cnf == nil && strings.EqualFold(res.TokenType, "dpop") {
 		return nil, errors.New("mcpresource: DPoP token without cnf.jkt")
 	}
-	if jkt != "" {
-		bound, err := v.bindDPoP(r, token, scheme, jkt, now)
-		if err != nil {
-			return nil, err
-		}
-		principal.CnfJKT = bound
+	if strings.EqualFold(res.TokenType, "dpop") && res.Cnf.JKT == "" {
+		return nil, errors.New("mcpresource: DPoP token without cnf.jkt")
+	}
+	if err := v.bindConfirmation(r, token, scheme, res.Cnf, principal, now); err != nil {
+		return nil, err
 	}
 	if err := v.checkRevocation(r, token, principal); err != nil {
 		return nil, err

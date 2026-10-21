@@ -34,9 +34,36 @@ const (
 	// CodeApprovalRequired means a statement escalated the call and no valid
 	// approval was presented.
 	CodeApprovalRequired DecisionCode = "approval_required"
-	// CodeApprovalInvalid means an approval id was presented but could not be
-	// spent (unknown, pending, already used or issued for another call).
+	// CodeApprovalInvalid is the generic fallback for an approval id that
+	// could not be spent. The built in toolguard approvals report one of the
+	// specific approval_* codes below instead; only a custom Approvals that
+	// cannot say why still reports this one.
 	CodeApprovalInvalid DecisionCode = "approval_invalid"
+	// CodeApprovalNotFound means the presented approval id is unknown.
+	CodeApprovalNotFound DecisionCode = "approval_not_found"
+	// CodeApprovalPending means the request is still waiting for a human.
+	CodeApprovalPending DecisionCode = "approval_pending"
+	// CodeApprovalDenied means a human denied the request.
+	CodeApprovalDenied DecisionCode = "approval_denied"
+	// CodeApprovalExpired means the request passed its expiry before it was
+	// decided or spent.
+	CodeApprovalExpired DecisionCode = "approval_expired"
+	// CodeApprovalAlreadyUsed means the approval was already spent.
+	CodeApprovalAlreadyUsed DecisionCode = "approval_already_used"
+	// CodeApprovalMismatch means the approval was issued for another agent,
+	// action or resource.
+	CodeApprovalMismatch DecisionCode = "approval_mismatch"
+	// CodeApprovalArgumentsMismatch means the arguments presented at spend
+	// time differ from the ones the human approved.
+	CodeApprovalArgumentsMismatch DecisionCode = "approval_arguments_mismatch"
+	// CodeApprovalStepUpInsufficient means the approval was granted under a
+	// weaker step-up rule than the policy demands now. Reserved here: the Go
+	// approvals do not record a step-up rule yet.
+	CodeApprovalStepUpInsufficient DecisionCode = "approval_step_up_insufficient"
+	// CodeApprovalGranted is the code of the decision event emitted when a
+	// human approves a request. It is not a spend: the spend reports
+	// approval_consumed.
+	CodeApprovalGranted DecisionCode = "approval_granted"
 	// CodeAgentNotFound means the agent id is unknown.
 	CodeAgentNotFound DecisionCode = "agent_not_found"
 	// CodeAgentRevoked means the agent was revoked or suspended. Reserved
@@ -47,6 +74,21 @@ const (
 	// CodeInvalidToken means the presented token failed verification.
 	// Reserved for the token layer; policy never sees an invalid token.
 	CodeInvalidToken DecisionCode = "invalid_token"
+	// CodeConfirmationRequired means the token is sender constrained (DPoP or
+	// mTLS, RFC 7800) and the request carried no proof of the key. Reserved
+	// until the resource server side checks land.
+	CodeConfirmationRequired DecisionCode = "confirmation_required"
+	// CodeConfirmationFailed means the proof of possession does not match the
+	// key or certificate the token is bound to. Reserved, see above.
+	CodeConfirmationFailed DecisionCode = "confirmation_failed"
+	// CodeDeviceNotFound means the device id is unknown (IoT devices).
+	CodeDeviceNotFound DecisionCode = "device_not_found"
+	// CodeDeviceSuspended means the device is suspended. Reversible.
+	CodeDeviceSuspended DecisionCode = "device_suspended"
+	// CodeDeviceRevoked means the device was revoked.
+	CodeDeviceRevoked DecisionCode = "device_revoked"
+	// CodeDeviceExpired means the device passed its expiry.
+	CodeDeviceExpired DecisionCode = "device_expired"
 	// CodeOwnerMismatch means the caller does not own the agent. Reserved.
 	CodeOwnerMismatch DecisionCode = "owner_mismatch"
 	// CodeHookDenied means a before authorize hook refused the call. Reserved.
@@ -69,8 +111,13 @@ func AllDecisionCodes() []DecisionCode {
 	return []DecisionCode{
 		CodeAllowed, CodeApprovalConsumed, CodeNoPermission, CodeRateLimited,
 		CodeIPNotAllowed, CodeTimeRestricted, CodeArgumentRejected,
-		CodeApprovalRequired, CodeApprovalInvalid, CodeAgentNotFound,
-		CodeAgentRevoked, CodeAgentExpired, CodeInvalidToken, CodeOwnerMismatch,
+		CodeApprovalRequired, CodeApprovalInvalid, CodeApprovalNotFound,
+		CodeApprovalPending, CodeApprovalDenied, CodeApprovalExpired,
+		CodeApprovalAlreadyUsed, CodeApprovalMismatch, CodeApprovalArgumentsMismatch,
+		CodeApprovalStepUpInsufficient, CodeApprovalGranted, CodeAgentNotFound,
+		CodeAgentRevoked, CodeAgentExpired, CodeInvalidToken,
+		CodeConfirmationRequired, CodeConfirmationFailed,
+		CodeDeviceNotFound, CodeDeviceSuspended, CodeDeviceRevoked, CodeDeviceExpired, CodeOwnerMismatch,
 		CodeHookDenied, CodeHookTimeout, CodeHookError, CodeTaintViolation,
 		CodeRiskEscalation, CodePolicyIndeterminate,
 	}

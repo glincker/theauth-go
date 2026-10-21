@@ -21,7 +21,7 @@ VALUES (?, ?, ?, ?, ?)`,
 		ulidToBytes(t.OrganizationID),
 		t.TokenHash,
 		t.Name,
-		timeUTC(t.CreatedAt),
+		timeUTCOrNow(t.CreatedAt),
 	)
 	if err != nil {
 		return theauth.SCIMToken{}, err
@@ -123,8 +123,8 @@ VALUES (?, ?, ?, ?, ?, ?)`,
 		ulidToBytes(g.OrganizationID),
 		g.DisplayName,
 		nullStringVal(g.ExternalID),
-		timeUTC(g.CreatedAt),
-		timeUTC(g.UpdatedAt),
+		timeUTCOrNow(g.CreatedAt),
+		timeUTCOrNow(g.UpdatedAt),
 	)
 	if err != nil {
 		if isMySQL1062(err) {
@@ -245,7 +245,7 @@ func (s *Store) SetGroupMembers(ctx context.Context, groupID theauth.ULID, userI
 	}
 	for _, uid := range userIDs {
 		if _, err := tx.ExecContext(ctx,
-			`INSERT IGNORE INTO group_members (group_id, user_id) VALUES (?, ?)`,
+			`INSERT INTO group_members (group_id, user_id) VALUES (?, ?) ON DUPLICATE KEY UPDATE group_id = group_id`,
 			ulidToBytes(groupID), ulidToBytes(uid),
 		); err != nil {
 			return err
@@ -257,7 +257,7 @@ func (s *Store) SetGroupMembers(ctx context.Context, groupID theauth.ULID, userI
 func (s *Store) AddGroupMembers(ctx context.Context, groupID theauth.ULID, userIDs []theauth.ULID) error {
 	for _, uid := range userIDs {
 		if _, err := s.db.ExecContext(ctx,
-			`INSERT IGNORE INTO group_members (group_id, user_id) VALUES (?, ?)`,
+			`INSERT INTO group_members (group_id, user_id) VALUES (?, ?) ON DUPLICATE KEY UPDATE group_id = group_id`,
 			ulidToBytes(groupID), ulidToBytes(uid),
 		); err != nil {
 			return err

@@ -123,3 +123,84 @@ func TestDeviceAdminRoutesAbsentWhenDisabled(t *testing.T) {
 		t.Fatalf("status %d, want the routes unmounted", code)
 	}
 }
+
+func TestDeviceAdminSuspendResumeAndTokenKinds(t *testing.T) {
+	base, store := newDeviceAdminServer(t, true)
+	org := ulid.New().String()
+	orgURL := base + org
+
+	t.Run("claim and bulk tokens", func(t *testing.T) {
+		code, claim, raw := call(t, http.MethodPost, orgURL+"/devices/join-tokens",
+			`{"kind":"claim","scopes":["telemetry:write"]}`)
+		secret, _ := claim["token"].(string)
+		if code != http.StatusCreated || len(secret) != 11 || secret[5] != '-' || claim["kind"] != "claim" || claim["max_uses"] != float64(1) {
+			t.Fatalf("claim: %d %s", code, raw)
+		}
+		code, bulk, raw := call(t, http.MethodPost, orgURL+"/devices/join-tokens",
+			`{"kind":"bulk","max_uses":50,"scopes":["telemetry:write"],"ttl_seconds":3600}`)
+		if code != http.StatusCreated || !strings.HasPrefix(bulk["token"].(string), "dj_") || bulk["max_uses"] != float64(50) {
+			t.Fatalf("bulk: %d %s", code, raw)
+		}
+		for _, body := range []string{
+			`{"kind":"bulk","scopes":["a"]}`,
+			`{"kind":"bulk","max_uses":2,"spiffe_id":"spiffe://example.org/x","scopes":["a"]}`,
+			`{"kind":"claim","max_uses":3,"scopes":["a"]}`,
+			`{"kind":"nope","scopes":["a"]}`,
+			`{"kind":"claim","scopes":["a"],"ttl_seconds":99999999}`,
+		} {
+			if code, _, _ := call(t, http.MethodPost, orgURL+"/devices/join-tokens", body); code != http.StatusBadRequest {
+				t.Errorf("%s: status %d, want 400", body, code)
+			}
+		}
+	})
+
+	t.Run("suspend and resume", func(t *testing.T) {
+		var orgID models.ULID
+		if err := orgID.UnmarshalText([]byte(org)); err != nil {
+			t.Fatal(err)
+		}
+		dev := models.Device{
+			ID: ulid.New(), OrganizationID: &orgID, Name: "door", PublicKeyJWK: []byte(`{"kty":"OKP","crv":"Ed25519","x":"AAAA"}`),
+			KeyThumbprint: "tp2", Attestation: models.DeviceAttestationJoinToken, Scopes: []string{"telemetry:write"},
+			Status: models.DeviceStatusActive, CreatedAt: time.Now(),
+		}
+		if err := store.InsertDevice(t.Context(), dev); err != nil {
+			t.Fatal(err)
+		}
+		path := "/devices/" + dev.ID.String()
+		other := base + ulid.New().String()
+		if code, _, _ := call(t, http.MethodPost, other+path+"/suspend", ""); code != http.StatusNotFound {
+			t.Fatalf("another org suspended our device: %d", code)
+		}
+		if code, _, _ := call(t, http.MethodPost, orgURL+path+"/suspend", ""); code != http.StatusNoContent {
+			t.Fatalf("suspend: %d", code)
+		}
+		if code, _, _ := call(t, http.MethodPost, orgURL+path+"/suspend", ""); code != http.StatusNoContent {
+			t.Fatalf("suspend twice: %d", code)
+		}
+		if got, _ := store.DeviceByID(t.Context(), dev.ID); got.Status != models.DeviceStatusSuspended {
+			t.Fatalf("after suspend: %+v", got)
+		}
+		_, list, _ := call(t, http.MethodGet, orgURL+"/devices", "")
+		if rows, _ := list["data"].([]any); len(rows) != 1 || rows[0].(map[string]any)["status"] != "suspended" {
+			t.Fatalf("list shows %v", list)
+		}
+		if code, _, _ := call(t, http.MethodPost, orgURL+path+"/resume", ""); code != http.StatusNoContent {
+			t.Fatalf("resume: %d", code)
+		}
+		if got, _ := store.DeviceByID(t.Context(), dev.ID); !got.Active() {
+			t.Fatalf("after resume: %+v", got)
+		}
+		if code, _, _ := call(t, http.MethodPost, orgURL+path+"/revoke", ""); code != http.StatusNoContent {
+			t.Fatalf("revoke: %d", code)
+		}
+		for _, verb := range []string{"/resume", "/suspend"} {
+			if code, _, _ := call(t, http.MethodPost, orgURL+path+verb, ""); code != http.StatusConflict {
+				t.Fatalf("%s a revoked device: %d, want 409", verb, code)
+			}
+		}
+		if code, _, _ := call(t, http.MethodPost, orgURL+"/devices/"+ulid.New().String()+"/suspend", ""); code != http.StatusNotFound {
+			t.Fatalf("unknown device: %d", code)
+		}
+	})
+}

@@ -1,0 +1,902 @@
+{
+	"generator": "docs-local/vectors/gen-attest-policy-vectors.mts",
+	"vectors": [
+		{
+			"name": "android: default roots algorithm_EC_SecurityLevel_TEE",
+			"claims": {
+				"format": "android-key-attestation",
+				"attestationVersion": 3,
+				"securityLevel": "trusted_environment",
+				"keySecurityLevel": "trusted_environment",
+				"verifiedBootState": "unverified",
+				"deviceLocked": false,
+				"verifiedBootKey": "0000000000000000000000000000000000000000000000000000000000000000",
+				"osVersion": 0,
+				"osPatchLevel": 201907,
+				"attestedKeyThumbprint": "hmEa5OJk8eBoerqDxN5vZhAZIOE3nW7xyjMkC1FHIVw",
+				"packages": [
+					"android",
+					"com.android.keychain",
+					"com.android.settings",
+					"com.qti.diagservices",
+					"com.android.dynsystem",
+					"com.android.inputdevices",
+					"com.android.localtransport",
+					"com.android.location.fused",
+					"com.android.server.telecom",
+					"com.android.wallpaperbackup",
+					"com.google.SSRestartDetector",
+					"com.google.android.hiddenmenu",
+					"com.android.providers.settings"
+				],
+				"signerDigests": [
+					"301aa3cb081134501c45f1422abc66c24224fd5ded5fdc8f17e697176fd866aa"
+				],
+				"attestationRootSerial": "f92009e853b6b045"
+			},
+			"facts": {
+				"format": "android-key-attestation",
+				"securityLevel": "hardware",
+				"bootState": "unlocked",
+				"appIds": [
+					"android",
+					"com.android.keychain",
+					"com.android.settings",
+					"com.qti.diagservices",
+					"com.android.dynsystem",
+					"com.android.inputdevices",
+					"com.android.localtransport",
+					"com.android.location.fused",
+					"com.android.server.telecom",
+					"com.android.wallpaperbackup",
+					"com.google.SSRestartDetector",
+					"com.google.android.hiddenmenu",
+					"com.android.providers.settings"
+				]
+			}
+		},
+		{
+			"name": "android: pinned own root algorithm_RSA_SecurityLevel_StrongBox",
+			"claims": {
+				"format": "android-key-attestation",
+				"attestationVersion": 3,
+				"securityLevel": "strongbox",
+				"keySecurityLevel": "strongbox",
+				"verifiedBootState": "unverified",
+				"deviceLocked": false,
+				"verifiedBootKey": "0000000000000000000000000000000000000000000000000000000000000000",
+				"osVersion": 0,
+				"osPatchLevel": 201907,
+				"packages": [
+					"android",
+					"com.android.keychain",
+					"com.android.settings",
+					"com.qti.diagservices",
+					"com.android.dynsystem",
+					"com.android.inputdevices",
+					"com.android.localtransport",
+					"com.android.location.fused",
+					"com.android.server.telecom",
+					"com.android.wallpaperbackup",
+					"com.google.SSRestartDetector",
+					"com.google.android.hiddenmenu",
+					"com.android.providers.settings"
+				],
+				"signerDigests": [
+					"301aa3cb081134501c45f1422abc66c24224fd5ded5fdc8f17e697176fd866aa"
+				],
+				"attestationRootSerial": "e35d38c6897d47e8"
+			},
+			"facts": {
+				"format": "android-key-attestation",
+				"securityLevel": "strongbox",
+				"bootState": "unlocked",
+				"appIds": [
+					"android",
+					"com.android.keychain",
+					"com.android.settings",
+					"com.qti.diagservices",
+					"com.android.dynsystem",
+					"com.android.inputdevices",
+					"com.android.localtransport",
+					"com.android.location.fused",
+					"com.android.server.telecom",
+					"com.android.wallpaperbackup",
+					"com.google.SSRestartDetector",
+					"com.google.android.hiddenmenu",
+					"com.android.providers.settings"
+				]
+			}
+		},
+		{
+			"name": "android: default roots algorithm_RSA_SecurityLevel_TEE",
+			"claims": {
+				"format": "android-key-attestation",
+				"attestationVersion": 3,
+				"securityLevel": "trusted_environment",
+				"keySecurityLevel": "trusted_environment",
+				"verifiedBootState": "unverified",
+				"deviceLocked": false,
+				"verifiedBootKey": "0000000000000000000000000000000000000000000000000000000000000000",
+				"osVersion": 0,
+				"osPatchLevel": 201907,
+				"packages": [
+					"android",
+					"com.android.keychain",
+					"com.android.settings",
+					"com.qti.diagservices",
+					"com.android.dynsystem",
+					"com.android.inputdevices",
+					"com.android.localtransport",
+					"com.android.location.fused",
+					"com.android.server.telecom",
+					"com.android.wallpaperbackup",
+					"com.google.SSRestartDetector",
+					"com.google.android.hiddenmenu",
+					"com.android.providers.settings"
+				],
+				"signerDigests": [
+					"301aa3cb081134501c45f1422abc66c24224fd5ded5fdc8f17e697176fd866aa"
+				],
+				"attestationRootSerial": "f92009e853b6b045"
+			},
+			"facts": {
+				"format": "android-key-attestation",
+				"securityLevel": "hardware",
+				"bootState": "unlocked",
+				"appIds": [
+					"android",
+					"com.android.keychain",
+					"com.android.settings",
+					"com.qti.diagservices",
+					"com.android.dynsystem",
+					"com.android.inputdevices",
+					"com.android.localtransport",
+					"com.android.location.fused",
+					"com.android.server.telecom",
+					"com.android.wallpaperbackup",
+					"com.google.SSRestartDetector",
+					"com.google.android.hiddenmenu",
+					"com.android.providers.settings"
+				]
+			}
+		},
+		{
+			"name": "apple: ok apple_guide_sample",
+			"claims": {
+				"format": "apple-app-attest",
+				"bound": "none",
+				"environment": "production",
+				"appId": "1234567890.com.example.myapp",
+				"keyId": "zgSY9YSD+7TaDXssY6WlOPVS1K3Lmk+pFhlcSWE+ZV0=",
+				"attestedPublicKey": "BEMyVErPMj23dEQ8qvM59W5+lcck+sLBQlnzZeJEVlCytfsoW89Um8tgWUQS52gqJCfuran7Ut/tCxqxftCfqb0=",
+				"attestedKeyThumbprint": "hsBuW8aaxivCglI3ZCPaLwq-xeG3ovL62Khy8cj8rZs",
+				"validationCategory": 1,
+				"bundleVersion": "1",
+				"attestationRootSerial": "bf3be0ef1cdd2e0fb8c6e721f621798"
+			},
+			"facts": {
+				"format": "apple-app-attest",
+				"securityLevel": "hardware",
+				"appIds": [
+					"1234567890.com.example.myapp"
+				]
+			}
+		},
+		{
+			"name": "apple: attested-key good apple_guide_sample",
+			"claims": {
+				"format": "apple-app-attest",
+				"bound": "attested-key",
+				"environment": "production",
+				"appId": "1234567890.com.example.myapp",
+				"keyId": "zgSY9YSD+7TaDXssY6WlOPVS1K3Lmk+pFhlcSWE+ZV0=",
+				"attestedPublicKey": "BEMyVErPMj23dEQ8qvM59W5+lcck+sLBQlnzZeJEVlCytfsoW89Um8tgWUQS52gqJCfuran7Ut/tCxqxftCfqb0=",
+				"attestedKeyThumbprint": "hsBuW8aaxivCglI3ZCPaLwq-xeG3ovL62Khy8cj8rZs",
+				"validationCategory": 1,
+				"bundleVersion": "1",
+				"attestationRootSerial": "bf3be0ef1cdd2e0fb8c6e721f621798"
+			},
+			"facts": {
+				"format": "apple-app-attest",
+				"securityLevel": "hardware",
+				"appIds": [
+					"1234567890.com.example.myapp"
+				]
+			}
+		},
+		{
+			"name": "apple: ok veehaitch_ios_14_4",
+			"claims": {
+				"format": "apple-app-attest",
+				"bound": "none",
+				"environment": "development",
+				"appId": "6MURL8TA57.de.vincent-haupert.apple-appattest-poc",
+				"keyId": "YmbJO4x5nEHUvncp9zdWuVZjNBEMgJn3cdSToAXQe3M=",
+				"attestedPublicKey": "BIjANKGQqn28WgYVAcZUKAOUJYIZiz8cxUZzyjua0gtBUoJnpU9f26BGn6+0a7aZCjlr8E+UpJ1DIMgcerJAo5g=",
+				"attestedKeyThumbprint": "H878BuiNLgemAutj1dyeZlteVhAH7EErQ8bmCiiFHGY",
+				"attestationRootSerial": "bf3be0ef1cdd2e0fb8c6e721f621798"
+			},
+			"facts": {
+				"format": "apple-app-attest",
+				"securityLevel": "hardware",
+				"appIds": [
+					"6MURL8TA57.de.vincent-haupert.apple-appattest-poc"
+				]
+			}
+		},
+		{
+			"name": "apple: attested-key good veehaitch_ios_14_4",
+			"claims": {
+				"format": "apple-app-attest",
+				"bound": "attested-key",
+				"environment": "development",
+				"appId": "6MURL8TA57.de.vincent-haupert.apple-appattest-poc",
+				"keyId": "YmbJO4x5nEHUvncp9zdWuVZjNBEMgJn3cdSToAXQe3M=",
+				"attestedPublicKey": "BIjANKGQqn28WgYVAcZUKAOUJYIZiz8cxUZzyjua0gtBUoJnpU9f26BGn6+0a7aZCjlr8E+UpJ1DIMgcerJAo5g=",
+				"attestedKeyThumbprint": "H878BuiNLgemAutj1dyeZlteVhAH7EErQ8bmCiiFHGY",
+				"attestationRootSerial": "bf3be0ef1cdd2e0fb8c6e721f621798"
+			},
+			"facts": {
+				"format": "apple-app-attest",
+				"securityLevel": "hardware",
+				"appIds": [
+					"6MURL8TA57.de.vincent-haupert.apple-appattest-poc"
+				]
+			}
+		},
+		{
+			"name": "apple: ok termakan_ios_27_0_1",
+			"claims": {
+				"format": "apple-app-attest",
+				"bound": "none",
+				"environment": "production",
+				"appId": "4L4SS26L9J.com.jewei.termakan",
+				"keyId": "eRmMhmV6XDreAAVgWDYRtFXM82FmRaKmf5TRDk5RjdE=",
+				"attestedPublicKey": "BF9DM9VGuArPyl2aBiDqLiKnRcEPPIx3Og98cAAQTNPn1OGqITalRNhucXwGflTg7R0T2ZoVPqydB1H5qMnzwOg=",
+				"attestedKeyThumbprint": "sZlBHuS2YdT2cc25T6mfFJAwKuYG8XD9XXo0e7GitW8",
+				"validationCategory": 3,
+				"bundleVersion": "1",
+				"attestationRootSerial": "bf3be0ef1cdd2e0fb8c6e721f621798"
+			},
+			"facts": {
+				"format": "apple-app-attest",
+				"securityLevel": "hardware",
+				"appIds": [
+					"4L4SS26L9J.com.jewei.termakan"
+				]
+			}
+		},
+		{
+			"name": "apple: attested-key good termakan_ios_27_0_1",
+			"claims": {
+				"format": "apple-app-attest",
+				"bound": "attested-key",
+				"environment": "production",
+				"appId": "4L4SS26L9J.com.jewei.termakan",
+				"keyId": "eRmMhmV6XDreAAVgWDYRtFXM82FmRaKmf5TRDk5RjdE=",
+				"attestedPublicKey": "BF9DM9VGuArPyl2aBiDqLiKnRcEPPIx3Og98cAAQTNPn1OGqITalRNhucXwGflTg7R0T2ZoVPqydB1H5qMnzwOg=",
+				"attestedKeyThumbprint": "sZlBHuS2YdT2cc25T6mfFJAwKuYG8XD9XXo0e7GitW8",
+				"validationCategory": 3,
+				"bundleVersion": "1",
+				"attestationRootSerial": "bf3be0ef1cdd2e0fb8c6e721f621798"
+			},
+			"facts": {
+				"format": "apple-app-attest",
+				"securityLevel": "hardware",
+				"appIds": [
+					"4L4SS26L9J.com.jewei.termakan"
+				]
+			}
+		},
+		{
+			"name": "apple: client-data good",
+			"claims": {
+				"format": "apple-app-attest",
+				"bound": "client-data",
+				"environment": "production",
+				"appId": "4L4SS26L9J.com.jewei.termakan",
+				"keyId": "eRmMhmV6XDreAAVgWDYRtFXM82FmRaKmf5TRDk5RjdE=",
+				"attestedPublicKey": "BF9DM9VGuArPyl2aBiDqLiKnRcEPPIx3Og98cAAQTNPn1OGqITalRNhucXwGflTg7R0T2ZoVPqydB1H5qMnzwOg=",
+				"attestedKeyThumbprint": "sZlBHuS2YdT2cc25T6mfFJAwKuYG8XD9XXo0e7GitW8",
+				"validationCategory": 3,
+				"bundleVersion": "1",
+				"attestationRootSerial": "bf3be0ef1cdd2e0fb8c6e721f621798"
+			},
+			"facts": {
+				"format": "apple-app-attest",
+				"securityLevel": "hardware",
+				"appIds": [
+					"4L4SS26L9J.com.jewei.termakan"
+				]
+			}
+		},
+		{
+			"name": "tpm: ok sha1",
+			"claims": {
+				"format": "tpm2-quote",
+				"akName": "000bf175bdb57297b2b289973f819863d6c9d09c236725676914f4248c9a2404c2a4",
+				"akKeyType": "rsa2048",
+				"signatureHash": "sha256",
+				"akVerified": true,
+				"attestationRootSerial": "6f0e24b18dbe4e538c4f96c3a8265ac1",
+				"pcrs": {
+					"sha1": {
+						"0": "c032c3b51dbb6f96b047421512fd4b4dfde496f3",
+						"1": "e3e9e1d9deacd95b289bbbd3a1717a57af7d211b",
+						"2": "b2a83b0ebf2f8374299a5b2bdfc31ea955ad7236",
+						"3": "b2a83b0ebf2f8374299a5b2bdfc31ea955ad7236",
+						"4": "6168c9ce88a8658920f2cf2f9012d3c6bbfab79b",
+						"5": "4099f70ab5a4171fe8cc11b5f23bc980ef272336",
+						"6": "b2a83b0ebf2f8374299a5b2bdfc31ea955ad7236",
+						"7": "42e669233f0e826df5093abfd6998c020df2de88",
+						"8": "72778b0ba3c491db25eb7c8368cb1fb51f0ce458",
+						"9": "f43c10ad862c39aee3f99fa270b91472533bae5f",
+						"10": "e655831ad17eb698f57048a6bfdefdef3b62cc98",
+						"11": "0000000000000000000000000000000000000000",
+						"12": "0000000000000000000000000000000000000000",
+						"13": "0000000000000000000000000000000000000000",
+						"14": "0000000000000000000000000000000000000000",
+						"15": "0000000000000000000000000000000000000000",
+						"16": "0000000000000000000000000000000000000000",
+						"17": "ffffffffffffffffffffffffffffffffffffffff",
+						"18": "ffffffffffffffffffffffffffffffffffffffff",
+						"19": "ffffffffffffffffffffffffffffffffffffffff",
+						"20": "ffffffffffffffffffffffffffffffffffffffff",
+						"21": "ffffffffffffffffffffffffffffffffffffffff",
+						"22": "ffffffffffffffffffffffffffffffffffffffff",
+						"23": "0000000000000000000000000000000000000000"
+					}
+				},
+				"clockSafe": true,
+				"resetCount": 10,
+				"restartCount": 0,
+				"firmwareVersion": "2016051100162800"
+			},
+			"facts": {
+				"format": "tpm2-quote",
+				"securityLevel": "hardware"
+			}
+		},
+		{
+			"name": "tpm: ok sha256",
+			"claims": {
+				"format": "tpm2-quote",
+				"akName": "000bf175bdb57297b2b289973f819863d6c9d09c236725676914f4248c9a2404c2a4",
+				"akKeyType": "rsa2048",
+				"signatureHash": "sha256",
+				"akVerified": true,
+				"attestationRootSerial": "6f0e24b18dbe4e538c4f96c3a8265ac1",
+				"pcrs": {
+					"sha256": {
+						"0": "0f35c214608d93c7a6e68ae7359b4a8be5a0e99eea9107ece427c4dea4e439cf",
+						"1": "6eb40f5b6bfafcb9914d486ce59404acd24bc13a6a3c45cda3b44c9d7053d638",
+						"2": "3d458cfe55cc03ea1f443f1562beec8df51c75e14a9fcf9a7234a13f198e7969",
+						"3": "3d458cfe55cc03ea1f443f1562beec8df51c75e14a9fcf9a7234a13f198e7969",
+						"4": "d690bdac2aa8b73a1d718cb91990df07d0747b07ea57b3b2d0f0d511f0d90491",
+						"5": "158cd54b4f5f440d1a4da99da68fce2b1576eb8e2f18af2c3d9f96463f28d04e",
+						"6": "3d458cfe55cc03ea1f443f1562beec8df51c75e14a9fcf9a7234a13f198e7969",
+						"7": "3365d7fa2b024c852913c06e04ffbfa6ea5289f743bbf1a76f7ffdf21ed84793",
+						"8": "9e9b6511ae6ad443aae4c7bf998ffffbcd271c874f1efab9d692f129eb6e6c18",
+						"9": "e01c8cf808763422c5ede2cdb34595b92bd7d06b8bbd6014b54d2e95b14b0963",
+						"10": "63b093fd26fd34dc09ec621ff349f1053145d559422f11dbce734b3b00b5d673",
+						"11": "0000000000000000000000000000000000000000000000000000000000000000",
+						"12": "0000000000000000000000000000000000000000000000000000000000000000",
+						"13": "0000000000000000000000000000000000000000000000000000000000000000",
+						"14": "0000000000000000000000000000000000000000000000000000000000000000",
+						"15": "0000000000000000000000000000000000000000000000000000000000000000",
+						"16": "0000000000000000000000000000000000000000000000000000000000000000",
+						"17": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+						"18": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+						"19": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+						"20": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+						"21": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+						"22": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+						"23": "0000000000000000000000000000000000000000000000000000000000000000"
+					}
+				},
+				"clockSafe": true,
+				"resetCount": 10,
+				"restartCount": 0,
+				"firmwareVersion": "2016051100162800"
+			},
+			"facts": {
+				"format": "tpm2-quote",
+				"securityLevel": "hardware"
+			}
+		},
+		{
+			"name": "tpm: ok sha384",
+			"claims": {
+				"format": "tpm2-quote",
+				"akName": "000bf175bdb57297b2b289973f819863d6c9d09c236725676914f4248c9a2404c2a4",
+				"akKeyType": "rsa2048",
+				"signatureHash": "sha256",
+				"akVerified": true,
+				"attestationRootSerial": "6f0e24b18dbe4e538c4f96c3a8265ac1",
+				"pcrs": {
+					"sha384": {
+						"0": "46ce251b0b5b3da7917c5eb7a72e6e88f8f830445b149937921b095c1fd628db691963861c1153aba9c7097ff1c747f9",
+						"1": "844d7108d3a3b5de969355e20cb4d6b7ca14d287f0dbb81883ed0d1f6372a61715c69d5c6ad02e881297ae5c063273a1",
+						"2": "518923b0f955d08da077c96aaba522b9decede61c599cea6c41889cfbea4ae4d50529d96fe4d1afdafb65e7f95bf23c4",
+						"3": "518923b0f955d08da077c96aaba522b9decede61c599cea6c41889cfbea4ae4d50529d96fe4d1afdafb65e7f95bf23c4",
+						"4": "7f3a5eb37191b396b74e0b941bc90d0775e9ea0af7b47048c19c40f58d81e8a0c95686c48ebcafb76600d3cc89bdad23",
+						"5": "8b76ff943a11e442cb221d500780cdf1e549ed7209d59de86f51194880976a8ba343911a17a0a228de8901c2ff77ff40",
+						"6": "518923b0f955d08da077c96aaba522b9decede61c599cea6c41889cfbea4ae4d50529d96fe4d1afdafb65e7f95bf23c4",
+						"7": "1d89e5eb741702ee7c2eb73aa84fdcfa5fa279ad5c1fc428b694575198afb6ddf83c6ce1a06b2c563efbf840a2cead63",
+						"8": "f97c3aaae273a2758fc1595ac99c77425f896520914a3482158970dfb49f9e1106f9ce6b2465ec2865e976c8ab81c6e4",
+						"9": "25bb55977c44a0eb38fdaf6f4c2fc4cda23c20bc89ada9399f52908d0ba7342f28c2ba3e953ab1786273f90be0e8447c",
+						"10": "308c4e8a2654cb0dfad122137d8a2afd3f7a94731adfc801aa1a95126b1830be866e9abef5e34844bc59257dac139d26",
+						"11": "000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+						"12": "000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+						"13": "000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+						"14": "000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+						"15": "000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+						"16": "000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+						"17": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+						"18": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+						"19": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+						"20": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+						"21": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+						"22": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+						"23": "000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+					}
+				},
+				"clockSafe": true,
+				"resetCount": 10,
+				"restartCount": 0,
+				"firmwareVersion": "2016051100162800"
+			},
+			"facts": {
+				"format": "tpm2-quote",
+				"securityLevel": "hardware"
+			}
+		},
+		{
+			"name": "tpm: unverified ak allowed",
+			"claims": {
+				"format": "tpm2-quote",
+				"akName": "000bf175bdb57297b2b289973f819863d6c9d09c236725676914f4248c9a2404c2a4",
+				"akKeyType": "rsa2048",
+				"signatureHash": "sha256",
+				"akVerified": false,
+				"pcrs": {
+					"sha256": {
+						"0": "0f35c214608d93c7a6e68ae7359b4a8be5a0e99eea9107ece427c4dea4e439cf",
+						"1": "6eb40f5b6bfafcb9914d486ce59404acd24bc13a6a3c45cda3b44c9d7053d638",
+						"2": "3d458cfe55cc03ea1f443f1562beec8df51c75e14a9fcf9a7234a13f198e7969",
+						"3": "3d458cfe55cc03ea1f443f1562beec8df51c75e14a9fcf9a7234a13f198e7969",
+						"4": "d690bdac2aa8b73a1d718cb91990df07d0747b07ea57b3b2d0f0d511f0d90491",
+						"5": "158cd54b4f5f440d1a4da99da68fce2b1576eb8e2f18af2c3d9f96463f28d04e",
+						"6": "3d458cfe55cc03ea1f443f1562beec8df51c75e14a9fcf9a7234a13f198e7969",
+						"7": "3365d7fa2b024c852913c06e04ffbfa6ea5289f743bbf1a76f7ffdf21ed84793",
+						"8": "9e9b6511ae6ad443aae4c7bf998ffffbcd271c874f1efab9d692f129eb6e6c18",
+						"9": "e01c8cf808763422c5ede2cdb34595b92bd7d06b8bbd6014b54d2e95b14b0963",
+						"10": "63b093fd26fd34dc09ec621ff349f1053145d559422f11dbce734b3b00b5d673",
+						"11": "0000000000000000000000000000000000000000000000000000000000000000",
+						"12": "0000000000000000000000000000000000000000000000000000000000000000",
+						"13": "0000000000000000000000000000000000000000000000000000000000000000",
+						"14": "0000000000000000000000000000000000000000000000000000000000000000",
+						"15": "0000000000000000000000000000000000000000000000000000000000000000",
+						"16": "0000000000000000000000000000000000000000000000000000000000000000",
+						"17": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+						"18": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+						"19": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+						"20": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+						"21": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+						"22": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+						"23": "0000000000000000000000000000000000000000000000000000000000000000"
+					}
+				},
+				"clockSafe": true,
+				"resetCount": 10,
+				"restartCount": 0,
+				"firmwareVersion": "2016051100162800"
+			},
+			"facts": {
+				"format": "tpm2-quote",
+				"securityLevel": "software"
+			}
+		},
+		{
+			"name": "tpm: generated ecdsa P-256 ok",
+			"claims": {
+				"format": "tpm2-quote",
+				"akName": "000b08b1a963109028a9c0aea1db90de4374301d49cad8a219307f0ef2a51666d9dc",
+				"akKeyType": "P-256",
+				"signatureHash": "sha256",
+				"akVerified": false,
+				"pcrs": {
+					"sha256": {
+						"0": "0707070707070707070707070707070707070707070707070707070707070707"
+					}
+				},
+				"clockSafe": true,
+				"resetCount": 1,
+				"restartCount": 2,
+				"firmwareVersion": "0"
+			},
+			"facts": {
+				"format": "tpm2-quote",
+				"securityLevel": "software"
+			}
+		},
+		{
+			"name": "tpm: generated ecdsa P-384 ok",
+			"claims": {
+				"format": "tpm2-quote",
+				"akName": "000b4752ceda9f15fa754b7ca3be173703e8e09caf6d84d6233dd20e17b9e9b9e66b",
+				"akKeyType": "P-384",
+				"signatureHash": "sha384",
+				"akVerified": false,
+				"pcrs": {
+					"sha384": {
+						"0": "070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707"
+					}
+				},
+				"clockSafe": true,
+				"resetCount": 1,
+				"restartCount": 2,
+				"firmwareVersion": "0"
+			},
+			"facts": {
+				"format": "tpm2-quote",
+				"securityLevel": "software"
+			}
+		},
+		{
+			"name": "edge: android tee",
+			"claims": {
+				"format": "android-key-attestation",
+				"attestationVersion": 4,
+				"securityLevel": "trusted_environment",
+				"keySecurityLevel": "trusted_environment",
+				"verifiedBootState": "verified",
+				"deviceLocked": true,
+				"packages": [
+					"com.example.lock"
+				]
+			},
+			"facts": {
+				"format": "android-key-attestation",
+				"securityLevel": "hardware",
+				"bootState": "verified",
+				"appIds": [
+					"com.example.lock"
+				]
+			}
+		},
+		{
+			"name": "edge: android strongbox",
+			"claims": {
+				"format": "android-key-attestation",
+				"attestationVersion": 4,
+				"securityLevel": "strongbox",
+				"keySecurityLevel": "strongbox",
+				"verifiedBootState": "verified",
+				"deviceLocked": true,
+				"packages": [
+					"com.example.lock"
+				]
+			},
+			"facts": {
+				"format": "android-key-attestation",
+				"securityLevel": "strongbox",
+				"bootState": "verified",
+				"appIds": [
+					"com.example.lock"
+				]
+			}
+		},
+		{
+			"name": "edge: android strongbox attestation, tee key",
+			"claims": {
+				"format": "android-key-attestation",
+				"attestationVersion": 4,
+				"securityLevel": "strongbox",
+				"keySecurityLevel": "trusted_environment",
+				"verifiedBootState": "verified",
+				"deviceLocked": true,
+				"packages": [
+					"com.example.lock"
+				]
+			},
+			"facts": {
+				"format": "android-key-attestation",
+				"securityLevel": "hardware",
+				"bootState": "verified",
+				"appIds": [
+					"com.example.lock"
+				]
+			}
+		},
+		{
+			"name": "edge: android software",
+			"claims": {
+				"format": "android-key-attestation",
+				"attestationVersion": 4,
+				"securityLevel": "software",
+				"keySecurityLevel": "software",
+				"verifiedBootState": "verified",
+				"deviceLocked": true,
+				"packages": [
+					"com.example.lock"
+				]
+			},
+			"facts": {
+				"format": "android-key-attestation",
+				"securityLevel": "software",
+				"bootState": "verified",
+				"appIds": [
+					"com.example.lock"
+				]
+			}
+		},
+		{
+			"name": "edge: android unlocked",
+			"claims": {
+				"format": "android-key-attestation",
+				"attestationVersion": 4,
+				"securityLevel": "trusted_environment",
+				"keySecurityLevel": "trusted_environment",
+				"verifiedBootState": "verified",
+				"deviceLocked": false,
+				"packages": [
+					"com.example.lock"
+				]
+			},
+			"facts": {
+				"format": "android-key-attestation",
+				"securityLevel": "hardware",
+				"bootState": "unlocked",
+				"appIds": [
+					"com.example.lock"
+				]
+			}
+		},
+		{
+			"name": "edge: android self signed",
+			"claims": {
+				"format": "android-key-attestation",
+				"attestationVersion": 4,
+				"securityLevel": "trusted_environment",
+				"keySecurityLevel": "trusted_environment",
+				"verifiedBootState": "self_signed",
+				"deviceLocked": true,
+				"packages": [
+					"com.example.lock"
+				]
+			},
+			"facts": {
+				"format": "android-key-attestation",
+				"securityLevel": "hardware",
+				"bootState": "self_signed",
+				"appIds": [
+					"com.example.lock"
+				]
+			}
+		},
+		{
+			"name": "edge: android failed",
+			"claims": {
+				"format": "android-key-attestation",
+				"attestationVersion": 4,
+				"securityLevel": "trusted_environment",
+				"keySecurityLevel": "trusted_environment",
+				"verifiedBootState": "failed",
+				"deviceLocked": true,
+				"packages": [
+					"com.example.lock"
+				]
+			},
+			"facts": {
+				"format": "android-key-attestation",
+				"securityLevel": "hardware",
+				"bootState": "failed",
+				"appIds": [
+					"com.example.lock"
+				]
+			}
+		},
+		{
+			"name": "edge: android bogus boot state",
+			"claims": {
+				"format": "android-key-attestation",
+				"attestationVersion": 4,
+				"securityLevel": "trusted_environment",
+				"keySecurityLevel": "trusted_environment",
+				"verifiedBootState": "unlocked",
+				"deviceLocked": true,
+				"packages": [
+					"com.example.lock"
+				]
+			},
+			"facts": {
+				"format": "android-key-attestation",
+				"securityLevel": "hardware",
+				"appIds": [
+					"com.example.lock"
+				]
+			}
+		},
+		{
+			"name": "edge: android no key level",
+			"claims": {
+				"format": "android-key-attestation",
+				"attestationVersion": 4,
+				"securityLevel": "trusted_environment",
+				"verifiedBootState": "verified",
+				"deviceLocked": true,
+				"packages": [
+					"com.example.lock"
+				]
+			},
+			"facts": {
+				"format": "android-key-attestation",
+				"securityLevel": "hardware",
+				"bootState": "verified",
+				"appIds": [
+					"com.example.lock"
+				]
+			}
+		},
+		{
+			"name": "edge: android two packages",
+			"claims": {
+				"format": "android-key-attestation",
+				"attestationVersion": 4,
+				"securityLevel": "trusted_environment",
+				"keySecurityLevel": "trusted_environment",
+				"verifiedBootState": "verified",
+				"deviceLocked": true,
+				"packages": [
+					"com.a",
+					"com.b",
+					""
+				]
+			},
+			"facts": {
+				"format": "android-key-attestation",
+				"securityLevel": "hardware",
+				"bootState": "verified",
+				"appIds": [
+					"com.a",
+					"com.b"
+				]
+			}
+		},
+		{
+			"name": "edge: android no packages",
+			"claims": {
+				"format": "android-key-attestation",
+				"attestationVersion": 4,
+				"securityLevel": "trusted_environment",
+				"keySecurityLevel": "trusted_environment",
+				"verifiedBootState": "verified",
+				"deviceLocked": true
+			},
+			"facts": {
+				"format": "android-key-attestation",
+				"securityLevel": "hardware",
+				"bootState": "verified"
+			}
+		},
+		{
+			"name": "edge: apple",
+			"claims": {
+				"format": "apple-app-attest",
+				"appId": "TEAM1234.com.example.app"
+			},
+			"facts": {
+				"format": "apple-app-attest",
+				"securityLevel": "hardware",
+				"appIds": [
+					"TEAM1234.com.example.app"
+				]
+			}
+		},
+		{
+			"name": "edge: apple no app id",
+			"claims": {
+				"format": "apple-app-attest"
+			},
+			"facts": {
+				"format": "apple-app-attest",
+				"securityLevel": "hardware"
+			}
+		},
+		{
+			"name": "edge: tpm verified",
+			"claims": {
+				"format": "tpm2-quote",
+				"akVerified": true
+			},
+			"facts": {
+				"format": "tpm2-quote",
+				"securityLevel": "hardware"
+			}
+		},
+		{
+			"name": "edge: tpm unverified",
+			"claims": {
+				"format": "tpm2-quote",
+				"akVerified": false
+			},
+			"facts": {
+				"format": "tpm2-quote",
+				"securityLevel": "software"
+			}
+		},
+		{
+			"name": "edge: tpm no flag",
+			"claims": {
+				"format": "tpm2-quote"
+			},
+			"facts": {
+				"format": "tpm2-quote",
+				"securityLevel": "software"
+			}
+		},
+		{
+			"name": "edge: tpm certify verified",
+			"claims": {
+				"format": "tpm2-certify",
+				"activated": true,
+				"ekVerified": true
+			},
+			"facts": {
+				"format": "tpm2-certify",
+				"securityLevel": "hardware"
+			}
+		},
+		{
+			"name": "edge: tpm certify unverified ek",
+			"claims": {
+				"format": "tpm2-certify",
+				"activated": true,
+				"ekVerified": false
+			},
+			"facts": {
+				"format": "tpm2-certify",
+				"securityLevel": "software"
+			}
+		},
+		{
+			"name": "edge: tpm certify not activated",
+			"claims": {
+				"format": "tpm2-certify",
+				"activated": false,
+				"ekVerified": true
+			},
+			"facts": {
+				"format": "tpm2-certify",
+				"securityLevel": "software"
+			}
+		},
+		{
+			"name": "edge: tpm certify no flags",
+			"claims": {
+				"format": "tpm2-certify"
+			},
+			"facts": {
+				"format": "tpm2-certify",
+				"securityLevel": "software"
+			}
+		},
+		{
+			"name": "edge: custom format with strongbox claim",
+			"claims": {
+				"format": "custom",
+				"securityLevel": "strongbox"
+			},
+			"facts": null
+		},
+		{
+			"name": "edge: no format",
+			"claims": {
+				"securityLevel": "strongbox"
+			},
+			"facts": null
+		}
+	]
+}

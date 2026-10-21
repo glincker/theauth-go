@@ -37,13 +37,12 @@ have not been moved into a dated section yet.
 - [ ] Raise `internal/rbac` and `internal/webauthn` unit coverage further
       beyond the DeleteRole/DeleteCredential gaps closed in this pass
 - [ ] **Full storage-contract-suite parity (bigger, separate effort).**
-      The shared contract test suite fails against both Postgres and (now
-      confirmed, not just suspected) MySQL on constraint and foreign-key
-      edge cases the lenient in-memory backend doesn't enforce, plus a
-      couple of correctness bugs in individual methods (e.g. JWKS key
-      update on an unknown KID doesn't return `ErrNotFound`). Each backend
-      needs its own investigation before the opt-in contract gates can be
-      enabled by default in CI.
+      The shared contract suite now passes on MySQL 8.4.11 (checked
+      2026-10-18, with `THEAUTH_MYSQL_CONTRACT=1`) and runs in CI through
+      `.github/workflows/mysql-contract.yml`. Postgres passes the full
+      contract on PostgreSQL 14 with `THEAUTH_PG_CONTRACT=1`, but that gate
+      is still opt in and not enabled in CI. Other MySQL versions and MariaDB
+      have not been tested.
 
 ## Under consideration
 

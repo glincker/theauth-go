@@ -187,3 +187,69 @@ func TestNewRequiresConfig(t *testing.T) {
 		t.Fatalf("err = %v", err)
 	}
 }
+
+func quorumSetup(t *testing.T) (http.Handler, *memory.Store) {
+	t.Helper()
+	h, store := setup(t, true)
+	err := store.OpenToolApproval(context.Background(), theauth.ToolApproval{
+		ID: "pair", AgentID: "robot-1", Action: "move", Resource: "robot:arm",
+		OpenedBy: "requester", CreatedAt: t0, ExpiresAt: t0.Add(time.Hour), RequiredApprovals: 2,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return h, store
+}
+
+func TestQuorumDecide(t *testing.T) {
+	h, store := quorumSetup(t)
+	view := func(rec *httptest.ResponseRecorder) approvals.View {
+		t.Helper()
+		var v approvals.View
+		if err := json.Unmarshal(rec.Body.Bytes(), &v); err != nil {
+			t.Fatal(err)
+		}
+		return v
+	}
+	// AllowSelfApproval is on in this setup, and the requester is still refused.
+	if c := do(h, "POST", "/approvals/pair/approve", "requester").Code; c != 403 {
+		t.Fatalf("requester = %d, want 403", c)
+	}
+	rec := do(h, "POST", "/approvals/pair/approve", "alice")
+	if v := view(rec); rec.Code != 200 || v.Status != approvals.StatusPending || v.ApprovalsReceived != 1 || v.RequiredApprovals != 2 {
+		t.Fatalf("first = %d %+v", rec.Code, v)
+	}
+	if c := do(h, "POST", "/approvals/pair/approve", "alice").Code; c != 409 {
+		t.Fatalf("repeat = %d, want 409", c)
+	}
+	rec = do(h, "POST", "/approvals/pair/approve", "bob")
+	if v := view(rec); rec.Code != 200 || v.Status != approvals.StatusApproved || v.ApprovalsReceived != 2 || len(v.Approvers) != 2 {
+		t.Fatalf("second = %d %+v", rec.Code, v)
+	}
+	if c := do(h, "POST", "/approvals/pair/approve", "carol").Code; c != 409 {
+		t.Fatalf("after quorum = %d, want 409", c)
+	}
+	evs, _, _ := store.QueryAuditEvents(context.Background(), theauth.AuditQuery{})
+	var votes int
+	for _, e := range evs {
+		if e.Action == approvals.ActionApproved && e.TargetID == "pair" {
+			votes++
+		}
+	}
+	if votes != 2 {
+		t.Fatalf("audit rows for the quorum = %d, want 2", votes)
+	}
+}
+
+func TestQuorumDenyVetoes(t *testing.T) {
+	h, _ := quorumSetup(t)
+	if c := do(h, "POST", "/approvals/pair/approve", "alice").Code; c != 200 {
+		t.Fatalf("approve = %d", c)
+	}
+	if c := do(h, "POST", "/approvals/pair/deny", "bob").Code; c != 200 {
+		t.Fatalf("deny = %d", c)
+	}
+	if c := do(h, "POST", "/approvals/pair/approve", "carol").Code; c != 409 {
+		t.Fatalf("approve after deny = %d, want 409", c)
+	}
+}

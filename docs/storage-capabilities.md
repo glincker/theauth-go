@@ -33,15 +33,18 @@ If you write your own backend, run the matching suite from `storagetest` against
 | RBAC | `RBACStorage` | Yes | Yes (0016) | Yes (0009) | Yes (0009) |
 | Audit log | `AuditStorage` | Yes | Yes (0005) | Yes (0010) | Yes (0010) |
 | Audit write order (`recorded_at_us`, `event`, `Order`, `c1.` cursors) | `storagetest.AuditOrderCapable` (`AuditOrderSupported() bool`) | Yes | Yes (0036) | Yes (0032) | Yes (0031) |
-| Audit hash chain | `VerifyAuditChain`, `ChainSupported` | No (reports unsupported) | Yes (0017) | Yes (0028) | Yes (0027) |
+| Audit provenance filter (`AuditQuery.Provenance`) | `storagetest.AuditProvenanceCapable` (`AuditProvenanceSupported() bool`) | Yes | Yes (0017) | Yes (0028) | Yes (0027) |
+| Rotating audit pseudonyms | `AuditPseudonymRotator` | Yes | Yes (0038) | Yes (0035) | Yes (0033) |
+| Audit hash chain | `VerifyAuditChain`, `ChainSupported` | Yes (ring buffer, see below) | Yes (0017) | Yes (0028) | Yes (0027) |
 | Shared signals store | `SignalsStore()` | Use `signals.NewMemoryStore` | Yes (0012) | Yes (0026) | No |
 | API tokens | `APITokenStorage` | Yes | Yes (0007) | Yes (0018) | Yes (0018) |
 | Agent id on API tokens | `APITokenAgentStorage` | Yes | Yes (0018) | Yes (0027) | Yes (0026) |
 | Device codes (API token device grant) | `DeviceCodeStorage`, `DeviceCodeLister` | Yes | Yes (0007) | Yes (0018) | Yes (0018) |
-| Device identity (join tokens, enrolled devices) | `DeviceIdentityStorage` | Yes | Yes (0011) | Yes (0024) | Yes (0024) |
+| Device identity (join tokens, enrolled devices) | `DeviceIdentityStorage` | Yes | Yes (0011, 0039) | Yes (0024, 0036) | Yes (0024, 0036) |
 | Token vault credentials (`tokenvault` package) | `TokenVaultStorage` | Yes | No | No | No |
 | Agent tool approvals (single use, used by `toolguard.NewStorageApprovals`) | `ToolApprovalStorage` | Yes | Yes (0019) | Yes (0029) | Yes (0028) |
-| Approvals inbox (get, list, deny; used by the `approvals` package) | `ToolApprovalAdminStorage` | Yes | No | No | No |
+| Approvals inbox and specific denial codes (get, list, deny; used by the `approvals` package and `StorageApprovals.Spend`) | `ToolApprovalAdminStorage` | Yes | Yes (0037) | Yes (0034) | Yes (0032) |
+| Approval expiry marking (one audit row and event per expiry) | `ToolApprovalExpiryStorage` | Yes | Yes (0037) | Yes (0034) | Yes (0032) |
 
 Audit write order is a flag, not an interface: a store declares it by returning true from `AuditOrderSupported()`. It means the store assigns `AuditEvent.RecordedAtUs` (microseconds, strictly increasing per chain key, a caller value is ignored), stores and filters `AuditEvent.Event` (nullable, empty on old rows), serves `AuditQuery.Order` (`asc` or `desc`, default `desc`) and pages with the opaque `c1.` keyset cursor on `(recorded_at_us, id)`. Neither new column is part of the audit chain hash, so chains written before keep verifying. Cursors from before this existed keep working for descending reads. `storagetest.RunAudit` runs the write order cases for stores that declare the flag and skips them with a message for the rest.
 
@@ -49,7 +52,17 @@ MySQL migration `0031_audit_write_order` (up only, like every MySQL migration) a
 
 Postgres migration 0032 (`audit_write_order`) adds nullable `recorded_at_us bigint` and `event text` to `audit_events`, a `recorded_at_us` high-water column on `theauth_audit_chain_heads`, and keyset indexes on `(recorded_at_us, id)`, `(organization_id, recorded_at_us, id)` and `(event, recorded_at_us, id)`. The writer assigns `recorded_at_us` inside the append transaction while it holds the chain head row lock: `max(now in microseconds, head stamp + 1, process counter + 1)`, so the stamp is strictly increasing per chain key and a caller supplied value is ignored. The migration backfills `recorded_at_us` from `created_at` in microseconds and `event` from the action mapping (actions without a shared event stay NULL). The column default stamps rows inserted by an older binary during a rolling deploy. Neither column is hashed, so chains written before 0032 verify unchanged. On a very large `audit_events` table you can run the backfill `UPDATE` in batches and create the indexes with `CREATE INDEX CONCURRENTLY` yourself before running `Migrate`, then record the version in `theauth_schema_migrations`.
 
-The audit hash chain is what `VerifyAuditChain` and the `audit/checkpoint` package read. The memory store returns an explicit unsupported result, never a pass.
+The audit hash chain is what `VerifyAuditChain` and the `audit/checkpoint` package read. All four stores use the same row format (`internal/audit` `BuildChainEntry`) and the same verifier. A store that keeps no chain returns an explicit unsupported result, never a pass.
+
+The memory store chains in process. Its audit log is a ring buffer of 10000 rows, so on a busy process the oldest rows are evicted. Verification then anchors on the first retained row of each chain and checks every later link, and eviction is not reported as a break. The pseudonym secret lives in process memory and is lost on restart, so use a SQL store where the chain must outlive the process.
+
+### Head checkpoints (tail truncation)
+
+A verifier that walks rows cannot see rows cut off the end of a chain, since every remaining row still links to the one before. `checkpoint.CreateHeadCheckpoint(ctx, store, checkpoint.HeadOptions{Signer: signer})` signs the last position of every chain (`chainKey`, `seq`, `hash`) with an Ed25519 key, the same `Signer` and public key a Merkle `Checkpoint` uses. Store the result where the log writer cannot rewrite it. Later, `checkpoint.CheckHeadCheckpoint(ctx, store, head, publicKey)` verifies the signature and then reports `chain_truncated` (a chain is shorter than signed or gone) or `head_mismatch` (the row at the signed seq has another hash). Rows and chains added after signing are fine. `VerifyHeadCheckpoint` checks only the signature, offline. Run `VerifyAuditChain` as well, since the head check looks only at the signed positions. When the chain has grown past the signed seq but the store no longer holds that row (the memory ring evicted it, or retention removed it), the check reports `head_not_retained`. That is not tampering and not proof of it, so check a newer head checkpoint instead.
+
+Wire format: JSON `{version: 1, alg: "Ed25519", keyId, timestamp (ms), heads: [{chainKey, seq, hash}], signature}`, heads sorted by `chainKey`. The signature is base64url without padding over the bytes `theauth.audit.head.v1\n` followed by the canonical JSON (sorted keys, no whitespace) of `{version, alg, keyId, timestamp, heads}`. The TypeScript SDK verifies this object with `verifyGoHeadCheckpoint` (and `theauth audit verify-go --head`), so a TypeScript service can detect tail truncation of a Go chain given the signing public key.
+
+The Postgres (0028) and MySQL (0027) chain migrations already exist, and a head checkpoint reads the chain through `QueryAuditEvents`, so no new migration is needed.
 
 ### Test vectors for other implementations
 
@@ -98,10 +111,10 @@ SQLite also has `0029_oauth_cascade_triggers`, which removes a client's codes an
 - MySQL has no CIBA storage and no pushed authorization requests. If you set `AuthorizationServerConfig.CIBA` or `PAR` on a backend without the interface, the endpoints are not mounted and `New` does not fail, so check the metadata document (`backchannel_authentication_endpoint`, `pushed_authorization_request_endpoint`) after startup. The MySQL migration list has no files for either.
 - Postgres and MySQL have no `JWTBearerStorage`. The jwt-bearer grant still works: the server falls back to an in-process `jti` cache. That cache is per process and is lost on restart, so with several replicas a replayed assertion can be accepted by a different node inside its lifetime. Use a backend with the interface (SQLite or memory) or keep assertion lifetimes short.
 - Without `BackchannelRedeemer` (MySQL has no CIBA at all), the server serializes redemption with an in-process lock, which does not hold across nodes.
-- The memory store has no hash-linked audit chain. `VerifyAuditChain` returns `ErrAuditChainUnsupported`. Do not use it where you need tamper evidence.
+- The memory audit chain lives in a 10000 row ring buffer and a per process secret. It detects edits to retained rows, not eviction or a restart. Use a SQL store where you need durable tamper evidence.
 - Postgres migration 0033 (`delegation_live_unique`) replaces the full `UNIQUE (user_id, agent_id, resource)` on `delegation_grants` with a partial unique index on live rows (`revoked_at IS NULL`), as SQLite and memory already behave, so a grant can be re-issued after a revoke. Password hashes on Postgres live in `users.password_hash`; there is no separate password table. The shared `storagetest` contract passes on Postgres when `THEAUTH_PG_CONTRACT=1` and `THEAUTH_TEST_PG_DSN` are set (checked on PostgreSQL 14), but CI does not set them yet. The contract test resets the `public` schema, so point it at a scratch database.
 - Postgres has two migrations numbered 0016 (`backchannel_requests` and `pushed_authorization_requests`). Both apply; the numbering is historical.
-- MySQL session auth methods (0029) has a contract test (`storagetest.RunSessionAuthMethods` in `storage/mysql/mysql_caps_test.go`) that needs `THEAUTH_TEST_MYSQL_DSN`. It is not run by a plain `go test`, and this page was not checked against a live MySQL server.
+- MySQL session auth methods (0029) has a contract test (`storagetest.RunSessionAuthMethods` in `storage/mysql/mysql_caps_test.go`) that needs `THEAUTH_TEST_MYSQL_DSN`. It is not run by a plain `go test`: set `THEAUTH_MYSQL_CONTRACT=1` and `THEAUTH_TEST_MYSQL_DSN`. All MySQL suites (the full `storagetest.Run` contract, the capability suites, the audit chain, the kv adapter, the concurrent claim races and the 0034 upgrade test) passed against MySQL 8.4.11 on 2026-10-18, and CI repeats them on `mysql:8.4` in `.github/workflows/mysql-contract.yml`. This page was checked against that server. MariaDB and other MySQL versions have not been tested.
 - Old SQLite schema. If a database has not run 0034, sessions still read and write without an auth record and recording one returns `ErrStorageMissingCapability`. If it has not run 0017, audit events are written in the old shape and are not chained. Run `Migrate` before you deploy.
 - Consent tickets and rate limits are not part of the storage interfaces. They use `Config.Stores` (`kv.ReplayCache`, `kv.RateLimiter`, `kv.Cache`), which is in memory by default. The `kv/sqlkv` adapter runs on SQLite, Postgres and MySQL, and `kv/redis` is available too. See [pluggable-stores.md](pluggable-stores.md).
 

@@ -36,15 +36,22 @@ func (v *Validator) Middleware(next http.Handler) http.Handler {
 			// fallback path still returns invalid_token for ordinary
 			// failures.
 			if isDPoPProofError(err) {
-				v.denyDPoP(w, r, err.Error())
+				v.denyDPoP(w, r, err)
 				return
 			}
 			v.deny(w, r, "invalid_token", err.Error())
 			return
 		}
+		// RFC 9449 section 8.2: hand out the next nonce on success so the
+		// client does not need an error round trip when the window rolls.
+		if v.dpop != nil && v.dpop.nonces != nil && principal.CnfJKT != "" {
+			w.Header().Set("DPoP-Nonce", v.dpop.nonces.issue(utcNow()))
+		}
 		next.ServeHTTP(w, r.WithContext(withPrincipal(r.Context(), principal)))
 	})
 }
+
+func utcNow() time.Time { return time.Now() }
 
 // authenticate runs the full validation chain for a token and returns a
 // populated Principal on success. Steps:
@@ -57,8 +64,9 @@ func (v *Validator) Middleware(next http.Handler) http.Handler {
 //  3. When the token carries an RFC 7800 cnf.jkt claim, REQUIRE an
 //     inbound DPoP header and verify the proof against the request method
 //     + URL + access-token hash, then check the proof JWK thumbprint
-//     equals cnf.jkt. Tokens without cnf.jkt skip this step (Bearer
-//     semantics).
+//     equals cnf.jkt. When it carries cnf x5t#S256 (RFC 8705), REQUIRE the
+//     matching client certificate. Both members are enforced when both are
+//     present. Tokens with neither skip this step (Bearer semantics).
 //  4. Ask the optional RevocationChecker whether the token was revoked.
 //  5. If the token carries an act chain or delegation_grant_id, walk the
 //     chain against the AS introspection endpoint. Cached results live up to
@@ -87,12 +95,8 @@ func (v *Validator) authenticate(r *http.Request, token, scheme string) (*Princi
 	// MUST also carry a DPoP header signed by the matching key. The
 	// AS chose at issuance time whether to constrain; the resource
 	// server enforces unconditionally.
-	if claims.Cnf != nil && claims.Cnf.JKT != "" {
-		jkt, err := v.bindDPoP(r, token, scheme, claims.Cnf.JKT, now)
-		if err != nil {
-			return nil, err
-		}
-		principal.CnfJKT = jkt
+	if err := v.bindConfirmation(r, token, scheme, claims.Cnf, principal, now); err != nil {
+		return nil, err
 	}
 	if err := v.checkRevocation(r, token, principal); err != nil {
 		return nil, err
@@ -170,30 +174,45 @@ func isDPoPProofError(err error) bool {
 		errors.Is(err, errDPoPProofExpired),
 		errors.Is(err, errDPoPReplay),
 		errors.Is(err, errDPoPJKTMismatch),
+		errors.Is(err, errDPoPNonceRequired),
 		errors.Is(err, errDPoPMissingHeader):
 		return true
 	}
 	return false
 }
 
-// denyDPoP writes a 401 response with WWW-Authenticate using the DPoP
-// scheme + invalid_dpop_proof / invalid_token error per RFC 9449 section
-// 7.1. Distinct from deny() so clients can branch on the scheme to know
-// whether to issue a fresh proof vs. a fresh token.
-func (v *Validator) denyDPoP(w http.ResponseWriter, r *http.Request, description string) {
-	metadataURL := protectedResourceMetadataURL(r, v.resourceURI)
-	value := `DPoP error="invalid_token"`
-	if description != "" {
-		value += `, error_description="` + escapeQuoted(description) + `"`
+// denyDPoP writes a 401 with a DPoP WWW-Authenticate challenge (RFC 9449
+// section 7.1). The error code tells the client what to fix:
+//
+//   - use_dpop_nonce: retry with the nonce in the DPoP-Nonce header (section 9)
+//   - invalid_dpop_proof: the proof itself failed section 4.3
+//   - invalid_token: the DPoP header is missing or the key is not the one the
+//     token is bound to
+//
+// The algs parameter lists the proof algorithms the server accepts.
+func (v *Validator) denyDPoP(w http.ResponseWriter, r *http.Request, cause error) {
+	code := "invalid_dpop_proof"
+	description := cause.Error()
+	switch {
+	case errors.Is(cause, errDPoPNonceRequired):
+		code = "use_dpop_nonce"
+		description = "Resource server requires nonce in DPoP proof"
+		if v.dpop != nil && v.dpop.nonces != nil {
+			w.Header().Set("DPoP-Nonce", v.dpop.nonces.issue(utcNow()))
+		}
+	case errors.Is(cause, errDPoPMissingHeader), errors.Is(cause, errDPoPJKTMismatch):
+		code = "invalid_token"
 	}
-	if metadataURL != "" {
-		value += `, resource_metadata="` + metadataURL + `"`
+	params := [][2]string{{"resource_metadata", protectedResourceMetadataURL(r, v.resourceURI)}}
+	if v.dpop != nil {
+		params = append(params, [2]string{"algs", v.dpop.algList()})
 	}
-	w.Header().Set("WWW-Authenticate", value)
-	w.Header().Set("Cache-Control", "no-store")
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusUnauthorized)
-	_, _ = w.Write([]byte(`{"error":"invalid_token","scheme":"DPoP"}`))
+	w.Header().Set("WWW-Authenticate", challenge("DPoP", code, description, params...))
+	WriteDenial(w, http.StatusUnauthorized, Denial{
+		Error:            code,
+		ErrorDescription: description,
+		ResourceMetadata: protectedResourceMetadataURL(r, v.resourceURI),
+	})
 }
 
 // errInactiveChain is the canonical error for an AS-reported revoked chain.

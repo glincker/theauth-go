@@ -80,6 +80,10 @@ type Config struct {
 	// DecisionActionPrefixes lists the action prefixes treated as
 	// decision-class for FailClosed. Defaults to DefaultDecisionPrefixes.
 	DecisionActionPrefixes []string
+
+	// InputHasher hashes the content of inputs declared with WithInputs. The zero value is unkeyed
+	// SHA-256; NewInputHasher(key) gives the keyed form.
+	InputHasher InputHasher
 }
 
 // DefaultDecisionPrefixes are the action prefixes treated as decision-class events when
@@ -418,6 +422,12 @@ func (s *Service) emit(ctx context.Context, action string, target models.TargetR
 		}
 	}
 
+	// Inputs declared on the context (WithInputs) are trusted, unlike anything in the metadata. Only
+	// their hashes are kept.
+	if in := InputsFromContext(ctx); len(in) > 0 {
+		evt.InputProvenance = MergeInputProvenance(evt.InputProvenance, BuildInputProvenance(s.cfg.InputHasher, in))
+	}
+
 	select {
 	case s.ch <- evt:
 		if s.mQueueDepth != nil {
@@ -449,12 +459,23 @@ func (s *Service) Query(ctx context.Context, q models.AuditQuery) ([]models.Audi
 // (storagetest.AuditOrderCapable).
 type orderCapable interface{ AuditOrderSupported() bool }
 
+// provenanceCapable is the optional flag a backend implements once it serves AuditQuery.Provenance.
+type provenanceCapable interface{ AuditProvenanceSupported() bool }
+
 // CheckQuery validates q before it reaches store: it returns ErrBadAuditOrder for an unknown order,
 // ErrBadCursor for a "c1." cursor that does not decode for the query's order (or a legacy cursor
 // combined with asc), and ErrAuditOrderUnsupported when the query needs write order support
 // (asc, an Event filter or a "c1." cursor) and store does not declare AuditOrderSupported() true.
 // A plain descending query with no event filter works on every backend.
 func CheckQuery(store any, q models.AuditQuery) error {
+	if q.Provenance != nil {
+		if _, err := ProvenanceNeedle(*q.Provenance); err != nil {
+			return err
+		}
+		if c, ok := store.(provenanceCapable); !ok || !c.AuditProvenanceSupported() {
+			return models.ErrAuditProvenanceUnsupported
+		}
+	}
 	order, ok := NormalizeOrder(q.Order)
 	if !ok {
 		return models.ErrBadAuditOrder

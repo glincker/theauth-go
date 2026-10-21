@@ -34,4 +34,8 @@ updates:
     open-pull-requests-limit: 10
     labels: ["type/chore", "area/ci"]
     commit-message:
-      prefix: "ci"
+      prefix: "chore"
+    groups:
+      codeql:
+        patterns:
+          - "github/codeql-action"

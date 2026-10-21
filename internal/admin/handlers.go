@@ -702,9 +702,16 @@ func (h *Handler) queryAudit(w http.ResponseWriter, r *http.Request) {
 		}
 		q.Until = &t
 	}
+	if kind, hash := r.URL.Query().Get("provenance_kind"), r.URL.Query().Get("provenance_hash"); kind != "" || hash != "" {
+		q.Provenance = &models.ProvenanceFilter{Kind: kind, Hash: hash}
+	}
 	events, next, err := h.audit.QueryAudit(r.Context(), q)
 	if err != nil {
 		switch {
+		case errors.Is(err, models.ErrBadProvenanceFilter):
+			admin.Write(w, http.StatusBadRequest, admin.CodeValidationInvalid, "invalid provenance filter: kind must be user_message, tool_output, retrieved_document or agent, and hash 64 lowercase hex characters", "")
+		case errors.Is(err, models.ErrAuditProvenanceUnsupported):
+			admin.Write(w, http.StatusBadRequest, admin.CodeValidationInvalid, "this storage backend does not support the provenance filter", "")
 		case errors.Is(err, models.ErrBadCursor):
 			admin.Write(w, http.StatusBadRequest, admin.CodeBadCursor, err.Error(), "")
 		case errors.Is(err, models.ErrBadAuditOrder):
@@ -724,6 +731,7 @@ func (h *Handler) queryAudit(w http.ResponseWriter, r *http.Request) {
 			"target_id":   q.TargetID,
 			"event":       q.Event,
 			"order":       q.Order,
+			"provenance":  q.Provenance != nil,
 		},
 	})
 	type response struct {
