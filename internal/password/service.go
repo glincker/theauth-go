@@ -12,6 +12,7 @@ import (
 	"log/slog"
 	"net/mail"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/glincker/theauth-go/v2/crypto"
@@ -120,6 +121,9 @@ type Config struct {
 	Account AccountLifecycle
 	// Devices lets a remembered device skip the TOTP prompt. Nil disables it.
 	Devices TrustedDeviceChecker
+	// ShareDummyHash makes every Service in the process reuse one timing-equalization hash.
+	// Meant for test binaries that build many engines; leave false in production.
+	ShareDummyHash bool
 }
 
 // Service holds the dependencies needed for password flows.
@@ -131,11 +135,37 @@ type Service struct {
 	totpPending PendingTOTPIssuer
 	auditEm     audit.Emitter
 	cfg         Config
-	dummyHash   string
+	dummy       *dummyHolder
 }
 
-// NewService constructs a password Service. dummyPasswordHash is computed
-// once here so the verify cost is paid at startup, not per request (see
+// dummyHolder computes the timing-equalization hash on first use. Argon2id
+// allocates 64 MiB per hash, so doing it at construction taxed every Service.
+type dummyHolder struct {
+	once sync.Once
+	hash string
+}
+
+// hashDummy is the hash function behind the dummy hash; tests swap it to count calls.
+var hashDummy = crypto.HashPassword
+
+// sharedDummy backs Config.ShareDummyHash: one hash per process.
+var sharedDummy = &dummyHolder{}
+
+func (h *dummyHolder) get() string {
+	h.once.Do(func() {
+		hash, err := hashDummy("theauth-dummy-password-not-real")
+		if err != nil {
+			// An unparseable value still fails verification, which is all the caller needs,
+			// but the Argon2id cost was already paid so timing stays equalized.
+			hash = ""
+		}
+		h.hash = hash
+	})
+	return h.hash
+}
+
+// NewService constructs a password Service. The timing-equalization hash is
+// computed once, on first use, with the production Argon2id parameters (see
 // security audit M6). em may be nil; the constructor swaps in
 // audit.NoopEmitter. totpPending may be nil only when cfg.TOTPEnabled is
 // false; Signin would otherwise hit a nil-pointer dereference on the
@@ -152,9 +182,9 @@ func NewService(
 	if em == nil {
 		em = audit.NoopEmitter{}
 	}
-	dummy, err := crypto.HashPassword("theauth-dummy-password-not-real")
-	if err != nil {
-		return nil, fmt.Errorf("theauth: synthesize signin timing-equalization hash: %w", err)
+	holder := &dummyHolder{}
+	if cfg.ShareDummyHash {
+		holder = sharedDummy
 	}
 	return &Service{
 		storage:     storage,
@@ -164,16 +194,16 @@ func NewService(
 		totpPending: totpPending,
 		auditEm:     em,
 		cfg:         cfg,
-		dummyHash:   dummy,
+		dummy:       holder,
 	}, nil
 }
 
-// DummyHash returns the precomputed Argon2id PHC string the Service uses
-// for signin timing equalization. Exposed so the root *TheAuth can keep
+// DummyHash returns the Argon2id PHC string the Service uses
+// for signin timing equalization, computing it on first call. Exposed so the root *TheAuth can keep
 // the legacy dummyPasswordHash field non-empty for any other timing path
 // that may want to reuse it; not part of any caller-facing contract.
 func (s *Service) DummyHash() string {
-	return s.dummyHash
+	return s.dummy.get()
 }
 
 // normalizeEmail trims and lowercases an email for storage-side uniqueness.
@@ -279,9 +309,9 @@ func (s *Service) Signin(ctx context.Context, emailAddr, password, userAgent, ip
 		// security audit M6: pay the Argon2id verify cost
 		// on the user-not-found branch too. Without this, an attacker
 		// can time the response and learn which emails are registered.
-		// The dummy hash mints once at NewService time; the verify
-		// result is ignored.
-		_, _ = crypto.VerifyPassword(password, s.dummyHash)
+		// The dummy hash mints on the first unknown-user signin, so that
+		// request pays one extra hash; the verify result is ignored.
+		_, _ = crypto.VerifyPassword(password, s.dummy.get())
 		s.recordFailure(ctx, ip, emailAddr)
 		s.emitLoginFailed(ctx, nil, userAgent, ip, "unknown_user")
 		return "", nil, "", models.NewError(models.CodeInvalidCredentials, "invalid email or password", nil)
@@ -293,7 +323,7 @@ func (s *Service) Signin(ctx context.Context, emailAddr, password, userAgent, ip
 		// Account exists but has no password set (magic-link-only signup).
 		// Pay the verify cost against the dummy hash so the timing matches
 		// the genuine wrong-password branch (security audit M6).
-		_, _ = crypto.VerifyPassword(password, s.dummyHash)
+		_, _ = crypto.VerifyPassword(password, s.dummy.get())
 		s.recordFailure(ctx, ip, emailAddr)
 		s.emitLoginFailed(ctx, &user.ID, userAgent, ip, "no_password")
 		return "", nil, "", models.NewError(models.CodeInvalidCredentials, "invalid email or password", nil)
