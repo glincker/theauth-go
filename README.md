@@ -48,6 +48,8 @@ theauth-go is the Go library for [theAuth](https://theauth.dev). It handles sign
 
 It runs inside your process as an `http.Handler`. You keep your users, sessions and tokens in your own database. The root module is Go 1.25, MIT licensed, and every release is signed and ships an SBOM. The TypeScript library is [glincker/theauth](https://github.com/glincker/theauth).
 
+**Verify it yourself.** This project is about four months old, so we point to things you can check instead of asking for trust: signed releases, test counts you can reproduce with `find`, and the exact benchmark statements we stand behind. See [docs/PROOF.md](./docs/PROOF.md).
+
 ## Contents
 
 - [Install](#install)
@@ -56,6 +58,7 @@ It runs inside your process as an `http.Handler`. You keep your users, sessions 
 - [Quick start: agent identity and delegation](#quick-start-agent-identity-and-delegation)
 - [What you can build](#what-you-can-build)
 - [Features](#features)
+- [How it compares](#how-it-compares)
 - [Storage backends](#storage-backends)
 - [Stability](#stability)
 - [Security](#security)
@@ -331,6 +334,26 @@ Details and the Redis adapter are in [docs/pluggable-stores.md](./docs/pluggable
 ## Choosing between a library and a hosted service
 
 theauth-go is a library you embed and run yourself, so you own the database and the operations. It does not include a hosted login UI or a managed service. If you need either, it is not the right shape for you. The TypeScript library at [glincker/theauth](https://github.com/glincker/theauth) covers Node, Bun, Deno and Workers backends.
+
+## How it compares
+
+Public GitHub stats for Go auth projects, pulled from the GitHub API on 2026-10-30. This is a size and age snapshot, not a feature comparison. Check each project's own docs for what it supports.
+
+| Project | Stars | Created | Last push | License | Shape |
+|---|---|---|---|---|---|
+| glincker/theauth-go | 6 | 2026-06 | 2026-10 | MIT | Sign-in, OAuth 2.1 server and MCP authorization in one library |
+| [ory/fosite](https://github.com/ory/fosite) | 2,631 | 2015-12 | 2025-11-20 | Apache-2.0 | OAuth2/OIDC server SDK, no user management |
+| [go-oauth2/oauth2](https://github.com/go-oauth2/oauth2) | 3,627 | 2016-05 | 2026-09-01 | MIT | OAuth2 server library |
+| [aarondl/authboss](https://github.com/aarondl/authboss) | 4,201 | 2015-01 | 2026-07-10 | MIT | Modular web auth (sign-in, confirm, recover) |
+| [go-pkgz/auth](https://github.com/go-pkgz/auth) | 1,355 | 2018-12 | 2026-10-28 | MIT | Social, email and Telegram login middleware |
+| [markbates/goth](https://github.com/markbates/goth) | 6,620 | 2014-10 | 2026-02-11 | MIT | Social login (client side) |
+| [go-webauthn/webauthn](https://github.com/go-webauthn/webauthn) | 1,357 | 2021-12 | 2026-10-29 | BSD-3 | WebAuthn and passkeys only |
+| [coreos/go-oidc](https://github.com/coreos/go-oidc) | 2,503 | 2015-06 | 2026-10-19 | Apache-2.0 | OIDC client and verifier |
+| [golang/oauth2](https://github.com/golang/oauth2) | 5,908 | 2014-04 | 2026-09-08 | BSD-3 | OAuth2 client |
+
+Standalone servers such as ory/hydra, zitadel, casdoor, authelia, dex and pocket-id are a different shape: you run them as a separate service. They have far more stars and history than this library.
+
+When to pick which. If you want a separate identity service with its own admin UI, a standalone server is the safer, better established choice. If you want auth inside your own Go process and database, an embeddable library fits, and you can pick a narrow one (fosite for the OAuth2 server, goth or go-oidc for client side login, go-webauthn for passkeys) or a broader one like this. If you only call other providers' APIs, a client helper such as golang/oauth2 is enough. theauth-go's age is its main weakness; [docs/PROOF.md](./docs/PROOF.md) lists what you can verify and what is still experimental.
 
 ## Storage backends
 
