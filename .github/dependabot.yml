@@ -1,37 +1,66 @@
 version: 2
+
+# One PR per group per ecosystem. Majors are excluded from every group so each
+# one lands as its own PR. "chore(deps)" keeps titles valid for lint-pr.
 updates:
   - package-ecosystem: "gomod"
-    directory: "/"
+    # Globs cover every nested module (adapters, examples) plus the three
+    # that were listed before. Cross-directory groups yield a single PR.
+    directories:
+      - "/"
+      - "/mcpresource"
+      - "/audit/sinks/otlp"
+      - "/storage/sqlite"
+      - "/adapters/*"
+      - "/examples/*"
     schedule:
       interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "Etc/UTC"
     open-pull-requests-limit: 10
     labels: ["type/chore", "area/ci"]
     commit-message:
       prefix: "chore"
-
-  - package-ecosystem: "gomod"
-    directory: "/mcpresource"
-    schedule:
-      interval: "weekly"
-    open-pull-requests-limit: 5
-    labels: ["type/chore", "area/ci"]
-    commit-message:
-      prefix: "chore"
-
-  - package-ecosystem: "gomod"
-    directory: "/audit/sinks/otlp"
-    schedule:
-      interval: "weekly"
-    open-pull-requests-limit: 5
-    labels: ["type/chore", "area/ci"]
-    commit-message:
-      prefix: "chore"
+      include: "scope"
+    # Group order matters: a dependency joins the first group that matches.
+    groups:
+      # Security boundary deps stay together so the auto-merge workflow can
+      # hold exactly this PR for review (idea from thesvg/levelrail grouping).
+      go-security:
+        patterns:
+          - "golang.org/x/crypto"
+          - "github.com/golang-jwt/jwt*"
+          - "github.com/crewjam/saml*"
+          - "github.com/russellhaering/goxmldsig*"
+          - "github.com/go-webauthn/*"
+          - "github.com/pquerna/otp*"
+          - "github.com/beevik/etree*"
+          - "filippo.io/*"
+          - "github.com/fxamacker/cbor*"
+          - "github.com/mattermost/xml-roundtrip-validator*"
+          - "github.com/google/go-tpm*"
+        update-types: ["minor", "patch"]
+      go-x:
+        patterns: ["golang.org/x/*"]
+        update-types: ["minor", "patch"]
+      go-minor-patch:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
 
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
       interval: "weekly"
-    open-pull-requests-limit: 10
+      day: "monday"
+      time: "06:00"
+      timezone: "Etc/UTC"
+    open-pull-requests-limit: 5
     labels: ["type/chore", "area/ci"]
     commit-message:
-      prefix: "ci"
+      prefix: "chore"
+      include: "scope"
+    groups:
+      actions:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
