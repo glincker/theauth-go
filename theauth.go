@@ -247,6 +247,10 @@ type PasswordPolicyConfig struct {
 	// bcrypt hash fails. Leave false outside migrations.
 	AllowLegacyBcrypt bool
 
+	// ShareDummyHash makes every engine in the process reuse one timing-equalization hash, so a test
+	// binary that builds many engines pays the 64 MiB Argon2id cost once. Leave false in production.
+	ShareDummyHash bool
+
 	// HashConcurrency bounds concurrent Argon2id hashes process-wide (default NumCPU/4, at least 1) so
 	// sign-ins queue instead of each allocating 64 MiB. The last New call wins.
 	HashConcurrency int
