@@ -3,6 +3,7 @@ package password
 import (
 	"context"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 
@@ -64,5 +65,35 @@ func TestDummyHashSharedAcrossServices(t *testing.T) {
 	}
 	if got := n.Load(); got != 1 {
 		t.Fatalf("shared hash computed %d times, want 1", got)
+	}
+}
+
+func TestDummyHashWarmOnceThenSigninReuses(t *testing.T) {
+	n := countDummyHashes(t)
+	svc, err := NewService(unknownUserStorage{}, nil, nil, nil, nil, nil, Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := n.Load(); got != 0 {
+		t.Fatalf("hash computed at construction: %d", got)
+	}
+	var wg sync.WaitGroup
+	for i := 0; i < 4; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			_ = svc.DummyHash()
+		}()
+	}
+	wg.Wait()
+	_ = svc.DummyHash()
+	if got := n.Load(); got != 1 {
+		t.Fatalf("warm computed %d times, want 1", got)
+	}
+	if _, _, _, err := svc.Signin(context.Background(), "nobody@example.com", "pw", "ua", "1.2.3.4"); err == nil {
+		t.Fatal("expected invalid credentials")
+	}
+	if got := n.Load(); got != 1 {
+		t.Fatalf("signin recomputed the hash: %d", got)
 	}
 }
