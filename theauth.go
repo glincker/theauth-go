@@ -486,6 +486,17 @@ func New(cfg Config) (*TheAuth, error) {
 	return a, nil
 }
 
+// WarmDummyHash computes the timing-equalization hash used for unknown-user sign-ins now,
+// instead of on the first such sign-in. It exists to remove the one-time slower first
+// unknown-user sign-in and is optional. Safe to call more than once and concurrently; it does
+// nothing when password auth is disabled or the hash is already computed.
+func (a *TheAuth) WarmDummyHash() {
+	if a == nil || a.passwordSvc == nil {
+		return
+	}
+	_ = a.passwordSvc.DummyHash()
+}
+
 // Start spawns the audit writer goroutine when Config.Audit is set. It is idempotent. New calls it
 // automatically.
 func (a *TheAuth) Start() error {
