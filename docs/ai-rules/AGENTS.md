@@ -1,6 +1,6 @@
 # theauth-go rules
 
-Module `github.com/glincker/theauth-go/v2` (Go 1.25+). MCP resource server SDK: `github.com/glincker/theauth-go/mcpresource` (separate module, stdlib only). Read `go doc` before using an option. Do not invent APIs.
+Module `github.com/glincker/theauth-go/v2` (Go 1.26+). MCP resource server SDK: `github.com/glincker/theauth-go/mcpresource` (separate module, stdlib only). Read `go doc` before using an option. Do not invent APIs.
 
 ```go
 import (
