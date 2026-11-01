@@ -13,6 +13,7 @@ import (
 	"github.com/glincker/theauth-go/v2/internal/models"
 	"github.com/glincker/theauth-go/v2/internal/ulid"
 	"github.com/glincker/theauth-go/v2/policy"
+	"github.com/glincker/theauth-go/v2/policy/pathmatch"
 )
 
 func doc(id string, st ...policy.Statement) policy.Policy {
@@ -113,6 +114,50 @@ func TestResolverV2WinsAndValidatesLimit(t *testing.T) {
 		var ce *agent.ClassifiedError
 		if !errors.Is(err, agentpolicy.ErrInvalidRateLimit) || !errors.As(err, &ce) || ce.Class != agent.ErrClassInvalidLimit {
 			t.Fatalf("%+v: want ErrInvalidRateLimit, got %v", bad, err)
+		}
+	}
+}
+
+func TestResourceMatchingPathMode(t *testing.T) {
+	allow := policy.Statement{Effect: policy.Allow, Actions: []string{"publish"}, Resources: []string{"ros2:/fleet/*/cmd"}}
+	queries := []agent.PolicyQuery{
+		{Action: "publish", Resource: "ros2:/fleet/a/cmd"},
+		{Action: "publish", Resource: "ros2:/fleet/a/b/cmd"},
+		{Action: "publish", Resource: "ros2:/fleet/../cmd"},
+	}
+	run := func(m pathmatch.Mode) []string {
+		e, err := agentpolicy.New(agentpolicy.Config{Policies: []policy.Policy{doc("p", allow)}, ResourceMatching: m})
+		if err != nil {
+			t.Fatal(err)
+		}
+		dec, err := e.Decide(context.Background(), models.Agent{ID: ulid.New()}, queries)
+		if err != nil {
+			t.Fatal(err)
+		}
+		out := make([]string, len(dec.Verdicts))
+		for i, v := range dec.Verdicts {
+			out[i] = v.Effect
+		}
+		return out
+	}
+	// Default keeps the policy package glob, where * crosses segments.
+	for i, got := range run("") {
+		want := agent.VerdictNone
+		if policy.Match("ros2:/fleet/*/cmd", queries[i].Resource) {
+			want = agent.VerdictAllow
+		}
+		if got != want {
+			t.Fatalf("default query %d: %s want %s", i, got, want)
+		}
+	}
+	if run("")[1] != agent.VerdictAllow {
+		t.Fatal("default glob should still let * span segments (path mode narrows this)")
+	}
+	got := run(pathmatch.Path)
+	want := []string{agent.VerdictAllow, agent.VerdictNone, agent.VerdictNone}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("path query %d: %s want %s", i, got[i], want[i])
 		}
 	}
 }

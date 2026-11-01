@@ -3,6 +3,8 @@ package oauth
 import (
 	"context"
 	"errors"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -102,5 +104,34 @@ func TestHasUnsafeRedirectChars(t *testing.T) {
 		if got := HasUnsafeRedirectChars(in); got != want {
 			t.Errorf("HasUnsafeRedirectChars(%q) = %v, want %v", in, got, want)
 		}
+	}
+}
+
+// TestMemoryStateStoreTakeSingleWinner takes one state entry from many goroutines at once. The
+// callback must see a state exactly once, otherwise one authorization response could be replayed.
+func TestMemoryStateStoreTakeSingleWinner(t *testing.T) {
+	m := NewMemoryStateStore()
+	t.Cleanup(m.Close)
+	ctx := context.Background()
+	if err := m.Put(ctx, "race-key", State{}, time.Minute); err != nil {
+		t.Fatal(err)
+	}
+	var wins atomic.Int32
+	var wg sync.WaitGroup
+	start := make(chan struct{})
+	for i := 0; i < 32; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			<-start
+			if _, err := m.Take(ctx, "race-key"); err == nil {
+				wins.Add(1)
+			}
+		}()
+	}
+	close(start)
+	wg.Wait()
+	if wins.Load() != 1 {
+		t.Fatalf("DOUBLE SPEND: %d Take calls returned one state, want 1", wins.Load())
 	}
 }

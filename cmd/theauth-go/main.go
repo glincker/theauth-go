@@ -39,6 +39,8 @@ func run(args []string, stdout, stderr io.Writer, entropy io.Reader) int {
 		return cmdDB(args[1:], stdout, stderr)
 	case "init":
 		return cmdInit(args[1:], stdout, stderr, entropy)
+	case "device":
+		return cmdDevice(args[1:], stdout, stderr)
 	case "help", "-h", "--help":
 		usage(stdout)
 		return 0
@@ -50,7 +52,7 @@ func run(args []string, stdout, stderr io.Writer, entropy io.Reader) int {
 }
 
 func usage(w io.Writer) {
-	_, _ = fmt.Fprintln(w, "usage: theauth-go <command> [flags]\n\ncommands:\n  secret   print a random secret (session, OTP or signing key material)\n  openapi  print an OpenAPI 3.1 document for the default route set\n  policy   run a policy test suite: theauth-go policy test <suite.json>\n  db       migration ledger: theauth-go db status|migrate --driver <postgres|mysql> --dsn <dsn>\n  init     scaffold main.go and .env.example in a project directory")
+	_, _ = fmt.Fprintln(w, "usage: theauth-go <command> [flags]\n\ncommands:\n  secret   print a random secret (session, OTP or signing key material)\n  openapi  print an OpenAPI 3.1 document for the default route set\n  policy   run a policy test suite: theauth-go policy test <suite.json>\n  db       migration ledger: theauth-go db status|migrate --driver <postgres|mysql> --dsn <dsn>\n  init     scaffold main.go and .env.example in a project directory\n  device   check device attestation evidence offline: theauth-go device attest android|apple|tpm|tpm-certify|apple-assertion|apple-receipt")
 }
 
 func cmdSecret(args []string, stdout, stderr io.Writer, entropy io.Reader) int {

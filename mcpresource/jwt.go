@@ -52,11 +52,13 @@ type claims struct {
 	Cnf *confirmationClaim `json:"cnf,omitempty"`
 }
 
-// confirmationClaim is the RFC 7800 cnf claim shape. Only the jkt
-// member is observed today; future confirmation methods (mTLS, kid) can
-// land here additively without breaking older callers.
+// confirmationClaim is the RFC 7800 cnf claim shape. The jkt (DPoP)
+// and x5t#S256 (mutual TLS) members are enforced; other members are ignored.
 type confirmationClaim struct {
+	// JKT is the RFC 9449 DPoP key thumbprint.
 	JKT string `json:"jkt,omitempty"`
+	// X5tS256 is the RFC 8705 client certificate thumbprint.
+	X5tS256 string `json:"x5t#S256,omitempty"`
 }
 
 type jwtHeader struct {

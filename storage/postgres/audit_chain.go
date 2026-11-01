@@ -88,6 +88,10 @@ func (s *Store) VerifyAuditChain(ctx context.Context) (theauth.AuditChainResult,
 	if err := s.pool.QueryRow(ctx, `SELECT secret FROM theauth_audit_secrets WHERE id = 1`).Scan(&secret); err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		return fail(err)
 	}
+	periods, err := s.periodSecrets(ctx)
+	if err != nil {
+		return fail(err)
+	}
 	rows, err := s.pool.Query(ctx, `
 SELECT id, organization_id, actor_user_id, actor_session_id, action,
        COALESCE(target_type, ''), COALESCE(target_id, ''), chain_metadata, metadata,
@@ -100,13 +104,13 @@ FROM audit_events WHERE chain_seq IS NOT NULL ORDER BY chain_key, chain_seq`)
 		return fail(err)
 	}
 	defer rows.Close()
-	res, err := audit.VerifyChainRows(func() (audit.ChainRow, bool, error) {
+	res, err := audit.VerifyChainRowsKeys(func() (audit.ChainRow, bool, error) {
 		if !rows.Next() {
 			return audit.ChainRow{}, false, rows.Err()
 		}
 		r, err := scanChainRow(rows)
 		return r, err == nil, err
-	}, secret, unchained)
+	}, audit.PseudonymKeys{Stable: secret, Periods: periods}, unchained)
 	if err != nil {
 		return fail(err)
 	}

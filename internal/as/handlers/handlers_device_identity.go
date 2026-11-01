@@ -4,6 +4,7 @@ package handlers
 // org-scoped admin routes.
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -23,17 +24,24 @@ type enrollBody struct {
 	Challenge string          `json:"challenge"`
 	Proof     string          `json:"proof"`
 	Name      string          `json:"name"`
+	// AttestationEvidence is hardware attestation evidence, a JSON document as a string.
+	AttestationEvidence string `json:"attestation_evidence"`
+	// EKPublic and AKPublic are the TPM keys of a credential activation (tpm-activation only).
+	EKPublic string `json:"ek_public"`
+	AKPublic string `json:"ak_public"`
 }
 
 func (b enrollBody) request() internalas.DeviceEnrollRequest {
 	return internalas.DeviceEnrollRequest{
 		Kind: b.Kind, JoinToken: b.JoinToken, JWK: b.JWK, Challenge: b.Challenge, Proof: b.Proof, Name: b.Name,
+		AttestationEvidence: b.AttestationEvidence,
 	}
 }
 
 func (h *Handler) mountDeviceIdentity(r chi.Router) {
 	r.With(h.limited).Post("/oauth/devices/challenge", h.handleDeviceChallenge)
 	r.With(h.limited).Post("/oauth/devices/enroll", h.handleDeviceEnroll)
+	r.With(h.limited).Post("/oauth/devices/tpm-activation", h.handleDeviceTPMActivation)
 }
 
 func (h *Handler) writeEnrollError(w http.ResponseWriter, err error) {
@@ -45,6 +53,15 @@ func (h *Handler) writeEnrollError(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, models.ErrDeviceEnrollmentInvalid):
 		writeOAuthError(w, http.StatusBadRequest, oauthErrInvalidGrant, "invalid join token, key or proof")
+	case errors.Is(err, models.ErrDeviceAttestationRequired):
+		writeOAuthError(w, http.StatusBadRequest, oauthErrInvalidRequest, "attestation_required")
+	case errors.Is(err, models.ErrDeviceAttestationFailed):
+		var af *internalas.DeviceAttestationError
+		desc := "attestation_failed"
+		if errors.As(err, &af) && af.Reason != "" {
+			desc += ": " + af.Reason
+		}
+		writeOAuthError(w, http.StatusBadRequest, oauthErrInvalidGrant, desc)
 	case errors.Is(err, models.ErrDeviceConflict):
 		writeOAuthError(w, http.StatusConflict, oauthErrInvalidRequest, "device identity already registered")
 	default:
@@ -64,6 +81,25 @@ func (h *Handler) handleDeviceChallenge(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	writeJSON(w, http.StatusOK, ch)
+}
+
+// handleDeviceTPMActivation is the server half of the TPM credential activation. The device sends its
+// join token, key, challenge, proof and its TPM keys, runs TPM2_ActivateCredential on the answer and puts
+// the recovered secret into attestation_evidence.
+func (h *Handler) handleDeviceTPMActivation(w http.ResponseWriter, r *http.Request) {
+	var body enrollBody
+	if err := httpx.DecodeJSON(r, &body); err != nil {
+		writeOAuthError(w, http.StatusBadRequest, oauthErrInvalidRequest, "malformed body")
+		return
+	}
+	act, err := h.svc.DeviceTPMActivation(r.Context(), internalas.DeviceTPMActivationRequest{
+		DeviceEnrollRequest: body.request(), EKPublic: body.EKPublic, AKPublic: body.AKPublic,
+	})
+	if err != nil {
+		h.writeEnrollError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, act)
 }
 
 func (h *Handler) handleDeviceEnroll(w http.ResponseWriter, r *http.Request) {
@@ -117,6 +153,8 @@ func (a *AdminHandler) mountDevices(r chi.Router, perm func(http.Handler) http.H
 	r.With(perm).Delete("/devices/join-tokens/{tokenID}", a.revokeJoinToken)
 	r.With(perm).Get("/devices", a.listDevices)
 	r.With(perm).Post("/devices/{deviceID}/revoke", a.revokeDevice)
+	r.With(perm).Post("/devices/{deviceID}/suspend", a.suspendDevice)
+	r.With(perm).Post("/devices/{deviceID}/resume", a.resumeDevice)
 }
 
 func (a *AdminHandler) createJoinToken(w http.ResponseWriter, r *http.Request) {
@@ -130,6 +168,8 @@ func (a *AdminHandler) createJoinToken(w http.ResponseWriter, r *http.Request) {
 		SPIFFEID   string   `json:"spiffe_id"`
 		Scopes     []string `json:"scopes"`
 		TTLSeconds int      `json:"ttl_seconds"`
+		Kind       string   `json:"kind"`
+		MaxUses    int      `json:"max_uses"`
 	}
 	if err := httpx.DecodeJSON(r, &body); err != nil {
 		admin.Write(w, http.StatusBadRequest, admin.CodeValidationInvalid, err.Error(), "")
@@ -137,7 +177,7 @@ func (a *AdminHandler) createJoinToken(w http.ResponseWriter, r *http.Request) {
 	}
 	in := internalas.CreateDeviceJoinTokenInput{
 		OrganizationID: &orgID, Name: body.Name, SPIFFEID: body.SPIFFEID, Scopes: body.Scopes,
-		TTL: time.Duration(body.TTLSeconds) * time.Second,
+		TTL: time.Duration(body.TTLSeconds) * time.Second, Kind: body.Kind, MaxUses: body.MaxUses,
 	}
 	if u, _ := a.userFromCtx(r); u != nil {
 		id := u.ID
@@ -146,7 +186,7 @@ func (a *AdminHandler) createJoinToken(w http.ResponseWriter, r *http.Request) {
 	t, raw, err := a.svc.CreateDeviceJoinToken(r.Context(), in)
 	if err != nil {
 		if errors.Is(err, models.ErrOAuthInvalidRequest) {
-			admin.Write(w, http.StatusBadRequest, admin.CodeValidationInvalid, "scopes are required and ttl_seconds must not be negative", "")
+			admin.Write(w, http.StatusBadRequest, admin.CodeValidationInvalid, "scopes are required, kind must be empty, claim or bulk, bulk needs max_uses, and ttl_seconds must be valid", "")
 			return
 		}
 		admin.Write(w, http.StatusInternalServerError, admin.CodeInternal, "could not create join token", "")
@@ -155,7 +195,7 @@ func (a *AdminHandler) createJoinToken(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
 	writeJSON(w, http.StatusCreated, map[string]any{
 		"id": t.ID.String(), "token": raw, "prefix": t.Prefix, "name": t.Name, "spiffe_id": t.SPIFFEID,
-		"scopes": t.Scopes, "expires_at": t.ExpiresAt,
+		"scopes": t.Scopes, "expires_at": t.ExpiresAt, "kind": body.Kind, "max_uses": t.EffectiveMaxUses(),
 	})
 }
 
@@ -210,10 +250,41 @@ func (a *AdminHandler) revokeDevice(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-func (a *AdminHandler) writeDeviceAdminError(w http.ResponseWriter, err error, what string) {
-	if errors.Is(err, models.ErrStorageNotFound) {
-		admin.Write(w, http.StatusNotFound, admin.CodeNotFound, what+" not found", "")
+func (a *AdminHandler) suspendDevice(w http.ResponseWriter, r *http.Request) {
+	a.changeDevice(w, r, a.svc.SuspendDevice)
+}
+
+func (a *AdminHandler) resumeDevice(w http.ResponseWriter, r *http.Request) {
+	a.changeDevice(w, r, a.svc.ResumeDevice)
+}
+
+func (a *AdminHandler) changeDevice(w http.ResponseWriter, r *http.Request,
+	fn func(context.Context, models.ULID, *models.ULID, *models.ULID) error) {
+	orgID, ok := httpx.ParseULIDPath(r, "orgID")
+	id, ok2 := httpx.ParseULIDPath(r, "deviceID")
+	if !ok || !ok2 {
+		admin.Write(w, http.StatusBadRequest, admin.CodeValidationInvalid, "invalid id", "")
 		return
 	}
-	admin.Write(w, http.StatusInternalServerError, admin.CodeInternal, "could not revoke "+what, "")
+	var actor *models.ULID
+	if u, _ := a.userFromCtx(r); u != nil {
+		uid := u.ID
+		actor = &uid
+	}
+	if err := fn(r.Context(), id, &orgID, actor); err != nil {
+		a.writeDeviceAdminError(w, err, "device")
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (a *AdminHandler) writeDeviceAdminError(w http.ResponseWriter, err error, what string) {
+	switch {
+	case errors.Is(err, models.ErrStorageNotFound):
+		admin.Write(w, http.StatusNotFound, admin.CodeNotFound, what+" not found", "")
+	case errors.Is(err, models.ErrDeviceRevoked):
+		admin.Write(w, http.StatusConflict, admin.CodeValidationInvalid, what+" is revoked", "")
+	default:
+		admin.Write(w, http.StatusInternalServerError, admin.CodeInternal, "could not update "+what, "")
+	}
 }

@@ -3,6 +3,7 @@ package memory
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"sort"
 	"sync"
 	"time"
@@ -29,6 +30,15 @@ func (d *iotDeviceState) init() {
 func cloneIoTDevice(d theauth.Device) theauth.Device {
 	d.PublicKeyJWK = append([]byte(nil), d.PublicKeyJWK...)
 	d.Scopes = append([]string(nil), d.Scopes...)
+	if d.AttestationClaims != nil {
+		// A JSON round trip is a deep copy, and matches what the SQL stores return.
+		if b, err := json.Marshal(d.AttestationClaims); err == nil {
+			var m map[string]any
+			if json.Unmarshal(b, &m) == nil {
+				d.AttestationClaims = m
+			}
+		}
+	}
 	return d
 }
 
@@ -86,6 +96,21 @@ func (s *Store) ListDevices(_ context.Context, orgID *theauth.ULID) ([]theauth.D
 		return bytes.Compare(out[i].ID[:], out[j].ID[:]) > 0
 	})
 	return out, nil
+}
+
+// AdvanceAppAttestCounter raises the App Attest counter while it is lower.
+func (s *Store) AdvanceAppAttestCounter(_ context.Context, id theauth.ULID, counter uint32) (bool, error) {
+	st := &s.iotdev
+	st.mu.Lock()
+	defer st.mu.Unlock()
+	st.init()
+	d, ok := st.devices[id]
+	if !ok || d.AppAttestCounter >= counter {
+		return false, nil
+	}
+	d.AppAttestCounter = counter
+	st.devices[id] = d
+	return true, nil
 }
 
 func (s *Store) RevokeDevice(_ context.Context, id theauth.ULID, at time.Time) (bool, error) {
@@ -174,8 +199,13 @@ func (s *Store) RedeemDeviceJoinToken(_ context.Context, id, deviceID theauth.UL
 	if !ok || !t.Active(now) {
 		return false, nil
 	}
-	t.RedeemedAt = &now
-	t.DeviceID = &deviceID
+	t.Uses++
+	if t.Uses >= t.EffectiveMaxUses() {
+		t.RedeemedAt = &now
+	}
+	if t.EffectiveMaxUses() == 1 {
+		t.DeviceID = &deviceID
+	}
 	st.tokens[id] = t
 	return true, nil
 }
@@ -186,9 +216,66 @@ func (s *Store) RefundDeviceJoinToken(_ context.Context, id theauth.ULID) error 
 	defer st.mu.Unlock()
 	st.init()
 	if t, ok := st.tokens[id]; ok {
+		if t.Uses > 0 {
+			t.Uses--
+		}
 		t.RedeemedAt = nil
 		t.DeviceID = nil
 		st.tokens[id] = t
 	}
 	return nil
+}
+
+func (s *Store) SuspendDevice(_ context.Context, id theauth.ULID) (bool, error) {
+	return s.setDeviceStatus(id, theauth.DeviceStatusActive, theauth.DeviceStatusSuspended)
+}
+
+func (s *Store) ResumeDevice(_ context.Context, id theauth.ULID) (bool, error) {
+	return s.setDeviceStatus(id, theauth.DeviceStatusSuspended, theauth.DeviceStatusActive)
+}
+
+func (s *Store) setDeviceStatus(id theauth.ULID, from, to string) (bool, error) {
+	st := &s.iotdev
+	st.mu.Lock()
+	defer st.mu.Unlock()
+	st.init()
+	d, ok := st.devices[id]
+	if !ok || d.Status != from || d.RevokedAt != nil {
+		return false, nil
+	}
+	d.Status = to
+	st.devices[id] = d
+	return true, nil
+}
+
+func (s *Store) DeviceBySPIFFEID(_ context.Context, spiffeID string) (*theauth.Device, error) {
+	return s.findIoTDevice(func(d theauth.Device) bool { return spiffeID != "" && d.SPIFFEID == spiffeID })
+}
+
+func (s *Store) DeviceByKeyThumbprint(_ context.Context, thumbprint string) (*theauth.Device, error) {
+	return s.findIoTDevice(func(d theauth.Device) bool { return thumbprint != "" && d.KeyThumbprint == thumbprint })
+}
+
+// findIoTDevice returns the newest device that match accepts.
+func (s *Store) findIoTDevice(match func(theauth.Device) bool) (*theauth.Device, error) {
+	st := &s.iotdev
+	st.mu.Lock()
+	defer st.mu.Unlock()
+	st.init()
+	var best *theauth.Device
+	for _, d := range st.devices {
+		if !match(d) {
+			continue
+		}
+		if best == nil || d.CreatedAt.After(best.CreatedAt) ||
+			(d.CreatedAt.Equal(best.CreatedAt) && bytes.Compare(d.ID[:], best.ID[:]) > 0) {
+			cp := d
+			best = &cp
+		}
+	}
+	if best == nil {
+		return nil, theauth.ErrStorageNotFound
+	}
+	cp := cloneIoTDevice(*best)
+	return &cp, nil
 }

@@ -3,6 +3,8 @@ package policy
 import (
 	"testing"
 	"time"
+
+	"github.com/glincker/theauth-go/v2/policy/pathmatch"
 )
 
 // TestTimeWindowBoundaries pins the inclusive-start and exclusive-end rules
@@ -117,6 +119,36 @@ func TestEvaluateStatementIDs(t *testing.T) {
 			d := Evaluator{}.Evaluate(Request{Action: "x", Resource: "r"}, p)
 			if d.Effect != tt.effect || d.StatementID != tt.stmt {
 				t.Fatalf("got effect=%q stmt=%q, want effect=%q stmt=%q", d.Effect, d.StatementID, tt.effect, tt.stmt)
+			}
+		})
+	}
+}
+
+// TestEvaluatorResourceMatching pins the opt in path matcher: the default stays the glob matcher.
+func TestEvaluatorResourceMatching(t *testing.T) {
+	pol := &Policy{Version: "1", ID: "p", Statements: []Statement{
+		{Effect: Allow, Actions: []string{"call"}, Resources: []string{"ros2:/fleet/*/cmd"}},
+		{Effect: Deny, Actions: []string{"call"}, Resources: []string{"ros2:/fleet/**/admin"}},
+	}}
+	tests := []struct {
+		name     string
+		resource string
+		glob     bool
+		path     bool
+	}{
+		{"one segment", "ros2:/fleet/a/cmd", true, true},
+		{"two segments", "ros2:/fleet/a/b/cmd", true, false},
+		{"dot dot segment", "ros2:/fleet/../cmd", true, false},
+		{"deny reaches deep", "ros2:/fleet/a/b/admin", false, false},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			req := Request{Action: "call", Resource: tc.resource}
+			if got := (Evaluator{}).Evaluate(req, pol).Allowed; got != tc.glob {
+				t.Errorf("glob = %v, want %v", got, tc.glob)
+			}
+			if got := (Evaluator{ResourceMatching: pathmatch.Path}).Evaluate(req, pol).Allowed; got != tc.path {
+				t.Errorf("path = %v, want %v", got, tc.path)
 			}
 		})
 	}

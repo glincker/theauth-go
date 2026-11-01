@@ -142,6 +142,13 @@ func (s *Store) deleteUserDependents(userID theauth.ULID) {
 			if a := v.auditRing[i].ActorUserID; a != nil && *a == userID {
 				v.auditRing[i].ActorUserID = nil
 			}
+			// Raw ids are blanked, the chain keeps verifying through the stored pseudonyms.
+			if v.auditRing[i].SubjectID == userID.String() {
+				v.auditRing[i].SubjectID = ""
+			}
+			if v.auditRing[i].ApproverID == userID.String() {
+				v.auditRing[i].ApproverID = ""
+			}
 		}
 		v.mu.Unlock()
 	}

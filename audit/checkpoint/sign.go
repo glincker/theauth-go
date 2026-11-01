@@ -109,9 +109,18 @@ func VerifyCheckpoint(c Checkpoint, keys ...PublicKey) Outcome {
 	if c.Alg != algEd25519 {
 		return fail(ReasonUnsupportedAlg)
 	}
+	msg, err := signedBytes(c)
+	if err != nil {
+		return fail(ReasonMalformed)
+	}
+	return verifySignature(c.KeyID, c.Signature, msg, keys)
+}
+
+// verifySignature checks an Ed25519 signature made by the key published under keyID.
+func verifySignature(keyID, signature string, msg []byte, keys []PublicKey) Outcome {
 	var match *PublicKey
 	for i := range keys {
-		if subtle.ConstantTimeCompare([]byte(keys[i].KeyID), []byte(c.KeyID)) == 1 {
+		if subtle.ConstantTimeCompare([]byte(keys[i].KeyID), []byte(keyID)) == 1 {
 			match = &keys[i]
 			break
 		}
@@ -122,20 +131,27 @@ func VerifyCheckpoint(c Checkpoint, keys ...PublicKey) Outcome {
 	if match.PublicKey.Kty != jwkKty || match.PublicKey.Crv != jwkCrv {
 		return fail(ReasonUnsupportedAlg)
 	}
-	pub, err := base64.RawURLEncoding.Strict().DecodeString(match.PublicKey.X)
-	if err != nil || len(pub) != publicKeyBytes {
+	pub, ok := decodeCanonicalB64(match.PublicKey.X)
+	if !ok || len(pub) != publicKeyBytes {
 		return fail(ReasonBadSignature)
 	}
-	sig, err := base64.RawURLEncoding.Strict().DecodeString(c.Signature)
-	if err != nil || len(sig) != signatureBytes {
+	sig, ok := decodeCanonicalB64(signature)
+	if !ok || len(sig) != signatureBytes {
 		return fail(ReasonBadSignature)
-	}
-	msg, err := signedBytes(c)
-	if err != nil {
-		return fail(ReasonMalformed)
 	}
 	if !ed25519.Verify(pub, msg, sig) {
 		return fail(ReasonBadSignature)
 	}
 	return OK()
+}
+
+// decodeCanonicalB64 decodes unpadded base64url and accepts only the one canonical spelling of the
+// bytes. The stdlib decoder skips CR and LF anywhere in the input, so Strict alone would let a
+// signature carry a second, newline laden encoding that still verifies.
+func decodeCanonicalB64(s string) ([]byte, bool) {
+	b, err := base64.RawURLEncoding.Strict().DecodeString(s)
+	if err != nil || base64.RawURLEncoding.EncodeToString(b) != s {
+		return nil, false
+	}
+	return b, true
 }

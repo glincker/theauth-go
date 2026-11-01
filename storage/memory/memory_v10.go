@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
+	"maps"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -12,6 +14,7 @@ import (
 
 	"github.com/glincker/theauth-go/v2"
 	"github.com/glincker/theauth-go/v2/audit"
+	iaudit "github.com/glincker/theauth-go/v2/internal/audit"
 	"github.com/glincker/theauth-go/v2/storage"
 	"github.com/oklog/ulid/v2"
 )
@@ -30,8 +33,13 @@ type v10State struct {
 	rolePerms         map[theauth.ULID]map[theauth.ULID]struct{} // roleID -> set of permID
 	userRoles         map[memberKey]theauth.UserRole             // {userID, roleID} -> ur (memberKey re-used for the same 2-tuple shape)
 	auditRing         []theauth.AuditEvent
-	auditHead         int  // next write position
-	auditWrapped      bool // ring has wrapped at least once
+	auditHead         int                         // next write position
+	auditWrapped      bool                        // ring has wrapped at least once
+	auditChain        []iaudit.ChainEntry         // chain payload per ring slot, index aligned with auditRing
+	auditHeads        map[string]iaudit.ChainHead // last position per chain key, kept after eviction
+	auditSecret       []byte                      // pseudonym secret, created on first write
+	auditRotation     iaudit.RotationState        // rotating pseudonym policy, off by default
+	auditPeriods      map[int64][]byte            // period secrets, guarded by mu
 
 	mu sync.Mutex // protects audit ring writes only (Store.mu protects everything else)
 }
@@ -348,19 +356,41 @@ func (s *Store) InsertAuditEvents(_ context.Context, events []theauth.AuditEvent
 	v := s.auditState()
 	v.mu.Lock()
 	defer v.mu.Unlock()
+	// Stage the whole batch first, so one event that cannot be hashed leaves neither rows nor an
+	// advanced chain head behind, like the transactional SQL stores.
+	savedHeads := maps.Clone(v.auditHeads)
+	type staged struct {
+		e  theauth.AuditEvent
+		ce iaudit.ChainEntry
+	}
+	batch := make([]staged, 0, len(events))
 	for _, e := range events {
 		if e.CreatedAt.IsZero() {
 			e.CreatedAt = time.Now()
 		}
 		// The store assigns the write-order stamp; a caller value is ignored. The process counter
-		// is enough here because memory keeps no chain heads.
+		// is enough here because one process owns every chain head.
 		e.RecordedAtUs = audit.NextRecordedAtUs(0)
+		ce, err := v.chainEvent(&e)
+		if err != nil {
+			if savedHeads != nil {
+				v.auditHeads = savedHeads
+			} else {
+				clear(v.auditHeads)
+			}
+			return err
+		}
+		batch = append(batch, staged{e, ce})
+	}
+	for _, b := range batch {
 		if len(v.auditRing) < auditRingCap {
-			v.auditRing = append(v.auditRing, e)
+			v.auditRing = append(v.auditRing, b.e)
+			v.auditChain = append(v.auditChain, b.ce)
 			v.auditHead = len(v.auditRing) % auditRingCap
 			continue
 		}
-		v.auditRing[v.auditHead] = e
+		v.auditChain[v.auditHead] = b.ce
+		v.auditRing[v.auditHead] = b.e
 		v.auditHead = (v.auditHead + 1) % auditRingCap
 		v.auditWrapped = true
 	}
@@ -424,9 +454,17 @@ func (s *Store) QueryAuditEvents(_ context.Context, q theauth.AuditQuery) ([]the
 			return c > 0
 		})
 	}
+	needle := ""
+	if q.Provenance != nil {
+		n, err := iaudit.ProvenanceNeedle(*q.Provenance)
+		if err != nil {
+			return nil, "", err
+		}
+		needle = n
+	}
 	out := []theauth.AuditEvent{}
 	for _, e := range snap {
-		if !auditRowMatches(e, q) {
+		if !auditRowMatches(e, q, needle) {
 			continue
 		}
 		if legacy {
@@ -446,6 +484,13 @@ func (s *Store) QueryAuditEvents(_ context.Context, q theauth.AuditQuery) ([]the
 		if q.Limit > 0 && len(out) >= q.Limit {
 			break
 		}
+	}
+	// The ring shares its maps and slices with the snapshot. Hand the caller private copies, since
+	// the chain rehashes the live event and an edit through a result would read as tampering.
+	for i := range out {
+		out[i].Metadata = cloneJSONMap(out[i].Metadata)
+		out[i].InputProvenance = cloneJSONMap(out[i].InputProvenance)
+		out[i].DelegationChain = slices.Clone(out[i].DelegationChain)
 	}
 	var next string
 	if q.Limit > 0 && len(out) == q.Limit {
@@ -470,7 +515,7 @@ func compareWriteOrder(a, b theauth.AuditEvent) int {
 	return a.ID.Compare(b.ID)
 }
 
-func auditRowMatches(e theauth.AuditEvent, q theauth.AuditQuery) bool {
+func auditRowMatches(e theauth.AuditEvent, q theauth.AuditQuery, provenanceNeedle string) bool {
 	if q.OrganizationID != nil && (e.OrganizationID == nil || *e.OrganizationID != *q.OrganizationID) {
 		return false
 	}
@@ -494,6 +539,12 @@ func auditRowMatches(e theauth.AuditEvent, q theauth.AuditQuery) bool {
 	}
 	if q.Until != nil && e.CreatedAt.After(*q.Until) {
 		return false
+	}
+	if provenanceNeedle != "" {
+		raw, _ := iaudit.MarshalOr(e.InputProvenance, "{}")
+		if !iaudit.MatchesProvenance(raw, provenanceNeedle) {
+			return false
+		}
 	}
 	return true
 }

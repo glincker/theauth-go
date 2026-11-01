@@ -11,6 +11,8 @@ import (
 	"crypto/subtle"
 	"sync"
 	"time"
+
+	"github.com/glincker/theauth-go/v2/internal/epoch"
 )
 
 // DefaultMaxEntries bounds the cache so probing many synthetic client_ids cannot exhaust memory
@@ -41,6 +43,9 @@ type Cache[V any] struct {
 
 	byID  map[string]*entry[V]
 	order *list.List // front = most recently used
+
+	// fence drops a Put that began before an Invalidate of the same client (see Begin).
+	fence epoch.Set
 }
 
 // New returns a cache. Non-positive limits fall back to DefaultMaxEntries and DefaultTTL.
@@ -89,8 +94,28 @@ func (c *Cache[V]) Get(clientID, secret string) (V, bool) {
 	return e.value, true
 }
 
+// Begin returns a token to take before the slow lookup and verify that precede a Put. Pass it to
+// PutAt, which drops the entry when Invalidate ran for the client in between. Without it, a rotation
+// that lands while an old secret is being verified would be undone by the Put, and the old secret
+// would authenticate for the whole TTL.
+func (c *Cache[V]) Begin(clientID string) uint64 {
+	if c == nil {
+		return 0
+	}
+	return c.fence.Token(clientID)
+}
+
+// PutAt is Put guarded by a token from Begin.
+func (c *Cache[V]) PutAt(clientID, secret string, value V, tok uint64) {
+	if c == nil || clientID == "" {
+		return
+	}
+	c.fence.Commit(clientID, tok, func() { c.Put(clientID, secret, value) })
+}
+
 // Put inserts or replaces the entry after a successful Argon2 verify of the same (clientID, secret)
-// pair. It evicts the LRU entry at capacity.
+// pair. It evicts the LRU entry at capacity. It is unguarded: a caller that verifies after a slow
+// lookup must use Begin and PutAt.
 func (c *Cache[V]) Put(clientID, secret string, value V) {
 	if c == nil || clientID == "" {
 		return
@@ -128,11 +153,13 @@ func (c *Cache[V]) Invalidate(clientID string) {
 	if c == nil || clientID == "" {
 		return
 	}
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if e, ok := c.byID[clientID]; ok {
-		c.removeLocked(e)
-	}
+	c.fence.Invalidate(clientID, func() {
+		c.mu.Lock()
+		defer c.mu.Unlock()
+		if e, ok := c.byID[clientID]; ok {
+			c.removeLocked(e)
+		}
+	})
 }
 
 // Len returns the current entry count. Test-only helper.

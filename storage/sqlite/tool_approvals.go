@@ -7,21 +7,26 @@ import (
 	"github.com/glincker/theauth-go/v2"
 )
 
-var _ theauth.ToolApprovalStorage = (*Store)(nil)
+var (
+	_ theauth.ToolApprovalStorage       = (*Store)(nil)
+	_ theauth.ToolApprovalAdminStorage  = (*Store)(nil)
+	_ theauth.ToolApprovalExpiryStorage = (*Store)(nil)
+)
 
 func (s *Store) OpenToolApproval(ctx context.Context, a theauth.ToolApproval) error {
 	_, err := s.db.ExecContext(ctx, s.q(`
-INSERT INTO theauth_tool_approvals (id, agent_id, action, resource, requirement, tier, reason, created_at, expires_at)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`),
-		a.ID, a.AgentID, a.Action, a.Resource, a.Requirement, a.Tier, a.Reason,
-		toMicro(a.CreatedAt), throttleMicro(a.ExpiresAt))
+INSERT INTO theauth_tool_approvals (id, agent_id, action, resource, requirement, tier, reason, opened_by, arguments_hash, created_at, expires_at, required_approvals)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`),
+		a.ID, a.AgentID, a.Action, a.Resource, a.Requirement, a.Tier, a.Reason, a.OpenedBy, a.ArgumentsHash,
+		toMicro(a.CreatedAt), throttleMicro(a.ExpiresAt), max(a.RequiredApprovals, 1))
 	return wrap("open tool approval", err)
 }
 
 func (s *Store) ApproveToolApproval(ctx context.Context, id, approver string, now time.Time) (bool, error) {
 	res, err := s.db.ExecContext(ctx, s.q(`
 UPDATE theauth_tool_approvals SET approved_at = ?, approver = ?
-WHERE id = ? AND approved_at IS NULL AND consumed_at IS NULL AND (expires_at = 0 OR expires_at > ?)`),
+WHERE id = ? AND approved_at IS NULL AND consumed_at IS NULL AND denied_at IS NULL AND expired_at IS NULL
+  AND required_approvals <= 1 AND (expires_at = 0 OR expires_at > ?)`),
 		toMicro(now), approver, id, toMicro(now))
 	return rowWon(res, err, "approve tool approval")
 }
@@ -32,7 +37,8 @@ func (s *Store) ConsumeToolApproval(ctx context.Context, id, agentID, action, re
 	res, err := s.db.ExecContext(ctx, s.q(`
 UPDATE theauth_tool_approvals SET consumed_at = ?
 WHERE id = ? AND agent_id = ? AND action = ? AND resource = ?
-  AND approved_at IS NOT NULL AND consumed_at IS NULL AND (expires_at = 0 OR expires_at > ?)`),
+  AND approved_at IS NOT NULL AND consumed_at IS NULL AND denied_at IS NULL AND expired_at IS NULL
+  AND (expires_at = 0 OR expires_at > ?)`),
 		toMicro(now), id, agentID, action, resource, toMicro(now))
 	return rowWon(res, err, "consume tool approval")
 }

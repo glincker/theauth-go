@@ -73,6 +73,18 @@ func (s *Store) QueryAuditEvents(ctx context.Context, q theauth.AuditQuery) ([]t
 		wheres = append(wheres, "created_at <= ?")
 		args = append(args, timeUTC(*q.Until))
 	}
+	if q.Provenance != nil {
+		needle, err := audit.ProvenanceNeedle(*q.Provenance)
+		if err != nil {
+			return nil, "", err
+		}
+		if needle != "" {
+			// A binary LOCATE is a literal, case sensitive search. LIKE would treat the underscore in
+			// "user_message" as a wildcard.
+			wheres = append(wheres, "LOCATE(BINARY ?, input_provenance) > 0")
+			args = append(args, needle)
+		}
+	}
 	switch {
 	case legacy:
 		ts, id, err := decodeAuditCursor(q.After)

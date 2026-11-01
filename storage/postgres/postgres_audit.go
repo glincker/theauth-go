@@ -42,16 +42,27 @@ func (s *Store) InsertAuditEvents(ctx context.Context, events []theauth.AuditEve
 	if err != nil {
 		return err
 	}
+	// Period secrets are taken before the head locks, like the installation secret, so every
+	// writer acquires in the same order.
+	times := make([]time.Time, len(events))
+	for i, e := range events {
+		times[i] = e.CreatedAt
+		if times[i].IsZero() {
+			times[i] = time.Now()
+		}
+	}
+	ps, err := s.rot.Resolve(ctx, secret, pgPeriods{tx}, times)
+	if err != nil {
+		return err
+	}
 	heads, stamps, err := lockChainHeads(ctx, tx, events)
 	if err != nil {
 		return err
 	}
-	for _, e := range events {
-		if e.CreatedAt.IsZero() {
-			e.CreatedAt = time.Now()
-		}
+	for i, e := range events {
+		e.CreatedAt = times[i]
 		key := audit.ChainKey(e)
-		entry, err := audit.BuildChainEntry(e, secret, heads[key])
+		entry, err := audit.BuildChainEntryWith(e, ps, heads[key])
 		if err != nil {
 			return err
 		}
@@ -142,6 +153,16 @@ func (s *Store) QueryAuditEvents(ctx context.Context, q theauth.AuditQuery) ([]t
 	}
 	if q.Until != nil {
 		wheres = append(wheres, "created_at <= "+bind(timeToTs(*q.Until)))
+	}
+	if q.Provenance != nil {
+		needle, err := audit.ProvenanceNeedle(*q.Provenance)
+		if err != nil {
+			return nil, "", err
+		}
+		if needle != "" {
+			// strpos is a literal search. LIKE would treat the underscore in "user_message" as a wildcard.
+			wheres = append(wheres, "strpos(input_provenance, "+bind(needle)+") > 0")
+		}
 	}
 	dir, cmp := "DESC", "<"
 	if order == theauth.AuditOrderAsc {
