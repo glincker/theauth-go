@@ -26,15 +26,15 @@ go list ./... | wc -l                                        # 129
 
 Of the 25 modules, 18 are runnable examples under `examples/`. The rest are the root module, `mcpresource`, `storage/sqlite`, `audit/sinks/otlp` and the three framework adapters.
 
-These counts show size and test presence. They say nothing about test quality or coverage. We have not published a coverage figure on this page; the Codecov badge in the README is the place to look.
+These counts show size and test presence. They say nothing about test quality or coverage. We have not published a coverage figure on this page; see the Codecov report at https://codecov.io/gh/glincker/theauth-go.
 
 ## Supply chain
 
 Every release is built by the `release` workflow (`.github/workflows/release.yml`).
 
-- Signing: release assets are signed keyless with cosign through GitHub Actions OIDC. The exact `cosign verify-blob` steps are in the README under [Verify releases](../README.md#verify-releases).
+- Signing: release assets are signed keyless with cosign through GitHub Actions OIDC. The exact `cosign verify-blob` steps are in the README under [Verify releases](./INSTALL.md#verify-releases).
 - SBOM: each `theauth-go-v*.tar.gz` ships with a `.sbom.json`, generated with syft in the release workflow.
-- Provenance: the release workflow calls `actions/attest-build-provenance` on the archive and the SBOM. The README badge claims SLSA level 3.
+- Provenance: the release workflow calls `actions/attest-build-provenance` on the archive and the SBOM. The release workflow targets SLSA level 3.
 - Scorecard: the `scorecard` workflow runs weekly. Current results are at <https://scorecard.dev/viewer/?uri=github.com/glincker/theauth-go>.
 - Code scanning: the `codeql` workflow runs weekly and on changes.
 - Dependencies: the `govulncheck` workflow runs weekly, and `dependency-review` runs on pull requests.
@@ -62,14 +62,14 @@ Both are projects of the same maintainers, so treat this as dogfooding, not inde
 
 ## Stability policy
 
-The SemVer rules and the list of stable packages are in [STABILITY](https://docs.theauth.dev/go/reference/stability). The README [Stability](../README.md#stability) section lists what is experimental. Changes that affect behavior go in [CHANGELOG.md](../CHANGELOG.md) with upgrade notes.
+The SemVer rules and the list of stable packages are in [STABILITY](https://docs.theauth.dev/go/reference/stability). The README [Status](../README.md#status) table and [STABILITY-AND-SECURITY.md](./STABILITY-AND-SECURITY.md) list what is experimental. Changes that affect behavior go in [CHANGELOG.md](../CHANGELOG.md) with upgrade notes.
 
 ## Limits and non-goals
 
 - Age. The repo is about four months old. Expect fewer deployed configurations, fewer third-party write-ups and fewer answered questions than older libraries have.
 - Maintainers. theauth-go is maintained by GLINR STUDIOS. [MAINTAINERS.md](../MAINTAINERS.md) names no individuals, so plan for a small team and check [GOVERNANCE.md](../GOVERNANCE.md) and recent commit history for yourself.
-- Experimental packages. Per the README, these may change in a minor release: `storage/sqlite`, `clientauth`, `policy`, the agent identity and revocation APIs, `Doctor`, `Config.ProviderResolver` and the newer optional storage capabilities.
-- Storage backends differ in which features they support. The table is in the README under Storage backends. The MySQL gate for newer features is still off in CI.
+- Experimental packages. Per the stability policy, these may change in a minor release: `storage/sqlite`, `clientauth`, `policy`, the agent identity and revocation APIs, `Doctor`, `Config.ProviderResolver` and the newer optional storage capabilities.
+- Storage backends differ in which features they support. The table is in [docs/STORAGE.md](./STORAGE.md). The MySQL gate for newer features is still off in CI.
 - No hosted service and no hosted login UI. It is a library you run yourself.
 - Not independently reviewed. This page shows what we publish and what you can reproduce. It is not a third-party assessment.
 
