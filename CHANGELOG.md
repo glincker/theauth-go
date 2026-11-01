@@ -6,6 +6,10 @@ adheres to [Semantic Versioning](https://semver.org/) from v1.0 forward.
 
 ## [Unreleased]
 
+### Changed
+
+- The minimum supported Go version is now 1.26 for the root module, `mcpresource` and CI. Go 1.25 is out of upstream support and current `golang.org/x/*` releases require 1.26.
+
 ### Added
 
 - Required claim matchers for jwt-bearer trusted issuers: `TrustedJWTIssuer.RequiredClaims []ClaimMatcher` (`Equals`, `OneOf`, anchored `*` glob `Pattern`, or `Present`; exactly one per matcher, validated at `New` with `ErrInvalidClaimMatcher`) must all pass on the signature-verified assertion. Missing claims fail closed, values are not coerced, matching is case sensitive, and string arrays match on any element. A denial is `invalid_grant` with no claim data plus a `jwt_bearer.claims_denied` audit event naming the issuer, failed claim names and the agent. New `TrustedJWTIssuer.Audience`, and `GitHubActionsIssuer` for GitHub Actions OIDC (refuses to build without a repository or owner, since an unrestricted GitHub issuer lets any repository mint tokens). Also fixes `JWTBearerConfig` defaults (`AssertionMaxAge`, default algorithms) not reaching the server when omitted, and a data race in the in-memory JTI store. See `docs/github-actions-oidc.md` and `examples/github-actions-oidc`.

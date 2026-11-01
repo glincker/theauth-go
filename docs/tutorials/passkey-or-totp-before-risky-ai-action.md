@@ -6,7 +6,7 @@ In this tutorial you guard an endpoint so it needs a recent proof and a second f
 
 ## Prerequisites
 
-- Go 1.25 or newer.
+- Go 1.26 or newer.
 - The memory, Postgres, MySQL or SQLite store. They all implement the session auth record.
 - An authenticator app, or a passkey if you use WebAuthn.
 

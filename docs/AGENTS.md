@@ -28,7 +28,7 @@ It is **not** a SaaS, **not** a port of a TypeScript library, and **not** a host
 go get github.com/glincker/theauth-go/v2
 ```
 
-Requires Go 1.25+.
+Requires Go 1.26+.
 
 ## Minimal working example
 
@@ -61,7 +61,7 @@ func main() {
 }
 ```
 
-This compiles and runs as-is against `go 1.25`, `github.com/glincker/theauth-go/v2 v0.1.x`, `github.com/go-chi/chi/v5`.
+This compiles and runs as-is against `go 1.26`, `github.com/glincker/theauth-go/v2 v0.1.x`, `github.com/go-chi/chi/v5`.
 
 ## Common patterns
 
@@ -96,7 +96,7 @@ This compiles and runs as-is against `go 1.25`, `github.com/glincker/theauth-go/
 
 | Dependency | Minimum                                        |
 | ---------- | ---------------------------------------------- |
-| Go         | 1.25                                           |
+| Go         | 1.26                                           |
 | chi        | v5                                             |
 | pgx        | v5 (only required when using Postgres storage) |
 

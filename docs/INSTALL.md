@@ -42,8 +42,8 @@ One Go module at the root plus three nested modules (`mcpresource`, `storage/sql
 
 | Module | Go | Reference |
 |---|---|---|
-| `github.com/glincker/theauth-go/v2` | 1.25 | [pkg.go.dev](https://pkg.go.dev/github.com/glincker/theauth-go/v2) |
-| `github.com/glincker/theauth-go/mcpresource` | 1.25 | [pkg.go.dev](https://pkg.go.dev/github.com/glincker/theauth-go/mcpresource) |
+| `github.com/glincker/theauth-go/v2` | 1.26 | [pkg.go.dev](https://pkg.go.dev/github.com/glincker/theauth-go/v2) |
+| `github.com/glincker/theauth-go/mcpresource` | 1.26 | [pkg.go.dev](https://pkg.go.dev/github.com/glincker/theauth-go/mcpresource) |
 | `github.com/glincker/theauth-go/storage/sqlite` | 1.26 | [pkg.go.dev](https://pkg.go.dev/github.com/glincker/theauth-go/storage/sqlite) |
 | `github.com/glincker/theauth-go/adapters/gin` | 1.26 | [pkg.go.dev](https://pkg.go.dev/github.com/glincker/theauth-go/adapters/gin) |
 | `github.com/glincker/theauth-go/adapters/echo` | 1.26 | [pkg.go.dev](https://pkg.go.dev/github.com/glincker/theauth-go/adapters/echo) |

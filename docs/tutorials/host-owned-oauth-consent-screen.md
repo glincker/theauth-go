@@ -6,7 +6,7 @@ In this tutorial you set a `ConsentHandler` that sends each request to your own 
 
 ## Prerequisites
 
-- Go 1.25 or newer.
+- Go 1.26 or newer.
 - A theauth instance with the authorization server enabled. The demo below uses the in-memory store and needs no network.
 
 ```sh

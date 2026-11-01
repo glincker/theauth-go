@@ -6,7 +6,7 @@ In this tutorial you attach an IAM policy to an agent so the token endpoint refu
 
 ## Prerequisites
 
-- Go 1.25 or newer.
+- Go 1.26 or newer.
 - An authorization server with `AgentIdentity` enabled. The demo uses the in-memory store.
 
 ```sh

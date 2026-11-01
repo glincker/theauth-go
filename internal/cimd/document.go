@@ -198,7 +198,8 @@ func validateRedirectURIWith(raw string, extraSchemes []string) error {
 	if u.Scheme == "" {
 		return errors.New("redirect_uri must be absolute")
 	}
-	if u.Fragment != "" {
+	// An empty fragment ("cb#") parses to Fragment == "" but is still forbidden by RFC 6749 3.1.2.
+	if u.Fragment != "" || strings.Contains(raw, "#") {
 		return errors.New("redirect_uri must not contain a fragment")
 	}
 	if u.User != nil {

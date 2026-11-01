@@ -27,7 +27,7 @@ Yes. The library can act as the OAuth 2.1 authorization server and publishes pro
 Follow [Migrate from Auth0](https://docs.theauth.dev/go/guides/migrate-from-auth0), [Migrate from Cognito](https://docs.theauth.dev/go/guides/migrate-from-cognito) or [Migrate from Keycloak](https://github.com/glincker/theauth-go/blob/main/docs/MIGRATING-FROM-KEYCLOAK.md). Password hashes carry over and upgrade to Argon2id at each user's first login. Coming from hand-rolled sessions: [Migrate from hand-rolled sessions](https://docs.theauth.dev/go/guides/migrate-from-hand-rolled-sessions).
 
 **Which Go versions are supported?**
-The root module declares Go 1.25. `storage/sqlite` is a separate module and needs Go 1.26.
+The root module and `storage/sqlite` both need Go 1.26.
 
 **Is it a hosted service?**
 No. It is a library you run inside your own process, under the MIT license.

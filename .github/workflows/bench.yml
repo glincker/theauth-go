@@ -53,15 +53,11 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
         with:
-          go-version: "1.25"
+          go-version: "1.26"
           cache: true
 
-      # Pinned: benchstat at @latest requires Go 1.26 as of 2026-08-19 (x/perf
-      # bumped its go directive), which breaks this job on Go 1.25. This is
-      # the last x/perf commit whose go.mod still says go 1.25.0. Bump this
-      # together with the go-version above.
       - name: Install benchstat
-        run: go install golang.org/x/perf/cmd/benchstat@fd4a688df89207abdabe0a0cf5b2cd9ccfd376d2
+        run: go install golang.org/x/perf/cmd/benchstat@latest
 
       # Work out which commit to compare against, once, so the cache key and
       # the base checkout agree.
