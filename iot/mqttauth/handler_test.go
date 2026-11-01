@@ -173,6 +173,7 @@ func TestAuthn(t *testing.T) {
 		{"cert wrong clientid", map[string]any{"clientid": "dev2"}, map[string]string{DefaultCertHeader: testFP}, "deny"},
 		{"jwt by subject", map[string]any{"password": f.jwt("spiffe://example.org/dev1", "mqtt", exp), "clientid": "dev1"}, nil, "allow"},
 		{"jwt by device id", map[string]any{"password": f.jwt("dev2", "mqtt", exp), "clientid": "dev2"}, nil, "allow"},
+		{"jwt with the id of a device that has its own subject", map[string]any{"password": f.jwt("dev1", "mqtt", exp), "clientid": "dev1"}, nil, "deny"},
 		{"jwt expired", map[string]any{"password": f.jwt("dev1", "mqtt", f.clock.Now().Add(-time.Minute)), "clientid": "dev1"}, nil, "deny"},
 		{"jwt wrong audience", map[string]any{"password": f.jwt("dev1", "other", exp), "clientid": "dev1"}, nil, "deny"},
 		{"jwt unknown subject", map[string]any{"password": f.jwt("ghost", "mqtt", exp), "clientid": "ghost"}, nil, "deny"},

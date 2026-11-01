@@ -51,8 +51,13 @@ func (c *JWTConfig) verify(tok string, now func() time.Time) (string, time.Time,
 
 func (h *Handler) deviceBySubject(ctx context.Context, sub string) (*Device, error) {
 	d, err := h.cfg.Store.DeviceBySubject(ctx, sub)
-	if errors.Is(err, ErrDeviceNotFound) {
-		return h.cfg.Store.DeviceByID(ctx, sub)
+	if !errors.Is(err, ErrDeviceNotFound) {
+		return d, err
+	}
+	// The device ID stands in for the subject only on devices with no subject of their own.
+	d, err = h.cfg.Store.DeviceByID(ctx, sub)
+	if err == nil && d.Subject != "" {
+		return nil, ErrDeviceNotFound
 	}
 	return d, err
 }
