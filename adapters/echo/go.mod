@@ -4,7 +4,7 @@ go 1.26.0
 
 require (
 	github.com/glincker/theauth-go/v2 v2.9.0
-	github.com/labstack/echo/v4 v4.16.1
+	github.com/labstack/echo/v4 v4.16.3
 )
 
 require (
