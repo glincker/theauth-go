@@ -8,7 +8,7 @@ replace github.com/glincker/theauth-go/storage/sqlite => ../../storage/sqlite
 
 require (
 	github.com/glincker/theauth-go/storage/sqlite v0.0.0
-	github.com/glincker/theauth-go/v2 v2.11.0
+	github.com/glincker/theauth-go/v2 v2.12.0
 	modernc.org/sqlite v1.60.1
 )
 
