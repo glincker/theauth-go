@@ -19,3 +19,7 @@ GOWORK=off go test -count=1 ./...
 - Token validation uses JWKS only. Introspection, revocation, DPoP and refresh are not covered here.
 - Servers run on `httptest` TLS listeners with in-memory storage. No other SDK is covered yet: `mark3labs/mcp-go` is not included.
 - Only one SDK version is pinned, so it detects drift only when the pin is bumped.
+
+## Demo
+
+`go run ./cmd/demo` runs the official go-sdk client against a theauth-go authorization server and prints each HTTP request it makes. The recording at `.github/demo/mcp-auth.gif` is rendered from `.github/demo/mcp-auth.tape` with [VHS](https://github.com/charmbracelet/vhs). Login and consent are simulated here too.
