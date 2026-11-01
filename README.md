@@ -14,7 +14,9 @@ Building an MCP server in Go means implementing OAuth 2.1, protected resource me
 - SQLite, Postgres or MySQL storage, plus SAML and SCIM when you need them (see the status table for what is stable).
 - Signed releases with an SBOM you can [verify](docs/INSTALL.md).
 
-<!-- Demo: add a 30 second terminal recording of the mcp-interop flow here once recorded. -->
+![The official Go MCP SDK client authenticating against a theauth-go authorization server: discovery, dynamic registration, PKCE, token exchange and a tool call](.github/demo/mcp-auth.gif)
+
+Every line above is a real request. Run it yourself with `cd integration/mcp-interop && GOWORK=off go run ./cmd/demo`. Login and consent are simulated in this demo.
 
 [![Go Reference](https://pkg.go.dev/badge/github.com/glincker/theauth-go/v2.svg)](https://pkg.go.dev/github.com/glincker/theauth-go/v2)
 [![CI](https://github.com/glincker/theauth-go/actions/workflows/ci.yml/badge.svg)](https://github.com/glincker/theauth-go/actions/workflows/ci.yml)
@@ -23,7 +25,7 @@ Building an MCP server in Go means implementing OAuth 2.1, protected resource me
 
 ## Quickstart
 
-A server with sign-up, sign-in, magic links, sessions and one protected route, stored in one SQLite file. Install with `go get github.com/glincker/theauth-go/v2` and `go get github.com/glincker/theauth-go/storage/sqlite` (the SQLite module needs Go 1.26, the root module Go 1.26).
+A server with sign-up, sign-in, magic links, sessions and one protected route, stored in one SQLite file. Install with `go get github.com/glincker/theauth-go/v2` and `go get github.com/glincker/theauth-go/storage/sqlite` (both modules need Go 1.26).
 
 ```go
 package main
