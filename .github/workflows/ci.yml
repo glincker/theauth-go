@@ -53,7 +53,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
         with:
-          go-version: "1.25"
+          go-version: "1.26"
       # go vet ./... covers the whole module, so it runs once in the rest shard.
       - name: Vet
         if: matrix.shard == 'rest'
@@ -117,7 +117,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
         with:
-          go-version: "1.25"
+          go-version: "1.26"
       - name: Fuzz ${{ matrix.target.name }}
         run: go test -run=^$ -fuzz=^${{ matrix.target.name }}$ -fuzztime=10s ${{ matrix.target.pkg }}
 
@@ -134,7 +134,7 @@ jobs:
       - run: git fetch origin main:refs/remotes/origin/main
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
         with:
-          go-version: "1.25"
+          go-version: "1.26"
       # golangci-lint-action caches ~/.cache/golangci-lint itself. Only new issues vs origin/main fail the job.
       - uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9
         with:
@@ -178,13 +178,13 @@ jobs:
       run:
         working-directory: mcpresource
     env:
-      # The repo go.work needs Go 1.26. Run the module the way a consumer builds it, at its own 1.25 floor.
+      # Run the module standalone, the way a consumer builds it, without go.work.
       GOWORK: "off"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
         with:
-          go-version: "1.25"
+          go-version: "1.26"
       - run: go vet ./...
       - run: go test -race -timeout=300s -coverprofile=coverage-mcpresource.out ./...
       - uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7

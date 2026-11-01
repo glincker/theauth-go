@@ -24,7 +24,7 @@ require (
 	github.com/crewjam/saml v0.5.1 // indirect
 	github.com/fxamacker/cbor/v2 v2.9.3 // indirect
 	github.com/glincker/theauth-go/mcpresource v0.2.0
-	github.com/go-chi/chi/v5 v5.3.2
+	github.com/go-chi/chi/v5 v5.4.0
 	github.com/go-webauthn/webauthn v0.13.4 // indirect
 	github.com/go-webauthn/x v0.1.23 // indirect
 	github.com/golang-jwt/jwt/v5 v5.3.1 // indirect

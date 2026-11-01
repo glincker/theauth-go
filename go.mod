@@ -1,6 +1,6 @@
 module github.com/glincker/theauth-go/v2
 
-go 1.25.0
+go 1.26.0
 
 require (
 	github.com/beevik/etree v1.8.1

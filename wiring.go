@@ -422,6 +422,7 @@ func wireServices(a *TheAuth, cfg Config, providers map[string]Provider, sp saml
 		MinLength:            cfg.PasswordPolicy.MinLength,
 		MaxBytes:             cfg.PasswordPolicy.MaxBytes,
 		AllowLegacyBcrypt:    cfg.PasswordPolicy.AllowLegacyBcrypt,
+		ShareDummyHash:       cfg.PasswordPolicy.ShareDummyHash,
 		OnLegacyHashAccepted: cfg.PasswordPolicy.OnLegacyHashAccepted,
 		Breach:               cfg.PasswordPolicy.BreachChecker,
 		Email:                a.emailNorm,

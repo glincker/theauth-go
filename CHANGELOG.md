@@ -6,6 +6,10 @@ adheres to [Semantic Versioning](https://semver.org/) from v1.0 forward.
 
 ## [Unreleased]
 
+### Changed
+
+- The minimum supported Go version is now 1.26 for the root module, `mcpresource` and CI. Go 1.25 is out of upstream support and current `golang.org/x/*` releases require 1.26.
+
 ### Added
 
 - Verified attestation claims are stored on the device: `Device.AttestationClaims` (SQLite 0042, Postgres 0039, MySQL 0040), set at enrollment and read through `theauth.DeviceAttestationFacts` / `attest.FactsFromClaims` into the policy facts `SecurityLevel`, `BootState` and `AppIDs`. `device.Constraints.Attestation` (`device.NewAttestationConstraint`) and `device.Claims.Attestation` (the signed `att` claim) make offline bundles decide permissions that need a hardware attested device, with the same rules, refusal texts and code `attestation_required` as the TypeScript SDK (258 shared decision cases and 38 facts vectors generated from TypeScript). See `docs/device-attestation.md`.

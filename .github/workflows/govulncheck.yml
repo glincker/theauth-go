@@ -15,6 +15,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 env:
   # Scan each module on its own, the way consumers resolve it, not through go.work.
   GOWORK: off
@@ -26,14 +30,39 @@ jobs:
       modules: ${{ steps.find.outputs.modules }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
       - id: find
-        name: List every module that has a go.mod
+        name: List modules to scan (only changed modules on pull requests)
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
-          modules=$(find . -name go.mod -not -path '*/node_modules/*' -not -path './.claude/*' -exec dirname {} \; | sed 's|^\./||' | sort | jq -R -s -c 'split("\n") | map(select(length > 0))')
+          all=$(find . -name go.mod -not -path '*/node_modules/*' -not -path './.claude/*' -exec dirname {} \; | sed 's|^\./||' | sort)
+          if [ "$EVENT" = "pull_request" ]; then
+            changed=$(git diff --name-only "$BASE_SHA"...HEAD)
+            picked=""
+            for m in $all; do
+              if [ "$m" = "." ]; then
+                # Root module owns every changed file that is not inside a nested module.
+                nested=$(echo "$all" | grep -v '^\.$' || true)
+                for f in $changed; do
+                  owned=1
+                  for n in $nested; do case "$f" in "$n"/*) owned=0 ;; esac; done
+                  [ "$owned" = 1 ] && { picked="$picked $m"; break; }
+                done
+              elif echo "$changed" | grep -q "^$m/"; then
+                picked="$picked $m"
+              fi
+            done
+            all=$(echo "$picked" | tr ' ' '\n')
+          fi
+          modules=$(echo "$all" | jq -R -s -c 'split("\n") | map(select(length > 0))')
           echo "modules=${modules}" >> "$GITHUB_OUTPUT"
 
   govulncheck:
     needs: discover
+    if: needs.discover.outputs.modules != '[]'
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -42,7 +71,7 @@ jobs:
     steps:
       - uses: golang/govulncheck-action@032d45514ae346b1db93c04b0c90b841c370344f # v1.1.0
         with:
-          # Latest stable Go covers every module (go.mod floors are 1.25 and 1.26)
+          # Latest stable Go covers every module (every go.mod floor is 1.26 or lower)
           # and avoids reporting already-fixed standard library issues.
           go-version-input: stable
           check-latest: true
