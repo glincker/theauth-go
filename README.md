@@ -46,7 +46,7 @@ Mount it into your own <code>net/http</code>, chi, Gin, Echo or Fiber server. Yo
 
 theauth-go is the Go library for [theAuth](https://theauth.dev). It handles sign-in for people (passwords, magic links, social login, passkeys, TOTP, SAML SSO, SCIM provisioning) and for software (an OAuth 2.1 authorization server with PKCE, DPoP, device login, token exchange and agent identities, plus a resource server module for MCP).
 
-It runs inside your process as an `http.Handler`. You keep your users, sessions and tokens in your own database. The root module is Go 1.25, MIT licensed, and every release is signed and ships an SBOM. The TypeScript library is [glincker/theauth](https://github.com/glincker/theauth).
+It runs inside your process as an `http.Handler`. You keep your users, sessions and tokens in your own database. The root module is Go 1.26, MIT licensed, and every release is signed and ships an SBOM. The TypeScript library is [glincker/theauth](https://github.com/glincker/theauth).
 
 **Verify it yourself.** This project is about four months old, so we point to things you can check instead of asking for trust: signed releases, test counts you can reproduce with `find`, and the exact benchmark statements we stand behind. See [docs/PROOF.md](./docs/PROOF.md).
 
@@ -108,8 +108,8 @@ One Go module at the root plus three nested modules (`mcpresource`, `storage/sql
 
 | Module | Go | Reference |
 |---|---|---|
-| `github.com/glincker/theauth-go/v2` | 1.25 | [pkg.go.dev](https://pkg.go.dev/github.com/glincker/theauth-go/v2) |
-| `github.com/glincker/theauth-go/mcpresource` | 1.25 | [pkg.go.dev](https://pkg.go.dev/github.com/glincker/theauth-go/mcpresource) |
+| `github.com/glincker/theauth-go/v2` | 1.26 | [pkg.go.dev](https://pkg.go.dev/github.com/glincker/theauth-go/v2) |
+| `github.com/glincker/theauth-go/mcpresource` | 1.26 | [pkg.go.dev](https://pkg.go.dev/github.com/glincker/theauth-go/mcpresource) |
 | `github.com/glincker/theauth-go/storage/sqlite` | 1.26 | [pkg.go.dev](https://pkg.go.dev/github.com/glincker/theauth-go/storage/sqlite) |
 | `github.com/glincker/theauth-go/adapters/gin` | 1.26 | [pkg.go.dev](https://pkg.go.dev/github.com/glincker/theauth-go/adapters/gin) |
 | `github.com/glincker/theauth-go/adapters/echo` | 1.26 | [pkg.go.dev](https://pkg.go.dev/github.com/glincker/theauth-go/adapters/echo) |
@@ -407,7 +407,7 @@ Yes. The library can act as the OAuth 2.1 authorization server and publishes pro
 Follow [Migrate from Auth0](https://docs.theauth.dev/go/guides/migrate-from-auth0), [Migrate from Cognito](https://docs.theauth.dev/go/guides/migrate-from-cognito) or [Migrate from Keycloak](https://github.com/glincker/theauth-go/blob/main/docs/MIGRATING-FROM-KEYCLOAK.md). Password hashes carry over and upgrade to Argon2id at each user's first login. Coming from hand-rolled sessions: [Migrate from hand-rolled sessions](https://docs.theauth.dev/go/guides/migrate-from-hand-rolled-sessions).
 
 **Which Go versions are supported?**
-The root module declares Go 1.25. `storage/sqlite` is a separate module and needs Go 1.26.
+Every module in this repo declares Go 1.26 or later.
 
 **Is it a hosted service?**
 No. It is a library you run inside your own process, under the MIT license.

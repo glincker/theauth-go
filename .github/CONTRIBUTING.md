@@ -20,7 +20,7 @@ Thank you for taking the time to contribute. This document covers dev setup, tes
 
 **Requirements:**
 
-- Go 1.25 or later
+- Go 1.26 or later
 - Docker (for Postgres integration tests)
 - `golangci-lint` (optional, matches what CI runs)
 
