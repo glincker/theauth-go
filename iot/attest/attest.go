@@ -150,8 +150,23 @@ func keyThumbprint(spki []byte) string {
 	if !ok || key.Curve == nil || (crv == "P-256" && key.Curve != elliptic.P256()) || (crv == "P-384" && key.Curve != elliptic.P384()) {
 		return ""
 	}
-	x := base64.RawURLEncoding.EncodeToString(key.X.FillBytes(make([]byte, size)))
-	y := base64.RawURLEncoding.EncodeToString(key.Y.FillBytes(make([]byte, size)))
+	xb, yb, ok := ecdsaXY(key)
+	if !ok || len(xb) != size {
+		return ""
+	}
+	x := base64.RawURLEncoding.EncodeToString(xb)
+	y := base64.RawURLEncoding.EncodeToString(yb)
 	canonical := fmt.Sprintf(`{"crv":%q,"kty":"EC","x":%q,"y":%q}`, crv, x, y)
 	return base64.RawURLEncoding.EncodeToString(sha256Sum([]byte(canonical)))
+}
+
+// ecdsaXY returns the fixed-width affine coordinates of k. It reads the SEC1
+// encoding because the big.Int fields X and Y are deprecated since Go 1.26.
+func ecdsaXY(k *ecdsa.PublicKey) (x, y []byte, ok bool) {
+	b, err := k.Bytes()
+	if err != nil || len(b) < 3 || b[0] != 4 || len(b)%2 != 1 {
+		return nil, nil, false
+	}
+	n := (len(b) - 1) / 2
+	return b[1 : 1+n], b[1+n:], true
 }

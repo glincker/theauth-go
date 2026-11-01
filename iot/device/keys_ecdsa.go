@@ -38,14 +38,17 @@ func ecdsaThumbprintInput(key crypto.PublicKey) []byte {
 	if !ok {
 		return nil
 	}
-	size := (k.Curve.Params().BitSize + 7) / 8
+	xb, yb, ok := ecdsaXY(k)
+	if !ok {
+		return nil
+	}
 	var canon []byte
 	canon = append(canon, `{"crv":"`...)
 	canon = append(canon, curveName(k.Curve)...)
 	canon = append(canon, `","kty":"EC","x":"`...)
-	canon = append(canon, b64.EncodeToString(k.X.FillBytes(make([]byte, size)))...)
+	canon = append(canon, b64.EncodeToString(xb)...)
 	canon = append(canon, `","y":"`...)
-	canon = append(canon, b64.EncodeToString(k.Y.FillBytes(make([]byte, size)))...)
+	canon = append(canon, b64.EncodeToString(yb)...)
 	return canon
 }
 
@@ -61,10 +64,13 @@ func ecdsaJWK(key crypto.PublicKey, jwk map[string]any) {
 	if !ok {
 		return
 	}
-	size := (k.Curve.Params().BitSize + 7) / 8
+	xb, yb, ok := ecdsaXY(k)
+	if !ok {
+		return
+	}
 	jwk["kty"], jwk["crv"] = "EC", curveName(k.Curve)
-	jwk["x"] = b64.EncodeToString(k.X.FillBytes(make([]byte, size)))
-	jwk["y"] = b64.EncodeToString(k.Y.FillBytes(make([]byte, size)))
+	jwk["x"] = b64.EncodeToString(xb)
+	jwk["y"] = b64.EncodeToString(yb)
 }
 
 func ecdsaPublicKeyFromJWK(kid, crv string, x, y []byte) (PublicKey, error) {
@@ -168,4 +174,15 @@ func rsFromDER(der []byte, size int) ([]byte, error) {
 		return nil, bad
 	}
 	return out, nil
+}
+
+// ecdsaXY returns the fixed-width affine coordinates of k. It reads the SEC1
+// encoding because the big.Int fields X and Y are deprecated since Go 1.26.
+func ecdsaXY(k *ecdsa.PublicKey) (x, y []byte, ok bool) {
+	b, err := k.Bytes()
+	if err != nil || len(b) < 3 || b[0] != 4 || len(b)%2 != 1 {
+		return nil, nil, false
+	}
+	n := (len(b) - 1) / 2
+	return b[1 : 1+n], b[1+n:], true
 }

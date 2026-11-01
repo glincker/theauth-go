@@ -230,9 +230,8 @@ func certMatchesAk(cert *certificate, pub *tpmPublic) bool {
 	if !ok || info.alg != oidECPublicKey || curveSizes[info.curve] != curveSize(pub.curve) || k.Curve.Params().Name != pub.curve {
 		return false
 	}
-	size := curveSize(pub.curve)
-	return string(k.X.FillBytes(make([]byte, size))) == string(pub.eccX) &&
-		string(k.Y.FillBytes(make([]byte, size))) == string(pub.eccY)
+	xb, yb, ok := ecdsaXY(k)
+	return ok && len(xb) == curveSize(pub.curve) && string(xb) == string(pub.eccX) && string(yb) == string(pub.eccY)
 }
 
 func sortedBanks(m map[string]map[int]string) []string {
