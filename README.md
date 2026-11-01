@@ -1,6 +1,20 @@
 # theauth-go
 
-A Go library that adds sign-in and an OAuth 2.1 authorization server to your own server, for people, MCP clients and agents. MIT licensed, self-hosted, your data stays in your own database.
+OAuth 2.1 and sign-in for Go MCP servers and agents. It mounts into your own `net/http` server, your users and tokens stay in your own database, and there is no hosted service. MIT licensed.
+
+Building an MCP server in Go means implementing OAuth 2.1, protected resource metadata (RFC 9728), PKCE and token validation yourself. This library does that part, so your server accepts tokens from MCP clients and you keep control of identity.
+
+**Checked against a real client.** The official `modelcontextprotocol/go-sdk` client (v1.8.0) completes the full flow against it in [`integration/mcp-interop`](integration/mcp-interop): discovery, dynamic client registration, PKCE S256, token exchange and an authenticated tool call. Login and consent are simulated in that test, so it proves the protocol path, not a production deployment.
+
+**Who it is for:** Go developers building MCP servers, agent backends or internal tools who want to own their auth instead of renting it.
+
+**What you get**
+- Sign-in with passwords, magic links, social login, passkeys and TOTP, with sessions stored in your database.
+- An OAuth 2.1 authorization server and an `mcpresource` module that guards MCP tools by scope.
+- SQLite, Postgres or MySQL storage, plus SAML and SCIM when you need them (see the status table for what is stable).
+- Signed releases with an SBOM you can [verify](docs/INSTALL.md).
+
+<!-- Demo: add a 30 second terminal recording of the mcp-interop flow here once recorded. -->
 
 [![Go Reference](https://pkg.go.dev/badge/github.com/glincker/theauth-go/v2.svg)](https://pkg.go.dev/github.com/glincker/theauth-go/v2)
 [![CI](https://github.com/glincker/theauth-go/actions/workflows/ci.yml/badge.svg)](https://github.com/glincker/theauth-go/actions/workflows/ci.yml)
@@ -9,7 +23,7 @@ A Go library that adds sign-in and an OAuth 2.1 authorization server to your own
 
 ## Quickstart
 
-A server with sign-up, sign-in, magic links, sessions and one protected route, stored in one SQLite file. Install with `go get github.com/glincker/theauth-go/v2` and `go get github.com/glincker/theauth-go/storage/sqlite` (the SQLite module needs Go 1.26, the root module Go 1.25).
+A server with sign-up, sign-in, magic links, sessions and one protected route, stored in one SQLite file. Install with `go get github.com/glincker/theauth-go/v2` and `go get github.com/glincker/theauth-go/storage/sqlite` (the SQLite module needs Go 1.26, the root module Go 1.26).
 
 ```go
 package main
