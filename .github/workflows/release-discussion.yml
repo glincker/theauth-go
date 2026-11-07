@@ -41,7 +41,7 @@ jobs:
     permissions:
       contents: read
       discussions: write
-    uses: glincker/theauth/.github/workflows/release-discussion.yml@5d81d9475582acab2ac5b3fb646657877fbf80a7 # main
+    uses: glincker/theauth/.github/workflows/release-discussion.yml@8c5de6256af91c90a970153fb8278185d6d92429 # main
     with:
       repo_key: theauth-go
       repo_title: theauth-go
