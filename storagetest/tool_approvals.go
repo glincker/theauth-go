@@ -28,7 +28,10 @@ func testToolApprovalAdmin(t *testing.T, store theauth.ToolApprovalAdminStorage)
 	open := func(t *testing.T, expires time.Time) string {
 		t.Helper()
 		id := newID().String()
-		a := theauth.ToolApproval{ID: id, AgentID: "agent-1", Action: "execute", Resource: "tool:pay", OpenedBy: "opener", CreatedAt: now, ExpiresAt: expires}
+		a := theauth.ToolApproval{
+			ID: id, AgentID: "agent-1", Action: "execute", Resource: "tool:pay", OpenedBy: "opener",
+			Requirement: "approval", Tier: "big", Reason: "over limit", ArgumentsHash: "abc123", CreatedAt: now, ExpiresAt: expires,
+		}
 		if err := store.OpenToolApproval(ctx, a); err != nil {
 			t.Fatalf("open: %v", err)
 		}
@@ -37,8 +40,12 @@ func testToolApprovalAdmin(t *testing.T, store theauth.ToolApprovalAdminStorage)
 	t.Run("get and list", func(t *testing.T) {
 		id := open(t, now.Add(time.Hour))
 		a, ok, err := store.GetToolApproval(ctx, id)
-		if err != nil || !ok || a.OpenedBy != "opener" {
+		if err != nil || !ok || a.OpenedBy != "opener" || a.ArgumentsHash != "abc123" || a.Reason != "over limit" ||
+			a.AgentID != "agent-1" || a.Resource != "tool:pay" || !a.ExpiresAt.Equal(now.Add(time.Hour)) || !a.CreatedAt.Equal(now) {
 			t.Fatalf("get = %+v, %v, %v", a, ok, err)
+		}
+		if !a.ApprovedAt.IsZero() || !a.DeniedAt.IsZero() || !a.ConsumedAt.IsZero() || !a.ExpiredAt.IsZero() {
+			t.Fatalf("fresh request has decision times: %+v", a)
 		}
 		if _, ok, _ := store.GetToolApproval(ctx, "nope"); ok {
 			t.Fatal("get unknown returned ok")
@@ -46,6 +53,122 @@ func testToolApprovalAdmin(t *testing.T, store theauth.ToolApprovalAdminStorage)
 		list, err := store.ListToolApprovals(ctx, 0)
 		if err != nil || len(list) == 0 {
 			t.Fatalf("list = %d, %v", len(list), err)
+		}
+		if one, err := store.ListToolApprovals(ctx, 1); err != nil || len(one) != 1 {
+			t.Fatalf("list limit 1 = %d, %v", len(one), err)
+		}
+	})
+	t.Run("no expiry round trips as zero", func(t *testing.T) {
+		id := open(t, time.Time{})
+		a, ok, err := store.GetToolApproval(ctx, id)
+		if err != nil || !ok || !a.ExpiresAt.IsZero() {
+			t.Fatalf("get = %+v, %v, %v", a, ok, err)
+		}
+	})
+	t.Run("approved fields round trip", func(t *testing.T) {
+		id := open(t, now.Add(time.Hour))
+		if ok, _ := store.ApproveToolApproval(ctx, id, "alice", now); !ok {
+			t.Fatal("approve failed")
+		}
+		if ok, _ := store.ConsumeToolApproval(ctx, id, "agent-1", "execute", "tool:pay", now); !ok {
+			t.Fatal("consume failed")
+		}
+		a, _, _ := store.GetToolApproval(ctx, id)
+		if a.Approver != "alice" || !a.ApprovedAt.Equal(now) || !a.ConsumedAt.Equal(now) {
+			t.Fatalf("fields = %+v", a)
+		}
+	})
+	t.Run("concurrent approve and deny pick one winner", func(t *testing.T) {
+		for range 5 {
+			id := open(t, now.Add(time.Hour))
+			var approves, denies atomic.Int32
+			var wg sync.WaitGroup
+			start := make(chan struct{})
+			for i := 0; i < 8; i++ {
+				wg.Add(2)
+				go func() {
+					defer wg.Done()
+					<-start
+					if ok, err := store.ApproveToolApproval(ctx, id, "alice", now); err == nil && ok {
+						approves.Add(1)
+					}
+				}()
+				go func() {
+					defer wg.Done()
+					<-start
+					if ok, err := store.DenyToolApproval(ctx, id, "bob", now); err == nil && ok {
+						denies.Add(1)
+					}
+				}()
+			}
+			close(start)
+			wg.Wait()
+			if approves.Load()+denies.Load() != 1 {
+				t.Fatalf("%d approves and %d denies won, want exactly one decision", approves.Load(), denies.Load())
+			}
+			a, _, _ := store.GetToolApproval(ctx, id)
+			if (a.ApprovedAt.IsZero()) == (a.DeniedAt.IsZero()) {
+				t.Fatalf("both or neither decision recorded: %+v", a)
+			}
+		}
+	})
+	t.Run("expire marks once and blocks decisions", func(t *testing.T) {
+		ex, ok := store.(theauth.ToolApprovalExpiryStorage)
+		if !ok {
+			t.Skip("store has no expiry capability")
+		}
+		id := open(t, now.Add(time.Minute))
+		if won, _ := ex.ExpireToolApproval(ctx, id, now); won {
+			t.Fatal("expired before the deadline")
+		}
+		late := now.Add(time.Hour)
+		overdue, err := ex.ListOverdueToolApprovals(ctx, late, 1000)
+		if err != nil {
+			t.Fatal(err)
+		}
+		found := false
+		for _, a := range overdue {
+			found = found || a.ID == id
+		}
+		if !found {
+			t.Fatal("overdue request missing from ListOverdueToolApprovals")
+		}
+		var wins atomic.Int32
+		var wg sync.WaitGroup
+		for i := 0; i < 8; i++ {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				if won, err := ex.ExpireToolApproval(ctx, id, late); err == nil && won {
+					wins.Add(1)
+				}
+			}()
+		}
+		wg.Wait()
+		if wins.Load() != 1 {
+			t.Fatalf("%d expiries won, want 1", wins.Load())
+		}
+		a, _, _ := store.GetToolApproval(ctx, id)
+		if a.ExpiredAt.IsZero() {
+			t.Fatal("ExpiredAt not set")
+		}
+		// A marked request is settled even if a caller's clock says it is still live.
+		if ok, _ := store.ApproveToolApproval(ctx, id, "alice", now); ok {
+			t.Fatal("approve after expiry mark succeeded")
+		}
+		if ok, _ := store.DenyToolApproval(ctx, id, "alice", now); ok {
+			t.Fatal("deny after expiry mark succeeded")
+		}
+		overdue, _ = ex.ListOverdueToolApprovals(ctx, late, 1000)
+		for _, o := range overdue {
+			if o.ID == id {
+				t.Fatal("marked request still listed as overdue")
+			}
+		}
+		decided := open(t, now.Add(time.Minute))
+		_, _ = store.ApproveToolApproval(ctx, decided, "alice", now)
+		if won, _ := ex.ExpireToolApproval(ctx, decided, late); won {
+			t.Fatal("an approved request was expired")
 		}
 	})
 	t.Run("deny once", func(t *testing.T) {

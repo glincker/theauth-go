@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/glincker/theauth-go/v2"
+	"github.com/glincker/theauth-go/v2/audit"
 	"github.com/oklog/ulid/v2"
 )
 
@@ -82,6 +83,8 @@ type Store struct {
 	// Bound to a caller's transaction: multi-statement methods use savepoints, never BeginTx.
 	inCallerTx bool
 	savepoints atomic.Uint64
+	// rot is the audit pseudonym rotation policy, off by default.
+	rot *audit.RotationState
 }
 
 // New wraps db, which the caller keeps ownership of, and verifies foreign keys are enforced.
@@ -96,7 +99,7 @@ func New(db *sql.DB, opts ...Option) (*Store, error) {
 	if err := checkForeignKeys(db, c); err != nil {
 		return nil, err
 	}
-	return &Store{db: db, prefix: c.prefix}, nil
+	return &Store{db: db, prefix: c.prefix, rot: &audit.RotationState{}}, nil
 }
 
 // NewTx binds a Store to the caller's open transaction. The Store never commits or rolls back;
@@ -113,7 +116,7 @@ func NewTx(tx *sql.Tx, opts ...Option) (*Store, error) {
 	if err := checkForeignKeys(tx, c); err != nil {
 		return nil, err
 	}
-	return &Store{db: tx, prefix: c.prefix, inCallerTx: true}, nil
+	return &Store{db: tx, prefix: c.prefix, inCallerTx: true, rot: &audit.RotationState{}}, nil
 }
 
 func checkForeignKeys(db DBTX, c config) error {

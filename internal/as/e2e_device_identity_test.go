@@ -35,6 +35,7 @@ const (
 
 type iotHarness struct {
 	a      *theauth.TheAuth
+	store  *memory.Store
 	srv    *httptest.Server
 	org    theauth.ULID
 	client theauth.RegisteredClient
@@ -49,8 +50,9 @@ func newIoTHarness(t *testing.T, cfg *theauth.DeviceTokensConfig) *iotHarness {
 	if _, err := rand.Read(enc); err != nil {
 		t.Fatal(err)
 	}
+	store := memory.New()
 	a, err := theauth.New(theauth.Config{
-		Storage:       memory.New(),
+		Storage:       store,
 		BaseURL:       devIssuer,
 		EncryptionKey: enc,
 		AuthorizationServer: &theauth.AuthorizationServerConfig{
@@ -72,7 +74,7 @@ func newIoTHarness(t *testing.T, cfg *theauth.DeviceTokensConfig) *iotHarness {
 	a.Mount(r)
 	srv := httptest.NewServer(r)
 	t.Cleanup(srv.Close)
-	return &iotHarness{a: a, srv: srv, org: ulid.New(), client: registerTestClient(t, srv)}
+	return &iotHarness{a: a, store: store, srv: srv, org: ulid.New(), client: registerTestClient(t, srv)}
 }
 
 // devKey is a device keypair that can sign JWS compact tokens.
@@ -447,6 +449,7 @@ func TestDeviceAssertionValidation(t *testing.T) {
 		}),
 		"wrong audience":        h.assertion(t, key, devID, func(o *assertionOpts) { o.aud = devIssuer }),
 		"missing jti":           h.assertion(t, key, devID, func(o *assertionOpts) { o.jti = "" }),
+		"short jti":             h.assertion(t, key, devID, func(o *assertionOpts) { o.jti = "0123456789abcde" }),
 		"signed by another key": h.assertion(t, other, devID, nil),
 	}
 	for name, a := range cases {

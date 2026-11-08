@@ -66,6 +66,12 @@ type View struct {
 	CreatedAt time.Time      `json:"createdAt"`
 	ExpiresAt *time.Time     `json:"expiresAt,omitempty"`
 	Arguments map[string]any `json:"arguments,omitempty"`
+	// RequiredApprovals is how many distinct approvers the request needs (1 for the ordinary flow).
+	RequiredApprovals int `json:"requiredApprovals"`
+	// ApprovalsReceived is how many are counted so far.
+	ApprovalsReceived int `json:"approvalsReceived"`
+	// Approvers lists who approved so far. Only set for a quorum request.
+	Approvers []string `json:"approvers,omitempty"`
 }
 
 // ErrConfig is returned by New for a missing required field.
@@ -115,7 +121,7 @@ func statusOf(a theauth.ToolApproval, now time.Time) string {
 		return StatusSpent
 	case !a.ApprovedAt.IsZero():
 		return StatusApproved
-	case !a.ExpiresAt.IsZero() && !a.ExpiresAt.After(now):
+	case !a.ExpiredAt.IsZero() || (!a.ExpiresAt.IsZero() && !a.ExpiresAt.After(now)):
 		return StatusExpired
 	default:
 		return StatusPending
@@ -126,6 +132,12 @@ func (h *handler) view(a theauth.ToolApproval, now time.Time) View {
 	v := View{
 		ID: a.ID, AgentID: a.AgentID, Action: a.Action, Resource: truncate(a.Resource),
 		Reason: truncate(a.Reason), Status: statusOf(a, now), OpenedBy: a.OpenedBy, CreatedAt: a.CreatedAt,
+		RequiredApprovals: max(a.RequiredApprovals, 1), ApprovalsReceived: len(a.Approvers),
+	}
+	if a.RequiredApprovals > 1 {
+		v.Approvers = a.Approvers
+	} else if !a.ApprovedAt.IsZero() {
+		v.ApprovalsReceived = 1
 	}
 	if !a.ExpiresAt.IsZero() {
 		e := a.ExpiresAt
@@ -178,12 +190,18 @@ func (h *handler) decide(approve bool) adminHandler {
 			admin.Write(w, http.StatusNotFound, admin.CodeNotFound, "approval not found", r.URL.Path)
 			return
 		}
-		if !h.cfg.AllowSelfApproval && a.OpenedBy != "" && a.OpenedBy == adminID {
+		quorum := approve && a.RequiredApprovals > 1
+		// A quorum request never lets the requester count, whatever AllowSelfApproval says.
+		if (quorum || !h.cfg.AllowSelfApproval) && a.OpenedBy != "" && a.OpenedBy == adminID {
 			admin.Write(w, http.StatusForbidden, "approvals.self_approval", "the requester cannot decide their own request", r.URL.Path)
 			return
 		}
 		if statusOf(a, now) != StatusPending {
 			admin.Write(w, http.StatusConflict, "approvals.not_pending", "approval is not pending", r.URL.Path)
+			return
+		}
+		if quorum {
+			h.vote(w, r, a, adminID, now)
 			return
 		}
 		action := ActionDenied

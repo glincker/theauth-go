@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/glincker/theauth-go/v2"
 	"github.com/glincker/theauth-go/v2/audit"
@@ -90,8 +91,17 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 
 	if err != nil {
 		return err
 	}
+	times := make([]time.Time, len(events))
+	for i, e := range events {
+		times[i] = orNow(e.CreatedAt)
+	}
+	ps, err := s.rot.Resolve(ctx, secret, periodStore{s, tx}, times)
+	if err != nil {
+		return err
+	}
 	heads := map[string]chainHead{}
-	for _, e := range events {
+	for i, e := range events {
+		created := times[i]
 		meta, err := marshalOr(e.Metadata, "{}")
 		if err != nil {
 			return fmt.Errorf("marshal audit metadata: %w", err)
@@ -118,13 +128,22 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 
 		p := auditChainPayload{
 			ChainKey: keyStr, Seq: head.seq + 1, Prev: head.hash, ID: idStr(e.ID), Org: keyStr,
 			Action: e.Action, TargetType: e.TargetType, TargetID: e.TargetID, Metadata: meta,
-			IP: e.IP, UserAgent: e.UserAgent, CreatedAt: toMicro(orNow(e.CreatedAt)),
-			SubjectPseudo: auditPseudonym(secret, e.SubjectID), ActorPseudo: auditPseudonym(secret, e.ActorID),
-			PolicyVersion: e.PolicyVersion, ApproverPseudo: auditPseudonym(secret, e.ApproverID),
-			DelegationChain: chain, InputProvenance: prov,
+			IP: e.IP, UserAgent: e.UserAgent, CreatedAt: toMicro(created),
+			PolicyVersion: e.PolicyVersion, DelegationChain: chain, InputProvenance: prov,
+		}
+		if p.SubjectPseudo, err = ps.Of(created, e.SubjectID); err != nil {
+			return err
+		}
+		if p.ActorPseudo, err = ps.Of(created, e.ActorID); err != nil {
+			return err
+		}
+		if p.ApproverPseudo, err = ps.Of(created, e.ApproverID); err != nil {
+			return err
 		}
 		if e.ActorUserID != nil {
-			p.ActorUserPseudo = auditPseudonym(secret, idStr(*e.ActorUserID))
+			if p.ActorUserPseudo, err = ps.Of(created, idStr(*e.ActorUserID)); err != nil {
+				return err
+			}
 		}
 		if e.ActorSessionID != nil {
 			p.ActorSession = idStr(*e.ActorSessionID)
@@ -268,6 +287,19 @@ func (s *Store) queryAuditEvents(ctx context.Context, q theauth.AuditQuery, orde
 	}
 	if q.Until != nil {
 		wheres, args = append(wheres, "created_at <= ?"), append(args, toMicro(*q.Until))
+	}
+	if q.Provenance != nil {
+		needle, err := audit.ProvenanceNeedle(*q.Provenance)
+		if err != nil {
+			return nil, "", err
+		}
+		// instr is a literal search. LIKE would treat the underscore in "user_message" as a wildcard.
+		// Before 0017 no row carries provenance.
+		if level == auditSchemaLegacy {
+			wheres = append(wheres, "1 = 0")
+		} else if needle != "" {
+			wheres, args = append(wheres, "instr(input_provenance, ?) > 0"), append(args, needle)
+		}
 	}
 	dir, cmp := "DESC", "<"
 	if order == theauth.AuditOrderAsc {

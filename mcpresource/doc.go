@@ -26,6 +26,13 @@
 // builds tools/list security metadata, and NewURLElicitation builds MCP URL
 // mode elicitations.
 //
+// Sender constrained tokens: a token whose cnf claim carries jkt needs a DPoP
+// proof (RFC 9449, with WithDPoPVerification, optional server nonces through
+// WithDPoPNonce and a shared replay cache through WithDPoPReplayCache). A token
+// whose cnf carries x5t#S256 needs the matching client certificate (RFC 8705,
+// see WithClientCertThumbprint for TLS terminating proxies). Both members are
+// enforced when both are present, for JWTs and introspected opaque tokens.
+//
 // A RevocationChecker (WithRevocationChecker) lets a server that validates
 // JWTs locally consult a denylist or the AS for tokens revoked before exp;
 // WithDeviceRevocationIntrospection does that for device tokens through the

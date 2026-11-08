@@ -75,8 +75,8 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		timePtrToNull(u.EmailVerifiedAt),
 		u.Name,
 		u.AvatarURL,
-		timeUTC(u.CreatedAt),
-		timeUTC(u.UpdatedAt),
+		timeUTCOrNow(u.CreatedAt),
+		timeUTCOrNow(u.UpdatedAt),
 		u.ExternalID,
 		u.GivenName,
 		u.FamilyName,
@@ -162,7 +162,7 @@ WHERE om.organization_id = ? AND users.external_id = ?`,
 }
 
 func (s *Store) UpdateUserSCIM(ctx context.Context, u theauth.User) error {
-	_, err := s.db.ExecContext(ctx, `
+	res, err := s.db.ExecContext(ctx, `
 UPDATE users SET
     name = ?, given_name = ?, family_name = ?, display_name = ?,
     email = ?, external_id = ?, updated_at = ?
@@ -172,7 +172,14 @@ WHERE id = ?`,
 		timeUTC(time.Now()),
 		ulidToBytes(u.ID),
 	)
-	return err
+	if err != nil {
+		return err
+	}
+	// updated_at always changes, so zero affected rows means no such user.
+	if n, _ := res.RowsAffected(); n == 0 {
+		return storage.ErrNotFound
+	}
+	return nil
 }
 
 func (s *Store) ListUsersByOrganization(ctx context.Context, orgID theauth.ULID, offset, limit int, filter theauth.SCIMUserFilter) ([]theauth.User, int, error) {
@@ -190,6 +197,11 @@ func (s *Store) ListUsersByOrganization(ctx context.Context, orgID theauth.ULID,
 	if filter.Email != "" {
 		wheres = append(wheres, "u.email = ?")
 		args = append(args, strings.ToLower(filter.Email))
+	}
+	if filter.UserName != "" {
+		// SCIM userName is the email; emails are stored lowercased.
+		wheres = append(wheres, "u.email = ?")
+		args = append(args, strings.ToLower(filter.UserName))
 	}
 	where := strings.Join(wheres, " AND ")
 	countSQL := `SELECT COUNT(*) FROM users u INNER JOIN organization_members om ON om.user_id = u.id WHERE ` + where

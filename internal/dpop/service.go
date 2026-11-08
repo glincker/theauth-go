@@ -223,7 +223,9 @@ func (s *Service) Verify(proofJWT string, params VerifyParams) (*Proof, error) {
 	if claims.JTI == "" {
 		return nil, joinErr(ErrMalformedProof, "jti", "missing")
 	}
-	fresh, err := s.checkJTI(claims.JTI, iat.Add(s.proofMaxAge))
+	// Remember the jti for as long as the proof stays acceptable (ProofMaxAge plus ClockSkew), or a proof
+	// inside the skew allowance could be replayed once its entry expired.
+	fresh, err := s.checkJTI(claims.JTI, iat.Add(s.proofMaxAge+s.clockSkew))
 	if err != nil {
 		return nil, err
 	}

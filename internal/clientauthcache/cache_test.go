@@ -103,3 +103,17 @@ func TestReplaceUpdatesDigest(t *testing.T) {
 		t.Fatalf("expected new=2, got ok=%v v=%d", ok, v)
 	}
 }
+
+func TestPutAtDroppedAfterInvalidate(t *testing.T) {
+	c := New[string](0, 0)
+	tok := c.Begin("c")
+	c.Invalidate("c")
+	c.PutAt("c", "old", "v", tok)
+	if _, ok := c.Get("c", "old"); ok {
+		t.Fatal("PutAt that began before Invalidate was cached")
+	}
+	c.PutAt("c", "new", "v", c.Begin("c"))
+	if _, ok := c.Get("c", "new"); !ok {
+		t.Fatal("fresh PutAt dropped")
+	}
+}

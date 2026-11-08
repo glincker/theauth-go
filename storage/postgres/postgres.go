@@ -10,6 +10,7 @@ import (
 
 	"github.com/glincker/theauth-go/v2"
 	"github.com/glincker/theauth-go/v2/crypto"
+	"github.com/glincker/theauth-go/v2/internal/audit"
 	"github.com/glincker/theauth-go/v2/storage"
 	sqlcgen "github.com/glincker/theauth-go/v2/storage/postgres/sqlc"
 	"github.com/jackc/pgx/v5"
@@ -24,6 +25,8 @@ var _ storage.Storage = (*Store)(nil)
 type Store struct {
 	pool *pgxpool.Pool
 	q    *sqlcgen.Queries
+	// rot is the audit pseudonym rotation policy, off by default.
+	rot audit.RotationState
 }
 
 // New constructs a Store using the given pgxpool.Pool.

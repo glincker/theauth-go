@@ -34,8 +34,8 @@ ON DUPLICATE KEY UPDATE
 		nullBytesToSlice(a.RefreshTokenEnc),
 		timePtrToNull(a.ExpiresAt),
 		a.Scope,
-		timeUTC(a.CreatedAt),
-		timeUTC(a.UpdatedAt),
+		timeUTCOrNow(a.CreatedAt),
+		timeUTCOrNow(a.UpdatedAt),
 	)
 	if err != nil {
 		return theauth.OAuthAccount{}, err
@@ -170,7 +170,7 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		c.PublicKey,
 		int64(c.SignCount),
 		transportsJSON,
-		c.AAGUID,
+		nonNilBytes(c.AAGUID),
 		c.Name,
 		timeUTC(c.CreatedAt),
 		timePtrToNull(c.LastUsedAt),

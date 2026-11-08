@@ -102,22 +102,32 @@ func (s *Service) IntrospectToken(ctx context.Context, token, clientID, clientSe
 		}
 		return resp, cached, nil
 	}
-	// A JWT has three dot-separated segments. Refresh tokens are single base64url segments.
-	if strings.Count(token, ".") == 2 {
-		resp := s.introspectJWT(ctx, token, expectedAud)
-		body, _ = json.Marshal(resp)
-		s.introspectCacheSet(token, expectedAud, body)
-		return resp, body, nil
-	}
-	if opaque, ok := s.introspectOpaque(ctx, token, expectedAud); ok {
-		body, _ = json.Marshal(opaque)
-		s.introspectCacheSet(token, expectedAud, body)
-		return opaque, body, nil
-	}
-	resp := s.introspectRefreshToken(ctx, token)
-	body, _ = json.Marshal(resp)
-	s.introspectCacheSet(token, expectedAud, body)
+	resp, body := s.introspectFresh(ctx, token, expectedAud)
 	return resp, body, nil
+}
+
+// introspectFresh answers from storage and caches the body. A JWT has three dot-separated
+// segments; refresh tokens are single base64url segments.
+func (s *Service) introspectFresh(ctx context.Context, token, expectedAud string) (IntrospectionResponse, []byte) {
+	// Taken before any storage read: a revoke that purges the cache meanwhile drops the store below.
+	key := introspectCacheKey(token, expectedAud)
+	tok := s.introspectEpoch.Token(key)
+	var resp IntrospectionResponse
+	if strings.Count(token, ".") == 2 {
+		resp = s.introspectJWT(ctx, token, expectedAud)
+	} else if opaque, ok := s.introspectOpaque(ctx, token, expectedAud); ok {
+		resp = opaque
+	} else {
+		// Refresh token answers are not cached. A cache hit re-checks the denylist, the device, the
+		// chain and the subject, but not the refresh token row, so a rotated or revoked refresh token
+		// would stay active until IntrospectionCacheTTL. The lookup is one indexed read.
+		resp = s.introspectRefreshToken(ctx, token)
+		body, _ := json.Marshal(resp)
+		return resp, body
+	}
+	body, _ := json.Marshal(resp)
+	s.introspectCacheSet(key, tok, body)
+	return resp, body
 }
 
 func (s *Service) introspectJWT(ctx context.Context, token, expectedAud string) IntrospectionResponse {
@@ -274,6 +284,11 @@ func (s *Service) chainStillActive(ctx context.Context, resp *IntrospectionRespo
 		}
 	}
 
+	// Taken before the walk: an InvalidateChainCache during the walk drops the store below.
+	var tok uint64
+	if cacheKey != "" {
+		tok = s.chainEpoch.Token(cacheKey)
+	}
 	active := true
 	var earliestExp time.Time
 	for cur := resp.Act; cur != nil; cur = cur.Act {
@@ -290,10 +305,12 @@ func (s *Service) chainStillActive(ctx context.Context, resp *IntrospectionRespo
 	}
 
 	if cacheKey != "" {
-		s.chainCache.Store(cacheKey, &chainCacheEntry{
-			active:    active,
-			checkedAt: now,
-			expiresAt: earliestExp,
+		s.chainEpoch.Commit(cacheKey, tok, func() {
+			s.chainCache.Store(cacheKey, &chainCacheEntry{
+				active:    active,
+				checkedAt: now,
+				expiresAt: earliestExp,
+			})
 		})
 	}
 	return active
@@ -374,14 +391,16 @@ func (s *Service) introspectCacheGet(token, aud string) ([]byte, bool) {
 	return entry.body, true
 }
 
-func (s *Service) introspectCacheSet(token, aud string, body []byte) {
+// introspectCacheSet stores body under key unless a purge ran since tok was taken.
+func (s *Service) introspectCacheSet(key string, tok uint64, body []byte) {
 	if s == nil {
 		return
 	}
-	s.introspectCache.Store(introspectCacheKey(token, aud), &introspectCacheEntry{
+	e := &introspectCacheEntry{
 		expiresAt: s.Cfg.Clock.Now().Add(s.Cfg.IntrospectionCacheTTL),
 		body:      body,
-	})
+	}
+	s.introspectEpoch.Commit(key, tok, func() { s.introspectCache.Store(key, e) })
 }
 
 func introspectCacheKey(token, aud string) string {
@@ -402,8 +421,10 @@ func (s *Service) purgeIntrospectCache() {
 	if s == nil {
 		return
 	}
-	s.introspectCache.Range(func(k, _ any) bool {
-		s.introspectCache.Delete(k)
-		return true
+	s.introspectEpoch.InvalidateAll(func() {
+		s.introspectCache.Range(func(k, _ any) bool {
+			s.introspectCache.Delete(k)
+			return true
+		})
 	})
 }

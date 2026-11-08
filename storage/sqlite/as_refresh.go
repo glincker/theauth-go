@@ -103,7 +103,7 @@ func (s *Store) RevokeRefreshTokensByAuthCode(ctx context.Context, codeHash, rea
 	rows, err := s.db.QueryContext(ctx, s.q(`
 UPDATE theauth_oauth_refresh_tokens SET revoked_at = ?, revocation_note = ?
 WHERE revoked_at IS NULL AND family_id IN (
-	SELECT family_id FROM theauth_oauth_refresh_tokens WHERE auth_code_hash = ?
+	SELECT family_id FROM theauth_oauth_refresh_tokens WHERE auth_code_hash = ? AND auth_code_hash <> ''
 )
 RETURNING parent_jti`), toMicro(time.Now()), reason, codeHash)
 	if err != nil {
