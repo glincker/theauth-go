@@ -5,7 +5,7 @@ go 1.26.0
 require (
 	github.com/glincker/theauth-go/mcpresource v0.0.0
 	github.com/glincker/theauth-go/v2 v2.12.0
-	github.com/go-chi/chi/v5 v5.4.0
+	github.com/go-chi/chi/v5 v5.5.0
 	github.com/modelcontextprotocol/go-sdk v1.8.0
 	github.com/oklog/ulid/v2 v2.1.2
 )
