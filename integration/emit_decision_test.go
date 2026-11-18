@@ -47,8 +47,27 @@ func TestTheAuth_EmitDecision_OpenByDefault(t *testing.T) {
 	}
 }
 
-func TestTheAuth_VerifyAuditChain_UnsupportedBackend(t *testing.T) {
+// noChainStore is a memory store that hides its chain, standing in for a backend without one.
+type noChainStore struct{ *memory.Store }
+
+func (noChainStore) ChainSupported() bool { return false }
+
+func TestTheAuth_VerifyAuditChain_MemoryIsChained(t *testing.T) {
 	a := newDecisionAuth(t, false)
+	defer a.Close()
+	res, err := a.VerifyAuditChain(context.Background())
+	if err != nil || !res.Supported || !res.OK {
+		t.Fatalf("memory chain = %+v, %v", res, err)
+	}
+}
+
+func TestTheAuth_VerifyAuditChain_UnsupportedBackend(t *testing.T) {
+	a, err := theauth.New(theauth.Config{
+		Storage: noChainStore{memory.New()}, BaseURL: "http://localhost", SessionTTL: time.Hour, MagicLinkTTL: time.Minute,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
 	defer a.Close()
 	res, err := a.VerifyAuditChain(context.Background())
 	if !errors.Is(err, theauth.ErrAuditChainUnsupported) {

@@ -25,9 +25,12 @@ func (s *Service) subjectActive(ctx context.Context, sub string) bool {
 		}
 		s.subjectCache.Delete(sub)
 	}
+	// The token is taken before the lookup. An InvalidateSubject that runs while the lookup is in
+	// flight makes the store below a no-op, so a revoked subject is never cached by a stale read.
+	tok := s.subjectEpoch.Token(sub)
 	active := s.subjectActiveLookup(ctx, sub)
 	if active {
-		s.subjectCache.Store(sub, now)
+		s.subjectEpoch.Commit(sub, tok, func() { s.subjectCache.Store(sub, now) })
 	}
 	return active
 }
@@ -38,7 +41,7 @@ func (s *Service) InvalidateSubject(sub string) {
 	if s == nil || sub == "" {
 		return
 	}
-	s.subjectCache.Delete(sub)
+	s.subjectEpoch.Invalidate(sub, func() { s.subjectCache.Delete(sub) })
 }
 
 // SubscribeRevocations drops the cached answer for the subject of every agent and owner revocation

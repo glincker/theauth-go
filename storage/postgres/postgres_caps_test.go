@@ -36,6 +36,9 @@ func TestPostgresCapabilityContracts(t *testing.T) {
 	}{
 		{"APITokens", func(t *testing.T, s *Store) { storagetest.RunAPITokens(t, s) }},
 		{"ToolApprovals", func(t *testing.T, s *Store) { storagetest.RunToolApprovals(t, s) }},
+		{"ToolApprovalAdmin", func(t *testing.T, s *Store) { storagetest.RunToolApprovalAdmin(t, s) }},
+		{"ApprovalFlow", func(t *testing.T, s *Store) { storagetest.RunApprovalFlow(t, s) }},
+		{"ToolApprovalQuorum", func(t *testing.T, s *Store) { storagetest.RunToolApprovalQuorum(t, s) }},
 		{"DeviceCodes", func(t *testing.T, s *Store) { storagetest.RunDeviceCodes(t, s) }},
 		{"DeviceAuthorizations", func(t *testing.T, s *Store) { storagetest.RunDeviceAuthorizations(t, s) }},
 		{"RegistrationTokens", func(t *testing.T, s *Store) { storagetest.RunRegistrationTokens(t, s) }},
@@ -45,6 +48,15 @@ func TestPostgresCapabilityContracts(t *testing.T) {
 		{"SessionAuthMethods", func(t *testing.T, s *Store) { storagetest.RunSessionAuthMethods(t, s) }},
 		{"AccountLifecycle", func(t *testing.T, s *Store) { storagetest.RunAccountLifecycle(t, s) }},
 		{"AuditChain", func(t *testing.T, s *Store) { storagetest.RunAuditChain(t, s) }},
+		{"AuditProvenance", func(t *testing.T, s *Store) { storagetest.RunAuditProvenance(t, s) }},
+		{"AuditRotation", func(t *testing.T, s *Store) { storagetest.RunAuditRotation(t, s) }},
+		{"AuditHeadCheckpoint", func(t *testing.T, s *Store) {
+			storagetest.RunAuditHeadCheckpoint(t, s, func(ctx context.Context) error {
+				_, err := s.pool.Exec(ctx, `DELETE FROM audit_events WHERE chain_key = '' AND chain_seq =
+(SELECT max(chain_seq) FROM audit_events WHERE chain_key = '')`)
+				return err
+			})
+		}},
 	}
 	for _, tc := range suites {
 		t.Run(tc.name, func(t *testing.T) { tc.run(t, capsStore(t)) })

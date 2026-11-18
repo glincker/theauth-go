@@ -81,6 +81,20 @@ func (s *Store) insertChained(ctx context.Context, events []theauth.AuditEvent) 
 	if err := s.ensureChainRows(ctx, events); err != nil {
 		return err
 	}
+	// Period secrets are created in autocommit statements before the batch transaction, like the
+	// chain heads, so two first writers of a period cannot deadlock inside it. The stable secret
+	// is read inside the transaction and added below.
+	times := make([]time.Time, len(events))
+	for i, e := range events {
+		times[i] = e.CreatedAt
+		if times[i].IsZero() {
+			times[i] = time.Now()
+		}
+	}
+	ps, err := s.rot.Resolve(ctx, nil, myPeriods{s.db}, times)
+	if err != nil {
+		return err
+	}
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
@@ -90,16 +104,15 @@ func (s *Store) insertChained(ctx context.Context, events []theauth.AuditEvent) 
 	if err != nil {
 		return err
 	}
+	ps.Stable = secret
 	heads, recorded, err := lockChainHeads(ctx, tx, events)
 	if err != nil {
 		return err
 	}
-	for _, e := range events {
-		if e.CreatedAt.IsZero() {
-			e.CreatedAt = time.Now()
-		}
+	for i, e := range events {
+		e.CreatedAt = times[i]
 		key := audit.ChainKey(e)
-		entry, err := audit.BuildChainEntry(e, secret, heads[key])
+		entry, err := audit.BuildChainEntryWith(e, ps, heads[key])
 		if err != nil {
 			return err
 		}
@@ -221,6 +234,10 @@ func (s *Store) VerifyAuditChain(ctx context.Context) (theauth.AuditChainResult,
 	if err := s.db.QueryRowContext(ctx, `SELECT secret FROM theauth_audit_secrets WHERE id = 1`).Scan(&secret); err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return fail(err)
 	}
+	periods, err := s.periodSecrets(ctx)
+	if err != nil {
+		return fail(err)
+	}
 	rows, err := s.db.QueryContext(ctx, `
 SELECT id, organization_id, actor_user_id, actor_session_id, action,
        COALESCE(target_type, ''), COALESCE(target_id, ''), chain_metadata, metadata,
@@ -234,13 +251,13 @@ FROM audit_events WHERE chain_seq IS NOT NULL ORDER BY chain_key, chain_seq`)
 		return fail(err)
 	}
 	defer func() { _ = rows.Close() }()
-	res, err := audit.VerifyChainRows(func() (audit.ChainRow, bool, error) {
+	res, err := audit.VerifyChainRowsKeys(func() (audit.ChainRow, bool, error) {
 		if !rows.Next() {
 			return audit.ChainRow{}, false, rows.Err()
 		}
 		r, err := scanChainRow(rows)
 		return r, err == nil, err
-	}, secret, unchained)
+	}, audit.PseudonymKeys{Stable: secret, Periods: periods}, unchained)
 	if err != nil {
 		return fail(err)
 	}

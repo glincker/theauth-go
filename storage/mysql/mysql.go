@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/glincker/theauth-go/v2"
+	"github.com/glincker/theauth-go/v2/internal/audit"
 	"github.com/glincker/theauth-go/v2/storage"
 )
 
@@ -18,6 +19,8 @@ var _ theauth.OAuthServerStorage = (*Store)(nil)
 // Store is the MySQL-backed storage adapter.
 type Store struct {
 	db *sql.DB
+	// rot is the audit pseudonym rotation policy, off by default.
+	rot audit.RotationState
 }
 
 // New constructs a Store using the given *sql.DB. The caller is responsible
@@ -78,6 +81,16 @@ func timeUTC(t time.Time) time.Time {
 	return t.UTC()
 }
 
+// timeUTCOrNow is timeUTC but maps the zero time to now. A zero time.Time
+// would otherwise be sent as '0000-00-00', which MySQL rejects under
+// NO_ZERO_DATE (on by default in strict mode).
+func timeUTCOrNow(t time.Time) time.Time {
+	if t.IsZero() {
+		return time.Now().UTC()
+	}
+	return t.UTC()
+}
+
 // nullBytesToSlice returns an empty slice when b is nil/empty.
 func nullBytesToSlice(b []byte) []byte {
 	if len(b) == 0 {
@@ -95,6 +108,15 @@ func isMySQL1062(err error) bool {
 	// The go-sql-driver/mysql error message always contains "Error 1062".
 	return strings.Contains(err.Error(), "1062") ||
 		strings.Contains(err.Error(), "Duplicate entry")
+}
+
+// nonNilBytes maps nil to an empty slice so a NOT NULL binary column stores an
+// empty value instead of NULL (the driver sends a nil []byte as NULL).
+func nonNilBytes(b []byte) []byte {
+	if b == nil {
+		return []byte{}
+	}
+	return b
 }
 
 // nullStringToPtr returns nil when s is empty.

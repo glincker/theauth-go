@@ -55,7 +55,10 @@ func (v *Validator) RequireScope(scopes ...string) func(http.Handler) http.Handl
 // token's acr and auth_time claims.
 type StepUp struct {
 	// ACRValues lists acceptable authentication context class references.
-	// The token's acr must equal one of them. Empty means no acr requirement.
+	// The token's acr must equal one of them, or be a stronger theAuth class
+	// than the weakest theAuth class listed (see ACRRank). Values outside the
+	// theAuth ladder are opaque (RFC 9470 section 2) and match by equality
+	// only. Empty means no acr requirement.
 	ACRValues []string
 	// MaxAge is the oldest acceptable user authentication. The token's
 	// auth_time must be no older than this. Zero means no age requirement
@@ -72,23 +75,65 @@ func (s StepUp) Satisfied(p *Principal, now time.Time) bool {
 		return false
 	}
 	if len(s.ACRValues) > 0 {
-		match := false
-		for _, a := range s.ACRValues {
-			if p.ACR != "" && p.ACR == a {
-				match = true
-				break
-			}
-		}
-		if !match {
+		if !acrSatisfied(p.ACR, s.ACRValues) {
 			return false
 		}
 	}
 	if s.MaxAge > 0 {
-		if p.AuthTime.IsZero() || now.Sub(p.AuthTime) > s.MaxAge {
+		// A token from the future is as untrustworthy as a stale one.
+		if p.AuthTime.IsZero() || now.Sub(p.AuthTime) > s.MaxAge || p.AuthTime.Sub(now) > futureAuthTimeSkew {
 			return false
 		}
 	}
 	return true
+}
+
+// futureAuthTimeSkew is how far ahead of the resource server's clock an
+// auth_time may be before it is refused as bogus.
+const futureAuthTimeSkew = time.Minute
+
+// The theAuth authentication context classes, weakest first. A stronger class
+// satisfies a request for a weaker one. This ordering is a theAuth rule: RFC
+// 9470 treats acr values as opaque strings. The URNs match the TypeScript
+// package so one resource server can sit behind either authorization server.
+const (
+	ACRNone              = "urn:theauth:acr:none"
+	ACRSingleFactor      = "urn:theauth:acr:single-factor"
+	ACRMFA               = "urn:theauth:acr:mfa"
+	ACRPhishingResistant = "urn:theauth:acr:phishing-resistant"
+)
+
+var acrLadder = []string{ACRNone, ACRSingleFactor, ACRMFA, ACRPhishingResistant}
+
+// ACRRank returns the position of acr in the theAuth ladder (0 weakest) and
+// whether acr is a theAuth class at all.
+func ACRRank(acr string) (int, bool) {
+	for i, c := range acrLadder {
+		if c == acr {
+			return i, true
+		}
+	}
+	return 0, false
+}
+
+// acrSatisfied reports whether the token acr meets any wanted value. An exact
+// match always passes. Otherwise, when the token acr is a theAuth class, it
+// passes if it is at least as strong as the weakest theAuth class wanted.
+func acrSatisfied(have string, wanted []string) bool {
+	if have == "" {
+		return false
+	}
+	haveRank, haveKnown := ACRRank(have)
+	minRank := -1
+	for _, w := range wanted {
+		if w == have {
+			return true
+		}
+		if r, ok := ACRRank(w); ok && (minRank < 0 || r < minRank) {
+			minRank = r
+		}
+	}
+	return haveKnown && minRank >= 0 && haveRank >= minRank
 }
 
 // RequireStepUp returns middleware that answers 401 with an RFC 9470

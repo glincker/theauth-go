@@ -38,6 +38,15 @@ var (
 	// (AuditOrderSupported() bool). The query is refused instead of silently ignoring the filter.
 	ErrAuditOrderUnsupported = errors.New("theauth: audit storage backend does not support write order, event filters or c1 cursors")
 
+	// ErrAuditProvenanceUnsupported is returned when an audit query has a Provenance filter and the
+	// storage backend does not declare AuditProvenanceSupported() true. The query is refused
+	// instead of silently ignoring the filter.
+	ErrAuditProvenanceUnsupported = errors.New("theauth: audit storage backend does not support the provenance filter")
+
+	// ErrBadProvenanceFilter is returned for a provenance filter with an unknown kind or a hash that
+	// is not 64 lowercase hex characters.
+	ErrBadProvenanceFilter = errors.New("theauth: invalid audit provenance filter")
+
 	// ErrLastOwner is returned when an org member removal would leave the
 	// organization with zero owners.
 	ErrLastOwner = errors.New("theauth: cannot remove the last owner")

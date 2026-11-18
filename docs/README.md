@@ -11,6 +11,7 @@ Feature guides for the OAuth server, agents and shared state are kept here until
 Running it:
 
 - [dev-mode.md](dev-mode.md): `go run .../cmd/theauth-dev@latest` starts a seeded in-memory server and walks through an agent, a delegation, an allowed and a denied tool call, and a verified audit chain.
+- [mcpresource-step-up.md](mcpresource-step-up.md): step-up (RFC 9470) and sender constrained tokens (DPoP RFC 9449, mTLS RFC 8705) on the Go resource server.
 - [mcp-oauth-sqlite.md](mcp-oauth-sqlite.md): the OAuth 2.1 authorization server on SQLite for an MCP server, including mounting under a path prefix and revocation with `mcpresource`.
 - [approvals.md](approvals.md): HTTP inbox to list, approve and deny agent tool approvals with four-eyes and audit.
 - [storage-capabilities.md](storage-capabilities.md): which capability interfaces each backend (memory, SQLite, Postgres, MySQL) implements, with migration numbers.
@@ -18,13 +19,14 @@ Running it:
 
 Authorization server:
 
-- [oauth-consent.md](oauth-consent.md), [session-auth-methods.md](session-auth-methods.md), [access-token-policy.md](access-token-policy.md), [rich-authorization-requests.md](rich-authorization-requests.md), [oauth-endpoint-limits.md](oauth-endpoint-limits.md), [mcp-metadata-paths.md](mcp-metadata-paths.md), [client-compat.md](client-compat.md), [oidc-provider.md](oidc-provider.md), [id-jag.md](id-jag.md), [device-authorization.md](device-authorization.md), [registration-tokens.md](registration-tokens.md), [device-tokens.md](device-tokens.md), [token-vault.md](token-vault.md) and [admission.md](admission.md).
+- [oauth-consent.md](oauth-consent.md), [session-auth-methods.md](session-auth-methods.md), [access-token-policy.md](access-token-policy.md), [rich-authorization-requests.md](rich-authorization-requests.md), [oauth-endpoint-limits.md](oauth-endpoint-limits.md), [mcp-metadata-paths.md](mcp-metadata-paths.md), [client-compat.md](client-compat.md), [oidc-provider.md](oidc-provider.md), [id-jag.md](id-jag.md), [device-authorization.md](device-authorization.md), [registration-tokens.md](registration-tokens.md), [device-tokens.md](device-tokens.md), [device-attestation.md](device-attestation.md), [mqtt-auth.md](mqtt-auth.md), [iot-device-client.md](iot-device-client.md), [token-vault.md](token-vault.md) and [admission.md](admission.md).
 
 Agents and audit:
 
 - [ai-assistants.md](ai-assistants.md).
 - [agent-expiry.md](agent-expiry.md), [agent-policies.md](agent-policies.md) and [policy-shrink.md](policy-shrink.md).
 - [shared-signals.md](shared-signals.md).
+- [audit-query.md](audit-query.md) and [audit-provenance.md](audit-provenance.md) (input provenance, rotating pseudonyms).
 
 Other guides: [otp.md](otp.md), [enumeration-safe-passwordless.md](enumeration-safe-passwordless.md), [passkey-attestation.md](passkey-attestation.md), [hooks.md](hooks.md), [create-user.md](create-user.md), [provider-catalog.md](provider-catalog.md), [cli.md](cli.md) and [MIGRATING-FROM-KEYCLOAK.md](MIGRATING-FROM-KEYCLOAK.md).
 

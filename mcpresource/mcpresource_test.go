@@ -16,7 +16,7 @@ import (
 
 // signToken builds an EdDSA JWT with the supplied claim map. Used in every
 // test to mint tokens that match the AS shape.
-func signToken(t *testing.T, kid string, priv ed25519.PrivateKey, claims map[string]any) string {
+func signToken(t testing.TB, kid string, priv ed25519.PrivateKey, claims map[string]any) string {
 	t.Helper()
 	header := map[string]string{"alg": "EdDSA", "typ": "at+jwt", "kid": kid}
 	headerJSON, err := json.Marshal(header)
@@ -48,7 +48,7 @@ type fakeAS struct {
 	jwksCalls        atomic.Int64
 }
 
-func newFakeAS(t *testing.T) *fakeAS {
+func newFakeAS(t testing.TB) *fakeAS {
 	t.Helper()
 	pub, priv, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {
@@ -93,12 +93,12 @@ func newFakeAS(t *testing.T) *fakeAS {
 
 const testResource = "https://mcp.example.com"
 
-func newValidatorAgainst(f *fakeAS) *Validator {
-	return New(testResource,
+func newValidatorAgainst(f *fakeAS, extra ...Option) *Validator {
+	return New(testResource, append([]Option{
 		WithJWKS(f.jwksServer.URL),
 		WithIntrospection(f.introspectServer.URL, "client-1", "secret-1"),
-		WithCacheTTL(60*time.Second),
-	)
+		WithCacheTTL(60 * time.Second),
+	}, extra...)...)
 }
 
 func TestMiddleware_SignaturePass(t *testing.T) {

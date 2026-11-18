@@ -20,7 +20,8 @@ import (
 )
 
 // TestMySQLStoreContract runs the storagetest suite against a live MySQL. Opt in with
-// THEAUTH_MYSQL_CONTRACT=1; the suite is unverified on MySQL (see docs/ROADMAP.md).
+// THEAUTH_MYSQL_CONTRACT=1. The suite passes on MySQL 8.4.11 (checked 2026-10-18) and runs in CI
+// through .github/workflows/mysql-contract.yml.
 //
 // Example:
 //
@@ -155,6 +156,7 @@ func dropTables(t *testing.T, ctx context.Context, db *sql.DB) {
 	t.Helper()
 
 	tables := []string{
+		"theauth_device_purge_events",
 		"theauth_tool_approvals",
 		"device_join_tokens",
 		"iot_devices",
@@ -172,6 +174,7 @@ func dropTables(t *testing.T, ctx context.Context, db *sql.DB) {
 		"session_links",
 		"audit_events",
 		"theauth_audit_secrets",
+		"theauth_audit_period_secrets",
 		"theauth_audit_chain_heads",
 		"delegation_grants",
 		"agent_credentials",

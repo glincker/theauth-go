@@ -82,6 +82,11 @@ type Principal struct {
 	// handlers can trust the binding without re-verifying.
 	CnfJKT string
 
+	// CnfX5tS256 is the RFC 8705 client certificate thumbprint the token
+	// was bound to. Set only after the request's client certificate was
+	// confirmed to match.
+	CnfX5tS256 string
+
 	// authorizationDetails is the RFC 9396 authorization_details, exposed
 	// read-only through AuthorizationDetails.
 	authorizationDetails []AuthorizationDetail

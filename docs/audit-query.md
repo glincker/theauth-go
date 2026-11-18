@@ -13,6 +13,7 @@ Read audit events through the admin endpoint or from Go with `QueryAudit`. Both 
 | `target_type`, `target_id` | Exact match on the target. |
 | `actor` | Actor user id (ULID). |
 | `since`, `until` | RFC 3339 timestamps. |
+| `provenance_kind`, `provenance_hash` | Rows that recorded an input source, see [audit-provenance.md](audit-provenance.md). `provenance_hash` is 64 lowercase hex characters. Either or both. |
 | `order` | `desc` (default, newest write first) or `asc` (oldest write first). `asc` needs write order support. Anything else is a 400. |
 | `limit` | Page size, 1 to 200, default 50. |
 | `cursor` | The `next_cursor` of the previous page. Send it with the same `order` and filters. |
@@ -34,7 +35,7 @@ Errors use the usual problem document (`application/problem+json`, with a `code`
 | Status | `code` | When |
 | --- | --- | --- |
 | 400 | `pagination.bad_cursor` | The cursor is malformed, truncated, or was issued for the other order. |
-| 400 | `validation.invalid` | `order` is not `asc` or `desc`, or the storage backend cannot serve `order=asc`, the `event` filter or a `c1.` cursor. The query is refused, never silently run without the filter. |
+| 400 | `validation.invalid` | `order` is not `asc` or `desc`, or the storage backend cannot serve `order=asc`, the `event` filter, a `c1.` cursor or the provenance filter. A bad `provenance_kind` or `provenance_hash` is a 400 too. The query is refused, never silently run without the filter. |
 
 ## Order and cursors
 

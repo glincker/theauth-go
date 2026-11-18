@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/glincker/theauth-go/v2/kv"
+	"github.com/glincker/theauth-go/v2/otp"
 )
 
 // Clock is a manually advanced time source. Give Clock.Now to the adapter under
@@ -190,6 +191,42 @@ func Run(t *testing.T, newCache Factory) {
 			// Adapters may legitimately treat a non-counter value as 0 or error;
 			// they must not continue the old count.
 			t.Logf("incr after set returned %d", got)
+		}
+	})
+
+	t.Run("one time code is claimed once under parallel verify", func(t *testing.T) {
+		c, _ := fresh(t)
+		const workers = 20
+		var sent string
+		svc, err := otp.New(otp.Config{
+			Cache:       c,
+			Secret:      []byte("kvtest-otp-secret-kvtest-otp-secret"),
+			MaxAttempts: workers * 4,
+			Sender:      otp.SenderFunc(func(_ context.Context, m otp.Message) error { sent = m.Code; return nil }),
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := svc.Issue(ctx, "login", "kv@example.com"); err != nil {
+			t.Fatalf("Issue: %v", err)
+		}
+		var wins atomic.Int32
+		var wg sync.WaitGroup
+		start := make(chan struct{})
+		for i := 0; i < workers; i++ {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				<-start
+				if err := svc.Verify(ctx, "login", "kv@example.com", sent); err == nil {
+					wins.Add(1)
+				}
+			}()
+		}
+		close(start)
+		wg.Wait()
+		if wins.Load() != 1 {
+			t.Fatalf("DOUBLE SPEND: %d Verify calls accepted one code, want 1", wins.Load())
 		}
 	})
 
