@@ -1,6 +1,9 @@
 package visitorsignal
 
-import "strings"
+import (
+	"math"
+	"strings"
+)
 
 // ConfidenceModel holds the heuristic terms. It is not a calibrated
 // probability. Penalties are positive numbers that Score subtracts.
@@ -47,6 +50,7 @@ func Score(p Payload, m ConfidenceModel) float64 {
 		platform = *c.Platform
 	}
 	mobile := c.Mobile != nil && *c.Mobile
+	// First match wins: the Safari penalty and the Android penalty never stack.
 	switch {
 	case platform == "iPhone" || platform == "iPad" ||
 		(mobile && c.UABrand != nil && *c.UABrand == "Safari"):
@@ -74,5 +78,6 @@ func Score(p Payload, m ConfidenceModel) float64 {
 	case s > 1:
 		return 1
 	}
-	return s
+	// Four decimals keeps the Go and TypeScript scores equal despite float noise.
+	return math.Round(s*1e4) / 1e4
 }
