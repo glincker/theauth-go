@@ -17,6 +17,5 @@ use (
 	./examples/single-binary-sqlite
 	./examples/stdlib-app
 	./mcpresource
-	./visitorsignal
 	./storage/sqlite
 )
