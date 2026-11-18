@@ -100,25 +100,36 @@ func Assess(p Payload, meta RequestMeta, m RiskModel) (float64, []string) {
 	return risk, reasons
 }
 
-var uaMajorRes = []*regexp.Regexp{
-	regexp.MustCompile(`Chrome/(\d+)`),
-	regexp.MustCompile(`Firefox/(\d+)`),
-	regexp.MustCompile(`Version/(\d+)`),
-}
+var (
+	chromeMajorRe  = regexp.MustCompile(`Chrome/(\d+)`)
+	firefoxMajorRe = regexp.MustCompile(`Firefox/(\d+)`)
+	safariMajorRe  = regexp.MustCompile(`Version/(\d+)`)
+)
 
-// uaMajorMismatch tries Chrome, then Firefox, then Version, so a WebView UA
-// that lists Version/4.0 before Chrome/N is compared on the Chrome major.
+// uaMajorMismatch compares only for brands whose UA token carries the same
+// major. Other Chromium forks (Opera, Samsung, Yandex) put their own version
+// in uaMajor, so a comparison would be a false positive and is skipped.
 func uaMajorMismatch(c Components, ua string) bool {
-	if c.UAMajor == nil {
+	if c.UAMajor == nil || c.UABrand == nil {
 		return false
 	}
-	for _, re := range uaMajorRes {
-		if m := re.FindStringSubmatch(ua); m != nil {
-			n, err := strconv.Atoi(m[1])
-			return err == nil && n != *c.UAMajor
-		}
+	var re *regexp.Regexp
+	switch *c.UABrand {
+	case "Chrome", "Google Chrome", "Chromium", "Microsoft Edge", "Brave":
+		re = chromeMajorRe
+	case "Firefox":
+		re = firefoxMajorRe
+	case "Safari":
+		re = safariMajorRe
+	default:
+		return false
 	}
-	return false
+	m := re.FindStringSubmatch(ua)
+	if m == nil {
+		return false
+	}
+	n, err := strconv.Atoi(m[1])
+	return err == nil && n != *c.UAMajor
 }
 
 func mobileMismatch(c Components, header string) bool {
@@ -188,8 +199,8 @@ func hintFamilies(hint string) map[string]bool {
 	return s
 }
 
-// platformMismatch fires when the claimed family disagrees with any observed
-// source that names a family.
+// platformMismatch fires when the claimed family disagrees with the observed
+// one, taken from Sec-CH-UA-Platform when present and the User-Agent otherwise.
 func platformMismatch(c Components, ua, hint string) bool {
 	if c.Platform == nil {
 		return false
@@ -198,16 +209,18 @@ func platformMismatch(c Components, ua, hint string) bool {
 	if fam == "" {
 		return false
 	}
-	for _, set := range []map[string]bool{uaFamilies(ua), hintFamilies(hint)} {
-		if len(set) > 0 && !set[fam] {
-			return true
-		}
+	// The client hint is the stronger signal. Android Chrome in desktop-site
+	// mode sends a desktop UA, so the UA is consulted only without a hint.
+	if strings.TrimSpace(hint) != "" {
+		set := hintFamilies(hint)
+		return len(set) > 0 && !set[fam]
 	}
-	return false
+	set := uaFamilies(ua)
+	return len(set) > 0 && !set[fam]
 }
 
 func languageMismatch(c Components, header string) bool {
-	if c.Lang == nil || *c.Lang == "" {
+	if c.Lang == nil || *c.Lang == "" || strings.TrimSpace(header) == "" {
 		return false
 	}
 	primary := strings.ToLower(strings.SplitN(*c.Lang, "-", 2)[0])
