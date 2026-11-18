@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/hex"
 	"errors"
+	"fmt"
+	"strings"
 	"testing"
 )
 
@@ -112,5 +114,29 @@ func TestMemorySaltProvider(t *testing.T) {
 	}
 	if _, err := NewMemorySaltProvider(map[string][]byte{"a": make([]byte, 31)}); !errors.Is(err, ErrMasterSecretTooShort) {
 		t.Fatalf("err = %v", err)
+	}
+}
+
+func TestHasherRedactsKey(t *testing.T) {
+	t.Parallel()
+	master := make([]byte, 32)
+	h, err := NewHasher(master, "s", ModeAnalytics, "d:2026-11-18")
+	if err != nil {
+		t.Fatal(err)
+	}
+	keyHex := hex.EncodeToString(h.key)
+	for _, verb := range []string{"%v", "%+v", "%#v", "%s", "%x", "%d"} {
+		for name, arg := range map[string]any{"pointer": h, "value": *h} {
+			t.Run(verb+"/"+name, func(t *testing.T) {
+				t.Parallel()
+				out := fmt.Sprintf(verb, arg)
+				if strings.Contains(out, keyHex) || strings.Contains(out, fmt.Sprintf("%v", h.key)) {
+					t.Fatalf("key leaked: %s", out)
+				}
+			})
+		}
+	}
+	if got := fmt.Sprintf("%v", h); got != "visitorsignal.Hasher{redacted}" {
+		t.Fatalf("got %q", got)
 	}
 }

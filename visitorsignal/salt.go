@@ -9,6 +9,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"io"
 	"strings"
 )
 
@@ -113,3 +114,12 @@ func (h *Hasher) Hash(c Components) (string, error) {
 func HashesEqual(a, b string) bool {
 	return subtle.ConstantTimeCompare([]byte(a), []byte(b)) == 1
 }
+
+// String redacts the derived key (value receiver, so copies redact too) so logging a Hasher never leaks it.
+func (h Hasher) String() string { return "visitorsignal.Hasher{redacted}" }
+
+// GoString redacts the key for %#v.
+func (h Hasher) GoString() string { return h.String() }
+
+// Format redacts the key for every fmt verb.
+func (h Hasher) Format(f fmt.State, _ rune) { _, _ = io.WriteString(f, h.String()) }
