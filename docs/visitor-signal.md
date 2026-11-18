@@ -38,3 +38,13 @@ Challenge tokens, the nonce store, the verifier and the HTTP handler are not bui
 ## Retention
 
 The library stores nothing. The caller decides where hashes live, how long, and how a visitor is deleted. Keep the retention period equal to what you tell your users, and never store raw components after scoring.
+
+## Developing the module
+
+`visitorsignal` is not listed in the repo `go.work`, so it stays out of the root module's vulnerability scope and builds on its own. Run its commands with the workspace off:
+
+```
+cd visitorsignal && GOWORK=off go test -race ./...
+```
+
+Add it to `go.work` locally if you want editor support across modules.
