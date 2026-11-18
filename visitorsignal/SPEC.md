@@ -13,6 +13,8 @@ The machine-readable contract is `schema/v1.json` (JSON Schema 2020-12). Example
 - A verifier must reject an unsupported `v` with `unsupported_version` before schema validation. It accepts the previous major for one release.
 - `status: "suppressed"` carries no components and must carry `suppressedReason`. Any other status must not carry `suppressedReason`.
 - `renderHash` is allowed only in `fraud_prevention` mode.
+- In `analytics` mode a payload with `flags.dnt` or `flags.gpc` true must be `suppressed`. Any other status is `schema_invalid`.
+- A JSON object that repeats a key, at any depth, is `schema_invalid`.
 - `ts` is client time and advisory. Freshness comes from the signed challenge, never from `ts`.
 
 ### Bucketing rules (client must apply, verifier checks the shape)
@@ -23,7 +25,7 @@ The machine-readable contract is `schema/v1.json` (JSON Schema 2020-12). Example
 | `cores` | Nearest power of two, ties round up (6 becomes 8, 3 becomes 4), capped at 64. |
 | `memoryGb` | The value `navigator.deviceMemory` already reports (0.25 to 8). |
 | `tzOffsetMin` | Current offset in minutes, range -840 to 840. |
-| `uaMajor` | Major version only. |
+| `uaMajor` | Major version only. When a Chromium brand is present (`Chrome`, `Google Chrome`, `Chromium`, `Microsoft Edge`, `Brave`), it is the Chromium major, the same number as `Chrome/N` in the User-Agent. Forks such as Opera, Samsung Internet and Yandex may report their own major, and the server skips the User-Agent cross-check for them. |
 
 ### Capability bitfield (`caps`)
 
@@ -137,7 +139,7 @@ Some consumers want a single opaque digest from the browser and apply their own 
 
 ### Confidence model
 
-A heuristic, not a calibrated probability. Defaults live in a `ConfidenceModel` struct that the integrator can override from configuration. Start at `base`, subtract, then clamp to [0, 1]:
+A heuristic, not a calibrated probability. Defaults live in a `ConfidenceModel` struct that the integrator can override from configuration. Start at `base`, subtract, clamp to [0, 1], then round to 4 decimals. The mobile Safari and Android terms are mutually exclusive: test mobile Safari first, and when it matches do not apply the Android term. Vectors are in `testdata/vectors-extra.json` under `confidence`.
 
 | Term | Default |
 | --- | --- |
@@ -162,10 +164,10 @@ A heuristic, not a calibrated probability. Defaults live in a `ConfidenceModel` 
 | `inconsistent` | 0.20 | `flags.inconsistent` |
 | `no_input` | 0.10 | `flags.noInputObserved`, fraud_prevention mode only |
 | `ua_missing` | 0.30 | request `User-Agent` empty |
-| `ua_major_mismatch` | 0.30 | payload `uaMajor` differs from the `Chrome/N` or `Firefox/N` or `Version/N` major in the request `User-Agent` |
+| `ua_major_mismatch` | 0.30 | payload `uaMajor` differs from the request `User-Agent` major, chosen by `uaBrand`: `Chrome/N` for the Chromium brands above, `Firefox/N` for `Firefox`, `Version/N` for `Safari`. Skipped for any other brand or when `uaBrand` is absent |
 | `mobile_mismatch` | 0.20 | payload `mobile` disagrees with `Sec-CH-UA-Mobile` when that header is present |
-| `platform_mismatch` | 0.20 | payload `platform` family (Win, Mac, Linux, iPhone, iPad, Android) disagrees with the request `User-Agent` or `Sec-CH-UA-Platform` |
-| `language_mismatch` | 0.10 | primary subtag of payload `lang` is absent from `Accept-Language` |
+| `platform_mismatch` | 0.20 | payload `platform` family (Win, Mac, Linux, iPhone, iPad, Android) disagrees with `Sec-CH-UA-Platform` when that header is present, otherwise with the request `User-Agent` (Android Chrome in desktop-site mode sends a desktop User-Agent) |
+| `language_mismatch` | 0.10 | primary subtag of payload `lang` is absent from `Accept-Language`, when `Accept-Language` is present |
 
 Anything the server observes outranks what the client claims. A blocked or failed collector yields unknown risk, never a bot verdict.
 
