@@ -20,7 +20,7 @@ The machine-readable contract is `schema/v1.json` (JSON Schema 2020-12). Example
 | Field | Rule |
 | --- | --- |
 | `screenBucket` | Each side rounded to the nearest 100 px, then `@` and the device pixel ratio rounded to one decimal. Example: 1512x982 at 2 becomes `1500x1000@2.0`. |
-| `cores` | Nearest power of two, capped at 64. |
+| `cores` | Nearest power of two, ties round up (6 becomes 8, 3 becomes 4), capped at 64. |
 | `memoryGb` | The value `navigator.deviceMemory` already reports (0.25 to 8). |
 | `tzOffsetMin` | Current offset in minutes, range -840 to 840. |
 | `uaMajor` | Major version only. |
