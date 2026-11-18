@@ -63,6 +63,9 @@ func ValidatePayloadWithConfig(raw []byte, cfg Config) (Payload, error) {
 	if err := checkVersion(top); err != nil {
 		return zero, err
 	}
+	if err := rejectDuplicateKeys(raw); err != nil {
+		return zero, err
+	}
 	if err := checkKeys(top, topKeys, topRequired, "payload"); err != nil {
 		return zero, err
 	}
@@ -84,6 +87,62 @@ func ValidatePayloadWithConfig(raw []byte, cfg Config) (Payload, error) {
 		return zero, err
 	}
 	return p, nil
+}
+
+// maxJSONDepth bounds the pre-pass recursion. The schema nests three deep.
+const maxJSONDepth = 16
+
+// rejectDuplicateKeys walks the token stream and refuses any object that
+// repeats a key. Without it the map and struct decoders each keep the last
+// value, so a first copy could carry data that the later checks never see.
+func rejectDuplicateKeys(raw []byte) error {
+	dec := json.NewDecoder(bytes.NewReader(raw))
+	if err := walkTokens(dec, 0); err != nil {
+		return err
+	}
+	return nil
+}
+
+func walkTokens(dec *json.Decoder, depth int) error {
+	if depth > maxJSONDepth {
+		return newError(CodeSchemaInvalid, "body is nested too deeply")
+	}
+	tok, err := dec.Token()
+	if err != nil {
+		return newError(CodeSchemaInvalid, "body is not valid JSON")
+	}
+	d, ok := tok.(json.Delim)
+	if !ok {
+		return nil
+	}
+	switch d {
+	case '{':
+		seen := map[string]struct{}{}
+		for dec.More() {
+			kt, err := dec.Token()
+			if err != nil {
+				return newError(CodeSchemaInvalid, "body is not valid JSON")
+			}
+			key, _ := kt.(string)
+			if _, dup := seen[key]; dup {
+				return newError(CodeSchemaInvalid, "duplicate key in body")
+			}
+			seen[key] = struct{}{}
+			if err := walkTokens(dec, depth+1); err != nil {
+				return err
+			}
+		}
+	case '[':
+		for dec.More() {
+			if err := walkTokens(dec, depth+1); err != nil {
+				return err
+			}
+		}
+	}
+	if _, err := dec.Token(); err != nil {
+		return newError(CodeSchemaInvalid, "body is not valid JSON")
+	}
+	return nil
 }
 
 func checkVersion(top map[string]json.RawMessage) error {
@@ -157,6 +216,9 @@ func checkSemantics(p Payload, hasReason bool, comps map[string]json.RawMessage)
 	}
 	if err := checkSuppression(p, hasReason, comps); err != nil {
 		return err
+	}
+	if p.Mode == ModeAnalytics && p.Status != StatusSuppressed && (p.Flags.DNT || p.Flags.GPC) {
+		return bad("analytics payload must be suppressed when dnt or gpc is set")
 	}
 	if err := checkComponents(p.Components, p.Mode); err != nil {
 		return err

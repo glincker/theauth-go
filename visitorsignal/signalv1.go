@@ -54,6 +54,9 @@ func ParseSignalV1(raw []byte) (SignalV1, error) {
 	if err := json.Unmarshal(raw, &top); err != nil || top == nil {
 		return bad("body is not a JSON object")
 	}
+	if err := rejectDuplicateKeys(raw); err != nil {
+		return zero, err
+	}
 	allowed := keySet(signalV1Keys...)
 	if err := checkKeys(top, allowed, signalV1Keys, "signal"); err != nil {
 		return zero, err

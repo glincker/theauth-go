@@ -149,3 +149,63 @@ func TestErrorMatching(t *testing.T) {
 		t.Fatal("plain error has no code")
 	}
 }
+
+func TestValidatePayloadDuplicateKeys(t *testing.T) {
+	t.Parallel()
+	const flags = `"flags":{"protectedBrowser":false,"webdriver":false,"headlessHint":false,"inconsistent":false}`
+	const head = `{"v":1,"mode":"analytics","ts":1,"nonce":"abcdefghijklmnop",`
+	tests := []struct {
+		name string
+		raw  string
+	}{
+		{"suppressed_components_overwritten", head + `"status":"suppressed","suppressedReason":"dnt",` +
+			`"components":{"tz":"Europe/Paris","lang":"fr-FR","screenBucket":"1500x1000@2.0"},"components":{},` + flags + `}`},
+		{"wrong_case_key_hidden_by_duplicate", head + `"status":"suppressed","suppressedReason":"dnt",` +
+			`"components":{"TZ":"X"},"components":{},` + flags + `}`},
+		{"duplicate_inside_components", head + `"status":"ok","components":{"tz":"A","tz":"B"},` + flags + `}`},
+		{"duplicate_inside_flags", head + `"status":"ok","components":{},"flags":{"protectedBrowser":false,"protectedBrowser":true,` +
+			`"webdriver":false,"headlessHint":false,"inconsistent":false}}`},
+		{"duplicate_version", `{"v":1,"v":1,"mode":"analytics","ts":1,"nonce":"abcdefghijklmnop","status":"ok","components":{},` + flags + `}`},
+		{"duplicate_top_level_scalar", head + `"status":"ok","status":"partial","components":{},` + flags + `}`},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			if _, err := ValidatePayload([]byte(tc.raw)); CodeOf(err) != CodeSchemaInvalid {
+				t.Fatalf("err = %v, want schema_invalid", err)
+			}
+		})
+	}
+}
+
+func TestValidatePayloadAnalyticsPrivacyFlags(t *testing.T) {
+	t.Parallel()
+	mk := func(mode, status, extraFlag string) []byte {
+		reason := ""
+		if status == "suppressed" {
+			reason = `"suppressedReason":"dnt",`
+		}
+		return []byte(`{"v":1,"mode":"` + mode + `","status":"` + status + `",` + reason +
+			`"ts":1,"nonce":"abcdefghijklmnop","components":{},"flags":{"protectedBrowser":false,` +
+			`"webdriver":false,"headlessHint":false,"inconsistent":false` + extraFlag + `}}`)
+	}
+	tests := []struct {
+		name string
+		raw  []byte
+		want ErrorCode
+	}{
+		{"analytics_ok_dnt", mk("analytics", "ok", `,"dnt":true`), CodeSchemaInvalid},
+		{"analytics_partial_gpc", mk("analytics", "partial", `,"gpc":true`), CodeSchemaInvalid},
+		{"analytics_suppressed_dnt", mk("analytics", "suppressed", `,"dnt":true`), ""},
+		{"analytics_ok_dnt_false", mk("analytics", "ok", `,"dnt":false`), ""},
+		{"fraud_ok_dnt", mk("fraud_prevention", "ok", `,"dnt":true`), ""},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			if _, err := ValidatePayload(tc.raw); CodeOf(err) != tc.want {
+				t.Fatalf("code = %q, want %q (%v)", CodeOf(err), tc.want, err)
+			}
+		})
+	}
+}

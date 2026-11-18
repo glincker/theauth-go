@@ -17,6 +17,9 @@ func FuzzValidatePayload(f *testing.F) {
 		}
 		f.Add(b)
 	}
+	f.Add([]byte(`{"v":1,"mode":"analytics","ts":1,"nonce":"abcdefghijklmnop","status":"suppressed",` +
+		`"suppressedReason":"dnt","components":{"tz":"X"},"components":{},"flags":{"protectedBrowser":false,` +
+		`"webdriver":false,"headlessHint":false,"inconsistent":false}}`))
 	f.Fuzz(func(t *testing.T, raw []byte) {
 		p, err := ValidatePayload(raw)
 		if err != nil {
