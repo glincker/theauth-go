@@ -580,9 +580,20 @@ type AuditQuery struct {
 	Since          *time.Time
 	Until          *time.Time
 	Event          string
-	Order          string
-	Limit          int
-	After          string
+	// Provenance keeps rows that recorded a given input source. Needs a backend that declares
+	// AuditProvenanceSupported() true, otherwise the query fails with ErrAuditProvenanceUnsupported.
+	Provenance *ProvenanceFilter
+	Order      string
+	Limit      int
+	After      string
+}
+
+// ProvenanceFilter narrows an audit query by input provenance. Both fields narrow the match.
+type ProvenanceFilter struct {
+	// Kind is user_message, tool_output, retrieved_document or agent.
+	Kind string
+	// Hash is 64 lowercase hex characters, from the input hasher (audit.InputHasher.Hash).
+	Hash string
 }
 
 // Audit read orders for AuditQuery.Order. The empty value means AuditOrderDesc.

@@ -60,6 +60,7 @@ func testPool(t testing.TB) *pgxpool.Pool {
 		DROP TABLE IF EXISTS audit_events CASCADE;
 		DROP TABLE IF EXISTS theauth_audit_chain_heads CASCADE;
 		DROP TABLE IF EXISTS theauth_audit_secrets CASCADE;
+		DROP TABLE IF EXISTS theauth_audit_period_secrets CASCADE;
 		DROP TABLE IF EXISTS group_members CASCADE;
 		DROP TABLE IF EXISTS groups CASCADE;
 		DROP TABLE IF EXISTS scim_tokens CASCADE;

@@ -177,7 +177,7 @@ func (e Evaluator) EvaluateTaint(req Request) *TaintVerdict {
 
 	var matches []TaintMatch
 	for i, r := range e.Taint {
-		if !Match(r.Resource, req.Resource) {
+		if !req.matchResource(r.Resource) {
 			continue
 		}
 		if len(r.Actions) > 0 && !slices.ContainsFunc(r.Actions, func(p string) bool { return Match(p, req.Action) }) {

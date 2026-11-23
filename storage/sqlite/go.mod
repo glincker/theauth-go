@@ -42,3 +42,5 @@ require (
 	golang.org/x/time v0.15.0 // indirect
 	modernc.org/sqlite v1.60.1
 )
+
+replace github.com/glincker/theauth-go/v2 => ../..

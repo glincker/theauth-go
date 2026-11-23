@@ -91,6 +91,8 @@ func TestContract(t *testing.T) {
 		{"TOTP", func(t *testing.T, s *sqlitestore.Store) { storagetest.RunTOTP(t, s) }},
 		{"Audit", func(t *testing.T, s *sqlitestore.Store) { storagetest.RunAudit(t, s) }},
 		{"AuditChain", func(t *testing.T, s *sqlitestore.Store) { storagetest.RunAuditChain(t, s) }},
+		{"AuditProvenance", func(t *testing.T, s *sqlitestore.Store) { storagetest.RunAuditProvenance(t, s) }},
+		{"AuditRotation", func(t *testing.T, s *sqlitestore.Store) { storagetest.RunAuditRotation(t, s) }},
 	}
 	for _, tc := range suites {
 		t.Run(tc.name, func(t *testing.T) {

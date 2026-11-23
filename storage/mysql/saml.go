@@ -34,8 +34,8 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		c.SPEntityID,
 		c.SPACSURL,
 		attrMap,
-		timeUTC(c.CreatedAt),
-		timeUTC(c.UpdatedAt),
+		timeUTCOrNow(c.CreatedAt),
+		timeUTCOrNow(c.UpdatedAt),
 	)
 	if err != nil {
 		return theauth.SAMLConnection{}, err
@@ -173,7 +173,7 @@ ON DUPLICATE KEY UPDATE
 		i.NameID,
 		i.NameIDFormat,
 		timePtrToNull(i.LastLoginAt),
-		timeUTC(i.CreatedAt),
+		timeUTCOrNow(i.CreatedAt),
 	)
 	if err != nil {
 		return theauth.SAMLIdentity{}, err
